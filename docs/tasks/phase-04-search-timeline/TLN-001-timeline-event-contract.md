@@ -1,6 +1,6 @@
 # TLN-001: Unified Timeline Event Contract
 
-Status: unstarted
+Status: complete
 Phase: 4 - Search, repeat logging, and timeline
 Depends on: FND-003, TRN-002, IND-003
 Parallel-safe with: SRH-005

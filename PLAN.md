@@ -21,14 +21,22 @@ IFCT 2017 Table 1 for the current macro/fibre nutrition contract. IFCT
 micronutrients remain intentionally deferred to Phase 8 because the app does not
 yet have the micronutrient schema and report surfaces.
 
+**Phase 3: Training** — COMPLETE
+
+Training schema, offline workout creation, active workout auto-recovery, plate calculator (bounded knapsack), PR detection, routines & programs, and superset/circuit groupings are implemented and verified.
+
+**Phase 4: Search, Repeat Logging, and Timeline** — COMPLETE
+
+Unified search contract and index (`@nutai/search`), food search ranking (IFCT > USDA, barcode priority, Hinglish aliases), exercise search ranking (custom boosts, equipment filters), shortcut read models (recents, favorites, usuals), repeat logging actions with atomic undo/redo, unified timeline contract (`@nutai/timeline`), 5-tab navigation (`UX-001`), and daily timeline mobile UI (`TLN-002`) are implemented, passing full check gates (473 tests) and verified on physical Android hardware.
+
 ## What Works Today
 
 | Area | Status | Evidence |
 |------|--------|----------|
 | Monorepo + npm workspaces | ✅ Working | `package.json` workspaces |
 | TypeScript strict mode | ✅ Working | `npm run typecheck` clean |
-| 11 Node-pure packages | ✅ Working | `check:node-purity` 11/11 |
-| 414 unit + property tests | ✅ Working | `npm run test` 36 files |
+| 16 Node-pure packages | ✅ Working | `check:node-purity` 16/16 |
+| 473 unit + property tests | ✅ Working | `npm run test` 48 files |
 | Schema v9 (UUID, ops, day, recipes) | ✅ Working | Android app-private `user.db` has migrations 1-9; FK/integrity clean |
 | Operations / undo foundation | ✅ Working | Strict replay, ledger-safe undo, recipe undo/redo coverage |
 | Day completeness storage | ✅ Working | Storage/restart/constraint tests pass |
@@ -39,7 +47,15 @@ yet have the micronutrient schema and report surfaces.
 | Confidence bands | ✅ Working | `confidence.test.ts` 22 tests |
 | BYO key (Anthropic/OpenAI/Gemini) | ✅ Working | Provider adapters |
 | Immutable nutrition snapshots | ✅ Working | per-100g at log time |
-| 3-tab navigation + FAB | ✅ Working | Home, Progress, Profile |
+| 5-tab navigation + sticky FAB | ✅ Working | UX-001 (Home, Food, Train, Progress, You) |
+| Food tab (dedicated) | ✅ Working | Food tab with shortcuts, day controls, copy-yesterday |
+| Train tab | ✅ Working | Workouts, routines, programs, sets, supersets |
+| Set/rep/load workout journal | ✅ Working | TRN-001+, auto-recovery, undo/redo, PR derivation |
+| Exercise library | ✅ Working | 200+ exercises seeded, custom exercise taxonomy |
+| Equipment / plate calculator | ✅ Working | EQP-001 bounded knapsack plate loading |
+| Universal search & ranking | ✅ Working | SRH-001, SRH-002, SRH-003 (@nutai/search) |
+| Shortcuts & repeat logging | ✅ Working | SRH-004, SRH-005 (recents, favorites, usuals, copy-yesterday) |
+| Unified timeline | ✅ Working | TLN-001, TLN-002 (@nutai/timeline & DayTimeline) |
 | Health score UI | ⚠️ Exists — TO BE REMOVED | Conflicts with principles |
 | ESLint | ✅ Configured | `npm run lint` passes |
 | Onboarding screens | 🔶 Partial | Routes exist, functionality partial |
@@ -49,16 +65,8 @@ yet have the micronutrient schema and report surfaces.
 | Open Food Facts adapter | ✅ Working | Barcode adapter, timeout, ODbL attribution, scanner fallback |
 | Indian aliases / ontology | ✅ Working | 100+ transliteration + Hindi-script aliases covered |
 | Recipe / dish family system | ✅ Working | Versioned recipes, yield/oil math, create/edit/log/undo |
-| 5-tab navigation | ❌ Not started | UX-001 |
-| Food tab (dedicated) | ❌ Not started | |
-| Train tab | ✅ Working | Workouts, routines, programs, sets, supersets |
-| Set/rep/load workout journal | ✅ Working | TRN-001+, auto-recovery, undo/redo, PR derivation |
-| Exercise library | ✅ Working | 200+ exercises seeded, custom exercise taxonomy |
-| Equipment / plate calculator | ✅ Working | EQP-001 bounded knapsack plate loading |
-| Universal search | ❌ Not started | SRH-001 |
 | Day completeness UI | ❌ Not started | ADP-002 |
 | Adaptive weekly check-in | ❌ Not started | ADP-003+ |
-| Unified timeline | ❌ Not started | TLN-001 |
 | Reports | ❌ Not started | TLN-003 |
 | UUID / sync metadata | ✅ Schema ready | v2 migration |
 | Cloud sync | ❌ Not started | SYN-001+ |
@@ -68,7 +76,7 @@ yet have the micronutrient schema and report surfaces.
 
 ## Next Task
 
-Start Phase 4 with `UX-001`: 5-Tab Navigation Migration and `SRH-001`: Unified Search Contract.
+Start Phase 5 with `ADP-001`: Day Status Rules and Analytics Exclusions and `ADP-002`: Completeness UI and Day Finalization.
 
 ## Blockers
 

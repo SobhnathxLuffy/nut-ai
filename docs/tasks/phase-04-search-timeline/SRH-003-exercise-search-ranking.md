@@ -1,6 +1,6 @@
 # SRH-003: Exercise Search Ranking and Filters
 
-Status: unstarted
+Status: complete
 Phase: 4 - Search, repeat logging, and timeline
 Depends on: SRH-001, TRN-002
 Parallel-safe with: SRH-002, SRH-004

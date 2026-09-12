@@ -1,6 +1,6 @@
 # SRH-001: Unified Search Contract and Local Index
 
-Status: unstarted
+Status: complete
 Phase: 4 - Search, repeat logging, and timeline
 Depends on: NUT-001, IND-002, TRN-001
 Parallel-safe with: None

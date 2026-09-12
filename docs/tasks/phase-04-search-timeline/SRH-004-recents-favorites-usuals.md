@@ -1,6 +1,6 @@
 # SRH-004: Recent, Frequent, Favorite, and Usual Meals
 
-Status: unstarted
+Status: complete
 Phase: 4 - Search, repeat logging, and timeline
 Depends on: FND-003, IND-003
 Parallel-safe with: SRH-002, SRH-003

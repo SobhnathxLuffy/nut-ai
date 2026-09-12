@@ -28,14 +28,14 @@ Tasks are dependency ordered. A task is `ready` only when every dependency is co
 | TRN-005 | Routines, Programs, and Progression | 3 | complete | TRN-002, EQP-001 | No | Large | schema.ts, routine/program routes | [TRN-005](./phase-03-training/TRN-005-routines-programs.md) |
 | TRN-007 | Superset & Circuit Grouping UI | 3 | complete | TRN-002 | Yes | Medium | workout active UI | [TRN-007](./phase-03-training/TRN-007-superset-circuit.md) |
 | **Phase 4: Search, Repeat Logging, and Timeline** |
-| UX-001 | 5-Tab Navigation Migration | 4 | unstarted | AUD-002 | No | Large | expo router, layout | [UX-001](./phase-04-search-timeline/UX-001-5-tab-navigation.md) |
-| SRH-001 | Unified Search Contract and Local Index | 4 | unstarted | NUT-001, IND-002, TRN-001 | No | Medium | search contracts, resolver | [SRH-001](./phase-04-search-timeline/SRH-001-unified-search-contract.md) |
-| SRH-002 | Food Search Ranking and Filters | 4 | unstarted | SRH-001, IND-003 | Yes | Medium | Food tab search UI | [SRH-002](./phase-04-search-timeline/SRH-002-food-search-ranking.md) |
-| SRH-003 | Exercise Search Ranking and Filters | 4 | unstarted | SRH-001, TRN-002 | Yes | Medium | Train search UI | [SRH-003](./phase-04-search-timeline/SRH-003-exercise-search-ranking.md) |
-| SRH-004 | Recent, Frequent, Favorite, and Usual Meals | 4 | unstarted | FND-003, IND-003 | Yes | Medium | logging history, saved meals | [SRH-004](./phase-04-search-timeline/SRH-004-recents-favorites-usuals.md) |
-| SRH-005 | Repeat Logging and Copy-Yesterday Actions | 4 | unstarted | SRH-004, FND-003 | Yes | Medium | operations, Food tab actions | [SRH-005](./phase-04-search-timeline/SRH-005-repeat-logging-actions.md) |
-| TLN-001 | Unified Timeline Event Contract | 4 | unstarted | FND-003, TRN-002, IND-003 | No | Medium | timeline read models | [TLN-001](./phase-04-search-timeline/TLN-001-timeline-event-contract.md) |
-| TLN-002 | Daily Timeline Mobile UI | 4 | unstarted | TLN-001, SRH-005, TRN-003 | No | Large | Home/Food navigation, timeline UI | [TLN-002](./phase-04-search-timeline/TLN-002-daily-timeline-ui.md) |
+| UX-001 | 5-Tab Navigation Migration | 4 | complete | AUD-002 | No | Large | expo router, layout | [UX-001](./phase-04-search-timeline/UX-001-5-tab-navigation.md) |
+| SRH-001 | Unified Search Contract and Local Index | 4 | complete | NUT-001, IND-002, TRN-001 | No | Medium | search contracts, resolver | [SRH-001](./phase-04-search-timeline/SRH-001-unified-search-contract.md) |
+| SRH-002 | Food Search Ranking and Filters | 4 | complete | SRH-001, IND-003 | Yes | Medium | Food tab search UI | [SRH-002](./phase-04-search-timeline/SRH-002-food-search-ranking.md) |
+| SRH-003 | Exercise Search Ranking and Filters | 4 | complete | SRH-001, TRN-002 | Yes | Medium | Train search UI | [SRH-003](./phase-04-search-timeline/SRH-003-exercise-search-ranking.md) |
+| SRH-004 | Recent, Frequent, Favorite, and Usual Meals | 4 | complete | FND-003, IND-003 | Yes | Medium | logging history, saved meals | [SRH-004](./phase-04-search-timeline/SRH-004-recents-favorites-usuals.md) |
+| SRH-005 | Repeat Logging and Copy-Yesterday Actions | 4 | complete | SRH-004, FND-003 | Yes | Medium | operations, Food tab actions | [SRH-005](./phase-04-search-timeline/SRH-005-repeat-logging-actions.md) |
+| TLN-001 | Unified Timeline Event Contract | 4 | complete | FND-003, TRN-002, IND-003 | No | Medium | timeline read models | [TLN-001](./phase-04-search-timeline/TLN-001-timeline-event-contract.md) |
+| TLN-002 | Daily Timeline Mobile UI | 4 | complete | TLN-001, SRH-005, TRN-003 | No | Large | Home/Food navigation, timeline UI | [TLN-002](./phase-04-search-timeline/TLN-002-daily-timeline-ui.md) |
 | **Phase 5: Day Completeness and Adaptive Check-ins** |
 | ADP-001 | Day Status Rules and Analytics Exclusions | 5 | unstarted | FND-004, TLN-001 | No | Medium | goals, reports contracts | [ADP-001](./phase-05-adaptive-checkins/ADP-001-day-status-rules.md) |
 | ADP-002 | Completeness UI and Day Finalization | 5 | unstarted | ADP-001, TLN-002 | Yes | Medium | Home/Food day controls | [ADP-002](./phase-05-adaptive-checkins/ADP-002-completeness-ui.md) |

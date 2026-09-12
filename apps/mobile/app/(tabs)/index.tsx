@@ -13,19 +13,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle } from 'react-native-svg'
 import { Icon, type IconName } from '../../src/components/Icon'
+import { DayTimeline } from '../../src/components/DayTimeline'
 import {
   currentGoal,
   dayTotals,
   localDate,
   runAdaptive,
-  mealsForDay,
-  deleteMeal,
-  latestUndoableMealOperation,
-  undoRecordedOperation,
   type AdaptiveOutcome,
   type CurrentGoal,
   type DayTotals,
-  type DayMeal,
 } from '../../src/data/repo'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
@@ -54,8 +50,6 @@ export default function Home() {
   const [goal, setGoal] = useState<CurrentGoal | null>(null)
   const [totals, setTotals] = useState<DayTotals | null>(null)
   const [adaptive, setAdaptive] = useState<AdaptiveOutcome | null>(null)
-  const [meals, setMeals] = useState<DayMeal[]>([])
-  const [undoableOperation, setUndoableOperation] = useState<{ uuid: string } | null>(null)
   const [offset, setOffset] = useState(0)
   const [page, setPage] = useState(0)
 
@@ -65,17 +59,13 @@ export default function Home() {
     // The adaptive loop runs BEFORE reading the goal, so a target it just
     // changed is the one rendered. Its own gates decide whether it may act.
     const outcome = await runAdaptive(Date.now())
-    const [g, t, m, operation] = await Promise.all([
+    const [g, t] = await Promise.all([
       currentGoal(),
       dayTotals(localDate(selected)),
-      mealsForDay(localDate(selected)),
-      latestUndoableMealOperation(),
     ])
     setAdaptive(outcome)
     setGoal(g)
     setTotals(t)
-    setMeals(m)
-    setUndoableOperation(operation)
   }, [selected])
 
   useFocusEffect(
@@ -102,7 +92,6 @@ export default function Home() {
   const remaining = goal.targetKcal - totals.kcal
   const over = remaining < 0
   const pct = goal.targetKcal > 0 ? totals.kcal / goal.targetKcal : 0
-  const empty = totals.mealCount === 0 && totals.pendingCount === 0
   return (
     <ScrollView
       style={{ backgroundColor: theme.bg }}
@@ -268,85 +257,10 @@ export default function Home() {
         </View>
       </View>
 
-      {/* Recently uploaded */}
-      <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
-        <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Recently uploaded</Text>
-
-        {undoableOperation ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Undo last meal change"
-            onPress={async () => {
-              await undoRecordedOperation(undoableOperation.uuid)
-              await loadData()
-            }}
-            style={[
-              styles.card,
-              {
-                backgroundColor: theme.bgElevated,
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginTop: space.sm,
-                marginBottom: space.sm,
-              },
-            ]}
-          >
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Last meal change</Text>
-            <Text style={[type.caption, { color: theme.uncertain }]}>Undo</Text>
-          </Pressable>
-        ) : null}
-
-        {empty ? (
-          <View style={[styles.emptyCard, { backgroundColor: theme.bgSunken }]}>
-            <View style={[styles.ghostRow, { backgroundColor: theme.bgElevated }]}>
-              <Icon name="bowl" size={26} color={theme.textFaint} />
-              <View style={{ flex: 1, gap: 6 }}>
-                <View style={[styles.skeleton, { backgroundColor: theme.ringTrack, width: '70%' }]} />
-                <View style={[styles.skeleton, { backgroundColor: theme.ringTrack, width: '45%' }]} />
-              </View>
-            </View>
-            <Text style={[type.body, { color: theme.textMuted, textAlign: 'center', marginTop: space.lg }]}>
-              Tap + to add your first meal of the day
-            </Text>
-          </View>
-        ) : (
-          <View style={{ gap: space.sm }}>
-            {meals.map((m) => (
-              <View
-                key={m.id}
-                style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={[type.bodyStrong, { color: theme.text, textTransform: 'capitalize' }]}>
-                    {m.slot ?? 'Meal'}
-                  </Text>
-                  <Pressable
-                    onPress={async () => {
-                      const operation = await deleteMeal(m.id)
-                      setUndoableOperation(operation)
-                      await loadData()
-                    }}
-                    hitSlop={space.sm}
-                  >
-                    <Text style={[type.caption, { color: theme.safety }]}>Delete</Text>
-                  </Pressable>
-                </View>
-                {m.items.length > 0 ? (
-                  <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-                    {m.items.map((i) => `${i.displayName} (${i.grams}g)`).join(' · ')}
-                  </Text>
-                ) : null}
-              </View>
-            ))}
-
-            {totals.pendingCount > 0 ? (
-              <Text style={[type.caption, { color: theme.uncertain, marginTop: space.xs }]}>
-                +{totals.pendingCount} still analyzing — not counted yet
-              </Text>
-            ) : null}
-          </View>
-        )}
+      {/* Daily Timeline */}
+      <View style={{ paddingHorizontal: space.lg, marginTop: space.xl, gap: space.md }}>
+        <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Daily timeline</Text>
+        <DayTimeline selectedDate={localDate(selected)} hideDateControls hideTotals />
       </View>
     </ScrollView>
   )
@@ -535,10 +449,4 @@ const styles = StyleSheet.create({
   },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: space.sm, marginTop: space.lg },
   dot: { width: 7, height: 7, borderRadius: 4 },
-  emptyCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.xl },
-  ghostRow: {
-    flexDirection: 'row', alignItems: 'center', gap: space.md,
-    padding: space.lg, borderRadius: radius.lg,
-  },
-  skeleton: { height: 8, borderRadius: 4 },
 })

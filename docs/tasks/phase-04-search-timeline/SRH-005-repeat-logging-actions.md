@@ -1,6 +1,6 @@
 # SRH-005: Repeat Logging and Copy-Yesterday Actions
 
-Status: unstarted
+Status: complete
 Phase: 4 - Search, repeat logging, and timeline
 Depends on: SRH-004, FND-003
 Parallel-safe with: TLN-001
