@@ -1,0 +1,22 @@
+{
+  "name": "@nutai/nutrition-sources",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@nutai/db-adapter": "*",
+    "@nutai/recipe-engine": "*"
+  }
+}

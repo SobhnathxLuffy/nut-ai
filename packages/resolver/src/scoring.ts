@@ -9,6 +9,8 @@
 
 export interface Candidate {
   foodId: string
+  source?: string
+  sourcePriority?: number
   name: string
   brand: string | null
   category: string | null
@@ -47,6 +49,7 @@ export const WEIGHTS = {
   categoryPrior: 0.1,
   portionPlausibility: 0.1,
   popularityPrior: 0.1,
+  sourcePriority: 0.05,
   /** v1.x only. Zero for now; the remaining weights already sum to 1.0. */
   embeddingCosine: 0,
   basisAmbiguityPenalty: 0.15,
@@ -183,6 +186,7 @@ export function scoreCandidates(
         categoryPrior: categoryPrior(c, ctx),
         portionPlausibility: portionPlausibility(c, ctx),
         popularityPrior: popularityPrior(c),
+        sourcePriority: Math.max(0, Math.min(1, (c.sourcePriority ?? 0) / 100)),
         basisAmbiguity: basisAmbiguity(c),
       }
 
@@ -192,7 +196,8 @@ export function scoreCandidates(
         WEIGHTS.prepMatch * parts.prepMatch +
         WEIGHTS.categoryPrior * parts.categoryPrior +
         WEIGHTS.portionPlausibility * parts.portionPlausibility +
-        WEIGHTS.popularityPrior * parts.popularityPrior -
+        WEIGHTS.popularityPrior * parts.popularityPrior +
+        WEIGHTS.sourcePriority * parts.sourcePriority -
         WEIGHTS.basisAmbiguityPenalty * parts.basisAmbiguity
 
       return { ...c, score: Math.max(0, Math.min(1, score)), breakdown: parts }

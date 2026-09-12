@@ -28,6 +28,17 @@
 
 export type SqlValue = string | number | bigint | Uint8Array | null
 
+export type SyncState = 'local' | 'synced' | 'pending' | 'conflict'
+
+export interface SyncMetadata {
+  uuid: string
+  created_at: number
+  updated_at: number | null
+  revision: number
+  deleted_at: number | null
+  sync_state: SyncState
+}
+
 export interface RunResult {
   changes: number
   lastInsertRowId: number | bigint

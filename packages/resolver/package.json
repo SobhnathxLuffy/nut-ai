@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@nutai/core-schema": "*",
-    "@nutai/db-adapter": "*"
+    "@nutai/db-adapter": "*",
+    "@nutai/nutrition-sources": "*"
   }
 }

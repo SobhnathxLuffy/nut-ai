@@ -1,0 +1,3 @@
+food_code,name,category,energy_kcal,protein_g,fat_g,carb_g,fiber_g
+IFCT001,Rice raw,Cereal,345,6.8,0.5,78.2,1.2
+IFCT002,Wheat flour whole,Cereal,341,12.1,1.7,69.4,1.9

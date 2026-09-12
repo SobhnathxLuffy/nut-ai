@@ -1,0 +1,12 @@
+{
+  "source": "Indian Food Composition Tables 2017",
+  "sourceUrl": "https://www.nin.res.in/ebooks/IFCT2017_16122024.pdf",
+  "sourceFile": "nutai-ifct-2017.pdf",
+  "sourcePdfSha256": "e87629581a58faca286f4886504bc75f33d6d3771a50fb4e40e2afee2b2b32dd",
+  "sourcePdfPages": "41-68",
+  "normalizedCsvSha256": "894006e2aa34ffcb510debff88705e78c40df88e2e7dcee65bbd944f9fcc4785",
+  "recordCount": 528,
+  "energyConversion": "ENERC kilojoules divided by 4.184",
+  "permission": "project-owner-authorized",
+  "extractorVersion": 1
+}

@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { DbAdapter } from '@nutai/db-adapter'
-import { resolveByText, type ScoredCandidate } from '@nutai/resolver'
-import { nutritionCorpusInfo, openNutritionDb } from '../src/db/expo-adapter'
-import { db } from '../src/data/repo'
+import { loadFood, resolveByText, type NutritionSourceContext, type ScoredCandidate } from '@nutai/resolver'
+import { ifctCorpusInfo, nutritionCorpusInfo, openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
+import { db as openUserDb } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import { logManualFood } from '../src/data/manual-food'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -20,9 +20,16 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
  * `db()`, so — like every other screen in this app — it is only exercised by
  * the running app, not by that test.
  */
-async function selectFood(nutritionDb: DbAdapter, candidate: ScoredCandidate, now: number): Promise<number> {
-  const selection = await resolveSelection(nutritionDb, candidate)
-  const userDb = await db()
+async function selectFood(
+  nutritionDb: DbAdapter,
+  candidate: ScoredCandidate,
+  context: NutritionSourceContext,
+  now: number,
+): Promise<number> {
+  const resolved = await loadFood(nutritionDb, candidate.foodId, context)
+  if (!resolved) throw new Error('Selected food is no longer available')
+  const selection = await resolveSelection(nutritionDb, candidate, resolved)
+  const userDb = await openUserDb()
   return logManualFood(userDb, selection, now)
 }
 
@@ -40,7 +47,14 @@ export default function FoodSearch() {
   const insets = useSafeAreaInsets()
 
   const [db, setDb] = useState<DbAdapter | null>(null)
-  const [corpus, setCorpus] = useState<{ foods: number; portions: number; builtAt: string | null } | null>(null)
+  const [sourceContext, setSourceContext] = useState<NutritionSourceContext>({})
+  const [corpus, setCorpus] = useState<{
+    foods: number
+    portions: number
+    builtAt: string | null
+    ifctFoods: number
+    ifctVersion: string | null
+  } | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ScoredCandidate[]>([])
   const [outcome, setOutcome] = useState<string>('')
@@ -51,11 +65,12 @@ export default function FoodSearch() {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const handle = await openNutritionDb()
-      const info = await nutritionCorpusInfo(handle)
+      const [handle, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), openUserDb()])
+      const [info, ifctInfo] = await Promise.all([nutritionCorpusInfo(handle), ifctCorpusInfo(ifctDb)])
       if (!alive) return
       setDb(handle)
-      setCorpus(info)
+      setSourceContext({ ifctDb, userDb })
+      setCorpus({ ...info, ifctFoods: ifctInfo.foods, ifctVersion: ifctInfo.version })
     })()
     return () => { alive = false }
   }, [])
@@ -71,7 +86,7 @@ export default function FoodSearch() {
         prepFacet: null,
         modelCategory: null,
         estimatedGrams: 150,
-      })
+      }, sourceContext)
       if (!alive) return
       if (r.outcome.kind === 'auto_accept') {
         setResults([r.outcome.match])
@@ -86,14 +101,14 @@ export default function FoodSearch() {
       setBusy(false)
     }, 180)
     return () => { alive = false; clearTimeout(timer) }
-  }, [db, query])
+  }, [db, query, sourceContext])
 
   async function handleSelect(candidate: ScoredCandidate) {
     if (!db || selectingId != null) return
     setSelectingId(candidate.foodId)
     setError(null)
     try {
-      await selectFood(db, candidate, Date.now())
+      await selectFood(db, candidate, sourceContext, Date.now())
       router.back()
     } catch {
       setError('Could not log that food — try again.')
@@ -106,7 +121,7 @@ export default function FoodSearch() {
     if (corpus.foods === 0) {
       return 'Corpus missing — the app bundled without nutrition.db. Run `npm run data:build`.'
     }
-    return `${corpus.foods.toLocaleString()} foods · ${corpus.portions.toLocaleString()} portion weights · USDA, CC0`
+    return `${corpus.ifctFoods.toLocaleString()} IFCT foods · ${corpus.foods.toLocaleString()} USDA foods · offline`
   }, [corpus])
 
   return (
@@ -165,6 +180,9 @@ export default function FoodSearch() {
               {r.energyKcal != null ? `${Math.round(r.energyKcal)} kcal / 100 g` : 'energy not reported'}
               {r.brand ? ` · ${r.brand}` : ''}
             </Text>
+            <Text style={[type.micro, { color: theme.textFaint, marginTop: 2 }]}>
+              {sourceLabel(r.source)}
+            </Text>
           </View>
           {selectingId === r.foodId ? (
             <ActivityIndicator color={theme.textFaint} />
@@ -180,6 +198,11 @@ export default function FoodSearch() {
           and you can save it as your own food so it resolves instantly next time.
         </Text>
       )}
+
+      <Text style={[type.micro, { color: theme.textFaint, marginTop: space.xl, lineHeight: 17 }]}>
+        IFCT 2017: ICMR-NIN, used with permission. USDA FoodData Central: U.S. public domain.
+        Open Food Facts barcode data: ODbL 1.0.
+      </Text>
     </ScrollView>
   )
 }
@@ -202,3 +225,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
 })
+
+function sourceLabel(source: string | undefined): string {
+  if (source === 'ifct') return 'IFCT 2017 · ICMR-NIN'
+  if (source === 'recipe') return 'HOUSEHOLD RECIPE'
+  if (source === 'userfood') return 'YOUR FOOD'
+  if (source === 'off') return 'OPEN FOOD FACTS · ODbL 1.0'
+  return 'USDA FOODDATA CENTRAL'
+}

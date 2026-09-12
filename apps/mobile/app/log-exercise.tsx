@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ExerciseEstimateZ } from '@nutai/core-schema'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { Icon, type IconName } from '../src/components/Icon'
-import { db, localDate, setting, weightHistory } from '../src/data/repo'
+import { logExercise, setting, weightHistory } from '../src/data/repo'
 import {
   exerciseKcal,
   INTENSITY_ANCHORS,
@@ -64,13 +64,7 @@ async function latestWeightKg(): Promise<number> {
 }
 
 async function saveEntry(name: string, kcal: number): Promise<void> {
-  const now = Date.now()
-  const h = await db()
-  await h.run(
-    `INSERT INTO exercise_entries (local_date, name, kcal, provenance, external_id, logged_at)
-     VALUES (?,?,?,'manual',NULL,?)`,
-    [localDate(now), name, kcal, now],
-  )
+  await logExercise(name, kcal, Date.now())
 }
 
 export default function LogExercise() {

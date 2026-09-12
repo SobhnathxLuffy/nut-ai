@@ -18,9 +18,14 @@ import {
   dayTotals,
   localDate,
   runAdaptive,
+  mealsForDay,
+  deleteMeal,
+  latestUndoableMealOperation,
+  undoRecordedOperation,
   type AdaptiveOutcome,
   type CurrentGoal,
   type DayTotals,
+  type DayMeal,
 } from '../../src/data/repo'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
@@ -49,28 +54,41 @@ export default function Home() {
   const [goal, setGoal] = useState<CurrentGoal | null>(null)
   const [totals, setTotals] = useState<DayTotals | null>(null)
   const [adaptive, setAdaptive] = useState<AdaptiveOutcome | null>(null)
+  const [meals, setMeals] = useState<DayMeal[]>([])
+  const [undoableOperation, setUndoableOperation] = useState<{ uuid: string } | null>(null)
   const [offset, setOffset] = useState(0)
   const [page, setPage] = useState(0)
 
   const selected = useMemo(() => Date.now() + offset * 86_400_000, [offset])
 
+  const loadData = useCallback(async () => {
+    // The adaptive loop runs BEFORE reading the goal, so a target it just
+    // changed is the one rendered. Its own gates decide whether it may act.
+    const outcome = await runAdaptive(Date.now())
+    const [g, t, m, operation] = await Promise.all([
+      currentGoal(),
+      dayTotals(localDate(selected)),
+      mealsForDay(localDate(selected)),
+      latestUndoableMealOperation(),
+    ])
+    setAdaptive(outcome)
+    setGoal(g)
+    setTotals(t)
+    setMeals(m)
+    setUndoableOperation(operation)
+  }, [selected])
+
   useFocusEffect(
     useCallback(() => {
       let alive = true
       void (async () => {
-        // The adaptive loop runs BEFORE reading the goal, so a target it just
-        // changed is the one rendered. Its own gates decide whether it may act.
-        const outcome = await runAdaptive(Date.now())
-        const [g, t] = await Promise.all([currentGoal(), dayTotals(localDate(selected))])
         if (!alive) return
-        setAdaptive(outcome)
-        setGoal(g)
-        setTotals(t)
+        await loadData()
       })()
       return () => {
         alive = false
       }
-    }, [selected]),
+    }, [loadData]),
   )
 
   if (!goal || !totals) {
@@ -254,6 +272,31 @@ export default function Home() {
       <View style={{ paddingHorizontal: space.lg, marginTop: space.xl }}>
         <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Recently uploaded</Text>
 
+        {undoableOperation ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Undo last meal change"
+            onPress={async () => {
+              await undoRecordedOperation(undoableOperation.uuid)
+              await loadData()
+            }}
+            style={[
+              styles.card,
+              {
+                backgroundColor: theme.bgElevated,
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginTop: space.sm,
+                marginBottom: space.sm,
+              },
+            ]}
+          >
+            <Text style={[type.bodyStrong, { color: theme.text }]}>Last meal change</Text>
+            <Text style={[type.caption, { color: theme.uncertain }]}>Undo</Text>
+          </Pressable>
+        ) : null}
+
         {empty ? (
           <View style={[styles.emptyCard, { backgroundColor: theme.bgSunken }]}>
             <View style={[styles.ghostRow, { backgroundColor: theme.bgElevated }]}>
@@ -268,10 +311,35 @@ export default function Home() {
             </Text>
           </View>
         ) : (
-          <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}>
-            <Text style={[type.bodyStrong, { color: theme.text }]}>
-              {totals.mealCount} {totals.mealCount === 1 ? 'meal' : 'meals'} logged
-            </Text>
+          <View style={{ gap: space.sm }}>
+            {meals.map((m) => (
+              <View
+                key={m.id}
+                style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent' }]}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={[type.bodyStrong, { color: theme.text, textTransform: 'capitalize' }]}>
+                    {m.slot ?? 'Meal'}
+                  </Text>
+                  <Pressable
+                    onPress={async () => {
+                      const operation = await deleteMeal(m.id)
+                      setUndoableOperation(operation)
+                      await loadData()
+                    }}
+                    hitSlop={space.sm}
+                  >
+                    <Text style={[type.caption, { color: theme.safety }]}>Delete</Text>
+                  </Pressable>
+                </View>
+                {m.items.length > 0 ? (
+                  <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+                    {m.items.map((i) => `${i.displayName} (${i.grams}g)`).join(' · ')}
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+
             {totals.pendingCount > 0 ? (
               <Text style={[type.caption, { color: theme.uncertain, marginTop: space.xs }]}>
                 +{totals.pendingCount} still analyzing — not counted yet

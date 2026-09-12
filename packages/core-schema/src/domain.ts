@@ -101,6 +101,8 @@ export interface IngredientRow {
   origin: IngredientOrigin
   /** Where a web_lookup row's numbers were transcribed from. Shown in the UI. */
   sourceUrl?: string | null
+  /** Human-readable source/license attribution shown beside resolved food data. */
+  sourceAttribution?: string | null
   gramPathway: GramPathway
   /** Half-width of this row's uncertainty band, as a fraction. §7.2. */
   bandHalfPct: number

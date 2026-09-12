@@ -53,7 +53,7 @@ export type ValidationResult = ValidationOk | ValidationErr
 
 const ANTHROPIC_VERSION = '2023-06-01'
 
-function classify(status: number, body: string): ScanFailure {
+function classify(status: number, _body: string): ScanFailure {
   if (status === 401 || status === 403) {
     return { kind: 'key-invalid', message: 'The provider rejected this credential.', retryable: false, httpStatus: status }
   }

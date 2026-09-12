@@ -19,9 +19,10 @@ import {
   type ProviderId,
 } from '@nutai/prompt'
 import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } from '@nutai/pipeline'
-import { openNutritionDb } from '../db/expo-adapter'
+import { resolveByBarcode } from '@nutai/resolver'
+import { openIfctDb, openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
-import { setting } from '../data/repo'
+import { db, setting } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup } from '../inference/pathA/client'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
@@ -158,12 +159,13 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
 
   let result: ScanResult | null = null
   try {
-    const nutritionDb = await openNutritionDb()
+    const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
     const foodDb = await loadFoodDb(nutritionDb)
     result = await runPipeline(
       outcome.value.raw,
       {
         db: nutritionDb,
+        sourceContext: { ifctDb, userDb },
         priors: EMPTY_PRIORS,
         baselines: SEEDED_BASELINES,
         path: 'cloud',
@@ -376,19 +378,6 @@ function readyFromRows(
   setPhase({ kind: 'ready', photoUri, result, bands, meta: null, webLookups })
 }
 
-interface BarcodeFoodRow {
-  id: number
-  name: string
-  serving_size_g: number | null
-  energy_kcal: number | null
-  protein_g: number | null
-  fat_g: number | null
-  carb_g: number | null
-  fiber_g: number | null
-  sugar_g: number | null
-  sodium_mg: number | null
-}
-
 /**
  * Barcode: corpus GTIN hit costs NOTHING — no model call, no network. A miss
  * falls to one web search when a key exists, and to a clear pointer at the
@@ -397,37 +386,35 @@ interface BarcodeFoodRow {
 export async function startBarcodeScan(gtin: string): Promise<void> {
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'matching' })
 
-  let food: BarcodeFoodRow | null = null
+  let food: Awaited<ReturnType<typeof resolveByBarcode>> = null
   try {
-    const ndb = await openNutritionDb()
-    food = await ndb.get<BarcodeFoodRow>(
-      `SELECT id, name, serving_size_g, energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg
-       FROM foods WHERE barcode = ? LIMIT 1`,
-      [gtin],
-    )
+    const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
+    food = await resolveByBarcode(nutritionDb, gtin, { ifctDb, userDb })
   } catch {
     food = null
   }
 
-  if (food && food.energy_kcal != null) {
-    const grams = food.serving_size_g ?? 100
+  if (food && food.energyKcal != null) {
+    const grams = food.servingSizeG ?? 100
     readyFromRows(
       [
         {
           id: `row_${Date.now()}`,
           displayName: food.name,
-          sourceFoodId: String(food.id),
+          sourceFoodId: food.foodId,
           grams,
           nutrientSnapshot: {
-            kcal: food.energy_kcal,
-            protein_g: food.protein_g ?? 0,
-            fat_g: food.fat_g ?? 0,
-            carbs_g: food.carb_g ?? 0,
-            fiber_g: food.fiber_g,
-            sugar_g: food.sugar_g,
-            sodium_mg: food.sodium_mg,
+            kcal: food.energyKcal,
+            protein_g: food.proteinG ?? 0,
+            fat_g: food.fatG ?? 0,
+            carbs_g: food.carbG ?? 0,
+            fiber_g: food.fiberG,
+            sugar_g: food.sugarG,
+            sodium_mg: food.sodiumMg,
           },
           origin: 'barcode',
+          sourceUrl: food.source === 'off' ? `https://world.openfoodfacts.org/product/${gtin}` : null,
+          sourceAttribution: food.attribution,
           gramPathway: 'packaged_exact',
           bandHalfPct: 0.05,
           isEstimate: false,
@@ -435,7 +422,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
         },
       ],
       null,
-      'barcode-local',
+      `barcode-${food.source}`,
       null,
     )
     return

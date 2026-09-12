@@ -5,12 +5,32 @@ Reproduce with `npm run check` plus `npm run data:build && npm run data:verify`.
 
 | Gate | Command | Result |
 |---|---|---|
-| Unit + property + integration tests | `npx vitest run` | **252 passed**, 13 files |
+| ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
+| Unit + property + integration tests | `npx vitest run` | **414 passed**, 36 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
-| Node-purity gate | `node scripts/check-node-purity.mjs` | **11/11 packages** React-Native-free |
+| Node-purity gate | `node scripts/check-node-purity.mjs` | **13/13 packages** React-Native-free |
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted |
+| IFCT corpus verification | `npm run ifct:verify` | **528-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
 | iOS bundle | `expo export --platform ios` | **1,597 modules**, 3.7 MB |
+| Android physical-device build | `npm run android` | **built and installed** on Samsung SM-M146B |
+| Android schema upgrade | cold launch, inspect app-private `user.db` | **migrations 1-9 present**, integrity check clean |
+| Android IFCT asset | inspect app-private `ifct.db` | **528 rows**, official PDF SHA-256 matches manifest |
+
+The complete `npm run check` gate was rerun on 2026-09-12 after the Phase 2
+correction pass. Focused coverage includes deterministic identity backfill,
+post-migration production writes, operation allowlists, lossless meal-ledger
+undo, reused-ID conflict protection, truncated-backup rejection,
+transient-path scrubbing, database-level day-status validation, source-qualified
+multi-database resolution, recipe v7-to-v8 repair, Hindi-script aliases, and
+bounded Open Food Facts parsing.
+
+Phase 2 physical-device verification was completed on Samsung SM-M146B. Food
+Database displayed `528 IFCT foods · 7,928 USDA foods · offline`; searching
+`ragi` returned `ifct:A010` with IFCT 2017 / ICMR-NIN attribution. The extracted
+app-private `ifct.db` passed `PRAGMA integrity_check`, contained 528 IFCT rows,
+and carried source PDF hash
+`e87629581a58faca286f4886504bc75f33d6d3771a50fb4e40e2afee2b2b32dd`.
 
 Strict mode means `strict` plus `noUncheckedIndexedAccess`,
 `exactOptionalPropertyTypes`, `noImplicitOverride`,
@@ -143,17 +163,18 @@ Stated plainly so nothing here reads as more finished than it is.
   dishes after the Nutrition5k import, down from the plan's 200
 - Store submission (M7) — needs your Apple and Google accounts
 
-**Not built:**
-- Onboarding (12 screens), goals UI, key-entry screen
+**Not built / Partial:**
+- Onboarding (routes scaffolded, full functional integration pending), goals UI (edit-goals route exists, partial), key-entry screen
 - Trends / Foods / You are placeholder screens
 - Offline queue, barcode scanning UI, saved meals, custom foods
 - HealthKit, Health Connect, widgets (M6)
 - Branded-foods tier and the five verified-open national tables (UK CoFID, Japan
   MEXT, France CIQUAL, Germany BLS, Australia FSANZ) — the pipeline is built and
   they are additive stages
-- ESLint config, so `npm run lint` currently fails; the three M0 rules do not
-  exist yet
-- No dev-client build has run on physical hardware
+- ESLint: configured (`eslint.config.mjs`) and passing cleanly
+- The current Phase 1 dev-client build has run on physical Android hardware.
+  Interactive delete/undo/restart and document-picker backup/restore walkthroughs
+  still need a human tap-through.
 
 Honestly: **M0 and M0.5 complete, M1 complete, M2 and M5–M8 untouched.** Roughly
 8–10 of the plan's 20+ engineer-weeks.

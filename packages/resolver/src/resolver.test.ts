@@ -240,7 +240,7 @@ describe('resolution against a real corpus', () => {
     const ids = r.outcome.kind === 'auto_accept'
       ? [r.outcome.match.foodId]
       : r.outcome.kind === 'disambiguate' ? r.outcome.candidates.map((c) => c.foodId) : []
-    expect(ids.map(String)).toContain('1')
+    expect(ids.map(String)).toContain('usda:1')
   })
 
   it('prefers the grilled row over the roasted one when the model saw grill marks', async () => {
@@ -251,7 +251,7 @@ describe('resolution against a real corpus', () => {
     const first = r.outcome.kind === 'auto_accept'
       ? r.outcome.match
       : r.outcome.kind === 'disambiguate' ? r.outcome.candidates[0] : null
-    expect(String(first?.foodId)).toBe('1')
+    expect(String(first?.foodId)).toBe('usda:1')
   })
 
   it('broadens down the ladder rather than giving up on one absent token', async () => {
@@ -280,7 +280,7 @@ describe('resolution against a real corpus', () => {
   })
 
   it('returns null for an unknown barcode instead of a wrong row', async () => {
-    expect(await resolveByBarcode(db, '9999999999994')).toBeNull()
+    expect(await resolveByBarcode(db, '9999999999995')).toBeNull()
   })
 
   it('never throws on a hostile query string', async () => {

@@ -14,6 +14,9 @@
     "use-release": "node scripts/use-release-scheme.mjs"
   },
   "dependencies": {
+    "@nutai/training": "*",
+    "@nutai/search": "*",
+    "@nutai/timeline": "*",
     "@expo/ui": "~57.0.8",
     "@kingstinct/react-native-healthkit": "^14.0.2",
     "@nutai/clamp": "*",

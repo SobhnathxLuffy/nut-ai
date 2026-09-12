@@ -82,7 +82,7 @@ const EMPTY: OnboardingAnswers = {
   birthDay: null,
   heightCm: null,
   weightKg: null,
-  units: 'imperial',
+  units: 'metric',
   worksWithProfessional: null,
   goal: null,
   desiredWeightKg: null,

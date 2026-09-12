@@ -193,6 +193,10 @@ export default function Result() {
                     <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
                       From {domainOf(row.sourceUrl)}
                     </Text>
+                  ) : row.sourceAttribution ? (
+                    <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
+                      {row.sourceAttribution}
+                    </Text>
                   ) : row.isEstimate ? (
                     <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>AI ESTIMATE</Text>
                   ) : null}

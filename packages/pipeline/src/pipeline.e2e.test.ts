@@ -100,7 +100,7 @@ describe('the happy path', () => {
     // The snapshot came from the DATABASE row, not the model's guess.
     expect(only.row.nutrientSnapshot.kcal).toBe(165)
     expect(only.row.isEstimate).toBe(false)
-    expect(only.row.sourceFoodId).toBe('1')
+    expect(only.row.sourceFoodId).toBe('usda:1')
   })
 
   it('shows displayed calories that are reproducible from the displayed macros', async () => {

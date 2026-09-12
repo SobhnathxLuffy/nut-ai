@@ -1,0 +1,14 @@
+{
+  "name": "@nutai/ifct-import",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "extract": "node src/extract-pdf.mjs",
+    "build": "node src/build.mjs",
+    "verify": "node src/golden-queries.mjs"
+  },
+  "dependencies": {
+    "@nutai/db-adapter": "*"
+  }
+}

@@ -22,7 +22,13 @@ import {
   type ResolvedRow,
 } from '@nutai/gram-engine'
 import { selectMealQuestions, type SelectedQuestion } from '@nutai/repair'
-import { loadFood, resolveByBarcode, resolveByText, type ResolvedFood } from '@nutai/resolver'
+import {
+  loadFood,
+  resolveByBarcode,
+  resolveByText,
+  type NutritionSourceContext,
+  type ResolvedFood,
+} from '@nutai/resolver'
 import { recomputeTotals, toDisplayTotals, type DisplayTotals } from '@nutai/totals'
 
 /**
@@ -58,6 +64,8 @@ export interface PipelineDeps {
   path: InferencePath
   /** Barcode decoded on-frame, if any. Short-circuits resolution for that item. */
   barcode?: string | undefined
+  /** Optional non-USDA databases used by the multi-source nutrition router. */
+  sourceContext?: NutritionSourceContext | undefined
   /** Tight calorie budgets make the same absolute error matter more. */
   severityWeight?: number | undefined
   now: number
@@ -177,7 +185,7 @@ export async function runPipeline(
     let candidates: ResolvedItem['candidates']
 
     if (deps.barcode && index === 0) {
-      food = await resolveByBarcode(deps.db, deps.barcode)
+      food = await resolveByBarcode(deps.db, deps.barcode, deps.sourceContext)
       if (food) resolution = 'barcode'
     }
 
@@ -205,11 +213,11 @@ export async function runPipeline(
         prepFacet: prepFacetFor(item),
         modelCategory: null,
         estimatedGrams: gram.grams,
-      })
+      }, deps.sourceContext)
       if (r.zeroHit) zeroHitCount++
 
       if (r.outcome.kind === 'auto_accept') {
-        food = await loadFood(deps.db, r.outcome.match.foodId)
+        food = await loadFood(deps.db, r.outcome.match.foodId, deps.sourceContext)
         resolution = 'auto_accept'
       } else if (r.outcome.kind === 'disambiguate') {
         resolution = 'disambiguate'
@@ -221,7 +229,7 @@ export async function runPipeline(
         }))
         // Take the top candidate provisionally so the user sees a number rather
         // than a blank while they decide. It is labeled, and one tap changes it.
-        food = await loadFood(deps.db, r.outcome.candidates[0]?.foodId ?? '')
+        food = await loadFood(deps.db, r.outcome.candidates[0]?.foodId ?? '', deps.sourceContext)
       }
     }
 

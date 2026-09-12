@@ -1,5 +1,5 @@
 import Storage from 'expo-sqlite/kv-store'
-import { migrate } from '@nutai/db-adapter'
+import { createSyncMetadata, migrate, recordOperation } from '@nutai/db-adapter'
 import type { CalorieTarget, MacroTargets } from '@nutai/goals'
 import { openUserDb } from '../db/expo-adapter'
 import { ONBOARDING_DONE_KEY } from './done-key'
@@ -54,11 +54,13 @@ export async function persistOnboarding(
       ],
     )
 
-    await tx.run(
+    const goalSync = createSyncMetadata(now)
+    const goalInsert = await tx.run(
       `INSERT INTO goals
          (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-          floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
+          floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive,
+          uuid, created_at, updated_at, revision, deleted_at, sync_state)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?,?)`,
       [
         now,
         inferredGoal(answers),
@@ -71,15 +73,51 @@ export async function persistOnboarding(
         macros.carbs_g,
         target.bmr,
         target.tdee,
+        goalSync.uuid,
+        goalSync.created_at,
+        goalSync.updated_at,
+        goalSync.revision,
+        goalSync.deleted_at,
+        goalSync.sync_state,
       ],
     )
+    const goalId = Number(goalInsert.lastInsertRowId)
+    const goal = await tx.get<Record<string, unknown>>('SELECT * FROM goals WHERE id = ?', [goalId])
+    await recordOperation(tx, {
+      entityType: 'goals', entityId: goalId, opType: 'insert', newJson: goal,
+      actor: 'user', createdAt: now,
+    })
 
     if (answers.weightKg != null) {
       const localDate = new Date(now).toISOString().slice(0, 10)
-      await tx.run(
-        'INSERT OR REPLACE INTO weight_entries (local_date, weight_kg, logged_at) VALUES (?,?,?)',
-        [localDate, answers.weightKg, now],
+      const previous = await tx.get<Record<string, unknown>>(
+        'SELECT * FROM weight_entries WHERE local_date = ?', [localDate],
       )
+      if (previous) {
+        await tx.run(
+          `UPDATE weight_entries SET weight_kg = ?, logged_at = ?, updated_at = ?,
+                                     revision = revision + 1, sync_state = 'local'
+           WHERE local_date = ?`,
+          [answers.weightKg, now, now, localDate],
+        )
+      } else {
+        const weightSync = createSyncMetadata(now)
+        await tx.run(
+          `INSERT INTO weight_entries
+             (local_date, weight_kg, logged_at, uuid, created_at, updated_at, revision, deleted_at, sync_state)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
+          [localDate, answers.weightKg, now, weightSync.uuid, weightSync.created_at,
+           weightSync.updated_at, weightSync.revision, weightSync.deleted_at, weightSync.sync_state],
+        )
+      }
+      const weight = await tx.get<Record<string, unknown>>(
+        'SELECT * FROM weight_entries WHERE local_date = ?', [localDate],
+      )
+      await recordOperation(tx, {
+        entityType: 'weight_entries', entityId: Number(weight?.['id']),
+        opType: previous ? 'update' : 'insert', prevJson: previous, newJson: weight,
+        actor: 'user', createdAt: now,
+      })
     }
 
     // Every setting below has a consumer. See the note at the top of store.ts:

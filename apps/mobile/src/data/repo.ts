@@ -1,15 +1,30 @@
-import { migrate, type DbAdapter } from '@nutai/db-adapter'
 import {
-  computeMacros,
-  computeTrend,
-  isDayCompleteEnough,
-  trendSlopeLbPerWeek,
-  updateAdaptiveTdee,
+  migrate,
+  getDayStatus as getDayStatusDb,
+  setDayStatus as setDayStatusDb,
+  listDayStatuses as listDayStatusesDb,
+  recordOperation,
+  undoOperation,
+  redoOperation,
+  getOperationByIdempotencyKey,
+  listOperations,
+  compactOperations,
+  createSyncMetadata,
+  type DbAdapter,
+  type DayStatusRecord,
+  type SetDayStatusInput,
+  type OperationRecord,
+  type OperationActor,
+  type UndoResult,
+  type RedoResult,
+} from '@nutai/db-adapter'
+import {
   type Goal,
   type MacroTargets,
   type WeightPoint,
 } from '@nutai/goals'
 import Storage from 'expo-sqlite/kv-store'
+import { seedExercises } from '@nutai/training'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
 import { localDate, slotFor } from './date-utils'
@@ -28,13 +43,18 @@ export { localDate, slotFor }
  */
 
 let cached: DbAdapter | null = null
+let opening: Promise<DbAdapter> | null = null
 
 export async function db(): Promise<DbAdapter> {
   if (cached) return cached
-  const handle = await openUserDb()
-  await migrate(handle, Date.now())
-  cached = handle
-  return handle
+  if (!opening) opening = (async () => {
+    const handle = await openUserDb()
+    await migrate(handle, Date.now())
+    await seedExercises(handle)
+    cached = handle
+    return handle
+  })().catch(error => { opening = null; throw error })
+  return opening
 }
 
 
@@ -146,29 +166,28 @@ export async function overrideTargets(
   now: number,
 ): Promise<void> {
   const h = await db()
-  await h.run(
-    `INSERT INTO goals
+  const sync = createSyncMetadata(now)
+  await h.transaction(async (tx) => {
+    const inserted = await tx.run(
+      `INSERT INTO goals
        (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [
-      now,
-      base.goalType,
-      null,
-      next.targetKcal,
-      next.targetKcal,
-      0,
-      next.macros.protein_g,
-      next.macros.fat_g,
-      next.macros.carbs_g,
-      base.bmr,
-      base.tdee,
-      // A hand-set target turns the adaptive loop OFF. Silently overwriting a
-      // number the user deliberately chose is the fastest way to lose their
-      // trust in every other number.
-      0,
-    ],
-  )
+        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive,
+        uuid, created_at, updated_at, revision, deleted_at, sync_state)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        now, base.goalType, null, next.targetKcal, next.targetKcal, 0,
+        next.macros.protein_g, next.macros.fat_g, next.macros.carbs_g,
+        base.bmr, base.tdee, 0, sync.uuid, sync.created_at, sync.updated_at,
+        sync.revision, sync.deleted_at, sync.sync_state,
+      ],
+    )
+    const goalId = Number(inserted.lastInsertRowId)
+    const goal = await tx.get<Record<string, unknown>>('SELECT * FROM goals WHERE id = ?', [goalId])
+    await recordOperation(tx, {
+      entityType: 'goals', entityId: goalId, opType: 'insert', newJson: goal,
+      actor: 'user', createdAt: now,
+    })
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +230,7 @@ export async function dayTotals(date: string): Promise<DayTotals> {
        COUNT(DISTINCT m.meal_slot) AS slots
      FROM meals m
      JOIN log_items li ON li.meal_id = m.id
-     WHERE m.local_date = ? AND m.analysis_status IN ('complete','manual')`,
+     WHERE m.local_date = ? AND m.deleted_at IS NULL AND li.deleted_at IS NULL AND m.analysis_status IN ('complete','manual')`,
     [date],
   )
 
@@ -255,16 +274,26 @@ export async function logMeal(
   } | null,
   photoUri: string | null,
   now: number,
+  options?: {
+    actor?: OperationActor | string
+    idempotencyKey?: string
+  },
 ): Promise<number> {
   const h = await db()
   const date = localDate(now)
+  const mealSync = createSyncMetadata(now)
 
   return h.transaction(async (tx) => {
+    if (options?.idempotencyKey) {
+      const existing = await getOperationByIdempotencyKey(tx, options.idempotencyKey)
+      if (existing) return existing.entity_id
+    }
     const meal = await tx.run(
       `INSERT INTO meals (logged_at, local_date, meal_slot, photo_uri, portion_eaten_fraction,
                           analysis_status, engine_id, prompt_version, schema_version,
-                          clamp_flags_json, created_at)
-       VALUES (?,?,?,?,?,'complete',?,?,?,?,?)`,
+                          clamp_flags_json, created_at, uuid, updated_at, revision,
+                          deleted_at, sync_state)
+       VALUES (?,?,?,?,?,'complete',?,?,?,?,?,?,?,?,?,?)`,
       [
         now,
         date,
@@ -276,12 +305,18 @@ export async function logMeal(
         result.meal.schemaVersion,
         JSON.stringify(result.clampFlags ?? []),
         now,
+        mealSync.uuid,
+        mealSync.updated_at,
+        mealSync.revision,
+        mealSync.deleted_at,
+        mealSync.sync_state,
       ],
     )
     const mealId = Number(meal.lastInsertRowId)
 
     let sort = 0
     for (const row of result.meal.ingredients) {
+      const itemSync = createSyncMetadata(now)
       const foodId = row.sourceFoodId == null ? null : Number(row.sourceFoodId)
       await tx.run(
         `INSERT INTO log_items (meal_id, matched_food_id, matched_food_source, raw_model_label,
@@ -289,8 +324,9 @@ export async function logMeal(
                                 snap_energy_kcal, snap_protein_g, snap_fat_g, snap_carb_g,
                                 snap_fiber_g, snap_sugar_g, snap_sodium_mg,
                                 is_estimate, macros_user_edited, band_half_pct,
-                                assumptions_json, sort_order, logged_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                assumptions_json, sort_order, logged_at, uuid,
+                                created_at, updated_at, revision, deleted_at, sync_state)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           mealId,
           Number.isFinite(foodId as number) ? foodId : null,
@@ -313,6 +349,12 @@ export async function logMeal(
           JSON.stringify(row.assumptions ?? []),
           sort++,
           now,
+          itemSync.uuid,
+          itemSync.created_at,
+          itemSync.updated_at,
+          itemSync.revision,
+          itemSync.deleted_at,
+          itemSync.sync_state,
         ],
       )
     }
@@ -326,20 +368,217 @@ export async function logMeal(
       )
     }
 
+    const mealRow = await tx.get<Record<string, unknown>>('SELECT * FROM meals WHERE id = ?', [mealId])
+    const itemRows = await tx.all<Record<string, unknown>>(
+      'SELECT * FROM log_items WHERE meal_id = ? ORDER BY id ASC',
+      [mealId],
+    )
+    const ledgerRows = await tx.all<Record<string, unknown>>(
+      'SELECT * FROM scan_cost_ledger WHERE meal_id = ? ORDER BY id ASC',
+      [mealId],
+    )
+
+    await recordOperation(tx, {
+      entityType: 'meals',
+      entityId: mealId,
+      opType: 'insert',
+      newJson: { meal: mealRow, items: itemRows, ledger: ledgerRows },
+      actor: options?.actor ?? 'user',
+      idempotencyKey: options?.idempotencyKey,
+      createdAt: now,
+    })
+
     return mealId
   })
+}
+
+export async function deleteMeal(
+  mealId: number,
+  options?: {
+    actor?: OperationActor | string
+    idempotencyKey?: string
+    now?: number
+  },
+): Promise<OperationRecord | null> {
+  const h = await db()
+  const now = options?.now ?? Date.now()
+
+  return h.transaction(async (tx) => {
+    if (options?.idempotencyKey) {
+      const existing = await getOperationByIdempotencyKey(tx, options.idempotencyKey)
+      if (existing) return existing
+    }
+    const mealRow = await tx.get<Record<string, unknown>>('SELECT * FROM meals WHERE id = ?', [mealId])
+    if (!mealRow) return null
+    const itemRows = await tx.all<Record<string, unknown>>(
+      'SELECT * FROM log_items WHERE meal_id = ? ORDER BY id ASC', [mealId],
+    )
+    const ledgerRows = await tx.all<Record<string, unknown>>(
+      'SELECT * FROM scan_cost_ledger WHERE meal_id = ? ORDER BY id ASC', [mealId],
+    )
+    await tx.run('DELETE FROM log_items WHERE meal_id = ?', [mealId])
+    await tx.run('DELETE FROM scan_cost_ledger WHERE meal_id = ?', [mealId])
+    await tx.run('DELETE FROM meals WHERE id = ?', [mealId])
+
+    return recordOperation(tx, {
+      entityType: 'meals',
+      entityId: mealId,
+      opType: 'delete',
+      prevJson: { meal: mealRow, items: itemRows, ledger: ledgerRows },
+      actor: options?.actor ?? 'user',
+      idempotencyKey: options?.idempotencyKey,
+      createdAt: now,
+    })
+
+  })
+}
+
+export async function updateMealSlot(
+  mealId: number,
+  slot: string,
+  options?: {
+    actor?: OperationActor | string
+    idempotencyKey?: string
+    now?: number
+  },
+): Promise<boolean> {
+  const h = await db()
+  const now = options?.now ?? Date.now()
+  return h.transaction(async (tx) => {
+    if (options?.idempotencyKey && await getOperationByIdempotencyKey(tx, options.idempotencyKey)) {
+      return true
+    }
+    const prevRow = await tx.get<Record<string, unknown>>('SELECT * FROM meals WHERE id = ?', [mealId])
+    if (!prevRow) return false
+    await tx.run(
+      `UPDATE meals SET meal_slot = ?, updated_at = ?, revision = revision + 1,
+                        sync_state = 'local' WHERE id = ?`,
+      [slot, now, mealId],
+    )
+    const newRow = await tx.get<Record<string, unknown>>('SELECT * FROM meals WHERE id = ?', [mealId])
+
+    await recordOperation(tx, {
+      entityType: 'meals',
+      entityId: mealId,
+      opType: 'update',
+      prevJson: prevRow,
+      newJson: newRow,
+      actor: options?.actor ?? 'user',
+      idempotencyKey: options?.idempotencyKey,
+      createdAt: now,
+    })
+
+    return true
+  })
+}
+
+export interface DayMealItem {
+  id: number
+  displayName: string
+  grams: number
+  energyKcal: number
+}
+
+export interface DayMeal {
+  id: number
+  slot: string | null
+  loggedAt: number
+  analysisStatus: string
+  items: DayMealItem[]
+}
+
+export async function mealsForDay(date: string): Promise<DayMeal[]> {
+  const h = await db()
+  const meals = await h.all<{
+    id: number
+    meal_slot: string | null
+    logged_at: number
+    analysis_status: string
+  }>(
+    'SELECT id, meal_slot, logged_at, analysis_status FROM meals WHERE local_date = ? ORDER BY logged_at ASC, id ASC',
+    [date],
+  )
+
+  const result: DayMeal[] = []
+  for (const m of meals) {
+    const items = await h.all<{
+      id: number
+      display_name: string
+      grams: number
+      snap_energy_kcal: number | null
+    }>(
+      'SELECT id, display_name, grams, snap_energy_kcal FROM log_items WHERE meal_id = ? ORDER BY sort_order ASC, id ASC',
+      [m.id],
+    )
+    result.push({
+      id: m.id,
+      slot: m.meal_slot,
+      loggedAt: m.logged_at,
+      analysisStatus: m.analysis_status,
+      items: items.map((i) => ({
+        id: i.id,
+        displayName: i.display_name,
+        grams: i.grams,
+        energyKcal: Math.round((i.snap_energy_kcal ?? 0) * (i.grams / 100)),
+      })),
+    })
+  }
+  return result
 }
 
 // ---------------------------------------------------------------------------
 // Weight
 // ---------------------------------------------------------------------------
 
-export async function logWeight(kg: number, now: number): Promise<void> {
+export async function logWeight(
+  kg: number,
+  now: number,
+  options?: {
+    actor?: OperationActor | string
+    idempotencyKey?: string
+  },
+): Promise<void> {
   const h = await db()
-  await h.run(
-    'INSERT OR REPLACE INTO weight_entries (local_date, weight_kg, logged_at) VALUES (?,?,?)',
-    [localDate(now), kg, now],
-  )
+  const date = localDate(now)
+
+  await h.transaction(async (tx) => {
+    if (options?.idempotencyKey && await getOperationByIdempotencyKey(tx, options.idempotencyKey)) return
+    const existing = await tx.get<Record<string, unknown>>(
+      'SELECT * FROM weight_entries WHERE local_date = ?', [date],
+    )
+    if (existing) {
+      await tx.run(
+        `UPDATE weight_entries SET weight_kg = ?, logged_at = ?, updated_at = ?,
+                                   revision = revision + 1, sync_state = 'local'
+         WHERE local_date = ?`,
+        [kg, now, now, date],
+      )
+    } else {
+      const sync = createSyncMetadata(now)
+      await tx.run(
+        `INSERT INTO weight_entries
+           (local_date, weight_kg, logged_at, uuid, created_at, updated_at, revision, deleted_at, sync_state)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        [date, kg, now, sync.uuid, sync.created_at, sync.updated_at, sync.revision, sync.deleted_at, sync.sync_state],
+      )
+    }
+    const newRow = await tx.get<Record<string, unknown>>(
+      'SELECT * FROM weight_entries WHERE local_date = ?',
+      [date],
+    )
+    const entityId = Number(newRow?.['id'] ?? 0)
+
+    await recordOperation(tx, {
+      entityType: 'weight_entries',
+      entityId,
+      opType: existing ? 'update' : 'insert',
+      prevJson: existing ?? null,
+      newJson: newRow ?? null,
+      actor: options?.actor ?? 'user',
+      idempotencyKey: options?.idempotencyKey,
+      createdAt: now,
+    })
+  })
 }
 
 export async function weightHistory(): Promise<WeightPoint[]> {
@@ -381,97 +620,103 @@ export interface AdaptiveOutcome {
  *   3. A >= 75 kcal MOVE before anything is surfaced. A target that shifts daily
  *      teaches people to ignore it.
  */
-export async function runAdaptive(now: number): Promise<AdaptiveOutcome> {
-  const goal = await currentGoal()
-  if (!goal) return { ran: false, reason: 'No goal set yet.' }
-  if (!goal.adaptive) return { ran: false, reason: 'Adaptive targets are off — you set this target by hand.' }
+export async function runAdaptive(_now: number): Promise<AdaptiveOutcome> {
+  return { ran: false, reason: 'Review weekly check-in suggestions in Progress. Targets change only after you accept.' }
+}
 
-  const points = await weightHistory()
-  if (points.length < 5) {
-    return { ran: false, reason: `Needs about ${5 - points.length} more weigh-ins before the trend means anything.` }
-  }
-
-  const trend = computeTrend(points)
-  const slope = trendSlopeLbPerWeek(trend)
-  if (slope == null) return { ran: false, reason: 'Not enough spread in your weigh-ins yet.' }
-
+export async function getDayStatus(targetDate: string): Promise<DayStatusRecord | null> {
   const h = await db()
-  const days = await h.all<{ local_date: string }>(
-    'SELECT DISTINCT local_date FROM meals ORDER BY local_date DESC LIMIT 21',
-  )
+  return getDayStatusDb(h, targetDate)
+}
 
-  let sum = 0
-  let admitted = 0
-  for (const d of days) {
-    const t = await dayTotals(d.local_date)
-    const complete = isDayCompleteEnough({
-      mealCount: t.mealCount,
-      distinctSlotCount: t.distinctSlots,
-      hasQueuedEntries: t.pendingCount > 0,
+export async function setDayStatus(input: SetDayStatusInput): Promise<DayStatusRecord> {
+  const h = await db()
+  return setDayStatusDb(h, input)
+}
+
+export async function listDayStatuses(options?: {
+  startDate?: string
+  endDate?: string
+}): Promise<DayStatusRecord[]> {
+  const h = await db()
+  return listDayStatusesDb(h, options)
+}
+
+// ---------------------------------------------------------------------------
+// Operations & Undo
+// ---------------------------------------------------------------------------
+
+export async function undoLastOperation(now: number = Date.now()): Promise<UndoResult> {
+  const h = await db()
+  const lastOp = await h.get<{ id: number }>(
+    'SELECT id FROM operations WHERE undone_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+  )
+  if (!lastOp) {
+    return { success: false, reason: 'not_found' }
+  }
+  return undoOperation(h, lastOp.id, now)
+}
+
+export async function undoRecordedOperation(
+  idOrUuid: number | string,
+  now: number = Date.now(),
+): Promise<UndoResult> {
+  return undoOperation(await db(), idOrUuid, now)
+}
+
+export async function logExercise(name: string, kcal: number, now: number = Date.now()): Promise<number> {
+  const h = await db()
+  const sync = createSyncMetadata(now)
+  return h.transaction(async (tx) => {
+    const inserted = await tx.run(
+      `INSERT INTO exercise_entries
+         (local_date, name, kcal, provenance, external_id, logged_at, uuid, created_at,
+          updated_at, revision, deleted_at, sync_state)
+       VALUES (?,?,?,'manual',NULL,?,?,?,?,?,?,?)`,
+      [localDate(now), name, kcal, now, sync.uuid, sync.created_at, sync.updated_at,
+        sync.revision, sync.deleted_at, sync.sync_state],
+    )
+    const id = Number(inserted.lastInsertRowId)
+    const row = await tx.get<Record<string, unknown>>('SELECT * FROM exercise_entries WHERE id = ?', [id])
+    await recordOperation(tx, {
+      entityType: 'exercise_entries', entityId: id, opType: 'insert', newJson: row,
+      actor: 'user', createdAt: now,
     })
-    if (!complete) continue
-    sum += t.kcal
-    admitted++
-  }
-
-  if (admitted < 5) {
-    return { ran: false, reason: `Needs about ${5 - admitted} more fully-logged days before adjusting your target.` }
-  }
-
-  const updateCount = Number(await setting('adaptive.updateCount', '0'))
-  const result = updateAdaptiveTdee({
-    currentTdee: goal.targetKcal,
-    avgDailyIntakeKcal: sum / admitted,
-    trendSlopeLbPerWeek: slope,
-    updateCount,
+    return id
   })
+}
 
-  await putSetting('adaptive.updateCount', String(updateCount + 1))
-  await putSetting('adaptive.lastRunAt', String(now))
-
-  if (!result.shouldSurface) {
-    return {
-      ran: true,
-      reason: 'Your target is still right — no change worth showing.',
-      previousKcal: goal.targetKcal,
-      newKcal: result.newTdee,
-      surfaced: false,
-    }
-  }
-
-  // Macros re-derive from the new target so protein tracks the body, not the
-  // budget, and carbs stay the single derived remainder.
-  const profile = await h.get<{ height_cm: number }>('SELECT height_cm FROM user_profile WHERE id = 1')
-  const latestKg = points[points.length - 1]?.weightKg ?? 80
-  const macros = computeMacros(result.newTdee, latestKg, goal.goalType)
-
-  await h.run(
-    `INSERT INTO goals
-       (effective_from, goal_type, rate_lb_per_week, target_kcal, target_raw_kcal,
-        floor_applied, protein_g, fat_g, carbs_g, bmr, tdee, adaptive)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,1)`,
-    [
-      now,
-      goal.goalType,
-      null,
-      result.newTdee,
-      result.newTdee,
-      0,
-      macros.protein_g,
-      macros.fat_g,
-      macros.carbs_g,
-      goal.bmr,
-      result.observedTdee,
-    ],
+export async function redoLastOperation(): Promise<RedoResult> {
+  const h = await db()
+  const lastUndone = await h.get<{ id: number }>(
+    'SELECT id FROM operations WHERE undone_at IS NOT NULL ORDER BY undone_at DESC, id DESC LIMIT 1',
   )
-  void profile
-
-  return {
-    ran: true,
-    reason: 'Target updated.',
-    previousKcal: goal.targetKcal,
-    newKcal: result.newTdee,
-    surfaced: true,
-    explanation: result.explanation,
+  if (!lastUndone) {
+    return { success: false, reason: 'not_found' }
   }
+  return redoOperation(h, lastUndone.id)
+}
+
+export async function listRecentOperations(limit: number = 20): Promise<OperationRecord[]> {
+  const h = await db()
+  return listOperations(h, { limit })
+}
+
+export async function latestUndoableMealOperation(): Promise<OperationRecord | null> {
+  const h = await db()
+  const [operation] = await listOperations(h, {
+    entityType: 'meals',
+    limit: 1,
+    includeUndone: false,
+  })
+  return operation ?? null
+}
+
+export async function compactHistory(options?: {
+  maxAgeMs?: number
+  maxCount?: number
+  now?: number
+}): Promise<{ deletedCount: number }> {
+  const h = await db()
+  return compactOperations(h, options)
 }

@@ -255,7 +255,11 @@ export default function Profile() {
 
       <Section title="About">
         <Row label="License" value="AGPL-3.0" />
-        <Row label="Nutrition data" value="USDA, CC0" />
+        <Row label="Nutrition data" value="IFCT 2017 + USDA" />
+        <Text style={[type.caption, { color: theme.textFaint, padding: space.lg, paddingTop: 0, lineHeight: 18 }]}>
+          IFCT: ICMR-NIN, used with permission. USDA FoodData Central: public domain.
+          Open Food Facts barcode data: ODbL 1.0.
+        </Text>
       </Section>
 
       <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xl, lineHeight: 19 }]}>

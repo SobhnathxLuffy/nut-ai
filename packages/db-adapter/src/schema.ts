@@ -1,3 +1,6 @@
+import { type DbAdapter } from "./types.js"
+import { deterministicUuidV7 } from './uuid.js'
+import { TRAINING_SQL, OPERATIONS_V10_SQL } from './phase3-schema.js'
 /**
  * Schema DDL.
  *
@@ -386,9 +389,10 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 1
+export const USER_SCHEMA_VERSION = 10
 
 export interface Migration {
+  up?: (db: DbAdapter, now: number) => Promise<void>
   version: number
   sql: string
 }
@@ -400,4 +404,344 @@ export interface Migration {
  * Migration tests run forward from EVERY shipped version, because a user who
  * skipped three releases must land in the same place as one who took all of them.
  */
-export const MIGRATIONS: readonly Migration[] = [{ version: 1, sql: USER_SCHEMA }]
+
+export const USER_SCHEMA_V2_SQL = `
+ALTER TABLE meals ADD COLUMN uuid TEXT;
+ALTER TABLE meals ADD COLUMN updated_at INTEGER;
+ALTER TABLE meals ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE meals ADD COLUMN deleted_at INTEGER;
+ALTER TABLE meals ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_meals_uuid ON meals(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE log_items ADD COLUMN uuid TEXT;
+ALTER TABLE log_items ADD COLUMN created_at INTEGER;
+ALTER TABLE log_items ADD COLUMN updated_at INTEGER;
+ALTER TABLE log_items ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE log_items ADD COLUMN deleted_at INTEGER;
+ALTER TABLE log_items ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_log_items_uuid ON log_items(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE weight_entries ADD COLUMN uuid TEXT;
+ALTER TABLE weight_entries ADD COLUMN created_at INTEGER;
+ALTER TABLE weight_entries ADD COLUMN updated_at INTEGER;
+ALTER TABLE weight_entries ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE weight_entries ADD COLUMN deleted_at INTEGER;
+ALTER TABLE weight_entries ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_weight_entries_uuid ON weight_entries(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE water_entries ADD COLUMN uuid TEXT;
+ALTER TABLE water_entries ADD COLUMN created_at INTEGER;
+ALTER TABLE water_entries ADD COLUMN updated_at INTEGER;
+ALTER TABLE water_entries ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE water_entries ADD COLUMN deleted_at INTEGER;
+ALTER TABLE water_entries ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_water_entries_uuid ON water_entries(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE exercise_entries ADD COLUMN uuid TEXT;
+ALTER TABLE exercise_entries ADD COLUMN created_at INTEGER;
+ALTER TABLE exercise_entries ADD COLUMN updated_at INTEGER;
+ALTER TABLE exercise_entries ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE exercise_entries ADD COLUMN deleted_at INTEGER;
+ALTER TABLE exercise_entries ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exercise_entries_uuid ON exercise_entries(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE user_foods ADD COLUMN uuid TEXT;
+ALTER TABLE user_foods ADD COLUMN updated_at INTEGER;
+ALTER TABLE user_foods ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_foods ADD COLUMN deleted_at INTEGER;
+ALTER TABLE user_foods ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_foods_uuid ON user_foods(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE saved_meals ADD COLUMN uuid TEXT;
+ALTER TABLE saved_meals ADD COLUMN updated_at INTEGER;
+ALTER TABLE saved_meals ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE saved_meals ADD COLUMN deleted_at INTEGER;
+ALTER TABLE saved_meals ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_meals_uuid ON saved_meals(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE user_containers ADD COLUMN uuid TEXT;
+ALTER TABLE user_containers ADD COLUMN updated_at INTEGER;
+ALTER TABLE user_containers ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE user_containers ADD COLUMN deleted_at INTEGER;
+ALTER TABLE user_containers ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_containers_uuid ON user_containers(uuid) WHERE uuid IS NOT NULL;
+
+ALTER TABLE goals ADD COLUMN uuid TEXT;
+ALTER TABLE goals ADD COLUMN created_at INTEGER;
+ALTER TABLE goals ADD COLUMN updated_at INTEGER;
+ALTER TABLE goals ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE goals ADD COLUMN deleted_at INTEGER;
+ALTER TABLE goals ADD COLUMN sync_state TEXT NOT NULL DEFAULT 'local';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_goals_uuid ON goals(uuid) WHERE uuid IS NOT NULL;
+`
+
+export async function backfillV2(db: DbAdapter, now: number): Promise<void> {
+  const meals = await db.all<{ id: number; created_at: number | null }>('SELECT id, created_at FROM meals WHERE uuid IS NULL')
+  for (const m of meals) {
+    const ts = m.created_at ?? now
+    await db.run('UPDATE meals SET uuid = ?, updated_at = coalesce(updated_at, ?) WHERE id = ?', [deterministicUuidV7(ts, `meals:${m.id}`), ts, m.id])
+  }
+
+  const items = await db.all<{ id: number; logged_at: number | null }>('SELECT id, logged_at FROM log_items WHERE uuid IS NULL')
+  for (const i of items) {
+    const ts = i.logged_at ?? now
+    await db.run(
+      'UPDATE log_items SET uuid = ?, created_at = coalesce(created_at, ?), updated_at = coalesce(updated_at, ?) WHERE id = ?',
+      [deterministicUuidV7(ts, `log_items:${i.id}`), ts, ts, i.id],
+    )
+  }
+
+  const weights = await db.all<{ id: number; logged_at: number | null }>('SELECT id, logged_at FROM weight_entries WHERE uuid IS NULL')
+  for (const w of weights) {
+    const ts = w.logged_at ?? now
+    await db.run(
+      'UPDATE weight_entries SET uuid = ?, created_at = coalesce(created_at, ?), updated_at = coalesce(updated_at, ?) WHERE id = ?',
+      [deterministicUuidV7(ts, `weight_entries:${w.id}`), ts, ts, w.id],
+    )
+  }
+
+  const exercises = await db.all<{ id: number; logged_at: number | null }>('SELECT id, logged_at FROM exercise_entries WHERE uuid IS NULL')
+  for (const e of exercises) {
+    const ts = e.logged_at ?? now
+    await db.run(
+      'UPDATE exercise_entries SET uuid = ?, created_at = coalesce(created_at, ?), updated_at = coalesce(updated_at, ?) WHERE id = ?',
+      [deterministicUuidV7(ts, `exercise_entries:${e.id}`), ts, ts, e.id],
+    )
+  }
+
+  const foods = await db.all<{ id: number; created_at: number | null }>('SELECT id, created_at FROM user_foods WHERE uuid IS NULL')
+  for (const f of foods) {
+    const ts = f.created_at ?? now
+    await db.run('UPDATE user_foods SET uuid = ?, updated_at = coalesce(updated_at, ?) WHERE id = ?', [deterministicUuidV7(ts, `user_foods:${f.id}`), ts, f.id])
+  }
+
+  const saved = await db.all<{ id: number; created_at: number | null }>('SELECT id, created_at FROM saved_meals WHERE uuid IS NULL')
+  for (const s of saved) {
+    const ts = s.created_at ?? now
+    await db.run('UPDATE saved_meals SET uuid = ?, updated_at = coalesce(updated_at, ?) WHERE id = ?', [deterministicUuidV7(ts, `saved_meals:${s.id}`), ts, s.id])
+  }
+
+  const containers = await db.all<{ id: number; created_at: number | null }>('SELECT id, created_at FROM user_containers WHERE uuid IS NULL')
+  for (const c of containers) {
+    const ts = c.created_at ?? now
+    await db.run('UPDATE user_containers SET uuid = ?, updated_at = coalesce(updated_at, ?) WHERE id = ?', [deterministicUuidV7(ts, `user_containers:${c.id}`), ts, c.id])
+  }
+
+  const goals = await db.all<{ id: number; effective_from: number | null }>('SELECT id, effective_from FROM goals WHERE uuid IS NULL')
+  for (const g of goals) {
+    const ts = g.effective_from ?? now
+    await db.run(
+      'UPDATE goals SET uuid = ?, created_at = coalesce(created_at, ?), updated_at = coalesce(updated_at, ?) WHERE id = ?',
+      [deterministicUuidV7(ts, `goals:${g.id}`), ts, ts, g.id],
+    )
+  }
+}
+
+export const USER_SCHEMA_V3_SQL = `
+CREATE TABLE IF NOT EXISTS day_status (
+  local_date   TEXT PRIMARY KEY,
+  completion   TEXT NOT NULL DEFAULT 'unknown' CHECK (completion IN ('complete', 'partial', 'unknown', 'fasting')),
+  confirmed_at INTEGER,
+  updated_at   INTEGER NOT NULL,
+  actor        TEXT NOT NULL DEFAULT 'user' CHECK (actor IN ('user', 'system', 'auto')),
+  provenance   TEXT
+);
+`
+
+export const USER_SCHEMA_V4_SQL = `
+CREATE TABLE IF NOT EXISTS operations (
+  id              INTEGER PRIMARY KEY,
+  uuid            TEXT NOT NULL UNIQUE,
+  entity_type     TEXT NOT NULL CHECK (entity_type IN ('meals', 'weight_entries', 'exercise_entries', 'goals', 'user_foods', 'saved_meals', 'user_containers')),
+  entity_id       INTEGER NOT NULL,
+  op_type         TEXT NOT NULL CHECK (op_type IN ('insert', 'update', 'delete')),
+  prev_json       TEXT,
+  new_json        TEXT,
+  actor           TEXT NOT NULL DEFAULT 'user' CHECK (actor IN ('user', 'system', 'sync', 'auto')),
+  idempotency_key TEXT,
+  created_at      INTEGER NOT NULL,
+  undone_at       INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_operations_entity ON operations(entity_type, entity_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_operations_idempotency ON operations(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_operations_created_at ON operations(created_at);
+`
+
+/** Repair databases that reached v4 while the Phase 1 implementation was under review. */
+export const USER_SCHEMA_V5_SQL = `
+CREATE TRIGGER IF NOT EXISTS validate_day_status_insert
+BEFORE INSERT ON day_status
+WHEN NEW.completion NOT IN ('complete', 'partial', 'unknown', 'fasting')
+  OR NEW.actor NOT IN ('user', 'system', 'auto')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid day_status value');
+END;
+
+CREATE TRIGGER IF NOT EXISTS validate_day_status_update
+BEFORE UPDATE ON day_status
+WHEN NEW.completion NOT IN ('complete', 'partial', 'unknown', 'fasting')
+  OR NEW.actor NOT IN ('user', 'system', 'auto')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid day_status value');
+END;
+
+CREATE TRIGGER IF NOT EXISTS validate_operations_insert
+BEFORE INSERT ON operations
+WHEN NEW.entity_type NOT IN ('meals', 'weight_entries', 'exercise_entries', 'goals', 'user_foods', 'saved_meals', 'user_containers')
+  OR NEW.op_type NOT IN ('insert', 'update', 'delete')
+  OR NEW.actor NOT IN ('user', 'system', 'sync', 'auto')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid operation value');
+END;
+
+`
+
+/** Keep the already-device-tested v5 migration immutable. */
+export const USER_SCHEMA_V6_SQL = `
+CREATE TRIGGER IF NOT EXISTS validate_operations_update
+BEFORE UPDATE ON operations
+WHEN NEW.entity_type NOT IN ('meals', 'weight_entries', 'exercise_entries', 'goals', 'user_foods', 'saved_meals', 'user_containers')
+  OR NEW.op_type NOT IN ('insert', 'update', 'delete')
+  OR NEW.actor NOT IN ('user', 'system', 'sync', 'auto')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid operation value');
+END;
+`
+
+/**
+ * Forward-only migrations.
+ *
+ * Version 1 is the whole baseline schema. Every later version is additive.
+ * Migration tests run forward from EVERY shipped version, because a user who
+ * skipped three releases must land in the same place as one who took all of them.
+ */
+export const USER_SCHEMA_V7_SQL = `
+CREATE TABLE IF NOT EXISTS recipes (
+  id INTEGER PRIMARY KEY,
+  uuid TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  deleted_at INTEGER,
+  sync_state TEXT NOT NULL DEFAULT 'local'
+);
+
+CREATE TABLE IF NOT EXISTS recipe_versions (
+  id INTEGER PRIMARY KEY,
+  uuid TEXT NOT NULL UNIQUE,
+  recipe_id INTEGER NOT NULL REFERENCES recipes(id),
+  version_number INTEGER NOT NULL,
+  preparation TEXT NOT NULL CHECK(preparation IN ('boiled', 'fried', 'roasted', 'raw')),
+  added_oil_g REAL NOT NULL DEFAULT 0,
+  added_water_g REAL NOT NULL DEFAULT 0,
+  final_cooked_weight_g REAL NOT NULL,
+  servings REAL NOT NULL,
+  created_at INTEGER NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'local',
+  UNIQUE(recipe_id, version_number)
+);
+
+CREATE TABLE IF NOT EXISTS recipe_components (
+  id INTEGER PRIMARY KEY,
+  uuid TEXT NOT NULL UNIQUE,
+  recipe_version_id INTEGER NOT NULL REFERENCES recipe_versions(id),
+  food_id TEXT NOT NULL,
+  gram_weight REAL NOT NULL,
+  created_at INTEGER NOT NULL,
+  sync_state TEXT NOT NULL DEFAULT 'local'
+);
+`
+
+/**
+ * Forward-only repair for the initial recipe migration. Recipe components hold
+ * immutable nutrient snapshots so later source-data updates cannot rewrite a
+ * recipe version's nutrition.
+ */
+export const USER_SCHEMA_V8_SQL = `
+ALTER TABLE recipes ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+
+ALTER TABLE recipe_versions ADD COLUMN updated_at INTEGER;
+ALTER TABLE recipe_versions ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE recipe_versions ADD COLUMN deleted_at INTEGER;
+
+ALTER TABLE recipe_components ADD COLUMN snap_energy_kcal REAL;
+ALTER TABLE recipe_components ADD COLUMN snap_protein_g REAL;
+ALTER TABLE recipe_components ADD COLUMN snap_fat_g REAL;
+ALTER TABLE recipe_components ADD COLUMN snap_carb_g REAL;
+ALTER TABLE recipe_components ADD COLUMN snap_fiber_g REAL;
+ALTER TABLE recipe_components ADD COLUMN snap_sugar_g REAL;
+ALTER TABLE recipe_components ADD COLUMN snap_sodium_mg REAL;
+ALTER TABLE recipe_components ADD COLUMN updated_at INTEGER;
+ALTER TABLE recipe_components ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE recipe_components ADD COLUMN deleted_at INTEGER;
+
+CREATE INDEX IF NOT EXISTS idx_recipe_versions_recipe ON recipe_versions(recipe_id, version_number DESC);
+CREATE INDEX IF NOT EXISTS idx_recipe_components_version ON recipe_components(recipe_version_id);
+`
+
+/** Add recipe display snapshots and make aggregate recipe changes undoable. */
+export const USER_SCHEMA_V9_SQL = `
+ALTER TABLE recipe_components ADD COLUMN display_name TEXT;
+
+DROP TRIGGER IF EXISTS validate_operations_insert;
+DROP TRIGGER IF EXISTS validate_operations_update;
+DROP INDEX IF EXISTS idx_operations_entity;
+DROP INDEX IF EXISTS idx_operations_idempotency;
+DROP INDEX IF EXISTS idx_operations_created_at;
+ALTER TABLE operations RENAME TO operations_v8;
+
+CREATE TABLE operations (
+  id              INTEGER PRIMARY KEY,
+  uuid            TEXT NOT NULL UNIQUE,
+  entity_type     TEXT NOT NULL CHECK (entity_type IN ('meals', 'weight_entries', 'exercise_entries', 'goals', 'user_foods', 'saved_meals', 'user_containers', 'recipes')),
+  entity_id       INTEGER NOT NULL,
+  op_type         TEXT NOT NULL CHECK (op_type IN ('insert', 'update', 'delete')),
+  prev_json       TEXT,
+  new_json        TEXT,
+  actor           TEXT NOT NULL DEFAULT 'user' CHECK (actor IN ('user', 'system', 'sync', 'auto')),
+  idempotency_key TEXT,
+  created_at      INTEGER NOT NULL,
+  undone_at       INTEGER
+);
+
+INSERT INTO operations
+  (id, uuid, entity_type, entity_id, op_type, prev_json, new_json, actor, idempotency_key, created_at, undone_at)
+SELECT id, uuid, entity_type, entity_id, op_type, prev_json, new_json, actor, idempotency_key, created_at, undone_at
+FROM operations_v8;
+DROP TABLE operations_v8;
+
+CREATE INDEX idx_operations_entity ON operations(entity_type, entity_id);
+CREATE UNIQUE INDEX idx_operations_idempotency ON operations(idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX idx_operations_created_at ON operations(created_at);
+
+CREATE TRIGGER validate_operations_insert
+BEFORE INSERT ON operations
+WHEN NEW.entity_type NOT IN ('meals', 'weight_entries', 'exercise_entries', 'goals', 'user_foods', 'saved_meals', 'user_containers', 'recipes')
+  OR NEW.op_type NOT IN ('insert', 'update', 'delete')
+  OR NEW.actor NOT IN ('user', 'system', 'sync', 'auto')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid operation value');
+END;
+
+CREATE TRIGGER validate_operations_update
+BEFORE UPDATE ON operations
+WHEN NEW.entity_type NOT IN ('meals', 'weight_entries', 'exercise_entries', 'goals', 'user_foods', 'saved_meals', 'user_containers', 'recipes')
+  OR NEW.op_type NOT IN ('insert', 'update', 'delete')
+  OR NEW.actor NOT IN ('user', 'system', 'sync', 'auto')
+BEGIN
+  SELECT RAISE(ABORT, 'invalid operation value');
+END;
+`
+
+export const MIGRATIONS: readonly Migration[] = [
+  { version: 1, sql: USER_SCHEMA },
+  { version: 2, sql: USER_SCHEMA_V2_SQL, up: backfillV2 },
+  { version: 3, sql: USER_SCHEMA_V3_SQL },
+  { version: 4, sql: USER_SCHEMA_V4_SQL },
+  { version: 5, sql: USER_SCHEMA_V5_SQL, up: backfillV2 },
+  { version: 6, sql: USER_SCHEMA_V6_SQL },
+  { version: 7, sql: USER_SCHEMA_V7_SQL },
+  { version: 8, sql: USER_SCHEMA_V8_SQL },
+  { version: 9, sql: USER_SCHEMA_V9_SQL },
+  { version: 10, sql: TRAINING_SQL + OPERATIONS_V10_SQL },
+]

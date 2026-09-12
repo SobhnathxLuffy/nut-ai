@@ -144,6 +144,7 @@ describe('display rounding — Regime B', () => {
       fat_g: 6.19,
       carbs_g: 50.0,
       fiber_g: 4.2,
+      sugar_g: 0,
       sodium_mg: 611.4,
     })
     expect(d.protein_g).toBe(53)

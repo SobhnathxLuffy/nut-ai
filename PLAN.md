@@ -1,0 +1,101 @@
+# PLAN.md — Current Implementation Status
+
+> **Last updated:** 2026-09-12
+> **Audited at:** Schema v9, 414 tests, commit `04fe708b` plus uncommitted Phase 1-2 implementation
+> **Worktree state:** Dirty with uncommitted implementation and planning changes
+
+## Current Phase
+
+**Phase 1: Foundation** — COMPLETE
+
+Phase 1 implementation passes the full automated gate. Android device inspection
+confirmed the migrated `user.db` contains migrations 1 through 9 and the Phase 1
+tables/triggers remain intact after the Phase 2 schema additions.
+
+**Phase 2: Nutrition** — COMPLETE
+
+Nutrition sources, source routing, Open Food Facts barcode fallback, Indian alias
+normalization, IFCT Table 1 ingestion, and household recipe version/yield/oil
+logging are implemented. The bundled `ifct.db` contains all 528 food items from
+IFCT 2017 Table 1 for the current macro/fibre nutrition contract. IFCT
+micronutrients remain intentionally deferred to Phase 8 because the app does not
+yet have the micronutrient schema and report surfaces.
+
+## What Works Today
+
+| Area | Status | Evidence |
+|------|--------|----------|
+| Monorepo + npm workspaces | ✅ Working | `package.json` workspaces |
+| TypeScript strict mode | ✅ Working | `npm run typecheck` clean |
+| 11 Node-pure packages | ✅ Working | `check:node-purity` 11/11 |
+| 414 unit + property tests | ✅ Working | `npm run test` 36 files |
+| Schema v9 (UUID, ops, day, recipes) | ✅ Working | Android app-private `user.db` has migrations 1-9; FK/integrity clean |
+| Operations / undo foundation | ✅ Working | Strict replay, ledger-safe undo, recipe undo/redo coverage |
+| Day completeness storage | ✅ Working | Storage/restart/constraint tests pass |
+| Backup round-trip | ✅ Working | Complete/atomic/secret-safe/user recipe tests pass |
+| USDA nutrition.db (7,928 foods) | ✅ Working | `data:verify` 26/26 |
+| Photo scan → pipeline → result | ✅ Working | `pipeline.e2e.test.ts` 18 tests |
+| Deterministic gram reconciliation | ✅ Working | `gram-engine.test.ts` 39 tests |
+| Confidence bands | ✅ Working | `confidence.test.ts` 22 tests |
+| BYO key (Anthropic/OpenAI/Gemini) | ✅ Working | Provider adapters |
+| Immutable nutrition snapshots | ✅ Working | per-100g at log time |
+| 3-tab navigation + FAB | ✅ Working | Home, Progress, Profile |
+| Health score UI | ⚠️ Exists — TO BE REMOVED | Conflicts with principles |
+| ESLint | ✅ Configured | `npm run lint` passes |
+| Onboarding screens | 🔶 Partial | Routes exist, functionality partial |
+| THIRD-PARTY-DATA.md | ✅ Created | Planning pass |
+| Nutrition source interface | ✅ Working | Source-qualified USDA/IFCT/user/recipe/OFF adapters |
+| IFCT data / adapter | ✅ Working | 528 IFCT Table 1 foods; official PDF hash in manifest |
+| Open Food Facts adapter | ✅ Working | Barcode adapter, timeout, ODbL attribution, scanner fallback |
+| Indian aliases / ontology | ✅ Working | 100+ transliteration + Hindi-script aliases covered |
+| Recipe / dish family system | ✅ Working | Versioned recipes, yield/oil math, create/edit/log/undo |
+| 5-tab navigation | ❌ Not started | UX-001 |
+| Food tab (dedicated) | ❌ Not started | |
+| Train tab | ✅ Working | Workouts, routines, programs, sets, supersets |
+| Set/rep/load workout journal | ✅ Working | TRN-001+, auto-recovery, undo/redo, PR derivation |
+| Exercise library | ✅ Working | 200+ exercises seeded, custom exercise taxonomy |
+| Equipment / plate calculator | ✅ Working | EQP-001 bounded knapsack plate loading |
+| Universal search | ❌ Not started | SRH-001 |
+| Day completeness UI | ❌ Not started | ADP-002 |
+| Adaptive weekly check-in | ❌ Not started | ADP-003+ |
+| Unified timeline | ❌ Not started | TLN-001 |
+| Reports | ❌ Not started | TLN-003 |
+| UUID / sync metadata | ✅ Schema ready | v2 migration |
+| Cloud sync | ❌ Not started | SYN-001+ |
+| Web app | ❌ Not started | WEB-001+ |
+| Health Connect | ❌ Not started | HLT-001+ |
+| Local AI | ❌ Not started | AIP-008+ |
+
+## Next Task
+
+Start Phase 4 with `UX-001`: 5-Tab Navigation Migration and `SRH-001`: Unified Search Contract.
+
+## Blockers
+
+| Blocker | Impact |
+|---------|--------|
+| Health score still in UI | Should be removed early (AUD-002) |
+| Units default to 'imperial' | Should be metric-first for India (AUD-002) |
+
+## Commands
+
+```bash
+npm run check              # Full gate
+npm run typecheck          # TypeScript strict
+npm run test               # 438 tests
+npm run check:node-purity  # 16/16 packages
+npm run data:verify        # 26/26 USDA golden queries
+npm run ifct:verify        # 528-row IFCT golden queries
+```
+
+## Planning Documents
+
+See [docs/planning/00_INDEX.md](docs/planning/00_INDEX.md) for the full index.
+
+## Update Protocol
+
+When completing a task:
+1. Update the task status in its file and `docs/tasks/TASK_INDEX.md`
+2. Update the tables above
+3. Update "Next Task" to the next ready task
+4. Update "Blockers" if anything changed

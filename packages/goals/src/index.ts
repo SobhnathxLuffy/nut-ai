@@ -14,6 +14,7 @@
  *    judgments. Nothing here returns a "you're behind" or a pass/fail day.
  */
 
+export * from './checkin.js'
 export type Sex = 'male' | 'female' | 'unspecified'
 export type Goal = 'lose' | 'maintain' | 'gain'
 
@@ -390,5 +391,28 @@ export function isDayCompleteEnough(input: {
     input.mealCount >= DAY_COMPLETENESS.minMeals &&
     input.distinctSlotCount >= DAY_COMPLETENESS.minDistinctSlots &&
     !input.hasQueuedEntries
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Day Completeness Status
+// ---------------------------------------------------------------------------
+
+export const DAY_COMPLETION_STATUSES = ['complete', 'partial', 'unknown', 'fasting'] as const
+export type DayCompletion = (typeof DAY_COMPLETION_STATUSES)[number]
+export type DayStatusActor = 'user' | 'system' | 'auto'
+
+export function isValidDayCompletion(value: unknown): value is DayCompletion {
+  if (typeof value !== 'string') return false
+  return (DAY_COMPLETION_STATUSES as readonly string[]).includes(value.toLowerCase().trim())
+}
+
+export function normalizeDayCompletion(value: string): DayCompletion {
+  const lower = value.toLowerCase().trim()
+  if ((DAY_COMPLETION_STATUSES as readonly string[]).includes(lower)) {
+    return lower as DayCompletion
+  }
+  throw new Error(
+    `Invalid day completion status: "${value}". Must be one of: ${DAY_COMPLETION_STATUSES.join(', ')}`,
   )
 }

@@ -71,9 +71,9 @@ export function openAiWireSchema(base: Record<string, unknown>): Record<string, 
   delete out['$schema']
   walk(out, (n) => {
     stripKeys(n, BOUND_KEYS)
-    if (n.type === 'object' && isObj(n.properties)) {
-      n.additionalProperties = false
-      n.required = Object.keys(n.properties)
+    if (n['type'] === 'object' && isObj(n['properties'])) {
+      n['additionalProperties'] = false
+      n['required'] = Object.keys(n['properties'])
     }
   })
   return out
@@ -89,23 +89,23 @@ export function geminiWireSchema(base: Record<string, unknown>): Record<string, 
   delete out['$schema']
   walk(out, (n) => {
     stripKeys(n, BOUND_KEYS)
-    delete n.additionalProperties
-    if (Array.isArray(n.type)) {
-      const types = n.type.filter((t) => t !== 'null')
-      if (types.length !== n.type.length) n.nullable = true
-      n.type = types.length === 1 ? types[0] : types
+    delete n['additionalProperties']
+    if (Array.isArray(n['type'])) {
+      const types = n['type'].filter((t) => t !== 'null')
+      if (types.length !== n['type'].length) n['nullable'] = true
+      n['type'] = types.length === 1 ? types[0] : types
     }
     // anyOf: [X, {type:'null'}] is zod-to-json-schema's other nullable spelling.
-    if (Array.isArray(n.anyOf)) {
-      const nonNull = n.anyOf.filter((m) => !(isObj(m) && m.type === 'null'))
-      if (nonNull.length === 1 && nonNull.length !== n.anyOf.length) {
+    if (Array.isArray(n['anyOf'])) {
+      const nonNull = n['anyOf'].filter((m) => !(isObj(m) && m['type'] === 'null'))
+      if (nonNull.length === 1 && nonNull.length !== n['anyOf'].length) {
         const only = nonNull[0] as Node
-        delete n.anyOf
+        delete n['anyOf']
         Object.assign(n, only, { nullable: true })
         // The merged branch was cleaned on its own visit-to-come, but THIS node
         // already had its cleanup — re-strip what the merge just copied in.
         stripKeys(n, BOUND_KEYS)
-        delete n.additionalProperties
+        delete n['additionalProperties']
       }
     }
   })

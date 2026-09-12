@@ -1,5 +1,5 @@
 import type { DbAdapter } from '@nutai/db-adapter'
-import type { ScoredCandidate } from '@nutai/resolver'
+import type { ResolvedFood, ScoredCandidate } from '@nutai/resolver'
 import type { ManualFoodSelection } from './manual-food'
 
 /**
@@ -24,39 +24,45 @@ interface PortionRow {
   gram_weight: number
 }
 
-export async function resolveSelection(nutritionDb: DbAdapter, candidate: ScoredCandidate): Promise<ManualFoodSelection> {
-  const foodId = Number(candidate.foodId)
+export async function resolveSelection(
+  nutritionDb: DbAdapter,
+  candidate: ScoredCandidate,
+  resolved?: ResolvedFood,
+): Promise<ManualFoodSelection> {
+  const source = resolved?.source ?? 'usda'
+  const sourceId = resolved?.sourceId ?? candidate.foodId.replace(/^usda:/, '')
+  const usdaRecordId = source === 'usda' && /^\d+$/.test(sourceId)
+    ? Number(sourceId)
+    : null
 
-  const [food, defaultPortion, anyPortion] = await Promise.all([
-    nutritionDb.get<FoodRow>(
-      'SELECT protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg FROM foods WHERE id = ?',
-      [foodId],
+  const [foodRecord, defaultPortion, anyPortion] = await Promise.all([
+    usdaRecordId == null ? Promise.resolve(null) : nutritionDb.get<FoodRow>(
+      "SELECT protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg FROM foods WHERE source_id = ? AND source LIKE 'fdc_%'", [sourceId],
     ),
-    nutritionDb.get<PortionRow>(
-      'SELECT gram_weight FROM food_portions WHERE food_id = ? AND is_fndds_default = 1 LIMIT 1',
-      [foodId],
+    usdaRecordId == null ? Promise.resolve(null) : nutritionDb.get<PortionRow>(
+      "SELECT p.gram_weight FROM food_portions p JOIN foods f ON f.id = p.food_id WHERE f.source_id = ? AND f.source LIKE 'fdc_%' AND p.is_fndds_default = 1 LIMIT 1", [sourceId],
     ),
-    nutritionDb.get<PortionRow>(
-      'SELECT gram_weight FROM food_portions WHERE food_id = ? ORDER BY id LIMIT 1',
-      [foodId],
+    usdaRecordId == null ? Promise.resolve(null) : nutritionDb.get<PortionRow>(
+      "SELECT p.gram_weight FROM food_portions p JOIN foods f ON f.id = p.food_id WHERE f.source_id = ? AND f.source LIKE 'fdc_%' ORDER BY p.id LIMIT 1", [sourceId],
     ),
   ])
 
   return {
-    foodId,
+    foodId: /^\d+$/.test(sourceId) ? Number(sourceId) : null,
+    matchedFoodSource: source,
     displayName: candidate.name,
     // FNDDS default portion first, any recorded portion second, and only
     // then a flat 100 g — matching per-100g basis every corpus row already
     // carries, so at worst the number is "unscaled," never fabricated.
     grams: defaultPortion?.gram_weight ?? anyPortion?.gram_weight ?? 100,
     nutrientSnapshot: {
-      kcal: candidate.energyKcal ?? 0,
-      protein_g: food?.protein_g ?? 0,
-      fat_g: food?.fat_g ?? 0,
-      carbs_g: food?.carb_g ?? 0,
-      fiber_g: food?.fiber_g ?? null,
-      sugar_g: food?.sugar_g ?? null,
-      sodium_mg: food?.sodium_mg ?? null,
+      kcal: resolved?.energyKcal ?? candidate.energyKcal ?? 0,
+      protein_g: resolved?.proteinG ?? foodRecord?.protein_g ?? 0,
+      fat_g: resolved?.fatG ?? foodRecord?.fat_g ?? 0,
+      carbs_g: resolved?.carbG ?? foodRecord?.carb_g ?? 0,
+      fiber_g: resolved?.fiberG ?? foodRecord?.fiber_g ?? null,
+      sugar_g: resolved?.sugarG ?? foodRecord?.sugar_g ?? null,
+      sodium_mg: resolved?.sodiumMg ?? foodRecord?.sodium_mg ?? null,
     },
   }
 }

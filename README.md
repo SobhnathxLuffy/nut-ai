@@ -20,6 +20,10 @@ and instantly. No subscription, no paywall, no account, no server.
   touch a model), **nutrition label** (transcribes the printed panel, refuses to guess a missing
   serving weight), and **receipt** (reads the line items, then fetches each item's published
   nutrition with the merchant as the brand).
+- **India-first nutrition lookup** with the authorized IFCT 2017 Table 1 corpus bundled locally:
+  528 Indian food rows, stable IFCT source codes, attribution, and USDA fallback.
+- **Household recipes** with immutable versions, raw-to-cooked yield, oil/ghee accounting, and
+  per-serving logging.
 - **Web lookup for branded and restaurant food**: when the local database misses — or a logo in
   frame names a brand — one search against the provider's own tool transcribes the published
   nutrition facts, source URL attached. Menu ambiguity comes back as options that each carry their
@@ -84,7 +88,8 @@ apps/mobile/      the Expo app — the ONLY package with React Native imports
 packages/         pure TypeScript, importable under plain Node:
   core-schema     Zod source of truth for every payload shape
   gram-engine     the reconciliation ladder, densities, yields, oil absorption
-  resolver        food name → database row (FTS5 candidates + six-signal scoring)
+  nutrition-sources  USDA, IFCT, user-food, recipe and Open Food Facts adapters
+  resolver        food name → source-qualified database row
   totals          recompute, macro reconciliation, rounding
   confidence      measured bands, structural widening, per-meal quadrature
   repair          the question bank and expected-value gating
@@ -150,12 +155,18 @@ Requires Node ≥ 20.19.
 
 ```bash
 npm install
-npm run check        # lint + typecheck + tests + node-purity
+npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT data checks
 ```
 
 **Expo Go is not a supported development mode.** The camera, SQLite, Keychain key storage, HealthKit,
 and file export/import all require a compiled app — build with Xcode or `expo run:android` as shown
 above.
+
+## Planning and Agent Workflow
+
+- [AGENTS.md](AGENTS.md) defines the binding implementation rules for coding agents.
+- [PLAN.md](PLAN.md) records the current planning status, next task, blockers, and validation commands.
+- [docs/planning/00_INDEX.md](docs/planning/00_INDEX.md) links the implementation-grade product plan, ADRs, task backlog, traceability matrix, and release gates.
 
 ## Licensing
 

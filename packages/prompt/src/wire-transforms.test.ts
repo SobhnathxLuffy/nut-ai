@@ -40,7 +40,7 @@ const BOUNDS = ['minimum', 'maximum', 'minLength', 'maxLength', 'minItems', 'max
 
 describe('the base wire schema', () => {
   it('is generated from the Zod source of truth and describes the payload', () => {
-    const props = (VISION_WIRE_SCHEMA as Node).properties as Node
+    const props = (VISION_WIRE_SCHEMA as Node)['properties'] as Node
     expect(props).toBeTruthy()
     expect(Object.keys(props)).toEqual(
       expect.arrayContaining(['schema_version', 'is_food', 'items', 'meal_overall']),
@@ -57,11 +57,11 @@ describe('openAiWireSchema (strict mode)', () => {
   const nodes = collectNodes(s)
 
   it('marks every object node additionalProperties:false with ALL keys required', () => {
-    const objects = nodes.filter((n) => n.type === 'object' && isObj(n.properties))
+    const objects = nodes.filter((n) => n['type'] === 'object' && isObj(n['properties']))
     expect(objects.length).toBeGreaterThan(3)
     for (const o of objects) {
-      expect(o.additionalProperties).toBe(false)
-      expect((o.required as string[]).sort()).toEqual(Object.keys(o.properties as Node).sort())
+      expect(o['additionalProperties']).toBe(false)
+      expect(((o['required'] as string[]) ?? []).sort()).toEqual(Object.keys(o['properties'] as Node).sort())
     }
   })
 
@@ -87,7 +87,7 @@ describe('geminiWireSchema (OpenAPI subset)', () => {
 
   it('never uses a type array containing null — nullability is `nullable: true`', () => {
     for (const n of nodes) {
-      if (Array.isArray(n.type)) expect(n.type).not.toContain('null')
+      if (Array.isArray(n['type'])) expect(n['type']).not.toContain('null')
     }
   })
 

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
+import { ActiveWorkoutCard } from '../../src/components/ActiveWorkout'
 
 /**
  * Three tabs plus the detached FAB.
@@ -22,8 +23,10 @@ import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
 
 const TABS: ReadonlyArray<{ name: string; label: string; icon: IconName }> = [
   { name: 'index', label: 'Home', icon: 'home' },
+  { name: 'food', label: 'Food', icon: 'bowl' },
+  { name: 'train', label: 'Train', icon: 'dumbbell' },
   { name: 'progress', label: 'Progress', icon: 'chart' },
-  { name: 'profile', label: 'Profile', icon: 'person' },
+  { name: 'profile', label: 'You', icon: 'person' },
 ]
 
 interface Action {
@@ -35,6 +38,7 @@ interface Action {
 const ACTIONS: Action[] = [
   { label: 'Log exercise', icon: 'dumbbell', route: '/log-exercise' },
   { label: 'Saved foods', icon: 'bookmark', route: '/saved-foods' },
+  { label: 'Recipes', icon: 'bowl', route: '/recipes' },
   { label: 'Food Database', icon: 'search', route: '/food-search' },
   { label: 'Scan food', icon: 'scan', route: '/camera' },
 ]
@@ -51,8 +55,8 @@ export default function TabLayout() {
         tabBar={({ state, navigation }) => (
           <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
             <View style={[styles.pill, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
-              {TABS.map((tab, i) => {
-                const focused = state.index === i
+              {TABS.map((tab) => {
+                const focused = state.routes[state.index]?.name === tab.name
                 return (
                   <Pressable
                     key={tab.name}
@@ -72,14 +76,14 @@ export default function TabLayout() {
               })}
             </View>
 
-            <Pressable
+            {state.routes[state.index]?.name === 'food' && <Pressable
               accessibilityRole="button"
               accessibilityLabel="Add"
               onPress={() => setSheetOpen(true)}
               style={[styles.fab, { backgroundColor: theme.text }]}
             >
               <Icon name="plus" size={26} color={theme.bg} weight={2.2} />
-            </Pressable>
+            </Pressable>}
           </View>
         )}
       >
@@ -87,6 +91,7 @@ export default function TabLayout() {
           <Tabs.Screen key={t.name} name={t.name} options={{ title: t.label }} />
         ))}
       </Tabs>
+      <ActiveWorkoutCard />
 
       <Modal visible={sheetOpen} transparent animationType="fade" onRequestClose={() => setSheetOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setSheetOpen(false)}>

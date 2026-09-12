@@ -12,6 +12,9 @@ const pkg = (name: string) =>
 export default defineConfig({
   resolve: {
     alias: {
+      '@nutai/training': pkg('training'),
+      '@nutai/search': pkg('search'),
+      '@nutai/timeline': pkg('timeline'),
       '@nutai/core-schema': pkg('core-schema'),
       '@nutai/gram-engine': pkg('gram-engine'),
       '@nutai/resolver': pkg('resolver'),
@@ -20,6 +23,8 @@ export default defineConfig({
       '@nutai/repair': pkg('repair'),
       '@nutai/goals': pkg('goals'),
       '@nutai/prompt': pkg('prompt'),
+      '@nutai/nutrition-sources': pkg('nutrition-sources'),
+      '@nutai/recipe-engine': pkg('recipe-engine'),
       '@nutai/db-adapter/node': fileURLToPath(new URL('./packages/db-adapter/src/node.ts', import.meta.url)),
       '@nutai/db-adapter': pkg('db-adapter'),
       '@nutai/clamp': pkg('clamp'),

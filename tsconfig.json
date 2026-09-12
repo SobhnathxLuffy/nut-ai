@@ -10,6 +10,12 @@
     ],
     "baseUrl": ".",
     "paths": {
+      "@nutai/training": ["packages/training/src/index.ts"],
+      "@nutai/search": ["packages/search/src/index.ts"],
+      "@nutai/timeline": ["packages/timeline/src/index.ts"],
+      "@nutai/nutrition-sources": [
+        "packages/nutrition-sources/src/index.ts"
+      ],
       "@nutai/core-schema": [
         "packages/core-schema/src/index.ts"
       ],
@@ -42,6 +48,9 @@
       ],
       "@nutai/db-adapter/node": [
         "packages/db-adapter/src/node.ts"
+      ],
+      "@nutai/recipe-engine": [
+        "packages/recipe-engine/src/index.ts"
       ],
       "@nutai/pipeline": [
         "packages/pipeline/src/index.ts"

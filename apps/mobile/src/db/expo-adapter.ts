@@ -69,6 +69,7 @@ export async function openUserDb(): Promise<DbAdapter> {
  * below, so that failure is legible rather than mysterious.
  */
 let nutritionImported = false
+let ifctImported = false
 
 export async function openNutritionDb(): Promise<DbAdapter> {
   if (!nutritionImported) {
@@ -86,6 +87,22 @@ export async function openNutritionDb(): Promise<DbAdapter> {
   }
 
   const db = await SQLite.openDatabaseAsync('nutrition.db')
+  return new ExpoDbAdapter(db)
+}
+
+/** The authorized IFCT corpus has a separate asset and provenance lifecycle. */
+export async function openIfctDb(): Promise<DbAdapter> {
+  if (!ifctImported) {
+    // The corpus is generated, not user data. Overwrite once per process so an
+    // install that previously imported the two-row development fixture receives
+    // the current 528-row authorized corpus after an app update.
+    await SQLite.importDatabaseFromAssetAsync('ifct.db', {
+      assetId: require('../../assets/ifct.db'),
+      forceOverwrite: true,
+    })
+    ifctImported = true
+  }
+  const db = await SQLite.openDatabaseAsync('ifct.db')
   return new ExpoDbAdapter(db)
 }
 
@@ -108,5 +125,19 @@ export async function nutritionCorpusInfo(
     return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, builtAt: built?.value ?? null }
   } catch {
     return { foods: 0, portions: 0, builtAt: null }
+  }
+}
+
+export async function ifctCorpusInfo(
+  db: DbAdapter,
+): Promise<{ foods: number; version: string | null }> {
+  try {
+    const foods = await db.get<{ c: number }>("SELECT COUNT(*) c FROM foods WHERE source = 'ifct'")
+    const version = await db.get<{ value: string }>(
+      "SELECT value FROM build_manifest WHERE key = 'version'",
+    )
+    return { foods: foods?.c ?? 0, version: version?.value ?? null }
+  } catch {
+    return { foods: 0, version: null }
   }
 }

@@ -54,7 +54,7 @@ describe('migrations', () => {
       'user_profile', 'goals', 'meals', 'log_items', 'weight_entries', 'water_entries',
       'exercise_entries', 'day_summaries', 'personal_gram_priors', 'food_attribute_memory',
       'user_containers', 'saved_meals', 'scan_cost_ledger', 'scan_cache', 'consents',
-      'settings', 'accuracy_baselines', 'user_foods',
+      'settings', 'accuracy_baselines', 'user_foods', 'day_status', 'operations',
     ]) {
       expect(names, `missing table ${t}`).toContain(t)
     }

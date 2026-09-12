@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { migrate, NUTRITION_SCHEMA, type DbAdapter } from '@nutai/db-adapter'
+import { isValidUuid, migrate, NUTRITION_SCHEMA, listOperations, undoOperation, type DbAdapter } from '@nutai/db-adapter'
 import { openMemoryDb } from '@nutai/db-adapter/node'
 import type { ScoredCandidate } from '@nutai/resolver'
 import { resolveSelection } from './food-search-select'
@@ -74,7 +74,7 @@ function candidateFor(foodId: string, name: string, energyKcal: number): ScoredC
 
 describe('resolveSelection + logManualFood — what a tap on a Food Database row does', () => {
   it('fires a real selection: a tap logs the food to today, not nothing', async () => {
-    const selection = await resolveSelection(nutritionDb, candidateFor('1', 'Egg, whole, raw, fresh', 143))
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
     const mealId = await logManualFood(userDb, selection, NOW)
 
     expect(mealId).toBeGreaterThan(0)
@@ -83,17 +83,26 @@ describe('resolveSelection + logManualFood — what a tap on a Food Database row
       [mealId],
     )
     expect(items).toHaveLength(1)
-    expect(items[0]?.matched_food_id).toBe(1)
+    expect(items[0]?.matched_food_id).toBe(173424)
     expect(items[0]?.display_name).toBe('Egg, whole, raw, fresh')
+    const identities = await userDb.all<{ uuid: string; created_at: number; updated_at: number }>(
+      `SELECT uuid, created_at, updated_at FROM meals WHERE id = ?
+       UNION ALL
+       SELECT uuid, created_at, updated_at FROM log_items WHERE meal_id = ?`,
+      [mealId, mealId],
+    )
+    expect(identities).toHaveLength(2)
+    expect(identities.every((row) => isValidUuid(row.uuid))).toBe(true)
+    expect(identities.every((row) => row.created_at === NOW && row.updated_at === NOW)).toBe(true)
   })
 
   it('uses the FNDDS default portion weight, not a hardcoded 100 g', async () => {
-    const selection = await resolveSelection(nutritionDb, candidateFor('1', 'Egg, whole, raw, fresh', 143))
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
     expect(selection.grams).toBe(50) // the seeded is_fndds_default row, not the 100 g fallback
   })
 
   it('scales the per-100g snapshot to the logged grams — 50 g of a 143 kcal/100g egg is ~71.5 kcal', async () => {
-    const selection = await resolveSelection(nutritionDb, candidateFor('1', 'Egg, whole, raw, fresh', 143))
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
     const mealId = await logManualFood(userDb, selection, NOW)
 
     const item = await userDb.get<{ snap_energy_kcal: number; snap_protein_g: number }>(
@@ -111,17 +120,48 @@ describe('resolveSelection + logManualFood — what a tap on a Food Database row
        VALUES (2, 'fdc_sr_legacy', '999', 'Mystery food, no portions', 200, 10, 5, 20, 1, 'CC0', ?)`,
       [NOW],
     )
-    const selection = await resolveSelection(nutritionDb, candidateFor('2', 'Mystery food, no portions', 200))
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:999', 'Mystery food, no portions', 200))
     expect(selection.grams).toBe(100)
   })
 
   it('two selections create two separate meals, not one overwritten row', async () => {
-    const selection = await resolveSelection(nutritionDb, candidateFor('1', 'Egg, whole, raw, fresh', 143))
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
     const first = await logManualFood(userDb, selection, NOW)
     const second = await logManualFood(userDb, selection, NOW + 1000)
     expect(first).not.toBe(second)
 
     const items = await userDb.all('SELECT id FROM log_items')
     expect(items).toHaveLength(2)
+  })
+
+  it('records structured operation with actor/idempotency and supports undo', async () => {
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
+    const mealId = await logManualFood(userDb, selection, NOW, {
+      actor: 'user',
+      idempotencyKey: 'manual-egg-1',
+    })
+
+    // 1. Verify operation recorded
+    const ops = await listOperations(userDb, { entityType: 'meals', entityId: mealId })
+    expect(ops).toHaveLength(1)
+    expect(ops[0]!.op_type).toBe('insert')
+    expect(ops[0]!.actor).toBe('user')
+    expect(ops[0]!.idempotency_key).toBe('manual-egg-1')
+
+    // 2. Test idempotency on replay
+    const replayedMealId = await logManualFood(userDb, selection, NOW + 500, {
+      actor: 'user',
+      idempotencyKey: 'manual-egg-1',
+    })
+    expect(replayedMealId).toBe(mealId)
+    expect(await userDb.all('SELECT id FROM meals')).toHaveLength(1)
+
+    // 3. Test undo
+    const undoRes = await undoOperation(userDb, ops[0]!.id, NOW + 1000)
+    expect(undoRes.success).toBe(true)
+
+    // Meal and items are cleanly removed by undo
+    expect(await userDb.get('SELECT id FROM meals WHERE id = ?', [mealId])).toBeNull()
+    expect(await userDb.all('SELECT id FROM log_items WHERE meal_id = ?', [mealId])).toHaveLength(0)
   })
 })

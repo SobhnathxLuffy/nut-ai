@@ -4,6 +4,14 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle, Line as SvgLine, Path, Rect, Text as SvgText } from 'react-native-svg'
 import { bmi, computeTrend, trendSlopeLbPerWeek, type TrendPoint, type WeightPoint } from '@nutai/goals'
+import {
+  deriveRecords,
+  performanceHistory,
+  listExercises,
+  type PersonalRecord,
+  type Performance,
+  type Exercise,
+} from '@nutai/training'
 import { currentGoal, db, setting, weightHistory, type CurrentGoal } from '../../src/data/repo'
 import { Icon } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
@@ -30,18 +38,24 @@ export default function Progress() {
   const [goalKg, setGoalKg] = useState<number | null>(null)
   const [streak, setStreak] = useState(0)
   const [window, setWindow] = useState<(typeof WINDOWS)[number]['key']>('90D')
+  const [records, setRecords] = useState<PersonalRecord[]>([])
+  const [exerciseHistory, setExerciseHistory] = useState<Performance[]>([])
+  const [exercises, setExercises] = useState<Exercise[]>([])
+  const [selectedExerciseId, setSelectedExerciseId] = useState<number | null>(null)
 
   useFocusEffect(
     useCallback(() => {
       let alive = true
       void (async () => {
         const h = await db()
-        const [pts, g, target, profile, days] = await Promise.all([
+        const [pts, g, target, profile, days, perfs, exList] = await Promise.all([
           weightHistory(),
           currentGoal(),
           setting('goal.desiredWeightKg', ''),
           h.get<{ height_cm: number }>('SELECT height_cm FROM user_profile WHERE id = 1'),
           h.all<{ local_date: string }>('SELECT DISTINCT local_date FROM meals ORDER BY local_date DESC'),
+          performanceHistory(h),
+          listExercises(h),
         ])
         if (!alive) return
         setPoints(pts)
@@ -49,6 +63,13 @@ export default function Progress() {
         setGoalKg(target ? Number(target) : null)
         setHeightCm(profile?.height_cm ?? null)
         setStreak(countStreak(days.map((d) => d.local_date)))
+        setExerciseHistory(perfs)
+        setExercises(exList)
+        const recs = deriveRecords(perfs)
+        setRecords(recs)
+        if (perfs.length > 0) {
+          setSelectedExerciseId((prev) => prev ?? perfs[perfs.length - 1]?.exercise_id ?? null)
+        }
       })()
       return () => {
         alive = false
@@ -203,6 +224,88 @@ export default function Progress() {
         </View>
       ) : null}
 
+      {/* TRN-004: Strength & Personal Records */}
+      <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
+        <View style={styles.spread}>
+          <Text style={[type.heading, { color: theme.text }]}>Strength & Personal Records</Text>
+        </View>
+        <Text style={[type.caption, { color: theme.textMuted }]}>
+          Derived deterministically from completed workout sets using the Epley estimated 1RM formula.
+        </Text>
+
+        {records.length > 0 ? (
+          <View style={{ gap: space.sm, marginTop: space.sm }}>
+            <Text style={[type.label, { color: theme.text, marginTop: space.xs }]}>Recent Records</Text>
+            {records.slice(-5).reverse().map((r) => {
+              const ex = exercises.find((e) => e.id === r.exercise_id)
+              return (
+                <View key={r.id} style={styles.spread}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[type.bodyStrong, { color: theme.text }]}>
+                      {ex?.name ?? `Exercise #${r.exercise_id}`}
+                    </Text>
+                    <Text style={[type.caption, { color: theme.textMuted }]}>
+                      {r.kind} · {r.local_date}
+                    </Text>
+                  </View>
+                  <Text style={[type.label, { color: theme.protein }]}>
+                    {Math.round(r.value * 10) / 10} {r.unit}
+                  </Text>
+                </View>
+              )
+            })}
+          </View>
+        ) : (
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm }]}>
+            No personal records yet. Finish a workout in Train to log sets and track strength progression.
+          </Text>
+        )}
+
+        {/* Core exercise progress graph */}
+        {exerciseHistory.length > 0 ? (
+          <View style={{ marginTop: space.md, gap: space.sm }}>
+            <Text style={[type.label, { color: theme.text }]}>Exercise Progression</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -space.md, paddingHorizontal: space.md }}>
+              <View style={{ flexDirection: 'row', gap: space.xs }}>
+                {Array.from(new Set(exerciseHistory.map((p) => p.exercise_id))).map((exId) => {
+                  const ex = exercises.find((e) => e.id === exId)
+                  const isSelected = exId === selectedExerciseId
+                  return (
+                    <Pressable
+                      key={exId}
+                      onPress={() => setSelectedExerciseId(exId)}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: isSelected ? theme.text : theme.bgElevated,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          type.caption,
+                          { color: isSelected ? theme.bg : theme.text, fontWeight: '600' },
+                        ]}
+                      >
+                        {ex?.name ?? `Exercise #${exId}`}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </ScrollView>
+
+            {selectedExerciseId ? (
+              <ExerciseProgressGraph
+                exerciseId={selectedExerciseId}
+                history={exerciseHistory}
+                exerciseName={exercises.find((e) => e.id === selectedExerciseId)?.name ?? 'Exercise'}
+              />
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
       {goal ? (
         <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
           <Text style={[type.heading, { color: theme.text }]}>Daily target</Text>
@@ -334,6 +437,97 @@ function BmiScale({ value }: { value: number }) {
   )
 }
 
+function ExerciseProgressGraph({
+  exerciseId,
+  history,
+  exerciseName,
+}: {
+  exerciseId: number
+  history: Performance[]
+  exerciseName: string
+}) {
+  const theme = useTheme()
+  const sessions = useMemo(() => {
+    const forEx = history.filter(
+      (p) => p.exercise_id === exerciseId && p.load_kg != null && (p.reps ?? 0) > 0,
+    )
+    const byWorkout = new Map<number, { date: string; best1rm: number; bestLoad: number }>()
+    for (const s of forEx) {
+      const e1rm = s.reps === 1 ? s.load_kg! : s.load_kg! * (1 + s.reps! / 30)
+      const existing = byWorkout.get(s.workout_id)
+      if (!existing) {
+        byWorkout.set(s.workout_id, { date: s.local_date, best1rm: e1rm, bestLoad: s.load_kg! })
+      } else {
+        existing.best1rm = Math.max(existing.best1rm, e1rm)
+        existing.bestLoad = Math.max(existing.bestLoad, s.load_kg!)
+      }
+    }
+    return Array.from(byWorkout.values()).sort((a, b) => a.date.localeCompare(b.date))
+  }, [exerciseId, history])
+
+  if (sessions.length === 0) {
+    return (
+      <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm }]}>
+        No weighted repetitions recorded for {exerciseName} yet.
+      </Text>
+    )
+  }
+
+  const W = 320
+  const H = 140
+  const padL = 36
+  const padR = 16
+  const padT = 16
+  const padB = 24
+
+  const maxVal = Math.max(...sessions.map((s) => s.best1rm))
+  const minVal = Math.min(...sessions.map((s) => s.best1rm))
+  const range = maxVal === minVal ? Math.max(1, maxVal * 0.2) : maxVal - minVal
+  const yMin = Math.max(0, minVal - range * 0.1)
+  const yMax = maxVal + range * 0.1
+
+  const x = (i: number) =>
+    sessions.length === 1
+      ? (W - padL - padR) / 2 + padL
+      : padL + (i / (sessions.length - 1)) * (W - padL - padR)
+  const y = (val: number) => H - padB - ((val - yMin) / (yMax - yMin)) * (H - padT - padB)
+
+  const pathD = sessions
+    .map((s, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(s.best1rm).toFixed(1)}`)
+    .join(' ')
+
+  const latest = sessions[sessions.length - 1]!
+
+  return (
+    <View style={{ marginTop: space.sm }}>
+      <View style={styles.spread}>
+        <Text style={[type.bodyStrong, { color: theme.text }]}>
+          Latest: {latest.best1rm.toFixed(1)} kg e1RM
+        </Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>
+          Top load: {latest.bestLoad} kg ({latest.date})
+        </Text>
+      </View>
+      <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop: space.xs }}>
+        <SvgLine x1={padL} y1={padT} x2={padL} y2={H - padB} stroke={theme.border} strokeWidth="1" />
+        <SvgLine x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke={theme.border} strokeWidth="1" />
+        <SvgText x={2} y={padT + 8} fontSize="9" fill={theme.textFaint}>
+          {Math.round(yMax)}kg
+        </SvgText>
+        <SvgText x={2} y={H - padB} fontSize="9" fill={theme.textFaint}>
+          {Math.round(yMin)}kg
+        </SvgText>
+        {sessions.length > 1 && (
+          <Path d={pathD} stroke={theme.protein} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+        {sessions.map((s, i) => (
+          <Circle key={i} cx={x(i)} cy={y(s.best1rm)} r="4" fill={theme.text} />
+        ))}
+      </Svg>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.md, marginTop: space.lg },
   tile: { flex: 1, padding: space.lg, borderRadius: radius.xl, alignItems: 'center' },
@@ -350,4 +544,5 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   line: { width: 18, height: 3, borderRadius: 2 },
   changeRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.md },
+  chip: { paddingHorizontal: space.md, paddingVertical: space.sm, borderRadius: radius.pill },
 })

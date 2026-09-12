@@ -1,0 +1,134 @@
+{
+  "format": "nutai.backup",
+  "format_version": 1,
+  "schema_version": 1,
+  "exported_at": 1754100000000,
+  "app_version": "0.1.0",
+  "tables": {
+    "user_profile": [
+      {
+        "id": 1,
+        "sex": "male",
+        "birth_year": 2003,
+        "height_cm": 180,
+        "activity_level": "moderate",
+        "units": "imperial",
+        "weight_visible": 1,
+        "gamification": 1,
+        "inference_path": "none",
+        "created_at": 1754100000000
+      }
+    ],
+    "goals": [
+      {
+        "id": 1,
+        "effective_from": 1754100000000,
+        "goal_type": "gain",
+        "rate_lb_per_week": 0.5,
+        "target_kcal": 3400,
+        "target_raw_kcal": 3400,
+        "floor_applied": 0,
+        "protein_g": 180,
+        "fat_g": 100,
+        "carbs_g": 450,
+        "bmr": 1900,
+        "tdee": 3150,
+        "adaptive": 1
+      }
+    ],
+    "settings": [
+      {
+        "key": "diet.style",
+        "value": "balanced"
+      },
+      {
+        "key": "provider",
+        "value": "anthropic"
+      },
+      {
+        "key": "provider_model",
+        "value": "claude-3-5-sonnet"
+      }
+    ],
+    "consents": [],
+    "user_foods": [],
+    "user_containers": [
+      {
+        "id": 1,
+        "label": "Blue Bowl",
+        "type": "bowl",
+        "usable_ml": 500,
+        "diameter_mm": 160,
+        "created_at": 1754100000000
+      }
+    ],
+    "saved_meals": [],
+    "personal_gram_priors": [],
+    "food_attribute_memory": [],
+    "weight_entries": [
+      {
+        "id": 1,
+        "local_date": "2026-08-01",
+        "weight_kg": 79.4,
+        "logged_at": 1754100000000
+      }
+    ],
+    "water_entries": [],
+    "exercise_entries": [
+      {
+        "id": 1,
+        "local_date": "2026-08-01",
+        "name": "Bench Press",
+        "kcal": 150,
+        "provenance": "manual",
+        "external_id": null,
+        "logged_at": 1754100000000
+      }
+    ],
+    "meals": [
+      {
+        "id": 77,
+        "logged_at": 1754100000000,
+        "local_date": "2026-08-01",
+        "meal_slot": "lunch",
+        "photo_uri": "file:///tmp/cache/photo.jpg",
+        "portion_eaten_fraction": 1,
+        "analysis_status": "complete",
+        "retry_count": 0,
+        "next_retry_at": null,
+        "engine_id": "test",
+        "prompt_version": null,
+        "schema_version": null,
+        "clamp_flags_json": null,
+        "created_at": 1754100000000
+      }
+    ],
+    "log_items": [
+      {
+        "id": 1,
+        "meal_id": 77,
+        "matched_food_id": null,
+        "matched_food_source": "corpus",
+        "raw_model_label": null,
+        "display_name": "Chicken Breast",
+        "grams": 170,
+        "gram_pathway": "discrete_count",
+        "portion_source": "vision_model",
+        "snap_energy_kcal": 165,
+        "snap_protein_g": 31,
+        "snap_fat_g": 3.6,
+        "snap_carb_g": 0,
+        "snap_fiber_g": 0,
+        "snap_sugar_g": 0,
+        "snap_sodium_mg": 74,
+        "is_estimate": 0,
+        "macros_user_edited": 0,
+        "band_half_pct": null,
+        "assumptions_json": null,
+        "sort_order": 0,
+        "logged_at": 1754100000000
+      }
+    ],
+    "scan_cost_ledger": []
+  }
+}
