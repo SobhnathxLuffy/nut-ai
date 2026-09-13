@@ -121,6 +121,27 @@ export default function Progress() {
         </View>
       </View>
 
+      {/* Weekly Check-in Card (ADP-003, ADP-004, ADP-005) */}
+      <View style={[styles.card, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+        <View style={styles.spread}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+            <Icon name="target" size={18} color={theme.protein} />
+            <Text style={[type.heading, { color: theme.text }]}>Weekly Check-in</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open weekly check-in review"
+            onPress={() => router.push('/checkin' as never)}
+            hitSlop={space.sm}
+          >
+            <Text style={[type.label, { color: theme.protein }]}>Review & adapt →</Text>
+          </Pressable>
+        </View>
+        <Text style={[type.caption, { color: theme.textMuted, lineHeight: 18 }]}>
+          Review your 7-day intake averages, scale trends, excluded days, and check for safe target suggestions.
+        </Text>
+      </View>
+
       <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
         <View style={styles.spread}>
           <Text style={[type.caption, { color: theme.textMuted }]}>Current weight</Text>

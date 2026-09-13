@@ -1,6 +1,6 @@
 # ADP-005: Check-in Consent and Safety Guardrails
 
-Status: unstarted
+Status: complete
 Phase: 5 - Day completeness and adaptive check-ins
 Depends on: ADP-004
 Parallel-safe with: None

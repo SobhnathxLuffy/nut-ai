@@ -8,7 +8,7 @@
 
 ### EXIF/GPS Stripping for Photos
 - **Risk**: User location leaked via photo metadata uploaded to the cloud.
-- **Mitigation**: The local client *must* aggressively strip all EXIF data (GPS coordinates, camera model, timestamps) from photos *before* they are saved locally or uploaded to object storage.
+- **Mitigation**: The local client *must* aggressively strip all EXIF data (GPS coordinates, camera model, timestamps) from photos *before* they are saved locally or uploaded to object storage. Temporary files created during scanning are deleted immediately upon success, failure, or cancellation, unless explicitly retained for the logged meal.
 
 ### Local Database/Backup Protection
 - **Risk**: Unauthorized access to `user.db` on a lost or compromised device.

@@ -67,6 +67,10 @@ async function preprocess(photoUri: string): Promise<string> {
     base64: true,
   })
   if (!saved.base64) throw new Error('preprocess produced no base64')
+  
+  // Clean up the resized temporary file since we only need the base64 payload
+  import('expo-file-system').then((fs) => fs.deleteAsync(saved.uri, { idempotent: true }).catch(() => {}))
+  
   return saved.base64
 }
 

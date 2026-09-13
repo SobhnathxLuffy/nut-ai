@@ -196,6 +196,12 @@ export function applyWebOption(rowId: string, option: WebLookupOption, sourceUrl
   }))
 }
 
-export function reset() {
+export function reset(opts?: { retainPhoto?: boolean }) {
+  const phase = getPhase()
+  if (!opts?.retainPhoto && 'photoUri' in phase && phase.photoUri) {
+    import('expo-file-system').then((fs) => {
+      fs.deleteAsync(phase.photoUri!, { idempotent: true }).catch(() => {})
+    })
+  }
   setPhase({ kind: 'idle' })
 }

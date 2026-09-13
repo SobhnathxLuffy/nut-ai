@@ -1,5 +1,5 @@
 import { normalizeIndianAliases } from '@nutai/resolver'
-export type SearchScope='food'|'recipe'|'saved_meal'|'exercise'|'action'
+export type SearchScope='food'|'recipe'|'saved_meal'|'exercise'|'action'|'dish'
 export interface SearchEntity {
   id:string; type:SearchScope; label:string; aliases:string[]; source:string; provenance:string;
   barcode?:string; favorite?:boolean; frequent?:number; last_used_at?:number; custom?:boolean;

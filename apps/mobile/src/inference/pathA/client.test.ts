@@ -1,3 +1,4 @@
+vi.mock('../credentials', () => ({ loadCredential: vi.fn(() => 'fake-key') }))
 import { describe, expect, it, vi } from 'vitest'
 import { runLabelScan, runScan, runScanWithFallback, runWebLookup } from './client'
 

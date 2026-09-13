@@ -1,6 +1,6 @@
 # ADP-003: Weekly Check-in Metrics Engine
 
-Status: unstarted
+Status: complete
 Phase: 5 - Day completeness and adaptive check-ins
 Depends on: ADP-001, TRN-004
 Parallel-safe with: ADP-002

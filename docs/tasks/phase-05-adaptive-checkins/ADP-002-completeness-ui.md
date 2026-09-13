@@ -1,6 +1,6 @@
 # ADP-002: Completeness UI and Day Finalization
 
-Status: unstarted
+Status: complete
 Phase: 5 - Day completeness and adaptive check-ins
 Depends on: ADP-001, TLN-002
 Parallel-safe with: ADP-003

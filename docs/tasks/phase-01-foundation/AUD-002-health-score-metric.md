@@ -1,6 +1,6 @@
 # AUD-002: Health Score Removal & Metric Default
 
-Status: ready
+Status: complete
 Phase: 1
 Depends on: AUD-001
 

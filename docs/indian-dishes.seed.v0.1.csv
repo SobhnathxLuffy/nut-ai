@@ -1,0 +1,363 @@
+id,canonicalName,aliases,regions,category,family,priorityBatch,portionStrategies,highImpactUnknowns,status,pendingIngredientSlots
+dish:in:roti,Roti,chapati,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:phulka,Phulka,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:tandoori-roti,Tandoori Roti,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:roomali-roti,Roomali Roti,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:missi-roti,Missi Roti,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:makki-di-roti,Makki di Roti,,Karnataka | South India | Punjab | North India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:bajra-roti,Bajra Roti,,Rajasthan | Northwest India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:jowar-bhakri,Jowar Bhakri,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:ragi-roti,Ragi Roti,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:akki-rotti,Akki Rotti,,Karnataka | South India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:thepla,Thepla,,Gujarat | Western India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:methi-thepla,Methi Thepla,,Gujarat | Western India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:bajra-rotla,Bajra Rotla,,Gujarat | Western India | Rajasthan | Northwest India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:naan,Naan,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:butter-naan,Butter Naan,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:garlic-naan,Garlic Naan,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:cheese-naan,Cheese Naan,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:kulcha,Kulcha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:amritsari-kulcha,Amritsari Kulcha,,Punjab | North India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:plain-paratha,Plain Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:aloo-paratha,Aloo Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:gobi-paratha,Gobi Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:paneer-paratha,Paneer Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:mooli-paratha,Mooli Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:methi-paratha,Methi Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:sattu-paratha,Sattu Paratha,,Bihar | Jharkhand | Eastern India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:lachha-paratha,Lachha Paratha,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:kerala-parotta,Kerala Parotta,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:malabar-parotta,Malabar Parotta,,Kerala | South India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:puri,Puri,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:bhatura,Bhatura,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:luchi,Luchi,,West Bengal | Eastern India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:bakarkhani,Bakarkhani,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:sheermal,Sheermal,,Pan-India,bread_flatbread,bread,A,count | piece_weight_g | diameter_thickness,piece_weight | added_fat | flour_type,DRAFT_CURATED,4
+dish:in:litti,Litti,bihari litti | litti bati,Bihar | Jharkhand | Eastern India,bread_flatbread,bread,A,count | piece_weight_g | diameter,piece_weight | sattu_to_flour_ratio | ghee_finishing_amount,DRAFT_CURATED,4
+dish:in:steamed-rice,Steamed Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:jeera-rice,Jeera Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:ghee-rice,Ghee Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:lemon-rice,Lemon Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:tamarind-rice,Tamarind Rice,puliyogare | puliyodarai,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:coconut-rice,Coconut Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:curd-rice,Curd Rice,thayir sadam,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:tomato-rice,Tomato Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:veg-pulao,Veg Pulao,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:peas-pulao,Peas Pulao,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:kashmiri-pulao,Kashmiri Pulao,,Kashmir | North India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:yakhni-pulao,Yakhni Pulao,,Kashmir | North India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:khichdi,Khichdi,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:moong-dal-khichdi,Moong Dal Khichdi,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:masala-khichdi,Masala Khichdi,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:sabudana-khichdi,Sabudana Khichdi,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:ven-pongal,Ven Pongal,,Tamil Nadu | South India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:bisi-bele-bath,Bisi Bele Bath,,Karnataka | South India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:chicken-biryani,Chicken Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | plate_volume | katori_volume,rice_serving_weight | chicken_edible_weight | oil_ghee_amount | rice_meat_ratio,DRAFT_CURATED,5
+dish:in:mutton-biryani,Mutton Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | plate_volume | katori_volume,rice_serving_weight | mutton_edible_weight | oil_ghee_amount | rice_meat_ratio | bone_fraction,DRAFT_CURATED,5
+dish:in:egg-biryani,Egg Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:veg-biryani,Veg Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:hyderabadi-chicken-biryani,Hyderabadi Chicken Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:hyderabadi-mutton-biryani,Hyderabadi Mutton Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:kolkata-chicken-biryani,Kolkata Chicken Biryani,,West Bengal | Eastern India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:kolkata-mutton-biryani,Kolkata Mutton Biryani,,West Bengal | Eastern India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:lucknowi-chicken-biryani,Lucknowi Chicken Biryani,,Uttar Pradesh | North India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:lucknowi-mutton-biryani,Lucknowi Mutton Biryani,,Uttar Pradesh | North India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:thalassery-chicken-biryani,Thalassery Chicken Biryani,,Kerala | South India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:ambur-chicken-biryani,Ambur Chicken Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:dindigul-chicken-biryani,Dindigul Chicken Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:sindhi-biryani,Sindhi Biryani,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:tehri,Tehri,,Uttar Pradesh | North India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:bagara-rice,Bagara Rice,,Pan-India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:pulihora,Pulihora,,Andhra Pradesh | Telangana | South India,rice_grain,cooked_grain,A,measured_g | katori_volume | plate_volume,cooked_yield | added_fat | mix_in_ratio,DRAFT_CURATED,4
+dish:in:idli,Idli,idly,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | diameter,piece_weight | rice_urad_ratio,DRAFT_CURATED,4
+dish:in:mini-idli,Mini Idli,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:rava-idli,Rava Idli,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:kanchipuram-idli,Kanchipuram Idli,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:thatte-idli,Thatte Idli,,Tamil Nadu | South India | Karnataka,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:plain-dosa,Plain Dosa,sada dosa | dosa,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | diameter | cooked_weight_g,diameter_thickness | batter_weight | cooking_oil,DRAFT_CURATED,4
+dish:in:masala-dosa,Masala Dosa,masala dose,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | diameter | cooked_weight_g | filling_weight_g,diameter_thickness | batter_weight | potato_filling_weight | cooking_oil,DRAFT_CURATED,4
+dish:in:mysore-masala-dosa,Mysore Masala Dosa,,Tamil Nadu | South India | Karnataka,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:rava-dosa,Rava Dosa,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:onion-rava-dosa,Onion Rava Dosa,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:set-dosa,Set Dosa,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:neer-dosa,Neer Dosa,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:pesarattu,Pesarattu,,Andhra Pradesh | Telangana | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:adai,Adai,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:uttapam,Uttapam,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:onion-uttapam,Onion Uttapam,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:vegetable-uttapam,Vegetable Uttapam,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:poha,Poha,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:kanda-poha,Kanda Poha,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:indori-poha,Indori Poha,,Madhya Pradesh | Central India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:aval-upma,Aval Upma,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:upma,Upma,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:rava-upma,Rava Upma,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:semiya-upma,Semiya Upma,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:pongal,Pongal,,Tamil Nadu | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:appam,Appam,,Kerala | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:idiyappam,Idiyappam,,Kerala | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:puttu,Puttu,,Kerala | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:kadala-puttu,Kadala Puttu,,Kerala | South India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:kuzhi-paniyaram,Kuzhi Paniyaram,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:medu-vada,Medu Vada,medhu vada | ulundu vadai,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:sabudana-vada,Sabudana Vada,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:moong-dal-chilla,Moong Dal Chilla,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:besan-chilla,Besan Chilla,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:paneer-chilla,Paneer Chilla,,Pan-India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:dhokla,Dhokla,,Gujarat | Western India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:khaman,Khaman,,Gujarat | Western India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:handvo,Handvo,,Gujarat | Western India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:khandvi,Khandvi,,Gujarat | Western India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:muthia,Muthia,,Gujarat | Western India,breakfast_snack,batter_or_breakfast,A,count | piece_weight_g | measured_g,piece_weight | batter_ratio | added_fat,DRAFT_CURATED,4
+dish:in:dal-tadka,Dal Tadka,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:dal-fry,Dal Fry,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:arhar-dal,Arhar Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:toor-dal,Toor Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:moong-dal,Moong Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:moong-dal-tadka,Moong Dal Tadka,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:masoor-dal,Masoor Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:masoor-dal-tadka,Masoor Dal Tadka,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:chana-dal,Chana Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:chana-dal-tadka,Chana Dal Tadka,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:urad-dal,Urad Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:dal-makhani,Dal Makhani,,Punjab | North India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:panchmel-dal,Panchmel Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:dal-baati-style-dal,Dal Baati Style Dal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:sambar,Sambar,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:rasam,Rasam,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:paruppu,Paruppu,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:pappu,Pappu,,Andhra Pradesh | Telangana | South India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:tomato-pappu,Tomato Pappu,,Andhra Pradesh | Telangana | South India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:palak-pappu,Palak Pappu,,Andhra Pradesh | Telangana | South India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:rajma,Rajma,rajma curry,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:rajma-masala,Rajma Masala,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:chole,Chole,chana | chole masala,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:chana-masala,Chana Masala,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:kala-chana-curry,Kala Chana Curry,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:lobia-curry,Lobia Curry,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:matki-usal,Matki Usal,,Maharashtra | Western India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:moong-usal,Moong Usal,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:misal,Misal,,Maharashtra | Western India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:kadhi,Kadhi,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:gujarati-kadhi,Gujarati Kadhi,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:punjabi-kadhi-pakora,Punjabi Kadhi Pakora,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:sindhi-kadhi,Sindhi Kadhi,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:maharashtrian-amti,Maharashtrian Amti,,Maharashtra | Western India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:varan,Varan,,Maharashtra | Western India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:dalma,Dalma,,Odisha | Eastern India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:ghugni,Ghugni,,Pan-India,dal_legume,legume_preparation,A,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:cholar-dal,Cholar Dal,,West Bengal | Eastern India,dal_legume,legume_preparation,B,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:maa-ki-dal,Maa ki Dal,,Pan-India,dal_legume,legume_preparation,B,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:kulthi-dal,Kulthi Dal,,Pan-India,dal_legume,legume_preparation,B,measured_g | katori_volume | ladle,water_ratio | tadka_fat | pulse_concentration,DRAFT_CURATED,4
+dish:in:aloo-gobi,Aloo Gobi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:aloo-matar,Aloo Matar,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:aloo-palak,Aloo Palak,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:aloo-jeera,Aloo Jeera,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:dum-aloo,Dum Aloo,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:kashmiri-dum-aloo,Kashmiri Dum Aloo,,Kashmir | North India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bombay-aloo,Bombay Aloo,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bhindi-masala,Bhindi Masala,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bhindi-fry,Bhindi Fry,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bharwa-bhindi,Bharwa Bhindi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:baingan-bharta,Baingan Bharta,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:baingan-masala,Baingan Masala,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bharwa-baingan,Bharwa Baingan,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:aloo-baingan,Aloo Baingan,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:lauki-sabzi,Lauki Sabzi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:lauki-chana-dal,Lauki Chana Dal,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:tori-sabzi,Tori Sabzi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:tinda-masala,Tinda Masala,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:karela-sabzi,Karela Sabzi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bharwa-karela,Bharwa Karela,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:patta-gobi-sabzi,Patta Gobi Sabzi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:gobi-matar,Gobi Matar,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:matar-mushroom,Matar Mushroom,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:mushroom-masala,Mushroom Masala,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:mushroom-do-pyaza,Mushroom Do Pyaza,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:mix-veg-curry,Mix Veg Curry,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:veg-korma,Veg Korma,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:navratan-korma,Navratan Korma,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:malai-kofta,Malai Kofta,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:veg-kofta-curry,Veg Kofta Curry,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:kofta-curry,Kofta Curry,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:palak-corn,Palak Corn,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:corn-masala,Corn Masala,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:methi-malai-matar,Methi Malai Matar,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:sarson-ka-saag,Sarson ka Saag,,Punjab | North India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:palak-saag,Palak Saag,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:bathua-saag,Bathua Saag,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:chana-saag,Chana Saag,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:avial,Avial,,Kerala | South India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:thoran,Thoran,,Kerala | South India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:beans-poriyal,Beans Poriyal,,Kerala | South India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:cabbage-poriyal,Cabbage Poriyal,,Kerala | South India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:beetroot-poriyal,Beetroot Poriyal,,Kerala | South India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:cabbage-foogath,Cabbage Foogath,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:undhiyu,Undhiyu,,Gujarat | Western India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:sev-tameta,Sev Tameta,,Gujarat | Western India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:ringna-no-olo,Ringna no Olo,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:karela-fry,Karela Fry,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:chokha,Chokha,bihari chokha,Bihar | Jharkhand | Eastern India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,mustard_oil_amount | potato_vs_eggplant_ratio | serving_weight,DRAFT_CURATED,3
+dish:in:aloo-chokha,Aloo Chokha,,Bihar | Jharkhand | Eastern India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:baingan-chokha,Baingan Chokha,,Bihar | Jharkhand | Eastern India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:tomato-chokha,Tomato Chokha,,Bihar | Jharkhand | Eastern India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:sukhi-aloo-sabzi,Sukhi Aloo Sabzi,,Pan-India,vegetable_dish,vegetable_preparation,B,measured_g | katori_volume | serving_spoon,added_fat | gravy_ratio | primary_vegetable_amount,DRAFT_CURATED,4
+dish:in:paneer-butter-masala,Paneer Butter Masala,paneer makhani | butter paneer,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | katori_volume | paneer_cube_count,paneer_amount | butter_ghee_amount | cream_amount | cashew_paste_amount | serving_weight,DRAFT_CURATED,5
+dish:in:kadai-paneer,Kadai Paneer,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:palak-paneer,Palak Paneer,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:shahi-paneer,Shahi Paneer,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:matar-paneer,Matar Paneer,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:paneer-tikka-masala,Paneer Tikka Masala,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:paneer-tikka,Paneer Tikka,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:paneer-bhurji,Paneer Bhurji,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:malai-paneer,Malai Paneer,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:paneer-do-pyaza,Paneer Do Pyaza,,Pan-India,paneer_dairy,paneer_preparation,B,measured_g | paneer_cube_count | katori_volume,paneer_amount | added_fat | cream_or_cashew,DRAFT_CURATED,4
+dish:in:butter-chicken,Butter Chicken,murgh makhani,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-curry,Chicken Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:kadai-chicken,Kadai Chicken,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-korma,Chicken Korma,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-do-pyaza,Chicken Do Pyaza,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-saag,Chicken Saag,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-tikka-masala,Chicken Tikka Masala,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-tikka,Chicken Tikka,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:tandoori-chicken,Tandoori Chicken,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-65,Chicken 65,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-chettinad,Chicken Chettinad,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-sukka,Chicken Sukka,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-cafreal,Chicken Cafreal,,Goa | Western India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-xacuti,Chicken Xacuti,,Goa | Western India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-vindaloo,Chicken Vindaloo,,Goa | Western India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-kolhapuri,Chicken Kolhapuri,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-handi,Chicken Handi,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-changezi,Chicken Changezi,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:champaran-chicken,Champaran Chicken,,Bihar | Jharkhand | Eastern India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:chicken-stew,Chicken Stew,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-curry,Mutton Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:rogan-josh,Rogan Josh,,Kashmir | North India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-korma,Mutton Korma,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-do-pyaza,Mutton Do Pyaza,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-saag,Mutton Saag,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-vindaloo,Mutton Vindaloo,,Goa | Western India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-sukka,Mutton Sukka,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-pepper-fry,Mutton Pepper Fry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:champaran-mutton,Champaran Mutton,,Bihar | Jharkhand | Eastern India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:laal-maas,Laal Maas,,Rajasthan | Northwest India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:keema-matar,Keema Matar,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:mutton-keema,Mutton Keema,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:nihari,Nihari,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:haleem,Haleem,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:pork-vindaloo,Pork Vindaloo,,Goa | Western India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:pork-curry,Pork Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:pork-with-bamboo-shoot,Pork with Bamboo Shoot,,Northeast India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:smoked-pork,Smoked Pork,,Northeast India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:fish-curry,Fish Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:bengali-fish-curry,Bengali Fish Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:machher-jhol,Machher Jhol,macher jhol,West Bengal | Eastern India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:doi-maach,Doi Maach,,West Bengal | Eastern India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:goan-fish-curry,Goan Fish Curry,,Goa | Western India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:kerala-fish-curry,Kerala Fish Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:meen-moilee,Meen Moilee,,Kerala | South India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:fish-fry,Fish Fry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:amritsari-fish,Amritsari Fish,,Punjab | North India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:prawn-curry,Prawn Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:prawn-masala,Prawn Masala,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:prawn-fry,Prawn Fry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:egg-curry,Egg Curry,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:anda-bhurji,Anda Bhurji,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:masala-omelette,Masala Omelette,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:egg-roast,Egg Roast,,Pan-India,protein_dish,protein_preparation,B,measured_g | piece_count | katori_volume,edible_meat_amount | added_fat | gravy_ratio,DRAFT_CURATED,4
+dish:in:samosa,Samosa,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:aloo-samosa,Aloo Samosa,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:kachori,Kachori,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:dal-kachori,Dal Kachori,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:pyaz-kachori,Pyaz Kachori,,Rajasthan | Northwest India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:raj-kachori,Raj Kachori,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:pakora,Pakora,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:onion-pakora,Onion Pakora,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:paneer-pakora,Paneer Pakora,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:bread-pakora,Bread Pakora,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:aloo-tikki,Aloo Tikki,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:aloo-tikki-chaat,Aloo Tikki Chaat,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:papdi-chaat,Papdi Chaat,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:dahi-papdi-chaat,Dahi Papdi Chaat,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:dahi-vada,Dahi Vada,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:bhel-puri,Bhel Puri,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:sev-puri,Sev Puri,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:pani-puri,Pani Puri,golgappa | puchka | gupchup,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:dahi-puri,Dahi Puri,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:ragda-pattice,Ragda Pattice,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:vada-pav,Vada Pav,vada pao,Maharashtra | Western India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:dabeli,Dabeli,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:pav-bhaji,Pav Bhaji,pao bhaji,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:misal-pav,Misal Pav,,Maharashtra | Western India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chole-bhature,Chole Bhature,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chole-kulche,Chole Kulche,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:aloo-puri,Aloo Puri,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:puri-sabzi,Puri Sabzi,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:kathi-roll,Kathi Roll,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:egg-roll,Egg Roll,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chicken-roll,Chicken Roll,chicken kathi roll,Pan-India,street_food_snack,street_snack,B,count | wrapper_size | finished_weight_g,wrapper_size | chicken_filling_weight | wrapper_cooking_oil | mayo_or_sauce_amount,DRAFT_CURATED,5
+dish:in:egg-chicken-roll,Egg Chicken Roll,egg chicken kathi roll,Pan-India,street_food_snack,street_snack,B,count | wrapper_size | finished_weight_g,wrapper_size | chicken_filling_weight | egg_count | wrapper_cooking_oil | mayo_or_sauce_amount,DRAFT_CURATED,6
+dish:in:paneer-roll,Paneer Roll,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:veg-roll,Veg Roll,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:frankie,Frankie,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:veg-momos,Veg Momos,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chicken-momos,Chicken Momos,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:fried-momos,Fried Momos,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:tandoori-momos,Tandoori Momos,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chowmein,Chowmein,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:veg-chowmein,Veg Chowmein,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:hakka-noodles,Hakka Noodles,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chilli-potato,Chilli Potato,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:manchurian,Manchurian,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:chilli-paneer,Chilli Paneer,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:bun-maska,Bun Maska,,Pan-India,street_food_snack,street_snack,B,count | piece_weight_g | plate_portion,frying_oil_absorption | filling_amount | sauce_or_chutney,DRAFT_CURATED,4
+dish:in:gulab-jamun,Gulab Jamun,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:kala-jamun,Kala Jamun,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:rasgulla,Rasgulla,rosogolla,West Bengal | Eastern India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:rajbhog,Rajbhog,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:rasmalai,Rasmalai,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:sandesh,Sandesh,,West Bengal | Eastern India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:mishti-doi,Mishti Doi,,West Bengal | Eastern India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:jalebi,Jalebi,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:imarti,Imarti,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:balushahi,Balushahi,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:kaju-katli,Kaju Katli,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:besan-ladoo,Besan Ladoo,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:motichoor-ladoo,Motichoor Ladoo,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:boondi-ladoo,Boondi Ladoo,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:atta-ladoo,Atta Ladoo,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:til-ladoo,Til Ladoo,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:nariyal-ladoo,Nariyal Ladoo,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:peda,Peda,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:milk-cake,Milk Cake,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:kalakand,Kalakand,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:barfi,Barfi,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:coconut-barfi,Coconut Barfi,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:mysore-pak,Mysore Pak,,Karnataka | South India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:soan-papdi,Soan Papdi,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:gajar-halwa,Gajar Halwa,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:sooji-halwa,Sooji Halwa,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:moong-dal-halwa,Moong Dal Halwa,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:kheer,Kheer,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:rice-kheer,Rice Kheer,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:phirni,Phirni,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:payasam,Payasam,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:seviyan-kheer,Seviyan Kheer,,Pan-India,sweet,sweet_dessert,B,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:shrikhand,Shrikhand,,Pan-India,sweet,sweet_dessert,C,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:basundi,Basundi,,Pan-India,sweet,sweet_dessert,C,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:malpua,Malpua,,Pan-India,sweet,sweet_dessert,C,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:thekua,Thekua,,Bihar | Jharkhand | Eastern India,sweet,sweet_dessert,C,count | piece_weight_g | bowl_volume,sugar_amount | fat_amount | piece_weight,DRAFT_CURATED,4
+dish:in:masala-chai,Masala Chai,,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:milk-tea,Milk Tea,,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:filter-coffee,Filter Coffee,,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:lassi,Lassi,,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:sweet-lassi,Sweet Lassi,,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:chaas,Chaas,buttermilk | mattha,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:nimbu-pani,Nimbu Pani,,Pan-India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:sattu-sharbat,Sattu Sharbat,sattu drink,Bihar | Jharkhand | Eastern India,beverage,beverage,C,ml | glass_volume,sugar_amount | milk_amount | serving_volume,DRAFT_CURATED,3
+dish:in:eromba,Eromba,,Manipur | Northeast India,regional_specialty,regional_dish,C,measured_g | bowl_volume | count,vegetable_mix | fermented_fish_amount | serving_weight,DRAFT_CURATED,4
+dish:in:singju,Singju,,Manipur | Northeast India,regional_specialty,regional_dish,C,measured_g | bowl_volume | count,recipe_variant | added_fat | portion_weight,DRAFT_CURATED,3
+dish:in:dal-pitha,Dal Pitha,,Bihar | Jharkhand | Eastern India,regional_specialty,regional_dish,C,measured_g | bowl_volume | count,recipe_variant | added_fat | portion_weight,DRAFT_CURATED,3
+dish:in:dhuska,Dhuska,,Bihar | Jharkhand | Eastern India,regional_specialty,regional_dish,C,measured_g | bowl_volume | count,recipe_variant | added_fat | portion_weight,DRAFT_CURATED,3
+dish:in:pittha,Pittha,,Bihar | Jharkhand | Eastern India,regional_specialty,regional_dish,C,measured_g | bowl_volume | count,recipe_variant | added_fat | portion_weight,DRAFT_CURATED,3

@@ -9,7 +9,7 @@ Tasks are dependency ordered. A task is `ready` only when every dependency is co
 | FND-001 | Schema v2 — UUID Identity and Sync Metadata | 1 | complete | AUD-001 | No | Medium | schema.ts, migrations | [FND-001](./phase-01-foundation/FND-001-schema-v2-identity.md) |
 | FND-002 | Backup Format v2 — Round-Trip All Tables | 1 | complete | FND-001 | Yes | Medium | backup-core.ts, backup allowlists | [FND-002](./phase-01-foundation/FND-002-backup-v2.md) |
 | FND-003 | Structured Operations and Undo Foundation | 1 | complete | FND-001 | No | Large | schema.ts, operations core | [FND-003](./phase-01-foundation/FND-003-operations-undo.md) |
-| AUD-002 | Health Score Removal & Metric Default | 1 | ready | AUD-001 | Yes | Small | index.tsx, settings | [AUD-002](./phase-01-foundation/AUD-002-health-score-metric.md) |
+| AUD-002 | Health Score Removal | AUD-002 | Health Score Removal & Metric Default | 1 | ready | Metric Default | 1 | complete | AUD-001 | Yes | Small | index.tsx, settings | [AUD-002](./phase-01-foundation/AUD-002-health-score-metric.md) |
 | FND-005 | String Extraction & i18n Foundation | 1 | ready | AUD-001 | Yes | Medium | app shell, components | [FND-005](./phase-01-foundation/FND-005-i18n-foundation.md) |
 | FND-004 | Day Completeness Storage Foundation | 1 | complete | FND-001 | Yes | Small | schema.ts, goals | [FND-004](./phase-01-foundation/FND-004-day-completeness.md) |
 | **Phase 2: Nutrition** |
@@ -37,16 +37,16 @@ Tasks are dependency ordered. A task is `ready` only when every dependency is co
 | TLN-001 | Unified Timeline Event Contract | 4 | complete | FND-003, TRN-002, IND-003 | No | Medium | timeline read models | [TLN-001](./phase-04-search-timeline/TLN-001-timeline-event-contract.md) |
 | TLN-002 | Daily Timeline Mobile UI | 4 | complete | TLN-001, SRH-005, TRN-003 | No | Large | Home/Food navigation, timeline UI | [TLN-002](./phase-04-search-timeline/TLN-002-daily-timeline-ui.md) |
 | **Phase 5: Day Completeness and Adaptive Check-ins** |
-| ADP-001 | Day Status Rules and Analytics Exclusions | 5 | unstarted | FND-004, TLN-001 | No | Medium | goals, reports contracts | [ADP-001](./phase-05-adaptive-checkins/ADP-001-day-status-rules.md) |
-| ADP-002 | Completeness UI and Day Finalization | 5 | unstarted | ADP-001, TLN-002 | Yes | Medium | Home/Food day controls | [ADP-002](./phase-05-adaptive-checkins/ADP-002-completeness-ui.md) |
-| ADP-003 | Weekly Check-in Metrics Engine | 5 | unstarted | ADP-001, TRN-004 | Yes | Medium | goals, analytics | [ADP-003](./phase-05-adaptive-checkins/ADP-003-weekly-checkin-metrics.md) |
-| ADP-004 | Adaptive Target Suggestions | 5 | unstarted | ADP-003 | No | Medium | goals, profile settings | [ADP-004](./phase-05-adaptive-checkins/ADP-004-adaptive-target-suggestions.md) |
-| ADP-005 | Check-in Consent and Safety Guardrails | 5 | unstarted | ADP-004 | No | Medium | safety rules, check-in UI | [ADP-005](./phase-05-adaptive-checkins/ADP-005-consent-safety-guardrails.md) |
+| ADP-001 | Day Status Rules and Analytics Exclusions | 5 | complete | FND-004, TLN-001 | No | Medium | goals, reports contracts | [ADP-001](./phase-05-adaptive-checkins/ADP-001-day-status-rules.md) |
+| ADP-002 | Completeness UI and Day Finalization | 5 | complete | ADP-001, TLN-002 | Yes | Medium | Home/Food day controls | [ADP-002](./phase-05-adaptive-checkins/ADP-002-completeness-ui.md) |
+| ADP-003 | Weekly Check-in Metrics Engine | 5 | complete | ADP-001, TRN-004 | Yes | Medium | goals, analytics | [ADP-003](./phase-05-adaptive-checkins/ADP-003-weekly-checkin-metrics.md) |
+| ADP-004 | Adaptive Target Suggestions | 5 | complete | ADP-003 | No | Medium | goals, profile settings | [ADP-004](./phase-05-adaptive-checkins/ADP-004-adaptive-target-suggestions.md) |
+| ADP-005 | Check-in Consent and Safety Guardrails | 5 | complete | ADP-004 | No | Medium | safety rules, check-in UI | [ADP-005](./phase-05-adaptive-checkins/ADP-005-consent-safety-guardrails.md) |
 | **Phase 6: AI Providers, Photo Analysis, and Chat** |
 | AIP-001 | AI Provider Interface and Key Storage Contract | 6 | unstarted | NUT-001, FND-003 | No | Medium | provider contracts, secure storage | [AIP-001](./phase-06-ai-chat/AIP-001-provider-interface-key-storage.md) |
-| AIP-002 | Photo Preprocessing and Privacy Filter | 6 | unstarted | AIP-001 | Yes | Medium | media pipeline, EXIF stripping | [AIP-002](./phase-06-ai-chat/AIP-002-photo-preprocessing-privacy.md) |
-| AIP-003 | Structured Meal Photo Analysis | 6 | unstarted | AIP-002, IND-003 | No | Large | prompt, gram engine integration | [AIP-003](./phase-06-ai-chat/AIP-003-structured-meal-photo-analysis.md) |
-| AIP-004 | Correction Intent Parser and Confirmation | 6 | unstarted | AIP-003, FND-003 | No | Large | correction flow, operations | [AIP-004](./phase-06-ai-chat/AIP-004-correction-intent-confirmation.md) |
+| AIP-002 | Photo Preprocessing and Privacy Filter | 6 | complete | AIP-001 | Yes | Medium | media pipeline, EXIF stripping | [AIP-002](./phase-06-ai-chat/AIP-002-photo-preprocessing-privacy.md) |
+| AIP-003 | Structured Meal Photo Analysis | 6 | complete | AIP-002, IND-003 | No | Large | prompt, gram engine integration | [AIP-003](./phase-06-ai-chat/AIP-003-structured-meal-photo-analysis.md) |
+| AIP-004 | Correction Intent Parser and Confirmation | 6 | complete | AIP-003, FND-003 | No | Large | correction flow, operations | [AIP-004](./phase-06-ai-chat/AIP-004-correction-intent-confirmation.md) |
 | AIP-005 | Unified Assistant Read Tools | 6 | unstarted | TLN-001, TRN-004, AIP-001 | Yes | Medium | assistant tool registry | [AIP-005](./phase-06-ai-chat/AIP-005-assistant-read-tools.md) |
 | AIP-006 | Assistant Write Actions with Confirmation | 6 | unstarted | AIP-004, AIP-005 | No | Medium | assistant confirmations | [AIP-006](./phase-06-ai-chat/AIP-006-assistant-write-actions.md) |
 | AIP-007 | Provider Fallbacks, Timeouts, Retries, and Cache | 6 | unstarted | AIP-001, AIP-003 | Yes | Medium | provider orchestration | [AIP-007](./phase-06-ai-chat/AIP-007-provider-fallback-retry-cache.md) |

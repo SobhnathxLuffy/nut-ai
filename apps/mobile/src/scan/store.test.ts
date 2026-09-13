@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Band } from '@nutai/confidence'
 import type { IngredientRow, LoggedMeal } from '@nutai/core-schema'
 import { recomputeAfterEdit } from '@nutai/pipeline'
@@ -13,6 +13,10 @@ import {
   setPortionEaten,
   setWebLookup,
 } from './store'
+
+vi.mock('expo-file-system', () => ({
+  deleteAsync: vi.fn(() => Promise.resolve()),
+}))
 
 /**
  * The scan store's arithmetic — the numbers the user actually edits.
@@ -177,5 +181,31 @@ describe('setWebLookup', () => {
     readyWith([row()])
     setWebLookup('r1', { status: 'running' })
     expect(readyPhase().webLookups['r1']).toEqual({ status: 'running' })
+  })
+})
+
+describe('reset cleanup', () => {
+  it('deletes temporary photo by default on cancel or failure', async () => {
+    const fs = await import('expo-file-system')
+    vi.mocked(fs.deleteAsync).mockClear()
+
+    setPhase({ kind: 'failed', photoUri: 'file:///tmp/cache/test.jpg', message: 'Fail', canRetry: true })
+    reset()
+    
+    // wait a tick since import('expo-file-system') is async inside reset
+    await new Promise(r => setTimeout(r, 0))
+    expect(fs.deleteAsync).toHaveBeenCalledWith('file:///tmp/cache/test.jpg', { idempotent: true })
+    expect(getPhase().kind).toBe('idle')
+  })
+
+  it('skips deleting if explicitly retained', async () => {
+    const fs = await import('expo-file-system')
+    vi.mocked(fs.deleteAsync).mockClear()
+
+    setPhase({ kind: 'failed', photoUri: 'file:///tmp/cache/test.jpg', message: 'Fail', canRetry: true })
+    reset({ retainPhoto: true })
+    
+    await new Promise(r => setTimeout(r, 0))
+    expect(fs.deleteAsync).not.toHaveBeenCalled()
   })
 })

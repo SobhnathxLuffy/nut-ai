@@ -1,5 +1,5 @@
 import type { DbAdapter } from '@nutai/db-adapter'
-import { USDASource, OpenFoodFactsSource, IFCTSource, UserFoodSource, RecipeSource, RouterSource } from '@nutai/nutrition-sources'
+import { USDASource, OpenFoodFactsSource, IFCTSource, UserFoodSource, RecipeSource, RouterSource, DishKBSource } from '@nutai/nutrition-sources'
 import { normalizeGtin } from './gtin.js'
 import { matchLadder } from './query.js'
 import { normalizeIndianAliases } from './aliases.js'
@@ -16,20 +16,16 @@ export * from './query.js'
 export * from './scoring.js'
 export * from './aliases.js'
 
-/**
- * Source databases deliberately remain separate. The bundled USDA and IFCT
- * artifacts have independent provenance/licensing lifecycles, while recipes
- * and user foods live only in user.db. Passing this context prevents accidental
- * cross-database row-ID collisions (for example USDA id 1 versus IFCT id 1).
- */
 export interface NutritionSourceContext {
   readonly ifctDb?: DbAdapter
   readonly userDb?: DbAdapter
+  readonly nutritionDb?: DbAdapter
 }
 
 function sourceRouter(nutritionDb: DbAdapter, context: NutritionSourceContext = {}): RouterSource {
   const sources = [
     ...(context.userDb ? [new UserFoodSource(context.userDb), new RecipeSource(context.userDb)] : []),
+    new DishKBSource(nutritionDb), // Priority is managed in scores, but order matters for short-circuits if needed
     ...(context.ifctDb ? [new IFCTSource(context.ifctDb)] : []),
     new USDASource(nutritionDb),
     new OpenFoodFactsSource(),

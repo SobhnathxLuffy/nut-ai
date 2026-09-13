@@ -1,0 +1,34 @@
+[
+  {
+    "query": "chapati",
+    "expectedCanonicalName": "Roti"
+  },
+  {
+    "query": "murgh makhani",
+    "expectedCanonicalName": "Butter Chicken"
+  },
+  {
+    "query": "puchka",
+    "expectedCanonicalName": "Pani Puri"
+  },
+  {
+    "query": "golgappa",
+    "expectedCanonicalName": "Pani Puri"
+  },
+  {
+    "query": "puliyogare",
+    "expectedCanonicalName": "Tamarind Rice"
+  },
+  {
+    "query": "bihari litti",
+    "expectedCanonicalName": "Litti"
+  },
+  {
+    "query": "egg chicken kathi roll",
+    "expectedCanonicalName": "Egg Chicken Roll"
+  },
+  {
+    "query": "butter paneer",
+    "expectedCanonicalName": "Paneer Butter Masala"
+  }
+]

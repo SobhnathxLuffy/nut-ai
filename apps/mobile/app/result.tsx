@@ -12,8 +12,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { WebLookupResult } from '@nutai/core-schema'
-import { healthScore } from '@nutai/totals'
+import type { WebLookupResult, MacroTotals } from '@nutai/core-schema'
 import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
 import { Icon, type IconName } from '../src/components/Icon'
 import { logMeal } from '../src/data/repo'
@@ -144,7 +143,6 @@ export default function Result() {
 
         <StatsPager
           totals={result.totals}
-          grams={result.meal.ingredients.reduce((a, r) => a + r.grams, 0)}
         />
 
         {/* Highlighted questions: at most two, ever. */}
@@ -248,7 +246,7 @@ export default function Result() {
               void (async () => {
                 try {
                   await logMeal(result, phase.meta, phase.photoUri, Date.now())
-                  reset()
+                  reset({ retainPhoto: true })
                   router.dismissAll()
                 } catch {
                   setLogging(false)
@@ -445,13 +443,11 @@ function Macro({
  * fiber/sugar/sodium with the health score. The score is arithmetic from
  * @nutai/totals — tap it and every point shows its named rule.
  */
-function StatsPager({ totals, grams }: { totals: Parameters<typeof healthScore>[0]; grams: number }) {
+function StatsPager({ totals }: { totals: MacroTotals }) {
   const theme = useTheme()
   const { width } = useWindowDimensions()
   const pageW = width - space.lg * 2
   const [page, setPage] = useState(0)
-  const [showWhy, setShowWhy] = useState(false)
-  const hs = healthScore(totals, grams > 0 ? grams : undefined)
 
   return (
     <View style={{ marginTop: space.xl }}>
@@ -474,37 +470,6 @@ function StatsPager({ totals, grams }: { totals: Parameters<typeof healthScore>[
             <Macro label="Sodium" value={totals.sodium_mg} unit="mg" color={theme.fat} icon="sodium" />
           </View>
 
-          {hs ? (
-            <Pressable
-              onPress={() => setShowWhy((v) => !v)}
-              style={[styles.healthCard, { backgroundColor: theme.bgSunken }]}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-                <Icon name="heart" size={18} color={theme.protein} />
-                <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]}>Health score</Text>
-                <Text style={[type.bodyStrong, { color: theme.text }]}>{hs.score}/10</Text>
-              </View>
-              <View style={[styles.healthTrack, { backgroundColor: theme.bgElevated }]}>
-                <View
-                  style={[
-                    styles.healthFill,
-                    { width: `${hs.score * 10}%` as const, backgroundColor: theme.affirm },
-                  ]}
-                />
-              </View>
-              {showWhy &&
-                hs.reasons.map((r) => (
-                  <Text key={r} style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-                    · {r}
-                  </Text>
-                ))}
-              {showWhy && (
-                <Text style={[type.micro, { color: theme.textFaint, marginTop: space.sm }]}>
-                  Computed by fixed rules from these totals — never by the AI.
-                </Text>
-              )}
-            </Pressable>
-          ) : null}
         </View>
       </ScrollView>
 

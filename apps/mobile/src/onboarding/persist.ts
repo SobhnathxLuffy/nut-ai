@@ -137,7 +137,6 @@ export async function persistOnboarding(
       ['reminders.enabled', features.remindersOn ? 'true' : 'false'],
       ['streak.enabled', features.streakOn ? 'true' : 'false'],
       ['foods.savedPinned', features.savedMealsPinned ? 'true' : 'false'],
-      ['healthScore.visible', features.showHealthScore ? 'true' : 'false'],
       ['mealIdeas.visible', features.showMealIdeas ? 'true' : 'false'],
       ['health.intent', answers.healthConnected ? 'true' : 'false'],
       // THE canonical keys the scan orchestrator reads. The apikey screen

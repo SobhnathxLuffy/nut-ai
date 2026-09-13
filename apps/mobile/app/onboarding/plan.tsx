@@ -207,7 +207,6 @@ export default function PlanScreen() {
             ) : null}
             {features.remindersOn ? <Bullet text="Reminders on, learned from when you actually log." /> : null}
             {features.savedMealsPinned ? <Bullet text="Saved meals pinned for one-tap relogging." /> : null}
-            {features.showHealthScore ? <Bullet text="Health score shown, with its formula published." /> : null}
             {features.showMealIdeas ? <Bullet text="Meal ideas surfaced on the Today screen." /> : null}
             {a.worksWithProfessional ? (
               <Bullet text="Shareable export enabled, and we'll keep our coaching suggestions out of your way." />

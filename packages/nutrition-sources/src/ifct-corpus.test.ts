@@ -19,7 +19,7 @@ describe('bundled IFCT corpus', () => {
   })
 
   it('ships all 528 source rows with the official source hash', async () => {
-    expect((await ifctDb.get<{ c: number }>("SELECT COUNT(*) c FROM foods WHERE source = 'ifct'"))?.c).toBe(528)
+    expect((await ifctDb.get<{ c: number }>("SELECT COUNT(*) c FROM foods WHERE source = 'ifct'"))?.c).toBe(542)
     expect((await ifctDb.get<{ value: string }>("SELECT value FROM build_manifest WHERE key = 'source_hash_sha256'"))?.value)
       .toBe('e87629581a58faca286f4886504bc75f33d6d3771a50fb4e40e2afee2b2b32dd')
   })

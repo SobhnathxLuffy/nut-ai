@@ -25,14 +25,14 @@ export default function LogWeight() {
   const { width } = useWindowDimensions()
 
   const [kg, setKg] = useState(80)
-  const [imperial, setImperial] = useState(true)
+  const [imperial, setImperial] = useState(false)
   const [saving, setSaving] = useState(false)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let alive = true
     void (async () => {
-      const [history, units] = await Promise.all([weightHistory(), setting('units', 'imperial')])
+      const [history, units] = await Promise.all([weightHistory(), setting('units', 'metric')])
       if (!alive) return
       const last = history[history.length - 1]
       if (last) setKg(last.weightKg)

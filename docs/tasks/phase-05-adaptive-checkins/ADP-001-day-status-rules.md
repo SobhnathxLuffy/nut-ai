@@ -1,6 +1,6 @@
 # ADP-001: Day Status Rules and Analytics Exclusions
 
-Status: unstarted
+Status: complete
 Phase: 5 - Day completeness and adaptive check-ins
 Depends on: FND-004, TLN-001
 Parallel-safe with: None

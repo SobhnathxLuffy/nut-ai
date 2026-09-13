@@ -1,6 +1,6 @@
 # AIP-002: Photo Preprocessing and Privacy Filter
 
-Status: unstarted
+Status: complete
 Phase: 6 - AI providers, photo analysis, and chat
 Depends on: AIP-001
 Parallel-safe with: AIP-005

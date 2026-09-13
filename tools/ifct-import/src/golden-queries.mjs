@@ -40,8 +40,8 @@ for (const c of CASES) {
 }
 
 const count = db.prepare("SELECT COUNT(*) c FROM foods WHERE source = 'ifct'").get().c
-if (count !== 528) {
-  console.error(`FAIL: expected 528 IFCT records, found ${count}`)
+if (count !== 542) {
+  console.error(`FAIL: expected 542 IFCT records, found ${count}`)
   failures++
 }
 

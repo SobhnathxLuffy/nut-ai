@@ -745,3 +745,41 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 9, sql: USER_SCHEMA_V9_SQL },
   { version: 10, sql: TRAINING_SQL + OPERATIONS_V10_SQL },
 ]
+
+export const DISH_KB_SCHEMA = `
+CREATE TABLE IF NOT EXISTS dish_definitions (
+  id TEXT PRIMARY KEY,
+  canonical_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  family TEXT NOT NULL,
+  parent_dish_id TEXT,
+  cooking_methods_json TEXT,
+  yield_model_json TEXT,
+  recipe_template_json TEXT NOT NULL,
+  portion_model_json TEXT NOT NULL,
+  uncertainty_model_json TEXT,
+  resolver_config_json TEXT,
+  record_status TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dish_aliases (
+  dish_id TEXT REFERENCES dish_definitions(id),
+  alias TEXT NOT NULL,
+  is_search_term INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_dish_aliases ON dish_aliases(dish_id);
+`;
+
+export const DISH_KB_FTS_SCHEMA = `
+CREATE VIRTUAL TABLE IF NOT EXISTS dish_fts USING fts5(
+  canonical_name, aliases, search_terms,
+  content='',
+  tokenize = "porter unicode61 remove_diacritics 2"
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS dish_fts_trigram USING fts5(
+  canonical_name, aliases,
+  content='',
+  tokenize = "trigram"
+);
+`;

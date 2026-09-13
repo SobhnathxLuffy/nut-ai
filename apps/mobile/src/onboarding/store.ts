@@ -221,7 +221,6 @@ export interface FeatureDefaults {
   remindersOn: boolean
   streakOn: boolean
   savedMealsPinned: boolean
-  showHealthScore: boolean
   showMealIdeas: boolean
 }
 
@@ -230,14 +229,12 @@ export function featureDefaultsFor(b: Blocker | null): FeatureDefaults {
     remindersOn: false,
     streakOn: true,
     savedMealsPinned: false,
-    showHealthScore: false,
     showMealIdeas: false,
   }
   switch (b) {
     case 'consistency':
       return { ...base, remindersOn: true, streakOn: true }
     case 'eating_habits':
-      return { ...base, showHealthScore: true }
     case 'busy':
       // Someone short on time gets one-tap relogging front and centre.
       return { ...base, savedMealsPinned: true }

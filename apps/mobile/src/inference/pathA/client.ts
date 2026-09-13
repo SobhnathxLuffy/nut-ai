@@ -226,7 +226,7 @@ export async function runScanWithFallback(
 ): Promise<ScanOutcome & { usedSchemaFallback?: boolean }> {
   const first = await runScan(req, fetchImpl)
   const structural =
-    !first.ok && first.error.httpStatus === 400 && req.jsonSchema != null
+    !first.ok && (first as any).error?.httpStatus === 400 && req.jsonSchema != null
   if (!structural) return first
 
   const second = await runScan({ ...req, jsonSchema: null }, fetchImpl)
@@ -412,5 +412,87 @@ export async function runWebLookup(
     return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
   } finally {
     clearTimeout(timer)
+  }
+}
+
+
+import type { CorrectionIntent } from '@nutai/core-schema'
+import { loadCredential } from '../credentials'
+
+export async function runCorrectionIntent(
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string },
+  fetchImpl: typeof fetch = fetch
+): Promise<{ ok: true; intent: CorrectionIntent } | { ok: false; error: ScanFailure }> {
+  try {
+    const credObj = await loadCredential(req.provider)
+    if (!credObj || !credObj.value) {
+      return { ok: false, error: { kind: 'key-invalid', message: `No credentials for ${req.provider}`, retryable: false } }
+    }
+    const cred = credObj.value
+
+    const payload = {
+      model: req.model,
+      messages: [
+        { role: 'system', content: req.systemPrompt },
+        { role: 'user', content: req.userPrompt }
+      ],
+      response_format: { type: 'json_object' }
+    }
+
+    let url = ''
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    
+    if (req.provider === 'openai') {
+      url = 'https://api.openai.com/v1/chat/completions'
+      headers['Authorization'] = `Bearer ${cred}`
+    } else if (req.provider === 'google') {
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${cred}`
+      // Google uses a different schema for messages
+      payload.messages = undefined as any
+      ;(payload as any).contents = [
+        { role: 'user', parts: [{ text: req.systemPrompt + "\\n\\n" + req.userPrompt }] }
+      ]
+      ;(payload as any).generationConfig = { responseMimeType: "application/json" }
+    } else if (req.provider === 'anthropic') {
+      url = 'https://api.anthropic.com/v1/messages'
+      headers['x-api-key'] = cred
+      headers['anthropic-version'] = '2023-06-01'
+      payload.messages = [{ role: 'user', content: req.userPrompt }]
+      ;(payload as any).system = req.systemPrompt
+    }
+
+    const res = await fetchImpl(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    })
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) return { ok: false, error: { kind: 'key-invalid', message: 'Invalid API key', retryable: false } }
+      return { ok: false, error: { kind: 'error-retryable', message: `Server error: ${res.status}`, retryable: true } }
+    }
+
+    const json = await res.json()
+    let rawResult = ''
+    
+    if (req.provider === 'openai') {
+      rawResult = json.choices?.[0]?.message?.content
+    } else if (req.provider === 'google') {
+      rawResult = json.candidates?.[0]?.content?.parts?.[0]?.text
+    } else if (req.provider === 'anthropic') {
+      rawResult = json.content?.[0]?.text
+    }
+
+    if (!rawResult) {
+      return { ok: false, error: { kind: 'error-retryable', message: 'No content in response', retryable: true } }
+    }
+
+    const parsed = JSON.parse(rawResult)
+    return { ok: true, intent: parsed as CorrectionIntent }
+  } catch (err: any) {
+    if (err.name === 'AbortError' || err.message?.includes('fetch')) {
+      return { ok: false, error: { kind: 'offline', message: err.message, retryable: true } }
+    }
+    return { ok: false, error: { kind: 'error-retryable', message: err.message, retryable: true } }
   }
 }

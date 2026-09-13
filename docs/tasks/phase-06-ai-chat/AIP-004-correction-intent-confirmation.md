@@ -1,6 +1,6 @@
 # AIP-004: Correction Intent Parser and Confirmation
 
-Status: unstarted
+Status: complete
 Phase: 6 - AI providers, photo analysis, and chat
 Depends on: AIP-003, FND-003
 Parallel-safe with: None

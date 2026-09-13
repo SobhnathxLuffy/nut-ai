@@ -29,6 +29,10 @@ Training schema, offline workout creation, active workout auto-recovery, plate c
 
 Unified search contract and index (`@nutai/search`), food search ranking (IFCT > USDA, barcode priority, Hinglish aliases), exercise search ranking (custom boosts, equipment filters), shortcut read models (recents, favorites, usuals), repeat logging actions with atomic undo/redo, unified timeline contract (`@nutai/timeline`), 5-tab navigation (`UX-001`), and daily timeline mobile UI (`TLN-002`) are implemented, passing full check gates (473 tests) and verified on physical Android hardware.
 
+**Phase 5: Day Completeness and Adaptive Check-ins** — COMPLETE
+
+Day status rules (`complete`, `partial`, `unknown`, `fasting`), analytics exclusions, fasting intentionality, exercise calorie separation from targets, day finalization UI (`DayStatusControl`), atomic operation recording for undo/redo, weekly check-in metrics engine (`@nutai/goals`), adaptive intake target suggestions with 150 kcal safety bounds and macro locks, consent/safety guardrails (<18yo, pregnancy, ED screening, low BMI, versioned goal snapshots), and the weekly check-in mobile screen (`apps/mobile/app/checkin.tsx` & `progress.tsx`) are implemented and verified.
+
 ## What Works Today
 
 | Area | Status | Evidence |
@@ -36,7 +40,7 @@ Unified search contract and index (`@nutai/search`), food search ranking (IFCT >
 | Monorepo + npm workspaces | ✅ Working | `package.json` workspaces |
 | TypeScript strict mode | ✅ Working | `npm run typecheck` clean |
 | 16 Node-pure packages | ✅ Working | `check:node-purity` 16/16 |
-| 473 unit + property tests | ✅ Working | `npm run test` 48 files |
+| 504 unit + property tests | ✅ Working | `npm run test` 53 files |
 | Schema v9 (UUID, ops, day, recipes) | ✅ Working | Android app-private `user.db` has migrations 1-9; FK/integrity clean |
 | Operations / undo foundation | ✅ Working | Strict replay, ledger-safe undo, recipe undo/redo coverage |
 | Day completeness storage | ✅ Working | Storage/restart/constraint tests pass |
@@ -56,7 +60,7 @@ Unified search contract and index (`@nutai/search`), food search ranking (IFCT >
 | Universal search & ranking | ✅ Working | SRH-001, SRH-002, SRH-003 (@nutai/search) |
 | Shortcuts & repeat logging | ✅ Working | SRH-004, SRH-005 (recents, favorites, usuals, copy-yesterday) |
 | Unified timeline | ✅ Working | TLN-001, TLN-002 (@nutai/timeline & DayTimeline) |
-| Health score UI | ⚠️ Exists — TO BE REMOVED | Conflicts with principles |
+| Health score UI | ✅ Removed | AUD-002 completed |
 | ESLint | ✅ Configured | `npm run lint` passes |
 | Onboarding screens | 🔶 Partial | Routes exist, functionality partial |
 | THIRD-PARTY-DATA.md | ✅ Created | Planning pass |
@@ -65,8 +69,8 @@ Unified search contract and index (`@nutai/search`), food search ranking (IFCT >
 | Open Food Facts adapter | ✅ Working | Barcode adapter, timeout, ODbL attribution, scanner fallback |
 | Indian aliases / ontology | ✅ Working | 100+ transliteration + Hindi-script aliases covered |
 | Recipe / dish family system | ✅ Working | Versioned recipes, yield/oil math, create/edit/log/undo |
-| Day completeness UI | ❌ Not started | ADP-002 |
-| Adaptive weekly check-in | ❌ Not started | ADP-003+ |
+| Day completeness UI | ✅ Working | ADP-001, ADP-002 (DayStatusControl on Home/Food) |
+| Adaptive weekly check-in | ✅ Working | ADP-003, ADP-004, ADP-005 (/checkin screen, metrics, adaptive targets, guardrails) |
 | Reports | ❌ Not started | TLN-003 |
 | UUID / sync metadata | ✅ Schema ready | v2 migration |
 | Cloud sync | ❌ Not started | SYN-001+ |
@@ -76,21 +80,18 @@ Unified search contract and index (`@nutai/search`), food search ranking (IFCT >
 
 ## Next Task
 
-Start Phase 5 with `ADP-001`: Day Status Rules and Analytics Exclusions and `ADP-002`: Completeness UI and Day Finalization.
+Begin Phase 6: AI Integration and Voice/Camera Pipelines (`AIP-001: AI Provider Interface and Key Storage Contract`).
 
 ## Blockers
 
-| Blocker | Impact |
-|---------|--------|
-| Health score still in UI | Should be removed early (AUD-002) |
-| Units default to 'imperial' | Should be metric-first for India (AUD-002) |
+None.
 
 ## Commands
 
 ```bash
 npm run check              # Full gate
 npm run typecheck          # TypeScript strict
-npm run test               # 438 tests
+npm run test               # 504 tests
 npm run check:node-purity  # 16/16 packages
 npm run data:verify        # 26/26 USDA golden queries
 npm run ifct:verify        # 528-row IFCT golden queries

@@ -231,4 +231,3 @@ export const labelRounding = {
   },
 } as const
 
-export * from './health-score.js'

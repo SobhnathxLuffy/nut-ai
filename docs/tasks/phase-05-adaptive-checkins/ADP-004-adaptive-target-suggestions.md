@@ -1,6 +1,6 @@
 # ADP-004: Adaptive Target Suggestions
 
-Status: unstarted
+Status: complete
 Phase: 5 - Day completeness and adaptive check-ins
 Depends on: ADP-003
 Parallel-safe with: None
