@@ -4,12 +4,20 @@ export const ProvenanceSchema = z.object({
   recordStatus: z.enum(['DRAFT_CURATED', 'CURATED', 'VERIFIED']),
   nutritionEmbedded: z.boolean(),
   sourceVerificationRequired: z.boolean(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
+  validation: z.object({
+    ingredientMappingsComplete: z.boolean(),
+    recipeStructureReviewed: z.boolean(),
+    portionYieldChecked: z.boolean(),
+    uncertaintyModelChecked: z.boolean(),
+    nutritionSanityChecked: z.boolean(),
+    blockers: z.array(z.string()),
+  }).optional()
 })
 
 export const AmountPriorSchema = z.discriminatedUnion('kind', [
   z.object({
-    kind: z.literal('broad_mass_fraction_engineering_prior'),
+    kind: z.enum(['MEASURED', 'CURATED_PRIOR', 'GENERIC_PRIOR', 'broad_mass_fraction_engineering_prior']),
     range: z.tuple([z.number(), z.number()]),
     verified: z.boolean()
   })
@@ -17,13 +25,25 @@ export const AmountPriorSchema = z.discriminatedUnion('kind', [
 
 export const IngredientSlotSchema = z.object({
   label: z.string(),
-  role: z.enum(['dominant', 'process', 'minor', 'fat_variable', 'flavor', 'core', 'inclusion', 'binding', 'liquid']),
+  role: z.enum(['dominant', 'process', 'minor', 'fat_variable', 'secondary', 'high_energy', 'flavor', 'core', 'inclusion', 'binding', 'liquid']),
   required: z.boolean(),
   amountPrior: AmountPriorSchema.optional(),
   nutritionMapping: z.object({
     preferredSources: z.array(z.string()),
     canonicalFoodId: z.string().nullable(),
-    mappingStatus: z.enum(['pending_exact_id', 'mapped', 'unresolved'])
+    mappingStatus: z.enum([
+      'pending_exact_id', 'mapped', 'AUTO_MAPPED', 'MANUAL_OVERRIDE',
+      'AMBIGUOUS', 'UNRESOLVED', 'unresolved',
+    ]),
+    mappedName: z.string().optional(),
+    mappingMethod: z.string().optional(),
+    reviewNote: z.string().optional(),
+    candidates: z.array(z.object({
+      foodId: z.string(),
+      name: z.string(),
+      source: z.string(),
+      score: z.number().optional(),
+    })).optional(),
   })
 })
 
@@ -39,6 +59,7 @@ export const PortionModelSchema = z.object({
   strategies: z.array(z.string()),
   standardPortionGrams: z.number().nullable(),
   standardPortionStatus: z.string(),
+  assumptionClass: z.enum(['MEASURED', 'CURATED_PRIOR', 'GENERIC_PRIOR']).optional(),
   householdOverrideEligible: z.boolean().optional()
 })
 
@@ -82,6 +103,7 @@ export const DishDefinitionSchema = z.object({
     yieldModel: z.object({
       measurementPriority: z.array(z.string()),
       verifiedNumericYield: z.number().nullable(),
+      assumptionClass: z.enum(['MEASURED', 'CURATED_PRIOR', 'GENERIC_PRIOR']).optional(),
       status: z.string().optional()
     })
   }),

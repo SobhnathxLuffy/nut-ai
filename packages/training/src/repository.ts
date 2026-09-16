@@ -1,4 +1,4 @@
-import { ExerciseInput, EquipmentInput, RoutineInput, ProgramInput, SetKind, SetValues, validateSet, type TrackingType } from '@nutai/core-schema'
+import { ExerciseInput, EquipmentInput, RoutineInput, ProgramInput, ProgressionRule, SetKind, SetValues, validateSet, type TrackingType } from '@nutai/core-schema'
 import { createSyncMetadata, deterministicUuidV7, generateUuidV7, recordOperation, validateLocalDate, type BatchChange, type DbAdapter, type SqlValue } from '@nutai/db-adapter'
 import { EXERCISE_LIBRARY } from './library.js'
 import { nextProgression, type Performance } from './progression.js'
@@ -50,11 +50,60 @@ export async function seedExercises(db:DbAdapter):Promise<void> {
 }
 export async function listExercises(db:DbAdapter):Promise<Exercise[]> {
   const rows=await db.all<Row>('SELECT * FROM exercises WHERE deleted_at IS NULL ORDER BY name,id')
-  return rows.map(r=>({...ExerciseInput.parse({name:r['name'],tracking_type:r['tracking_type'],aliases:JSON.parse(String(r['aliases_json'])),primary_muscles:JSON.parse(String(r['primary_muscles_json'])),secondary_muscles:JSON.parse(String(r['secondary_muscles_json'])),antagonist_muscles:JSON.parse(String(r['antagonist_muscles_json'])),equipment:JSON.parse(String(r['equipment_json'])),notes:r['notes'],media_uri:r['media_uri']}),id:Number(r['id']),uuid:String(r['uuid']),is_custom:Number(r['is_custom']),source:String(r['source'])}))
+  return rows.map(r=>{
+    const base = {name:r['name'],tracking_type:r['tracking_type'],aliases:JSON.parse(String(r['aliases_json'])),primary_muscles:JSON.parse(String(r['primary_muscles_json'])),secondary_muscles:JSON.parse(String(r['secondary_muscles_json'])),antagonist_muscles:JSON.parse(String(r['antagonist_muscles_json'])),equipment:JSON.parse(String(r['equipment_json'])),notes:r['notes'],media_uri:r['media_uri']};
+    const parsed = Number(r['is_custom']) ? ExerciseInput.parse(base) : base as any;
+    return {...parsed,id:Number(r['id']),uuid:String(r['uuid']),is_custom:Number(r['is_custom']),source:String(r['source'])}
+  })
+}
+export async function getExercise(db:DbAdapter,id:number):Promise<Exercise|null> {
+  const r=await db.get<Row>('SELECT * FROM exercises WHERE id=? AND deleted_at IS NULL',[id])
+  if(!r) return null
+  const base = {name:r['name'],tracking_type:r['tracking_type'],aliases:JSON.parse(String(r['aliases_json'])),primary_muscles:JSON.parse(String(r['primary_muscles_json'])),secondary_muscles:JSON.parse(String(r['secondary_muscles_json'])),antagonist_muscles:JSON.parse(String(r['antagonist_muscles_json'])),equipment:JSON.parse(String(r['equipment_json'])),notes:r['notes'],media_uri:r['media_uri']}
+  const parsed = Number(r['is_custom']) ? ExerciseInput.parse(base) : base as any
+  return {...parsed,id:Number(r['id']),uuid:String(r['uuid']),is_custom:Number(r['is_custom']),source:String(r['source'])}
+}
+export async function isExerciseInWorkout(db:DbAdapter,workoutId:number,exerciseId:number):Promise<boolean> {
+  const row=await db.get<{id:number}>('SELECT id FROM workout_exercises WHERE workout_id=? AND exercise_id=? AND deleted_at IS NULL LIMIT 1',[workoutId,exerciseId])
+  return !!row
 }
 export async function createExercise(db:DbAdapter,input:unknown,now=Date.now()):Promise<number> {
   const e=ExerciseInput.parse(input)
   return mutate(db,now,(tx,c)=>writeRow(tx,'exercises',{...exerciseRow(e),is_custom:1,source:'user'},now,c))
+}
+export async function addExerciseToRoutine(db:DbAdapter,routineId:number,exerciseId:number,now=Date.now()):Promise<void> {
+  const ex=await getExercise(db,exerciseId)
+  if(!ex) throw new Error('Exercise not found')
+  const defaultSet: SetValues = {
+    load_kg: ex.tracking_type === 'weight_reps' ? 20 : null,
+    reps: ['weight_reps', 'bodyweight_reps', 'reps', 'assisted'].includes(ex.tracking_type) ? 10 : null,
+    duration_s: ['distance_time', 'time', 'weight_time'].includes(ex.tracking_type) ? 60 : null,
+    distance_m: ['distance_time', 'distance'].includes(ex.tracking_type) ? 1000 : null,
+    assistance_kg: ex.tracking_type === 'assisted' ? 20 : null,
+    rir: null,
+    rpe: null,
+    tempo: null,
+  }
+  const defaultRule: ProgressionRule = {
+    kind: 'double',
+    increment: 2.5,
+    min_reps: 8,
+    max_reps: 12,
+    target_rir: 2,
+  }
+  await mutate(db,now,async(tx,c)=>{
+    const row=await tx.get<Routine>('SELECT * FROM routines WHERE id=? AND deleted_at IS NULL',[routineId])
+    if(!row) throw new Error('Routine not found')
+    const routine=RoutineInput.parse(JSON.parse(row.definition_json))
+    routine.exercises.push({
+      exercise_id: exerciseId,
+      group: null,
+      sets: [defaultSet, { ...defaultSet }, { ...defaultSet }],
+      rule: defaultRule,
+    })
+    RoutineInput.parse(routine)
+    await writeRow(tx,'routines',{definition_json:JSON.stringify(routine)},now,c,routineId)
+  })
 }
 export const activeWorkout=(db:DbAdapter):Promise<Workout|null>=>db.get("SELECT * FROM workouts WHERE status='active' AND deleted_at IS NULL")
 export const workoutHistory=(db:DbAdapter):Promise<Workout[]>=>db.all("SELECT * FROM workouts WHERE status='completed' AND deleted_at IS NULL ORDER BY started_at DESC,id DESC")

@@ -3,10 +3,12 @@ import { useCallback, useState } from 'react'
 import { Alert, Linking } from 'react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { WeightUnit } from '@nutai/analytics'
 import type { ProviderId } from '@nutai/prompt'
 import { availability, requestPermissions } from '../../src/health/healthkit'
 import { exportAndShareBackup, finishRestore, importBackup, pickBackupFile } from '../../src/data/backup'
-import { currentGoal, resetEverything, setting, type CurrentGoal } from '../../src/data/repo'
+import { currentGoal, db, resetEverything, setting, type CurrentGoal } from '../../src/data/repo'
+import { readWeightUnit, writeWeightUnit } from '../../src/data/weight-units'
 import { loadCredential, maskCredential } from '../../src/inference/credentials'
 import { PROVIDER_NAME } from '../../src/components/CredentialForm'
 import { Icon } from '../../src/components/Icon'
@@ -37,20 +39,24 @@ export default function Profile() {
   const [diet, setDiet] = useState('')
   const [providerLabel, setProviderLabel] = useState('—')
   const [dataBusy, setDataBusy] = useState(false)
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
 
   useFocusEffect(
     useCallback(() => {
       let alive = true
       void (async () => {
-        const [g, avail, d, p] = await Promise.all([
+        const handle = await db()
+        const [g, avail, d, p, unit] = await Promise.all([
           currentGoal(),
           availability(),
           setting('diet.style', 'balanced'),
           setting('provider'),
+          readWeightUnit(handle),
         ])
         if (!alive) return
         setGoal(g)
         setDiet(d)
+        setWeightUnit(unit)
         setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
         if (!p || p === 'none') {
           setProviderLabel('Not connected')
@@ -149,6 +155,18 @@ export default function Profile() {
     })()
   }
 
+  function changeWeightUnit(unit: WeightUnit) {
+    if (unit === weightUnit) return
+    const previous = weightUnit
+    setWeightUnit(unit)
+    void db()
+      .then((handle) => writeWeightUnit(handle, unit))
+      .catch(() => {
+        setWeightUnit(previous)
+        Alert.alert('Could not save preference', 'Your weight display unit was not changed.')
+      })
+  }
+
   return (
     <ScrollView
       style={{ backgroundColor: theme.bg }}
@@ -185,6 +203,32 @@ export default function Profile() {
 
       <Section title="AI provider">
         <Row label="Provider & key" value={providerLabel} onPress={() => router.push('/provider-settings' as never)} />
+      </Section>
+
+      <Section title="Display">
+        <View style={{ padding: space.lg }}>
+          <Text style={[type.body, { color: theme.text }]}>Bodyweight unit</Text>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>Stored weights remain in kilograms.</Text>
+          <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
+            {(['kg', 'lb'] as const).map((unit) => {
+              const selected = weightUnit === unit
+              return (
+                <Pressable
+                  key={unit}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => changeWeightUnit(unit)}
+                  style={[
+                    styles.unitButton,
+                    { backgroundColor: selected ? theme.text : theme.bgElevated, borderColor: theme.border },
+                  ]}
+                >
+                  <Text style={[type.label, { color: selected ? theme.bg : theme.text }]}>{unit}</Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </View>
       </Section>
 
       <Section title="Apple Health">
@@ -323,5 +367,14 @@ const styles = StyleSheet.create({
     paddingVertical: space.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 56,
+  },
+  unitButton: {
+    minWidth: 72,
+    minHeight: 48,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

@@ -122,6 +122,36 @@ describe('TRN-002 / TRN-003 / TRN-007: Active workout lifecycle, persistence, an
     const redoRes = await redoOperation(db, lastOp.id)
     expect(redoRes.success).toBe(true)
     expect((await workoutDetail(db, w)).workout.notes).toBe('Updated note')
+    await db.close()
+  })
+
+  it('editing a completed set does not uncomplete it', async () => {
+    const db = openMemoryDb()
+    await migrate(db, 1000)
+    await seedExercises(db)
+    const exList = await listExercises(db)
+    const ex1 = exList[0]!
+
+    const w = await startWorkout(db, '2026-09-12', 'Edit Test', 10000)
+    const we1 = await addExercise(db, w, ex1.id, 11000)
+
+    // Create and complete set
+    const setId = await saveSet(db, we1, { load_kg: 40, reps: 8 }, { completed: true }, 12000)
+    let detail = await workoutDetail(db, w)
+    expect(detail.exercises[0]?.sets[0]?.completed_at).toBe(12000)
+
+    // Edit values but pass completed: true (as the UI does now when editing a completed set)
+    await saveSet(db, we1, { load_kg: 42.5, reps: 7 }, { id: setId, completed: true }, 13000)
+    detail = await workoutDetail(db, w)
+    // The completed_at timestamp should remain unchanged from original completion
+    expect(detail.exercises[0]?.sets[0]?.completed_at).toBe(12000)
+    expect(detail.exercises[0]?.sets[0]?.load_kg).toBe(42.5)
+    expect(detail.exercises[0]?.sets[0]?.reps).toBe(7)
+
+    // Explicitly uncomplete
+    await saveSet(db, we1, { load_kg: 42.5, reps: 7 }, { id: setId, completed: false }, 14000)
+    detail = await workoutDetail(db, w)
+    expect(detail.exercises[0]?.sets[0]?.completed_at).toBeNull()
 
     await db.close()
   })

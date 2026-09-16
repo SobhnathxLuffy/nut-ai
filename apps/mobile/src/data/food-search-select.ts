@@ -47,19 +47,26 @@ export async function resolveSelection(
     ),
   ])
 
+  const kcal = resolved?.energyKcal ?? candidate.energyKcal
+  const protein = resolved?.proteinG ?? foodRecord?.protein_g
+  const fat = resolved?.fatG ?? foodRecord?.fat_g
+  const carbs = resolved?.carbG ?? foodRecord?.carb_g
+  if (kcal == null || protein == null || fat == null || carbs == null) {
+    throw new Error('Core nutrition is unavailable for this food')
+  }
+
   return {
     foodId: /^\d+$/.test(sourceId) ? Number(sourceId) : null,
     matchedFoodSource: source,
     displayName: candidate.name,
-    // FNDDS default portion first, any recorded portion second, and only
-    // then a flat 100 g — matching per-100g basis every corpus row already
-    // carries, so at worst the number is "unscaled," never fabricated.
-    grams: defaultPortion?.gram_weight ?? anyPortion?.gram_weight ?? 100,
+    // Serving size from resolved dish/food first, FNDDS default portion second,
+    // any recorded portion third, and only then flat 100 g.
+    grams: resolved?.servingSizeG ?? defaultPortion?.gram_weight ?? anyPortion?.gram_weight ?? 100,
     nutrientSnapshot: {
-      kcal: resolved?.energyKcal ?? candidate.energyKcal ?? 0,
-      protein_g: resolved?.proteinG ?? foodRecord?.protein_g ?? 0,
-      fat_g: resolved?.fatG ?? foodRecord?.fat_g ?? 0,
-      carbs_g: resolved?.carbG ?? foodRecord?.carb_g ?? 0,
+      kcal,
+      protein_g: protein,
+      fat_g: fat,
+      carbs_g: carbs,
       fiber_g: resolved?.fiberG ?? foodRecord?.fiber_g ?? null,
       sugar_g: resolved?.sugarG ?? foodRecord?.sugar_g ?? null,
       sodium_mg: resolved?.sodiumMg ?? foodRecord?.sodium_mg ?? null,

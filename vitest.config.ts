@@ -22,6 +22,7 @@ export default defineConfig({
       '@nutai/confidence': pkg('confidence'),
       '@nutai/repair': pkg('repair'),
       '@nutai/goals': pkg('goals'),
+      '@nutai/analytics': pkg('analytics'),
       '@nutai/prompt': pkg('prompt'),
       '@nutai/nutrition-sources': pkg('nutrition-sources'),
       '@nutai/recipe-engine': pkg('recipe-engine'),

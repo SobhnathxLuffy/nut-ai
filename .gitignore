@@ -44,3 +44,11 @@ eval/.promptfoo/
 
 # Raw USDA source CSVs — re-downloadable, ~90MB unpacked.
 tools/nutrition-data/data/
+
+# Temporary testing scripts, dumps, and test screenshots
+/*.png
+/run_*.py
+/test-*.js
+/test_*.js
+/window_dump.xml
+/walkthrough.md

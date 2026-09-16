@@ -19,12 +19,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:node-purity": "node scripts/check-node-purity.mjs",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run check:node-purity && npm run data:verify && npm run ifct:verify",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run check:node-purity && npm run data:verify && npm run ifct:verify && npm run indian-dishes:verify",
     "data:build": "node tools/nutrition-data/src/build.mjs",
     "data:verify": "node tools/nutrition-data/src/golden-queries.mjs",
     "ifct:build": "npm --workspace @nutai/ifct-import run build",
     "ifct:extract": "npm --workspace @nutai/ifct-import run extract",
     "ifct:verify": "npm --workspace @nutai/ifct-import run verify",
+    "indian-dishes:map": "node tools/indian-dishes/map-ingredients.mjs",
+    "indian-dishes:build": "node tools/indian-dishes/build-sqlite.mjs",
+    "indian-dishes:verify": "node tools/indian-dishes/validate.mjs",
     "postinstall": "node scripts/patch-expo-modules-jsi.mjs"
   },
   "devDependencies": {

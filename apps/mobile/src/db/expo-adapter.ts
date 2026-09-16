@@ -68,42 +68,52 @@ export async function openUserDb(): Promise<DbAdapter> {
  * resolver bug while actually being a missing asset. Hence `nutritionCorpusInfo`
  * below, so that failure is legible rather than mysterious.
  */
-let nutritionImported = false
-let ifctImported = false
+let nutritionOpenPromise: Promise<DbAdapter> | null = null
+let ifctOpenPromise: Promise<DbAdapter> | null = null
 
 export async function openNutritionDb(): Promise<DbAdapter> {
-  if (!nutritionImported) {
-    try {
+  if (!nutritionOpenPromise) {
+    nutritionOpenPromise = (async () => {
       await SQLite.importDatabaseFromAssetAsync('nutrition.db', {
         assetId: require('../../assets/nutrition.db'),
         // Idempotent by name. Re-copying 4.7 MB on every cold start would be a
         // visible delay for nothing.
         forceOverwrite: false,
       })
-    } catch {
-      // Already imported by a previous launch — the common path.
-    }
-    nutritionImported = true
+      const db = await SQLite.openDatabaseAsync('nutrition.db')
+      return new ExpoDbAdapter(db)
+    })().catch((error) => {
+      nutritionOpenPromise = null
+      throw error
+    })
   }
-
-  const db = await SQLite.openDatabaseAsync('nutrition.db')
-  return new ExpoDbAdapter(db)
+  return nutritionOpenPromise
 }
 
 /** The authorized IFCT corpus has a separate asset and provenance lifecycle. */
 export async function openIfctDb(): Promise<DbAdapter> {
-  if (!ifctImported) {
+  if (!ifctOpenPromise) {
     // The corpus is generated, not user data. Overwrite once per process so an
     // install that previously imported the two-row development fixture receives
     // the current 528-row authorized corpus after an app update.
-    await SQLite.importDatabaseFromAssetAsync('ifct.db', {
-      assetId: require('../../assets/ifct.db'),
-      forceOverwrite: true,
+    ifctOpenPromise = (async () => {
+      await SQLite.importDatabaseFromAssetAsync('ifct.db', {
+        assetId: require('../../assets/ifct.db'),
+        forceOverwrite: true,
+      })
+      const db = await SQLite.openDatabaseAsync('ifct.db')
+      return new ExpoDbAdapter(db)
+    })().catch((error) => {
+      ifctOpenPromise = null
+      throw error
     })
-    ifctImported = true
   }
-  const db = await SQLite.openDatabaseAsync('ifct.db')
-  return new ExpoDbAdapter(db)
+  return ifctOpenPromise
+}
+
+export function resetCorpusPromises(): void {
+  nutritionOpenPromise = null
+  ifctOpenPromise = null
 }
 
 /**
@@ -116,28 +126,20 @@ export async function openIfctDb(): Promise<DbAdapter> {
 export async function nutritionCorpusInfo(
   db: DbAdapter,
 ): Promise<{ foods: number; portions: number; builtAt: string | null }> {
-  try {
-    const foods = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods')
+  const foods = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods')
     const portions = await db.get<{ c: number }>('SELECT COUNT(*) c FROM food_portions')
     const built = await db.get<{ value: string }>(
       "SELECT value FROM build_manifest WHERE key = 'built_at'",
     )
-    return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, builtAt: built?.value ?? null }
-  } catch {
-    return { foods: 0, portions: 0, builtAt: null }
-  }
+  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, builtAt: built?.value ?? null }
 }
 
 export async function ifctCorpusInfo(
   db: DbAdapter,
 ): Promise<{ foods: number; version: string | null }> {
-  try {
-    const foods = await db.get<{ c: number }>("SELECT COUNT(*) c FROM foods WHERE source = 'ifct'")
+  const foods = await db.get<{ c: number }>("SELECT COUNT(*) c FROM foods WHERE source = 'ifct'")
     const version = await db.get<{ value: string }>(
       "SELECT value FROM build_manifest WHERE key = 'version'",
     )
-    return { foods: foods?.c ?? 0, version: version?.value ?? null }
-  } catch {
-    return { foods: 0, version: null }
-  }
+  return { foods: foods?.c ?? 0, version: version?.value ?? null }
 }

@@ -41,6 +41,7 @@ const ACTIONS: Action[] = [
   { label: 'Recipes', icon: 'bowl', route: '/recipes' },
   { label: 'Food Database', icon: 'search', route: '/food-search' },
   { label: 'Scan food', icon: 'scan', route: '/camera' },
+  { label: 'AI Assistant', icon: 'search', route: '/assistant' },
 ]
 
 export default function TabLayout() {

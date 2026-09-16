@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -141,9 +140,7 @@ export default function Result() {
           </View>
         </View>
 
-        <StatsPager
-          totals={result.totals}
-        />
+        <MacroStats totals={result.totals} />
 
         {/* Highlighted questions: at most two, ever. */}
         {highlighted.map((q) => (
@@ -438,49 +435,14 @@ function Macro({
   )
 }
 
-/**
- * Two stat pages, swipeable like the incumbent's: macros, then
- * fiber/sugar/sodium with the health score. The score is arithmetic from
- * @nutai/totals — tap it and every point shows its named rule.
- */
-function StatsPager({ totals }: { totals: MacroTotals }) {
+/** Only nutrients with reliable end-to-end coverage are shown here. */
+function MacroStats({ totals }: { totals: MacroTotals }) {
   const theme = useTheme()
-  const { width } = useWindowDimensions()
-  const pageW = width - space.lg * 2
-  const [page, setPage] = useState(0)
-
   return (
-    <View style={{ marginTop: space.xl }}>
-      <ScrollView
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => setPage(Math.round(e.nativeEvent.contentOffset.x / pageW))}
-      >
-        <View style={[styles.statsPage, { width: pageW }]}>
-          <Macro label="Protein" value={totals.protein_g} color={theme.protein} icon="protein" />
-          <Macro label="Carbs" value={totals.carbs_g} color={theme.carbs} icon="carbs" />
-          <Macro label="Fat" value={totals.fat_g} color={theme.fat} icon="fat" />
-        </View>
-
-        <View style={{ width: pageW }}>
-          <View style={styles.statsPage}>
-            <Macro label="Fiber" value={totals.fiber_g} color={theme.carbs} icon="fiber" />
-            <Macro label="Sugar" value={totals.sugar_g} color={theme.uncertain} icon="sugar" />
-            <Macro label="Sodium" value={totals.sodium_mg} unit="mg" color={theme.fat} icon="sodium" />
-          </View>
-
-        </View>
-      </ScrollView>
-
-      <View style={styles.dots}>
-        {[0, 1].map((i) => (
-          <View
-            key={i}
-            style={[styles.dot, { backgroundColor: i === page ? theme.text : theme.border }]}
-          />
-        ))}
-      </View>
+    <View style={[styles.statsPage, { marginTop: space.xl }]}>
+      <Macro label="Protein" value={totals.protein_g} color={theme.protein} icon="protein" />
+      <Macro label="Carbs" value={totals.carbs_g} color={theme.carbs} icon="carbs" />
+      <Macro label="Fat" value={totals.fat_g} color={theme.fat} icon="fat" />
     </View>
   )
 }
@@ -488,11 +450,6 @@ function StatsPager({ totals }: { totals: MacroTotals }) {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
   statsPage: { flexDirection: 'row', gap: space.md },
-  dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: space.md },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  healthCard: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
-  healthTrack: { height: 6, borderRadius: 3, marginTop: space.md, overflow: 'hidden' },
-  healthFill: { height: 6, borderRadius: 3 },
   secondary: {
     flexDirection: 'row',
     alignItems: 'center',

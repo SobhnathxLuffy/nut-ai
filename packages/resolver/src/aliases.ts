@@ -208,17 +208,13 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// Precompile a single massive regex that matches any alias in one pass.
+// This prevents 150 RegExp creations per string during hot search loops.
+const ALL_ALIASES_REGEX = new RegExp(`(^|[^\\p{L}\\p{N}])(${ALIAS_KEYS.map(escapeRegex).join('|')})(?=$|[^\\p{L}\\p{N}])`, 'gu')
+
 export function normalizeIndianAliases(query: string): string {
-  let normalized = query.toLowerCase()
-
-  for (const key of ALIAS_KEYS) {
-    // `\\b` is ASCII-oriented and fails around Devanagari. Unicode boundaries
-    // avoid replacements inside a larger token in every supported script.
-    const regex = new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegex(key)}(?=$|[^\\p{L}\\p{N}])`, 'gu')
-    if (regex.test(normalized)) {
-      normalized = normalized.replace(regex, (_match, boundary: string) => `${boundary}${INDIAN_ALIAS_FIXTURES[key]!}`)
-    }
-  }
-
-  return normalized
+  if (!query) return query
+  return query.toLowerCase().replace(ALL_ALIASES_REGEX, (_match, boundary: string, matchedAlias: string) => {
+    return `${boundary}${INDIAN_ALIAS_FIXTURES[matchedAlias]!}`
+  })
 }

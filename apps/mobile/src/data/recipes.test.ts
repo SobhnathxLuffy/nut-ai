@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getOperation, migrate, redoOperation, undoOperation, USER_SCHEMA_VERSION, type DbAdapter } from '@nutai/db-adapter'
 import { openMemoryDb } from '@nutai/db-adapter/node'
-import { createRecipe, editRecipe, getEditableRecipe, listRecipes, logRecipe, type RecipeDraft } from './recipes'
+import { createRecipe, deleteRecipe, editRecipe, getEditableRecipe, listRecipes, logRecipe, type RecipeDraft } from './recipes'
 import { buildBackupPayload, importBackupPayload } from './backup-core'
 
 const NOW = 1_760_000_000_000
@@ -92,11 +92,33 @@ describe('recipe repository', () => {
     expect(item?.grams).toBe(150)
     expect(item?.matched_food_source).toBe('recipe')
     expect(item?.portion_source).toContain(':v1')
-    expect(item?.snap_energy_kcal).toBeCloseTo(215.1, 1)
+    // Snapshots are canonically per 100 g; the served 150 g is scaled only by
+    // aggregators. The former assertion expected a serving total in a per-100 g
+    // column and hid a double-scaling bug shared with manual foods.
+    expect(item?.snap_energy_kcal).toBeCloseTo(143.4, 1)
+    const served = await db.get<{ kcal: number }>(
+      'SELECT snap_energy_kcal * grams / 100 kcal FROM log_items WHERE meal_id = ?',
+      [mealId],
+    )
+    expect(served?.kcal).toBeCloseTo(215.1, 1)
   })
 
   it('rejects empty recipes before opening a transaction', async () => {
     await expect(createRecipe(db, { ...DAL, ingredients: [] }, NOW)).rejects.toThrow(/ingredient/)
+  })
+
+  it('deletes a recipe and contextually restores that exact operation', async () => {
+    const created=await createRecipe(db,DAL,NOW)
+    const uuid=await deleteRecipe(db,created.recipeId,NOW+1)
+    expect(await getEditableRecipe(db,created.recipeId)).toBeNull()
+    expect((await undoOperation(db,uuid,NOW+2)).success).toBe(true)
+    expect(await getEditableRecipe(db,created.recipeId)).toMatchObject({name:'Home dal'})
+  })
+
+  it('preserves missing recipe micronutrients as unknown', async () => {
+    const created=await createRecipe(db,{...DAL,ingredients:[{...DAL.ingredients[0]!,fiberG:null,sugarG:null,sodiumMg:null}]},NOW)
+    const editable=await getEditableRecipe(db,created.recipeId)
+    expect(editable?.ingredients[0]?.fiberG).toBeNull()
   })
 
   it('round-trips every recipe version and component snapshot through backup v2', async () => {

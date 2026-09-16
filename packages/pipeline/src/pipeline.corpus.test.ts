@@ -26,6 +26,11 @@ const DB_PATH = join(
   '../../../apps/mobile/assets/nutrition.db',
 )
 
+const IFCT_DB_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../apps/mobile/assets/ifct.db',
+)
+
 const hasCorpus = existsSync(DB_PATH)
 const maybe = hasCorpus ? describe : describe.skip
 
@@ -75,13 +80,29 @@ function payload(items: Item[]): VisionPayload {
 
 maybe('the pipeline against the real USDA corpus', () => {
   let db: DbAdapter
+  let ifctDb: DbAdapter | undefined
   const priors: PersonalPriors = { get: () => null, containers: new Map() }
   const foodDb = makeFoodDb(new Map())
 
-  beforeAll(() => { db = openNodeDb(DB_PATH, { readonly: true }) })
-  afterAll(async () => { await db.close() })
+  beforeAll(() => {
+    db = openNodeDb(DB_PATH, { readonly: true })
+    if (existsSync(IFCT_DB_PATH)) {
+      ifctDb = openNodeDb(IFCT_DB_PATH, { readonly: true })
+    }
+  })
+  afterAll(async () => {
+    await db.close()
+    if (ifctDb) await ifctDb.close()
+  })
 
-  const deps = () => ({ db, priors, baselines: SEEDED_BASELINES, path: 'cloud' as const, now: 1_753_900_000_000 })
+  const deps = () => ({
+    db,
+    priors,
+    baselines: SEEDED_BASELINES,
+    path: 'cloud' as const,
+    now: 1_753_900_000_000,
+    sourceContext: ifctDb ? { ifctDb } : undefined,
+  })
 
   it('has the corpus the build reported', async () => {
     const row = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods')

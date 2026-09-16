@@ -267,7 +267,7 @@ export function todayEmphasisFor(a: Accomplish | null): 'calories' | 'protein' |
   }
 }
 
-export const LB_PER_KG = 2.20462
+export const LB_PER_KG = 2.2046226218
 
 /**
  * Weight change below this is treated as "maintain".

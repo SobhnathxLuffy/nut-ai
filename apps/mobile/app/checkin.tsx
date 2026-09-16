@@ -13,6 +13,8 @@ import {
 import { db, localDate } from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { kgToLb, type WeightUnit } from '@nutai/analytics'
+import { readWeightUnit } from '../src/data/weight-units'
 
 type ReviewResult = Awaited<ReturnType<typeof reviewCheckin>>
 
@@ -25,14 +27,16 @@ export default function CheckinScreen() {
   const [safety, setSafety] = useState<SafetySettings | null>(null)
   const [busy, setBusy] = useState(false)
   const [acceptedMessage, setAcceptedMessage] = useState<string | null>(null)
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
 
   const loadReview = useCallback(async () => {
     try {
       const h = await db()
       const today = localDate(Date.now())
-      const [rev, safe] = await Promise.all([reviewCheckin(h, today), readSafety(h)])
+      const [rev, safe, unit] = await Promise.all([reviewCheckin(h, today), readSafety(h), readWeightUnit(h)])
       setReview(rev)
       setSafety(safe)
+      setWeightUnit(unit)
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : String(err))
     } finally {
@@ -184,11 +188,11 @@ export default function CheckinScreen() {
             <Text style={[type.caption, { color: theme.textMuted }]}>Weight Trend</Text>
             <Text style={[styles.metricNumber, { color: theme.text }]}>
               {metrics.weight_change_kg_week != null
-                ? `${metrics.weight_change_kg_week > 0 ? '+' : ''}${metrics.weight_change_kg_week.toFixed(2)}`
+                ? `${metrics.weight_change_kg_week > 0 ? '+' : ''}${(weightUnit === 'lb' ? kgToLb(metrics.weight_change_kg_week) : metrics.weight_change_kg_week).toFixed(2)}`
                 : '—'}
             </Text>
             <Text style={[type.micro, { color: theme.textFaint }]}>
-              {metrics.weigh_in_count} weigh-ins (kg/wk)
+              {metrics.weigh_in_count} weigh-ins ({weightUnit}/wk)
             </Text>
           </View>
 

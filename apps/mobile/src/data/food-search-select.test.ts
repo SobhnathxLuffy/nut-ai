@@ -101,16 +101,36 @@ describe('resolveSelection + logManualFood — what a tap on a Food Database row
     expect(selection.grams).toBe(50) // the seeded is_fndds_default row, not the 100 g fallback
   })
 
-  it('scales the per-100g snapshot to the logged grams — 50 g of a 143 kcal/100g egg is ~71.5 kcal', async () => {
+  it('resolving a selected result does not write before review', async () => {
+    await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
+    expect(await userDb.all('SELECT id FROM meals')).toHaveLength(0)
+  })
+
+  it('preserves an explicitly selected historical local date and meal slot', async () => {
+    const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg', 143))
+    const mealId = await logManualFood(userDb, selection, NOW, { localDate: '2024-02-29', mealSlot: 'dinner' })
+    expect(await userDb.get('SELECT local_date, meal_slot FROM meals WHERE id = ?', [mealId]))
+      .toEqual({ local_date: '2024-02-29', meal_slot: 'dinner' })
+  })
+
+  it('does not fabricate missing core nutrition as zero', async () => {
+    await nutritionDb.run(`INSERT INTO foods (id,source,source_id,name,energy_kcal,protein_g,fat_g,carb_g,completeness_score,license,updated_at) VALUES (3,'fdc_sr_legacy','998','Incomplete',100,NULL,1,2,0.5,'CC0',?)`,[NOW])
+    await expect(resolveSelection(nutritionDb, candidateFor('usda:998','Incomplete',100))).rejects.toThrow(/unavailable/)
+  })
+
+  it('stores an immutable per-100g snapshot and scales once when totaling the serving', async () => {
     const selection = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
     const mealId = await logManualFood(userDb, selection, NOW)
 
-    const item = await userDb.get<{ snap_energy_kcal: number; snap_protein_g: number }>(
-      'SELECT snap_energy_kcal, snap_protein_g FROM log_items WHERE meal_id = ?',
+    const item = await userDb.get<{ snap_energy_kcal: number; snap_protein_g: number; served_kcal: number }>(
+      `SELECT snap_energy_kcal, snap_protein_g,
+              snap_energy_kcal * grams / 100 AS served_kcal
+       FROM log_items WHERE meal_id = ?`,
       [mealId],
     )
-    expect(item?.snap_energy_kcal).toBeCloseTo(71.5, 1)
-    expect(item?.snap_protein_g).toBeCloseTo(6.3, 1)
+    expect(item?.snap_energy_kcal).toBeCloseTo(143, 6)
+    expect(item?.snap_protein_g).toBeCloseTo(12.6, 6)
+    expect(item?.served_kcal).toBeCloseTo(71.5, 1)
   })
 
   it('falls back to 100 g when the corpus row has no portion data at all', async () => {
@@ -163,5 +183,60 @@ describe('resolveSelection + logManualFood — what a tap on a Food Database row
     // Meal and items are cleanly removed by undo
     expect(await userDb.get('SELECT id FROM meals WHERE id = ?', [mealId])).toBeNull()
     expect(await userDb.all('SELECT id FROM log_items WHERE meal_id = ?', [mealId])).toHaveLength(0)
+  })
+
+  it('uses resolved.servingSizeG when present on the resolved food', async () => {
+    const candidate = candidateFor('dish:in:roti', 'Roti', 297)
+    const resolved = {
+      foodId: 'dish:in:roti',
+      sourceId: 'dish:in:roti',
+      sourceVersion: 'v0.1',
+      attribution: 'Nut AI Dish KB',
+      name: 'Roti',
+      brand: null,
+      energyKcal: 297,
+      proteinG: 9.5,
+      fatG: 3.2,
+      carbG: 58.1,
+      fiberG: 9.8,
+      sugarG: 1.2,
+      sodiumMg: 150,
+      servingSizeG: 40,
+      servingDesc: '40g standard portion',
+      license: 'proprietary',
+      source: 'indian_dish_kb',
+    }
+    const selection = await resolveSelection(nutritionDb, candidate, resolved)
+    expect(selection.grams).toBe(40)
+  })
+
+  it('logManualMealWithItems logs multiple items atomically under a single meal', async () => {
+    const item1 = await resolveSelection(nutritionDb, candidateFor('usda:173424', 'Egg, whole, raw, fresh', 143))
+    const item2 = {
+      ...item1,
+      displayName: 'Roti',
+      grams: 40,
+      foodId: null,
+      matchedFoodSource: 'indian_dish_kb',
+    }
+
+    const mealId = await import('./manual-food.js').then((m) =>
+      m.logManualMealWithItems(userDb, [item1, item2], NOW),
+    )
+
+    expect(mealId).toBeGreaterThan(0)
+    const meal = await userDb.get('SELECT * FROM meals WHERE id = ?', [mealId])
+    expect(meal).not.toBeNull()
+
+    const items = await userDb.all<{ sort_order: number; display_name: string; grams: number }>(
+      'SELECT sort_order, display_name, grams FROM log_items WHERE meal_id = ? ORDER BY sort_order ASC',
+      [mealId],
+    )
+    expect(items).toHaveLength(2)
+    expect(items[0]?.display_name).toBe('Egg, whole, raw, fresh')
+    expect(items[0]?.sort_order).toBe(0)
+    expect(items[1]?.display_name).toBe('Roti')
+    expect(items[1]?.sort_order).toBe(1)
+    expect(items[1]?.grams).toBe(40)
   })
 })

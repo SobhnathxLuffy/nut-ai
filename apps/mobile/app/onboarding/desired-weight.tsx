@@ -36,6 +36,8 @@ export default function DesiredWeightScreen() {
   // ruler value rather than the stored one so the label never lags a frame.
   const goal = inferredGoal({ weightKg: currentKg, desiredWeightKg: kg })
   const deltaLb = Math.abs(kgToLb(kg) - kgToLb(currentKg))
+  const deltaDisplay = imperial ? deltaLb : Math.abs(kg - currentKg)
+  const maintainDisplay = imperial ? MAINTAIN_THRESHOLD_LB : MAINTAIN_THRESHOLD_LB / 2.2046226218
 
   return (
     <OnboardingScreen
@@ -72,8 +74,8 @@ export default function DesiredWeightScreen() {
       <View style={{ alignItems: 'center', marginTop: space.lg }}>
         <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center' }]}>
           {goal === 'maintain'
-            ? `Within ${MAINTAIN_THRESHOLD_LB} lbs of where you are — we'll set you up to maintain.`
-            : `${deltaLb.toFixed(1)} lbs to ${goal === 'gain' ? 'gain' : 'lose'}. We work the direction out from these two numbers.`}
+            ? `Within ${maintainDisplay.toFixed(1)} ${imperial ? 'lb' : 'kg'} of where you are — we'll set you up to maintain.`
+            : `${deltaDisplay.toFixed(1)} ${imperial ? 'lb' : 'kg'} to ${goal === 'gain' ? 'gain' : 'lose'}. We work the direction out from these two numbers.`}
         </Text>
       </View>
 

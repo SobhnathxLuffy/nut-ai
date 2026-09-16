@@ -7,7 +7,8 @@ import {
   type OperationRecord,
 } from '@nutai/db-adapter'
 import { computeRecipeServing, validateRecipeVersion, type RecipeVersion } from '@nutai/recipe-engine'
-import { logManualFood } from './manual-food'
+import { logManualFood, type ManualFoodSelection, type ManualMealOptions } from './manual-food'
+import { emitFoodMutation } from './food-mutations'
 
 export type RecipePreparation = RecipeVersion['preparation']
 
@@ -15,13 +16,13 @@ export interface RecipeIngredientDraft {
   foodId: string
   displayName: string
   gramWeight: number
-  energyKcal: number
-  proteinG: number
-  fatG: number
-  carbG: number
-  fiberG: number
-  sugarG: number
-  sodiumMg: number
+  energyKcal: number | null
+  proteinG: number | null
+  fatG: number | null
+  carbG: number | null
+  fiberG: number | null
+  sugarG: number | null
+  sodiumMg: number | null
 }
 
 export interface RecipeDraft {
@@ -40,7 +41,7 @@ export interface RecipeListItem {
   name: string
   versionNumber: number
   servingSizeG: number
-  energyKcal: number
+  energyKcal: number | null
 }
 
 export interface EditableRecipe extends RecipeDraft {
@@ -134,7 +135,7 @@ export async function createRecipe(
   options?: { actor?: OperationActor | string; idempotencyKey?: string },
 ): Promise<{ recipeId: number; operation: OperationRecord }> {
   const draft = normalizedDraft(input)
-  return db.transaction(async (tx) => {
+  const created = await db.transaction(async (tx) => {
     if (options?.idempotencyKey) {
       const existing = await getOperationByIdempotencyKey(tx, options.idempotencyKey)
       if (existing) return { recipeId: existing.entity_id, operation: existing }
@@ -154,6 +155,8 @@ export async function createRecipe(
     })
     return { recipeId, operation }
   })
+  emitFoodMutation({ kind: 'recipe', operationUuid: created.operation.uuid })
+  return created
 }
 
 export async function editRecipe(
@@ -164,7 +167,7 @@ export async function editRecipe(
   options?: { actor?: OperationActor | string; idempotencyKey?: string },
 ): Promise<{ recipeId: number; operation: OperationRecord }> {
   const draft = normalizedDraft(input)
-  return db.transaction(async (tx) => {
+  const edited = await db.transaction(async (tx) => {
     if (options?.idempotencyKey) {
       const existing = await getOperationByIdempotencyKey(tx, options.idempotencyKey)
       if (existing) return { recipeId: existing.entity_id, operation: existing }
@@ -188,6 +191,8 @@ export async function editRecipe(
     })
     return { recipeId, operation }
   })
+  emitFoodMutation({ kind: 'recipe', operationUuid: edited.operation.uuid })
+  return edited
 }
 
 export async function getEditableRecipe(db: DbAdapter, recipeId: number): Promise<EditableRecipe | null> {
@@ -217,13 +222,13 @@ export async function getEditableRecipe(db: DbAdapter, recipeId: number): Promis
     food_id: string
     display_name: string | null
     gram_weight: number
-    snap_energy_kcal: number
-    snap_protein_g: number
-    snap_fat_g: number
-    snap_carb_g: number
-    snap_fiber_g: number
-    snap_sugar_g: number
-    snap_sodium_mg: number
+    snap_energy_kcal: number | null
+    snap_protein_g: number | null
+    snap_fat_g: number | null
+    snap_carb_g: number | null
+    snap_fiber_g: number | null
+    snap_sugar_g: number | null
+    snap_sodium_mg: number | null
   }>('SELECT * FROM recipe_components WHERE recipe_version_id = ? AND deleted_at IS NULL ORDER BY id', [version.id])
   return {
     id: recipe.id,
@@ -269,12 +274,15 @@ export async function listRecipes(db: DbAdapter): Promise<RecipeListItem[]> {
   return items
 }
 
-export async function logRecipe(db: DbAdapter, recipeId: number, now: number): Promise<number> {
+export async function recipeSelection(db: DbAdapter, recipeId: number): Promise<ManualFoodSelection> {
   const recipe = await getEditableRecipe(db, recipeId)
   if (!recipe) throw new Error(`Recipe ${recipeId} does not exist`)
   const serving = computeRecipeServing(recipe)
+  if (serving.energyKcal === null || serving.proteinG === null || serving.fatG === null || serving.carbG === null) {
+    throw new Error('Core nutrition is unavailable for one or more recipe ingredients')
+  }
   const scaleTo100g = 100 / serving.servingSizeG
-  return logManualFood(db, {
+  return {
     foodId: null,
     matchedFoodSource: 'recipe',
     displayName: recipe.name,
@@ -286,9 +294,30 @@ export async function logRecipe(db: DbAdapter, recipeId: number, now: number): P
       protein_g: serving.proteinG * scaleTo100g,
       fat_g: serving.fatG * scaleTo100g,
       carbs_g: serving.carbG * scaleTo100g,
-      fiber_g: serving.fiberG * scaleTo100g,
-      sugar_g: serving.sugarG * scaleTo100g,
-      sodium_mg: serving.sodiumMg * scaleTo100g,
+      fiber_g: serving.fiberG === null ? null : serving.fiberG * scaleTo100g,
+      sugar_g: serving.sugarG === null ? null : serving.sugarG * scaleTo100g,
+      sodium_mg: serving.sodiumMg === null ? null : serving.sodiumMg * scaleTo100g,
     },
-  }, now)
+  }
+}
+
+export async function logRecipe(db: DbAdapter, recipeId: number, now: number, options?: ManualMealOptions): Promise<number> {
+  return logManualFood(db, await recipeSelection(db, recipeId), now, options)
+}
+
+export async function deleteRecipe(db: DbAdapter, recipeId: number, now: number): Promise<string> {
+  const operation = await db.transaction(async (tx) => {
+    const previous = await aggregateFor(tx, recipeId)
+    await tx.run(
+      "UPDATE recipes SET deleted_at = ?, updated_at = ?, revision = revision + 1, sync_state = 'local' WHERE id = ?",
+      [now, now, recipeId],
+    )
+    const next = await aggregateFor(tx, recipeId)
+    return recordOperation(tx, {
+      entityType: 'recipes', entityId: recipeId, opType: 'update', prevJson: previous,
+      newJson: next, actor: 'user', createdAt: now,
+    })
+  })
+  emitFoodMutation({ kind: 'recipe', operationUuid: operation.uuid })
+  return operation.uuid
 }

@@ -1,0 +1,923 @@
+{
+  "generatedAt": "2026-09-13T16:00:19.856Z",
+  "thresholdsLowered": false,
+  "totalDishes": 362,
+  "totalIngredientSlots": 1441,
+  "mappedToIFCT": 157,
+  "mappedToUSDA": 214,
+  "autoMapped": 6,
+  "manualOverrides": 365,
+  "ambiguous": 335,
+  "unresolved": 735,
+  "dishesFullyResolvable": 50,
+  "dishesPartiallyResolvable": 135,
+  "dishesUnusableForDeterministicNutrition": 312,
+  "DRAFT_CURATED": 312,
+  "CURATED": 50,
+  "VERIFIED": 0,
+  "priorityDeepValidation": [
+    {
+      "dishId": "dish:in:roti",
+      "dishName": "Roti",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:phulka",
+      "dishName": "Phulka",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:aloo-paratha",
+      "dishName": "Aloo Paratha",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:litti",
+      "dishName": "Litti",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:lemon-rice",
+      "dishName": "Lemon Rice",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:curd-rice",
+      "dishName": "Curd Rice",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:khichdi",
+      "dishName": "Khichdi",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chicken-biryani",
+      "dishName": "Chicken Biryani",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:mutton-biryani",
+      "dishName": "Mutton Biryani",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:hyderabadi-chicken-biryani",
+      "dishName": "Hyderabadi Chicken Biryani",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:idli",
+      "dishName": "Idli",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:rava-idli",
+      "dishName": "Rava Idli",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:plain-dosa",
+      "dishName": "Plain Dosa",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:masala-dosa",
+      "dishName": "Masala Dosa",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:rava-dosa",
+      "dishName": "Rava Dosa",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:poha",
+      "dishName": "Poha",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:upma",
+      "dishName": "Upma",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:pongal",
+      "dishName": "Pongal",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:medu-vada",
+      "dishName": "Medu Vada",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:dhokla",
+      "dishName": "Dhokla",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:dal-tadka",
+      "dishName": "Dal Tadka",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:dal-fry",
+      "dishName": "Dal Fry",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:arhar-dal",
+      "dishName": "Arhar Dal",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:toor-dal",
+      "dishName": "Toor Dal",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:sambar",
+      "dishName": "Sambar",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:rasam",
+      "dishName": "Rasam",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:rajma",
+      "dishName": "Rajma",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chole",
+      "dishName": "Chole",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chana-masala",
+      "dishName": "Chana Masala",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chokha",
+      "dishName": "Chokha",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:paneer-butter-masala",
+      "dishName": "Paneer Butter Masala",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:kadai-paneer",
+      "dishName": "Kadai Paneer",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:palak-paneer",
+      "dishName": "Palak Paneer",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:paneer-tikka",
+      "dishName": "Paneer Tikka",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:butter-chicken",
+      "dishName": "Butter Chicken",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chicken-curry",
+      "dishName": "Chicken Curry",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chicken-tikka",
+      "dishName": "Chicken Tikka",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:tandoori-chicken",
+      "dishName": "Tandoori Chicken",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:egg-curry",
+      "dishName": "Egg Curry",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:samosa",
+      "dishName": "Samosa",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:kachori",
+      "dishName": "Kachori",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:bhel-puri",
+      "dishName": "Bhel Puri",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:pani-puri",
+      "dishName": "Pani Puri",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:vada-pav",
+      "dishName": "Vada Pav",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:pav-bhaji",
+      "dishName": "Pav Bhaji",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chole-bhature",
+      "dishName": "Chole Bhature",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:egg-roll",
+      "dishName": "Egg Roll",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:chicken-roll",
+      "dishName": "Chicken Roll",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:egg-chicken-roll",
+      "dishName": "Egg Chicken Roll",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    },
+    {
+      "dishId": "dish:in:gulab-jamun",
+      "dishName": "Gulab Jamun",
+      "ingredientMappingsComplete": true,
+      "recipeStructureReviewed": true,
+      "portionYieldChecked": true,
+      "uncertaintyModelChecked": true,
+      "nutritionSanityChecked": true,
+      "stages": {
+        "ingredient_mappings": "PASS",
+        "recipe_structure": "PASS",
+        "ratios": "PASS",
+        "portion_yield": "PASS",
+        "uncertainty": "PASS",
+        "nutrition_sanity": "PASS"
+      },
+      "blockers": []
+    }
+  ],
+  "priorityRecordsNotFound": [
+    "Litti + Chokha (composite record is absent; separate Litti and Chokha records were reviewed)"
+  ]
+}

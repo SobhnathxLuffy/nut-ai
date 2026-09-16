@@ -17,17 +17,22 @@ export function rankSearch(entities:readonly SearchEntity[],input:SearchInput):{
     const f=input.filters
     if(!input.scopes.includes(e.type)||f?.source&&e.source!==f.source||f?.favorite&&!e.favorite||f?.recent&&!e.last_used_at||f?.frequent&&!(e.frequent&&e.frequent>1)||f?.muscle&&!e.muscles?.includes(f.muscle)||f?.coverage!==undefined&&(e.coverage===undefined||e.coverage<f.coverage))continue
     if(f?.equipment && e.equipment?.some(eq=>!f.equipment!.includes(eq)))continue
-    const label=normalize(e.label),aliases=e.aliases.map(normalize),all=[label,...aliases].join(' ')
-    const expandedLabel=normalize(normalizeIndianAliases(e.label))
-    const expandedAliases=e.aliases.map(a=>normalize(normalizeIndianAliases(a)))
-    const queryTokens=query.split(' ').filter(Boolean)
-    const matched=tokens.filter(t=>all.includes(t))
-    const matchedQuery=queryTokens.filter(t=>all.includes(t))
-    const tokensMatch=(tokens.length>0&&matched.length===tokens.length)||(queryTokens.length>0&&matchedQuery.length===queryTokens.length)
-    const exact=label===query||label===expanded||expandedLabel===query||expandedLabel===expanded
-    const aliasExact=aliases.includes(query)||aliases.includes(expanded)||expandedAliases.includes(query)||expandedAliases.includes(expanded)
-    const barcodeMatch=Boolean(query&&e.barcode&&(e.barcode===input.query||e.barcode===query))
-    if(query && !barcodeMatch && !aliasExact && !exact && !tokensMatch)continue
+    let barcodeMatch = false, exact = false, aliasExact = false, tokensMatch = false
+    let matched: string[] = [], matchedQuery: string[] = []
+    if (query) {
+      const label=normalize(e.label),aliases=e.aliases.map(normalize),all=[label,...aliases].join(' ')
+      const expandedLabel=normalize(normalizeIndianAliases(e.label))
+      const expandedAliases=e.aliases.map(a=>normalize(normalizeIndianAliases(a)))
+      const queryTokens=query.split(' ').filter(Boolean)
+      matched=tokens.filter(t=>all.includes(t))
+      matchedQuery=queryTokens.filter(t=>all.includes(t))
+      tokensMatch=(tokens.length>0&&matched.length===tokens.length)||(queryTokens.length>0&&matchedQuery.length===queryTokens.length)
+      exact=label===query||label===expanded||expandedLabel===query||expandedLabel===expanded
+      aliasExact=aliases.includes(query)||aliases.includes(expanded)||expandedAliases.includes(query)||expandedAliases.includes(expanded)
+      barcodeMatch=Boolean(e.barcode&&(e.barcode===input.query||e.barcode===query))
+      if(!barcodeMatch && !aliasExact && !exact && !tokensMatch)continue
+    }
+
     let score=barcodeMatch?10000:exact?1000:aliasExact?950:500
     score+=e.source==='recipe'?80:e.source==='ifct'?60:e.custom?50:0
     score+=e.favorite?30:0;score+=Math.min(e.frequent??0,20)

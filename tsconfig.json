@@ -37,6 +37,9 @@
       "@nutai/goals": [
         "packages/goals/src/index.ts"
       ],
+      "@nutai/analytics": [
+        "packages/analytics/src/index.ts"
+      ],
       "@nutai/prompt": [
         "packages/prompt/src/index.ts"
       ],
@@ -51,6 +54,9 @@
       ],
       "@nutai/recipe-engine": [
         "packages/recipe-engine/src/index.ts"
+      ],
+      "@nutai/indian-dishes": [
+        "packages/indian-dishes/src/index.ts"
       ],
       "@nutai/pipeline": [
         "packages/pipeline/src/index.ts"
@@ -69,5 +75,10 @@
     "eval/**/*",
     "scripts/**/*",
     "vitest.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
   ]
 }

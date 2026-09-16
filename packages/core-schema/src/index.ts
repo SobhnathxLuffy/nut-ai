@@ -10,3 +10,5 @@ export * from './exercise-estimate.js'
 export * from './training.js'
 export * from './indian-dish.js'
 export * from './correction.js'
+
+export * from './assistant.js'

@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 10
+export const USER_SCHEMA_VERSION = 11
 
 export interface Migration {
   up?: (db: DbAdapter, now: number) => Promise<void>
@@ -733,6 +733,14 @@ BEGIN
 END;
 `
 
+/** Preserve a custom food's display serving while keeping grams canonical. */
+export const USER_SCHEMA_V11_SQL = `
+ALTER TABLE user_foods ADD COLUMN serving_amount REAL;
+ALTER TABLE user_foods ADD COLUMN serving_unit TEXT NOT NULL DEFAULT 'g'
+  CHECK(serving_unit IN ('g', 'oz'));
+UPDATE user_foods SET serving_amount = serving_size_g WHERE serving_amount IS NULL;
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: USER_SCHEMA },
   { version: 2, sql: USER_SCHEMA_V2_SQL, up: backfillV2 },
@@ -744,11 +752,13 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 8, sql: USER_SCHEMA_V8_SQL },
   { version: 9, sql: USER_SCHEMA_V9_SQL },
   { version: 10, sql: TRAINING_SQL + OPERATIONS_V10_SQL },
+  { version: 11, sql: USER_SCHEMA_V11_SQL },
 ]
 
 export const DISH_KB_SCHEMA = `
 CREATE TABLE IF NOT EXISTS dish_definitions (
   id TEXT PRIMARY KEY,
+  search_rowid INTEGER NOT NULL UNIQUE,
   canonical_name TEXT NOT NULL,
   category TEXT NOT NULL,
   family TEXT NOT NULL,

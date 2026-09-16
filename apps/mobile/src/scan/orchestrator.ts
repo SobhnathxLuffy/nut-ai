@@ -26,6 +26,7 @@ import { db, setting } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup } from '../inference/pathA/client'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
+import { stripJpegMetadataBase64 } from './jpeg-privacy'
 
 /**
  * The scan orchestrator — capture in, ready-to-review meal out.
@@ -56,7 +57,7 @@ function wireSchemaFor(provider: ProviderId): Record<string, unknown> {
   return geminiWireSchema(VISION_WIRE_SCHEMA)
 }
 
-async function preprocess(photoUri: string): Promise<string> {
+export async function preprocess(photoUri: string): Promise<string> {
   const ctx = ImageManipulator.ImageManipulator.manipulate(photoUri)
   // Resize BEFORE encoding — the order is what bounds memory, not the format.
   ctx.resize({ width: 1024 })
@@ -67,11 +68,15 @@ async function preprocess(photoUri: string): Promise<string> {
     base64: true,
   })
   if (!saved.base64) throw new Error('preprocess produced no base64')
+  // ImageManipulator is an image transform, not our privacy guarantee. Strip
+  // every JPEG application metadata segment explicitly and validate the output
+  // before this payload can enter any cloud-provider request.
+  const sanitizedBase64 = stripJpegMetadataBase64(saved.base64)
   
   // Clean up the resized temporary file since we only need the base64 payload
   import('expo-file-system').then((fs) => fs.deleteAsync(saved.uri, { idempotent: true }).catch(() => {}))
   
-  return saved.base64
+  return sanitizedBase64
 }
 
 export async function startScan(photoUri: string): Promise<void> {

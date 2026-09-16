@@ -7,3 +7,5 @@ export * from './label-scan.js'
 export * from './receipt-scan.js'
 export * from './vision-json.js'
 export * from './correction.js'
+
+export * from './assistant.js'

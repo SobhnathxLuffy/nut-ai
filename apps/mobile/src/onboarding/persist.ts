@@ -145,6 +145,7 @@ export async function persistOnboarding(
       ['provider', answers.provider ?? 'none'],
       ['provider_model', answers.providerModel ?? ''],
       ['age.years', String(ageFrom(answers, now))],
+      ['weight.displayUnit', answers.units === 'imperial' ? 'lb' : 'kg'],
     ]
 
     for (const [key, value] of settings) {

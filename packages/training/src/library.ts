@@ -44,3 +44,4 @@ for(const name of ['Running','Walking','Cycling','Rowing','Swimming','Treadmill 
 for(const eq of ['band','machine']) for(const name of ['Pull-up','Chin-up','Dip','Pistol Squat']) add(`${eq} Assisted ${name}`,'assisted','back',[eq])
 for(const eq of ['dumbbell','kettlebell','trap_bar']) for(const name of ['Farmer Carry','Suitcase Carry','Front Rack Carry']) add(`${eq} ${name}`,'weight_time','forearms',[eq])
 for(const name of ['Standing Long Jump','Triple Jump','Broad Jump']) add(name,'distance','quadriceps',[])
+Object.freeze(EXERCISE_LIBRARY)

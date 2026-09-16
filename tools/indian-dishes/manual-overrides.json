@@ -1,0 +1,47 @@
+{
+  "water": {
+    "foodId": "usda:174158",
+    "name": "Water, bottled, generic",
+    "reason": "Explicit potable-water fallback; IFCT text search otherwise confuses water with water chestnut and coconut water."
+  },
+  "salt": {
+    "foodId": "usda:173468",
+    "name": "Salt, table",
+    "reason": "Explicit table-salt identity; resolver ranking otherwise places salted butter first."
+  },
+  "whole_wheat_flour": {
+    "foodId": "ifct:A019",
+    "name": "Wheat flour, atta (Triticum aestivum)",
+    "reason": "Indian atta is the specified whole-wheat flour for this slot."
+  },
+  "urad_dal": {
+    "foodId": "ifct:B003",
+    "name": "Black gram, dal (Phaseolus mungo)",
+    "reason": "Urad dal is split black gram; the common name differs from the IFCT canonical name."
+  },
+  "onion": {
+    "foodId": "ifct:G017",
+    "name": "Onion, big (Allium cepa)",
+    "reason": "Explicit reviewed default for ordinary bulb onion; onion stalk and small onion remain distinct candidates."
+  },
+  "egg": {
+    "foodId": "ifct:M001",
+    "name": "Egg, poultry, whole, raw",
+    "reason": "Recipe ingredient is whole raw poultry egg before cooking; omelette and separated egg rows are materially different."
+  },
+  "cashew_optional": {
+    "foodId": "ifct:H005",
+    "name": "Cashew nut (Anacardium occidentale)",
+    "reason": "Exact cashew-nut identity; optional describes presence, not food identity."
+  },
+  "cream_optional": {
+    "foodId": "usda:170859",
+    "name": "Cream, fluid, heavy whipping",
+    "reason": "Explicit heavy-cream default for rich North Indian gravy; optional describes presence."
+  },
+  "sugar_optional": {
+    "foodId": "usda:746784",
+    "name": "Sugars, granulated",
+    "reason": "Explicit granulated-sugar identity where the slot does not permit jaggery."
+  }
+}

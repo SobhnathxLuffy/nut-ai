@@ -1,13 +1,13 @@
 export interface RecipeIngredient {
   readonly foodId: string
   readonly gramWeight: number
-  readonly energyKcal: number
-  readonly proteinG: number
-  readonly fatG: number
-  readonly carbG: number
-  readonly fiberG: number
-  readonly sugarG: number
-  readonly sodiumMg: number
+  readonly energyKcal: number | null
+  readonly proteinG: number | null
+  readonly fatG: number | null
+  readonly carbG: number | null
+  readonly fiberG: number | null
+  readonly sugarG: number | null
+  readonly sodiumMg: number | null
 }
 
 export interface RecipeVersion {
@@ -21,13 +21,13 @@ export interface RecipeVersion {
 
 export interface ResolvedRecipeServing {
   readonly servingSizeG: number
-  readonly energyKcal: number
-  readonly proteinG: number
-  readonly fatG: number
-  readonly carbG: number
-  readonly fiberG: number
-  readonly sugarG: number
-  readonly sodiumMg: number
+  readonly energyKcal: number | null
+  readonly proteinG: number | null
+  readonly fatG: number | null
+  readonly carbG: number | null
+  readonly fiberG: number | null
+  readonly sugarG: number | null
+  readonly sodiumMg: number | null
 }
 
 // 902 kcal / 100g = 9.02 kcal/g for pure fat/oil
@@ -37,6 +37,10 @@ function requireFiniteNonNegative(value: number, field: string): void {
   if (!Number.isFinite(value) || value < 0) {
     throw new RangeError(`${field} must be a finite non-negative number`)
   }
+}
+
+function requireNullableNonNegative(value: number | null, field: string): void {
+  if (value !== null) requireFiniteNonNegative(value, field)
 }
 
 /** Reject impossible values before they become durable recipe history. */
@@ -51,13 +55,13 @@ export function validateRecipeVersion(version: RecipeVersion): void {
   }
   for (const ingredient of version.ingredients) {
     requireFiniteNonNegative(ingredient.gramWeight, 'ingredient.gramWeight')
-    requireFiniteNonNegative(ingredient.energyKcal, 'ingredient.energyKcal')
-    requireFiniteNonNegative(ingredient.proteinG, 'ingredient.proteinG')
-    requireFiniteNonNegative(ingredient.fatG, 'ingredient.fatG')
-    requireFiniteNonNegative(ingredient.carbG, 'ingredient.carbG')
-    requireFiniteNonNegative(ingredient.fiberG, 'ingredient.fiberG')
-    requireFiniteNonNegative(ingredient.sugarG, 'ingredient.sugarG')
-    requireFiniteNonNegative(ingredient.sodiumMg, 'ingredient.sodiumMg')
+    requireNullableNonNegative(ingredient.energyKcal, 'ingredient.energyKcal')
+    requireNullableNonNegative(ingredient.proteinG, 'ingredient.proteinG')
+    requireNullableNonNegative(ingredient.fatG, 'ingredient.fatG')
+    requireNullableNonNegative(ingredient.carbG, 'ingredient.carbG')
+    requireNullableNonNegative(ingredient.fiberG, 'ingredient.fiberG')
+    requireNullableNonNegative(ingredient.sugarG, 'ingredient.sugarG')
+    requireNullableNonNegative(ingredient.sodiumMg, 'ingredient.sodiumMg')
   }
 }
 
@@ -70,16 +74,17 @@ export function computeRecipeServing(version: RecipeVersion): ResolvedRecipeServ
   let sumFiber = 0
   let sumSugar = 0
   let sumSodium = 0
+  const known = { energy: true, protein: true, fat: true, carb: true, fiber: true, sugar: true, sodium: true }
 
   for (const ing of version.ingredients) {
     const factor = ing.gramWeight / 100.0
-    sumEnergy += ing.energyKcal * factor
-    sumProtein += ing.proteinG * factor
-    sumFat += ing.fatG * factor
-    sumCarb += ing.carbG * factor
-    sumFiber += ing.fiberG * factor
-    sumSugar += ing.sugarG * factor
-    sumSodium += ing.sodiumMg * factor
+    if (ing.energyKcal === null) known.energy = false; else sumEnergy += ing.energyKcal * factor
+    if (ing.proteinG === null) known.protein = false; else sumProtein += ing.proteinG * factor
+    if (ing.fatG === null) known.fat = false; else sumFat += ing.fatG * factor
+    if (ing.carbG === null) known.carb = false; else sumCarb += ing.carbG * factor
+    if (ing.fiberG === null) known.fiber = false; else sumFiber += ing.fiberG * factor
+    if (ing.sugarG === null) known.sugar = false; else sumSugar += ing.sugarG * factor
+    if (ing.sodiumMg === null) known.sodium = false; else sumSodium += ing.sodiumMg * factor
   }
 
   // Add oil nutrients
@@ -94,12 +99,12 @@ export function computeRecipeServing(version: RecipeVersion): ResolvedRecipeServ
 
   return {
     servingSizeG: servingWeight,
-    energyKcal: sumEnergy * multiplier,
-    proteinG: sumProtein * multiplier,
-    fatG: sumFat * multiplier,
-    carbG: sumCarb * multiplier,
-    fiberG: sumFiber * multiplier,
-    sugarG: sumSugar * multiplier,
-    sodiumMg: sumSodium * multiplier
+    energyKcal: known.energy ? sumEnergy * multiplier : null,
+    proteinG: known.protein ? sumProtein * multiplier : null,
+    fatG: known.fat ? sumFat * multiplier : null,
+    carbG: known.carb ? sumCarb * multiplier : null,
+    fiberG: known.fiber ? sumFiber * multiplier : null,
+    sugarG: known.sugar ? sumSugar * multiplier : null,
+    sodiumMg: known.sodium ? sumSodium * multiplier : null
   }
 }

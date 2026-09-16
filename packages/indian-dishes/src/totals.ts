@@ -1,74 +1,121 @@
 import type { DishDefinition } from '@nutai/core-schema'
-import { computeRecipeServing, type RecipeVersion, type RecipeIngredient } from '@nutai/recipe-engine'
 import type { DbAdapter } from '@nutai/db-adapter'
 
 export interface DishTotalOptions {
   dish: DishDefinition
-  db: DbAdapter
+  nutritionDb: DbAdapter
+  ifctDb?: DbAdapter
   servings?: number
 }
 
+export interface DishNutritionTotal {
+  servingSizeG: number
+  energyKcal: number | null
+  proteinG: number | null
+  fatG: number | null
+  carbG: number | null
+  fiberG: number | null
+  sugarG: number | null
+  sodiumMg: number | null
+}
+
+interface FoodRow {
+  energy_kcal: number | null
+  protein_g: number | null
+  fat_g: number | null
+  carb_g: number | null
+  fiber_g: number | null
+  sugar_g: number | null
+  sodium_mg: number | null
+}
+
+const MAPPED = new Set(['AUTO_MAPPED', 'MANUAL_OVERRIDE', 'mapped'])
+
+function finitePositive(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+function finiteNonNegative(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && value >= 0
+}
+
+async function loadMappedFood(
+  nutritionDb: DbAdapter,
+  ifctDb: DbAdapter | undefined,
+  foodId: string,
+): Promise<FoodRow | null> {
+  const fields = 'energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg'
+  if (foodId.startsWith('ifct:')) {
+    if (!ifctDb) throw new Error(`IFCT database is required for ${foodId}`)
+    return ifctDb.get<FoodRow>(`SELECT ${fields} FROM foods WHERE source = 'ifct' AND source_id = ?`, [foodId.slice(5)])
+  }
+  if (foodId.startsWith('usda:')) {
+    return nutritionDb.get<FoodRow>(`SELECT ${fields} FROM foods WHERE source LIKE 'fdc_%' AND source_id = ?`, [foodId.slice(5)])
+  }
+  throw new Error(`Unsupported source-qualified food ID: ${foodId}`)
+}
+
 /**
- * Computes nutrition for an Indian dish using its recipe template.
- * Satisfies Part E requirement: Calculate nutrition via ingredients * quantities -> cooked yield -> serving weight -> nutrition.
- * Never invents fixed AI calories.
+ * Compute a reviewed dish from ingredient rows, verified ratios, cooked yield,
+ * and verified portion weight. Draft templates fail closed. Missing nutrients
+ * propagate as unknown rather than being converted to zero.
  */
-export async function computeDishNutrition({ dish, db, servings = 1 }: DishTotalOptions) {
-  if (!dish.recipeTemplate) {
-    throw new Error('Dish is missing recipe template')
+export async function computeDishNutrition({
+  dish,
+  nutritionDb,
+  ifctDb,
+  servings = 1,
+}: DishTotalOptions): Promise<DishNutritionTotal> {
+  if (!finitePositive(servings)) throw new RangeError('servings must be a finite positive number')
+  if (dish.provenance?.recordStatus !== 'CURATED' && dish.provenance?.recordStatus !== 'VERIFIED') {
+    throw new Error('Dish recipe is not curated for deterministic nutrition')
+  }
+  if (dish.recipeTemplate.numericRatiosVerified !== true) {
+    throw new Error('Dish ingredient ratios are not verified')
+  }
+  const yieldMultiplier = dish.cooking?.yieldModel?.verifiedNumericYield
+  const portionG = dish.portionModel?.standardPortionGrams
+  if (!finitePositive(yieldMultiplier)) throw new Error('Dish cooked yield is not verified')
+  if (!finitePositive(portionG) || dish.portionModel.standardPortionStatus !== 'verified') {
+    throw new Error('Dish standard portion is not verified')
   }
 
-  const ingredients: RecipeIngredient[] = []
-  let totalRawMass = 0
-
+  const components: Array<{ grams: number; food: FoodRow }> = []
   for (const slot of dish.recipeTemplate.ingredientSlots) {
-    if (slot.nutritionMapping.mappingStatus === 'mapped' && slot.nutritionMapping.canonicalFoodId) {
-      // Find food in nutrition.db
-      const food = await db.get<any>(
-        'SELECT energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg FROM foods WHERE id = ?',
-        [slot.nutritionMapping.canonicalFoodId]
-      )
-      
-      if (food) {
-        // Calculate mass based on amount prior range average
-        // In a real usage, the app would supply specific user amounts
-        let massGrams = 0
-        if (slot.amountPrior?.kind === 'broad_mass_fraction_engineering_prior') {
-          massGrams = ((slot.amountPrior.range[0] + slot.amountPrior.range[1]) / 2) * 100 // Assume 100g base for calculation
-        } else {
-          massGrams = 100
-        }
-        
-        totalRawMass += massGrams
-        ingredients.push({
-          foodId: slot.nutritionMapping.canonicalFoodId,
-          gramWeight: massGrams,
-          energyKcal: food.energy_kcal || 0,
-          proteinG: food.protein_g || 0,
-          fatG: food.fat_g || 0,
-          carbG: food.carb_g || 0,
-          fiberG: food.fiber_g || 0,
-          sugarG: food.sugar_g || 0,
-          sodiumMg: food.sodium_mg || 0
-        })
-      }
+    const mapping = slot.nutritionMapping
+    if (!MAPPED.has(mapping.mappingStatus) || !mapping.canonicalFoodId) {
+      throw new Error(`Ingredient slot ${slot.label} is not mapped`)
     }
+    if (!slot.amountPrior || slot.amountPrior.verified !== true) {
+      throw new Error(`Ingredient ratio for ${slot.label} is not verified`)
+    }
+    const [low, high] = slot.amountPrior.range
+    if (!Number.isFinite(low) || !Number.isFinite(high) || low < 0 || high < low) {
+      throw new Error(`Ingredient ratio for ${slot.label} is invalid`)
+    }
+    const food = await loadMappedFood(nutritionDb, ifctDb, mapping.canonicalFoodId)
+    if (!food) throw new Error(`Mapped food no longer exists: ${mapping.canonicalFoodId}`)
+    components.push({ grams: ((low + high) / 2) * 100, food })
   }
+  const rawMass = components.reduce((sum, component) => sum + component.grams, 0)
+  if (!finitePositive(rawMass)) throw new Error('Dish recipe has no positive ingredient mass')
+  const cookedYieldG = rawMass * yieldMultiplier
+  const requestedG = portionG * servings
+  const scale = requestedG / cookedYieldG
 
-  // Calculate yield
-  let cookedYieldG = totalRawMass
-  if (dish.cooking?.yieldModel?.verifiedNumericYield) {
-    cookedYieldG = totalRawMass * dish.cooking.yieldModel.verifiedNumericYield
+  const nutrient = (key: keyof FoodRow): number | null => {
+    if (components.some((component) => !finiteNonNegative(component.food[key]))) return null
+    const value = components.reduce((sum, component) => sum + component.food[key]! * component.grams / 100, 0) * scale
+    return Number.isFinite(value) ? value : null
   }
-
-  const version: RecipeVersion = {
-    preparation: 'boiled', // TODO: map from dish.cooking.methods
-    addedOilG: 0,
-    addedWaterG: 0,
-    finalCookedWeightG: cookedYieldG,
-    servings,
-    ingredients
+  return {
+    servingSizeG: requestedG,
+    energyKcal: nutrient('energy_kcal'),
+    proteinG: nutrient('protein_g'),
+    fatG: nutrient('fat_g'),
+    carbG: nutrient('carb_g'),
+    fiberG: nutrient('fiber_g'),
+    sugarG: nutrient('sugar_g'),
+    sodiumMg: nutrient('sodium_mg'),
   }
-
-  return computeRecipeServing(version)
 }

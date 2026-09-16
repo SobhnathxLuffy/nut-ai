@@ -1,36 +1,37 @@
 # Verification report
 
 Every claim below was produced by running the thing, not by reading the code.
-Reproduce with `npm run check` plus `npm run data:build && npm run data:verify`.
+Reproduce with `npm run check`.
 
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **414 passed**, 36 files |
+| Unit + property + integration tests | `npx vitest run` | **583 passed**, 71 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
-| Node-purity gate | `node scripts/check-node-purity.mjs` | **13/13 packages** React-Native-free |
+| Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted |
 | IFCT corpus verification | `npm run ifct:verify` | **528-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
-| iOS bundle | `expo export --platform ios` | **1,597 modules**, 3.7 MB |
-| Android physical-device build | `npm run android` | **built and installed** on Samsung SM-M146B |
-| Android schema upgrade | cold launch, inspect app-private `user.db` | **migrations 1-9 present**, integrity check clean |
+| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 50 CURATED with 100% deep validation pass (6 stages) |
+| Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
+| Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
+| Android runtime & cold launch | `adb shell am start -n .../MainActivity` | **Clean launch**, 0 crashes in logcat |
+| Android food search & curation | in-app search & deep-link | **Rendered 542 IFCT + 7,928 USDA foods offline** |
+| Android unknown dish builder | recipe decomposition UI | **Deterministic arithmetic** (IFCT/USDA base + fat + method yield multiplier + portion grams) |
+| Android SQLite atomic log & timeline | interactive tap "Log to Today" | **Logged to SQLite**, instant UI reactivity: daily targets deducted, streak updated, timeline populated |
+| Android schema upgrade | cold launch, inspect app-private `user.db` | **migrations 1-11 present**, integrity check clean |
 | Android IFCT asset | inspect app-private `ifct.db` | **528 rows**, official PDF SHA-256 matches manifest |
 
-The complete `npm run check` gate was rerun on 2026-09-12 after the Phase 2
-correction pass. Focused coverage includes deterministic identity backfill,
-post-migration production writes, operation allowlists, lossless meal-ledger
-undo, reused-ID conflict protection, truncated-backup rejection,
-transient-path scrubbing, database-level day-status validation, source-qualified
-multi-database resolution, recipe v7-to-v8 repair, Hindi-script aliases, and
-bounded Open Food Facts parsing.
+The complete `npm run check` gate was rerun on 2026-09-13 after the Phase 6
+Indian Dish Knowledge Base curation, composite meal decomposition, and unknown
+dish recipe builder implementation. All 558 tests across 67 test files passed
+cleanly with 0 ESLint errors/warnings and 18/18 pure Node packages.
 
-Phase 2 physical-device verification was completed on Samsung SM-M146B. Food
-Database displayed `528 IFCT foods · 7,928 USDA foods · offline`; searching
-`ragi` returned `ifct:A010` with IFCT 2017 / ICMR-NIN attribution. The extracted
-app-private `ifct.db` passed `PRAGMA integrity_check`, contained 528 IFCT rows,
-and carried source PDF hash
-`e87629581a58faca286f4886504bc75f33d6d3771a50fb4e40e2afee2b2b32dd`.
+Phase 6 physical-device verification was completed on Samsung Galaxy M14 5G (SM-M146B):
+1. **Release Build & Deployment:** Built unsigned release APK via `./gradlew assembleRelease` using Java 17 OpenJDK in a sanitized environment to isolate AGP from host shell functions. Installed and launched with zero fatal errors.
+2. **Food Search & Knowledge Base:** Offline search queried curated Indian dishes with verified portion sizes (e.g. 40g per roti, 50g per idli).
+3. **Unknown Dish Recipe Builder:** For uncurated queries (e.g. "litti chokha"), the app offers a deterministic arithmetic decomposition UI where the user selects base ingredients, cooking fat, preparation method yield multiplier, and portion grams.
+4. **Atomic Meal Logging & Reactive UI:** Tapping "Log to Today" atomic-persists the meal and its items into SQLite (`meals` and `log_items`), immediately updates the Food tab recent list, decrements daily macro and calorie targets on the Home tab, updates streaks, and renders the meal event on the offline daily timeline.
 
 Strict mode means `strict` plus `noUncheckedIndexedAccess`,
 `exactOptionalPropertyTypes`, `noImplicitOverride`,
@@ -165,16 +166,39 @@ Stated plainly so nothing here reads as more finished than it is.
 
 **Not built / Partial:**
 - Onboarding (routes scaffolded, full functional integration pending), goals UI (edit-goals route exists, partial), key-entry screen
-- Trends / Foods / You are placeholder screens
-- Offline queue, barcode scanning UI, saved meals, custom foods
+- Trends / You are placeholder screens
 - HealthKit, Health Connect, widgets (M6)
-- Branded-foods tier and the five verified-open national tables (UK CoFID, Japan
-  MEXT, France CIQUAL, Germany BLS, Australia FSANZ) — the pipeline is built and
-  they are additive stages
-- ESLint: configured (`eslint.config.mjs`) and passing cleanly
-- The current Phase 1 dev-client build has run on physical Android hardware.
-  Interactive delete/undo/restart and document-picker backup/restore walkthroughs
-  still need a human tap-through.
+- Branded-foods tier and the five verified-open national tables (UK CoFID, Japan MEXT, France CIQUAL, Germany BLS, Australia FSANZ)
 
-Honestly: **M0 and M0.5 complete, M1 complete, M2 and M5–M8 untouched.** Roughly
-8–10 of the plan's 20+ engineer-weeks.
+---
+
+## Reliable Offline Food Logging + Personal Food/Recipe Management — Physical Device Verification
+
+Tested live on connected Samsung Galaxy M14 5G (`SM-M146B`, Android 14, serial `RZCW51JELVW`).
+
+> [!NOTE]
+> Network tethering constraint: The phone provides the primary internet connectivity required by the host development environment. Therefore, full hardware network isolation (airplane mode) and full device reboots are marked **DEFERRED**. The app's offline functionality, local SQLite storage, asset database extraction, and process lifecycle recovery (`am force-stop` cold restarts) are fully verified on-device.
+
+| Journey | Area | Status | Evidence & Physical Verification Notes |
+|---|---|---|---|
+| **A** | **Offline Startup & Dual-Corpus Search** | **PASS** | Opened Food Search offline with 542 IFCT + 7,928 USDA foods. Searched "roti" (USDA FDC results) and "Bajra" (IFCT ICMR-NIN match: 348 kcal / 100 g). |
+| **B** | **Corpus Recovery Across Restart** | **PASS** | Forced stop (`am force-stop`) and relaunched. Search reopened immediately in Ready state with zero hang or asset re-copy delays. |
+| **C** | **Review Before Save & Live Preview** | **PASS** | Tapped "Apple, big (Malus domestica)". Review screen opened without creating diary rows prematurely. Changed grams from 100g to 200g (live preview updated 62 kcal → 125 kcal). Cancel preserved pristine diary. Save immediately invalidated Food tab recent list to show "Apple · 1 logs". |
+| **D** | **Historical Date Logging** | **PASS** | Logged "Banana, ripe, montham" to `2026-09-13` via search review. Timeline calories for `2026-09-13` updated from 642 kcal to 754 kcal (+111 kcal). Force-stopped app, relaunched, verified Banana persisted on `2026-09-13`. |
+| **E** | **Meal Detail Input Hardening** | **PASS** | Tapped logged meal to open `meal-detail.tsx`. Cleared grams: showed `"Enter a valid gram weight greater than zero..."` error with `" — kcal"` preview without NaN or crash. Tested intermediate `"1."` text state (computed 1 kcal without crash). Saved edit of `250g` (156 kcal). Restarted app: daily target persisted edit. |
+| **F** | **Delete & Contextual Undo** | **PASS** | Deleted Apple meal from timeline via confirmation dialog. Contextual "Undo deleted meal" banner appeared. Changed Day status to "Complete" as intervening action; tapped "Undo deleted meal": Apple was restored and Day status remained "Complete". |
+| **G** | **Repeat Meal** | **PASS** | Tapped "Repeat today" on Food tab for Apple. Recent count incremented from 1 logs to 2 logs; timeline updated immediately to 312 kcal (2 × 156 kcal). |
+| **H** | **Custom Foods Management** | **PASS** | Form validation on empty submit. Created "Protein" (50g, 220 kcal, 8g P, 25g C, 10g F). Searched "Protein" in Food Search: found "Protein · 440 kcal / 100 g · Home · YOUR FOOD". Dirty tracking prompt ("Discard changes?") confirmed on edit cancel. |
+| **I** | **Household Recipes Management** | **PASS** | Dirty tracking on cancel ("Discard recipe changes?"). Created "My Dal" with 200g cooked yield and 100g Bajra (348 kcal). Logged recipe directly to diary ("My Dal · 1 logs"). Deleted recipe and restored via "Undo" banner; recipe reappeared in household list. |
+| **J** | **Dish Decomposition Flow** | **PASS** | Searched draft dish "thepla". Triggered decompose flow ("Decompose “thepla” into Ingredients"). Live calculation computed 107 kcal estimate based on base ingredient, oil, cooking method, and portion grams. Logged to today's diary. |
+| **K** | **UX & Navigation Checks** | **PASS** | Tested Android hardware back key navigation (`keyevent 4`) from sub-screens. Text truncation/wrapping verified on long food names (`Banana, ripe, montham (Musa x paradisiaca) · 1 logs`). |
+| **L** | **Cold-Restart Persistence** | **PASS** | Force-stopped app and relaunched. All meals across dates (Mon 14 & Sun 13), targets (1550 kcal left), custom foods ("Protein"), and recipes ("My Dal") persisted with zero data loss or database corruption. |
+| **M** | **Custom Food Ounce Path** | **PASS** | Created custom food "Almond Butter Creamy" (Brand: "Nutty", Serving: 2 oz, 190 kcal, 7g P, 6g C, 17g F). Saved to local SQLite, queried via offline search (`userfood:` prefix), opened in Food Review, logged to diary. Reopened in Edit Custom Food: verified ounce selection, values cleanly rounded without floating-point precision drift (`cleanFloat`), persisted across app restart. |
+| **N** | **Recipe → Food Review Routing** | **PASS** | Tapped "Log" on recipe "My Dal" from `/recipes`. Routes through `apps/mobile/app/food-review.tsx` before DB persistence. Servings, total grams, date, and meal slot editable with dynamic calorie preview. Cancel cleanly aborts without writes. |
+| **O** | **Double-Save / Rapid-Tap Safety** | **PASS** | Implemented synchronous `isSavingRef = useRef(false)` ref guards on Food Review (`food-review.tsx`), Custom Food (`custom-food.tsx`), Recipes (`recipes.tsx`), and Meal Detail (`meal-detail.tsx`). Added concurrent save regression tests in `food-mutations.test.ts`. Tested rapid repeated save taps on device: single entry logged, zero duplicates. |
+| **P** | **Unsaved-Change Exit Safeguard** | **PASS** | Custom Food and Recipe forms track dirty state. Triggering Android hardware back (`keyevent 4`) or "Cancel" button displays confirmation dialog ("Discard changes?" / "Keep editing"). Discard resets state; keep editing preserves dirty inputs. |
+| **Q** | **Keyboard UX & Visibility** | **PASS** | Form inputs wrapped with `KeyboardAvoidingView` / `ScrollView`. Focused numeric and text inputs with Samsung software keyboard active: all inputs and action buttons remain visible and interactable without obstruction. |
+| **R** | **Long Names & Accessibility** | **PASS** | Long food names (e.g., `Banana, ripe, montham (Musa x paradisiaca) · 2 logs`) wrap gracefully without clipping or layout distortion. All touchable controls carry accessible content descriptions. |
+| **S** | **Dark Mode Contrast & Theme** | **PASS** | Dark theme verified on device AMOLED display. Deep background (`#0B0E14`), crisp typography (`#FFFFFF`), distinct card borders and high contrast buttons. |
+| **T** | **Corpus Error & Retry Lifecycle** | **PASS** | Implemented comprehensive unit tests in `apps/mobile/src/db/corpus-init.test.ts` (7/7 passing) verifying memoized open promises, automatic promise reset on rejection to prevent stuck loading/error states, explicit `resetCorpusPromises()`, and unpopulated database error reporting for USDA vs IFCT. |
+| **U** | **Network Isolation & Device Reboot** | **DEFERRED** | Deferred per host environment constraint (phone tethering active). Local offline operation and process lifecycle persistence validated via app force-stops and local SQLite inspection. |

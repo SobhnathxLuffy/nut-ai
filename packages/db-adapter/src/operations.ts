@@ -92,7 +92,7 @@ const ENTITY_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   weight_entries: ['id', 'local_date', 'weight_kg', 'logged_at', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   exercise_entries: ['id', 'local_date', 'name', 'kcal', 'provenance', 'external_id', 'logged_at', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   goals: ['id', 'effective_from', 'goal_type', 'rate_lb_per_week', 'target_kcal', 'target_raw_kcal', 'floor_applied', 'protein_g', 'fat_g', 'carbs_g', 'bmr', 'tdee', 'adaptive', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
-  user_foods: ['id', 'name', 'brand', 'barcode', 'basis', 'serving_size_g', 'energy_kcal', 'protein_g', 'fat_g', 'carb_g', 'fiber_g', 'sugar_g', 'sodium_mg', 'source_photo_uri', 'pending_resolution', 'created_at', 'synced_to_community', 'uuid', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
+  user_foods: ['id', 'name', 'brand', 'barcode', 'basis', 'serving_size_g', 'serving_amount', 'serving_unit', 'energy_kcal', 'protein_g', 'fat_g', 'carb_g', 'fiber_g', 'sugar_g', 'sodium_mg', 'source_photo_uri', 'pending_resolution', 'created_at', 'synced_to_community', 'uuid', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   saved_meals: ['id', 'name', 'items_json', 'use_count', 'last_used_at', 'created_at', 'uuid', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   user_containers: ['id', 'label', 'type', 'usable_ml', 'diameter_mm', 'created_at', 'uuid', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   recipes: ['id', 'uuid', 'name', 'created_at', 'updated_at', 'deleted_at', 'sync_state', 'revision'],
@@ -412,7 +412,7 @@ export async function undoOperation(
       } else if (op.op_type === 'update') {
         if (!op.prev_json) throw new Error('No prev_json available to revert update')
         const prevData = JSON.parse(op.prev_json) as Record<string, unknown>
-        if (table === 'recipes') {
+        if (table === 'recipes' || (table === 'meals' && 'meal' in prevData)) {
           await deleteEntity(tx, table, op.entity_id)
           await restoreEntity(tx, table, prevData)
         } else {
@@ -462,7 +462,7 @@ export async function redoOperation(
       } else if (op.op_type === 'update') {
         if (!op.new_json) throw new Error('No new_json available to redo update')
         const newData = JSON.parse(op.new_json) as Record<string, unknown>
-        if (table === 'recipes') {
+        if (table === 'recipes' || (table === 'meals' && 'meal' in newData)) {
           await deleteEntity(tx, table, op.entity_id)
           await restoreEntity(tx, table, newData)
         } else {

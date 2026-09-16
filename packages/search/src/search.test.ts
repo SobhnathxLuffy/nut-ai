@@ -74,7 +74,7 @@ describe('Universal Search Contract (SRH-001)', () => {
     expect(result2.hasMore).toBe(false)
   })
 
-  it('returns entities on empty query when allowEmpty is true', () => {
+  it('returns entities on empty query when allowEmpty is true, without ranking them', () => {
     const result = rankSearch(sampleEntities, {
       query: '',
       locale: 'en-IN',
@@ -83,6 +83,9 @@ describe('Universal Search Contract (SRH-001)', () => {
       allowEmpty: true,
     })
     expect(result.results.length).toBe(3)
+    // When query is empty, results should simply have score 500 (or base scores)
+    // and no token matching should have been performed.
+    expect(result.results[0]?.matched_tokens).toEqual([])
   })
 
   it('filters by entity scope', () => {

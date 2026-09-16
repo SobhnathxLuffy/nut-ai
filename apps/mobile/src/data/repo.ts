@@ -28,10 +28,11 @@ import { seedExercises } from '@nutai/training'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
 import { localDate, slotFor } from './date-utils'
+import { emitFoodMutation, getLastDeletedMealUndoUuid, setLastDeletedMealUndoUuid } from './food-mutations'
 import { clearCredential } from '../inference/credentials'
 import { openUserDb } from '../db/expo-adapter'
 
-export { localDate, slotFor }
+export { localDate, slotFor, getLastDeletedMealUndoUuid, setLastDeletedMealUndoUuid }
 
 /**
  * The read/write layer over `user.db`.
@@ -403,7 +404,7 @@ export async function deleteMeal(
   const h = await db()
   const now = options?.now ?? Date.now()
 
-  return h.transaction(async (tx) => {
+  const operation = await h.transaction(async (tx) => {
     if (options?.idempotencyKey) {
       const existing = await getOperationByIdempotencyKey(tx, options.idempotencyKey)
       if (existing) return existing
@@ -431,6 +432,11 @@ export async function deleteMeal(
     })
 
   })
+  if (operation) {
+    setLastDeletedMealUndoUuid(operation.uuid)
+    emitFoodMutation({ kind: 'meal', operationUuid: operation.uuid })
+  }
+  return operation
 }
 
 export async function updateMealSlot(
@@ -646,6 +652,23 @@ export async function listDayStatuses(options?: {
 // Operations & Undo
 // ---------------------------------------------------------------------------
 
+function emitMutationForOperation(op?: OperationRecord) {
+  if (!op) return
+  const type = op.entity_type
+  if (type === 'meals' || type === 'batch' || type === 'saved_meals') {
+    emitFoodMutation({ kind: 'meal', operationUuid: op.uuid })
+    emitFoodMutation({ kind: 'shortcut', operationUuid: op.uuid })
+  } else if (type === 'user_foods') {
+    emitFoodMutation({ kind: 'custom-food', operationUuid: op.uuid })
+    emitFoodMutation({ kind: 'meal', operationUuid: op.uuid })
+  } else if (type === 'recipes') {
+    emitFoodMutation({ kind: 'recipe', operationUuid: op.uuid })
+    emitFoodMutation({ kind: 'meal', operationUuid: op.uuid })
+  } else if (type === 'logging_shortcuts') {
+    emitFoodMutation({ kind: 'shortcut', operationUuid: op.uuid })
+  }
+}
+
 export async function undoLastOperation(now: number = Date.now()): Promise<UndoResult> {
   const h = await db()
   const lastOp = await h.get<{ id: number }>(
@@ -654,14 +677,28 @@ export async function undoLastOperation(now: number = Date.now()): Promise<UndoR
   if (!lastOp) {
     return { success: false, reason: 'not_found' }
   }
-  return undoOperation(h, lastOp.id, now)
+  const result = await undoOperation(h, lastOp.id, now)
+  if (result.success) {
+    emitMutationForOperation(result.operation)
+    if (result.operation && result.operation.uuid === getLastDeletedMealUndoUuid()) {
+      setLastDeletedMealUndoUuid(null)
+    }
+  }
+  return result
 }
 
 export async function undoRecordedOperation(
   idOrUuid: number | string,
   now: number = Date.now(),
 ): Promise<UndoResult> {
-  return undoOperation(await db(), idOrUuid, now)
+  const result = await undoOperation(await db(), idOrUuid, now)
+  if (result.success) {
+    emitMutationForOperation(result.operation)
+    if (result.operation && result.operation.uuid === getLastDeletedMealUndoUuid()) {
+      setLastDeletedMealUndoUuid(null)
+    }
+  }
+  return result
 }
 
 export async function logExercise(name: string, kcal: number, now: number = Date.now()): Promise<number> {
@@ -694,7 +731,17 @@ export async function redoLastOperation(): Promise<RedoResult> {
   if (!lastUndone) {
     return { success: false, reason: 'not_found' }
   }
-  return redoOperation(h, lastUndone.id)
+  const result = await redoOperation(h, lastUndone.id)
+  if (result.success) emitMutationForOperation(result.operation)
+  return result
+}
+
+export async function redoRecordedOperation(
+  idOrUuid: number | string,
+): Promise<RedoResult> {
+  const result = await redoOperation(await db(), idOrUuid)
+  if (result.success) emitMutationForOperation(result.operation)
+  return result
 }
 
 export async function listRecentOperations(limit: number = 20): Promise<OperationRecord[]> {

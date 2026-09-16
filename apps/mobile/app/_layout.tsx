@@ -58,6 +58,8 @@ function Root() {
         <Stack.Screen name="provider-settings" options={{ presentation: 'modal' }} />
         <Stack.Screen name="log-exercise" options={{ presentation: 'modal' }} />
         <Stack.Screen name="food-search" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="food-review" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="meal-detail" options={{ presentation: 'modal' }} />
         <Stack.Screen name="saved-foods" options={{ presentation: 'modal' }} />
         <Stack.Screen name="recipes" options={{ presentation: 'modal' }} />
         <Stack.Screen name="edit-goals" options={{ presentation: 'modal' }} />
@@ -66,6 +68,10 @@ function Root() {
         <Stack.Screen name="routines" options={{ presentation: 'modal' }} />
         <Stack.Screen name="programs" options={{ presentation: 'modal' }} />
         <Stack.Screen name="search" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="exercise-detail" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="weekly-report" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="monthly-report" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="custom-food" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   )

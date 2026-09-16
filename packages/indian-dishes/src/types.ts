@@ -5,7 +5,7 @@ export interface IngredientSlot {
   role: "dominant" | "secondary" | "fat_variable" | "high_energy" | "minor" | "process";
   required: boolean;
   amountPrior: { kind: "broad_mass_fraction_engineering_prior"; range: [number, number]; verified: false; };
-  nutritionMapping: { preferredSources: Array<"IFCT" | "USDA_FDC">; canonicalFoodId: string | null; mappingStatus: "pending_exact_id" | "mapped"; };
+  nutritionMapping: { preferredSources: Array<"IFCT" | "USDA_FDC">; canonicalFoodId: string | null; mappingStatus: "pending_exact_id" | "mapped" | "AUTO_MAPPED" | "MANUAL_OVERRIDE" | "AMBIGUOUS" | "UNRESOLVED" | "unresolved"; mappedName?: string; mappingMethod?: string; reviewNote?: string; };
 }
 export interface IndianDishDefinition {
   schemaVersion: string; id: string; canonicalName: string; aliases: string[]; searchTerms: string[];

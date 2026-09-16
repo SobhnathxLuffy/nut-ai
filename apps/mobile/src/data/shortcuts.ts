@@ -1,5 +1,6 @@
 import { createSyncMetadata, recordOperation, isValidOperationPayload, validateLocalDate, getOperationByIdempotencyKey, type BatchChange, type DbAdapter, type SqlValue } from '@nutai/db-adapter'
 import { writeRow } from '@nutai/training'
+import { emitFoodMutation } from './food-mutations'
 type Row=Record<string,SqlValue>
 export interface MealSnapshot {meal:Row;items:Row[];ledger:Row[]}
 export interface Shortcut {id:number;meal_id:number;name:string;kind:'favorite'|'usual'|'saved';snapshot_json:string}
@@ -11,15 +12,27 @@ export async function mealSnapshot(db:DbAdapter,id:number):Promise<MealSnapshot>
 export const listShortcuts=(db:DbAdapter):Promise<Shortcut[]>=>db.all('SELECT * FROM logging_shortcuts WHERE deleted_at IS NULL ORDER BY updated_at DESC,id DESC')
 export async function saveShortcut(db:DbAdapter,mealId:number,kind:Shortcut['kind'],name:string,now=Date.now()):Promise<number> {
   if(!['favorite','usual','saved'].includes(kind)||!name.trim()||name.length>120)throw new Error('Enter a shortcut name')
-  return db.transaction(async tx=>{
+  let opUuid: string | undefined
+  const id = await db.transaction(async tx=>{
     const snapshot=await mealSnapshot(tx,mealId);const changes:BatchChange[]=[]
     const existing=await tx.get<{id:number}>('SELECT id FROM logging_shortcuts WHERE meal_id=? AND kind=? AND deleted_at IS NULL',[mealId,kind])
     const id=await writeRow(tx,'logging_shortcuts',{meal_id:mealId,kind,name:name.trim(),snapshot_json:JSON.stringify(snapshot)},now,changes,existing?.id)
-    await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now});return id
+    const op = await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now})
+    opUuid = op.uuid
+    return id
   })
+  emitFoodMutation({ kind: 'shortcut', operationUuid: opUuid })
+  return id
 }
 export async function removeShortcut(db:DbAdapter,id:number,now=Date.now()):Promise<void> {
-  await db.transaction(async tx=>{const changes:BatchChange[]=[];await writeRow(tx,'logging_shortcuts',{deleted_at:now},now,changes,id);await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now})})
+  let opUuid: string | undefined
+  await db.transaction(async tx=>{
+    const changes:BatchChange[]=[]
+    await writeRow(tx,'logging_shortcuts',{deleted_at:now},now,changes,id)
+    const op = await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now})
+    opUuid = op.uuid
+  })
+  emitFoodMutation({ kind: 'shortcut', operationUuid: opUuid })
 }
 export function dateOffset(date:string,days:number):string {validateLocalDate(date);return new Date(Date.parse(`${date}T12:00:00Z`)+days*86400000).toISOString().slice(0,10)}
 export function remapTimestamp(at:number,date:string):number {
@@ -36,8 +49,15 @@ export async function repeatSnapshots(db:DbAdapter,snapshots:MealSnapshot[],date
   validateLocalDate(date)
   if(!snapshots.length)throw new Error('No meals to copy')
   if(snapshots.length>100)throw new Error('Copy at most 100 meals at a time')
-  return db.transaction(async tx=>{
-    if(idempotencyKey){const prior=await getOperationByIdempotencyKey(tx,idempotencyKey);if(prior) return (JSON.parse(prior.new_json!) as {changes:BatchChange[]}).changes.map(c=>c.entityId)}
+  let opUuid: string | undefined
+  const ids = await db.transaction(async tx=>{
+    if(idempotencyKey){
+      const prior=await getOperationByIdempotencyKey(tx,idempotencyKey)
+      if(prior) {
+        opUuid = prior.uuid
+        return (JSON.parse(prior.new_json!) as {changes:BatchChange[]}).changes.map(c=>c.entityId)
+      }
+    }
     const changes:BatchChange[]=[];const ids:number[]=[]
     for(const snapshot of snapshots){
       if(!isValidOperationPayload('meals',JSON.stringify(snapshot))||!snapshot.items.length)throw new Error('Invalid meal snapshot')
@@ -48,9 +68,12 @@ export async function repeatSnapshots(db:DbAdapter,snapshots:MealSnapshot[],date
       for(const item of snapshot.items){const row={...item,...createSyncMetadata(now),meal_id:id,logged_at:at};const itemId=await insertCopy(tx,'log_items',row);items.push({...row,id:itemId})}
       changes.push({entityType:'meals',entityId:id,opType:'insert',prev:null,next:{meal:{...meal,id},items,ledger:[]}});ids.push(id)
     }
-    await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now,...(idempotencyKey?{idempotencyKey}:{})})
+    const op = await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now,...(idempotencyKey?{idempotencyKey}:{})})
+    opUuid = op.uuid
     return ids
   })
+  emitFoodMutation({ kind: 'meal', operationUuid: opUuid })
+  return ids
 }
 export async function copyYesterday(db:DbAdapter,date:string,now=Date.now(),key?:string):Promise<number[]> {
   const rows=await db.all<{id:number}>("SELECT id FROM meals WHERE local_date=? AND deleted_at IS NULL AND analysis_status IN ('complete','manual') ORDER BY logged_at,id",[dateOffset(date,-1)])

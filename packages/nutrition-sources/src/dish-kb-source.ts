@@ -5,7 +5,10 @@ export class DishKBSource implements NutritionSource {
   readonly id = 'indian_dish_kb'
   readonly priority = 65
 
-  constructor(private readonly db: DbAdapter) {}
+  constructor(
+    private readonly db: DbAdapter,
+    private readonly ifctDb?: DbAdapter,
+  ) {}
 
   getLicenseInfo(): SourceLicenseInfo {
     return {
@@ -26,7 +29,7 @@ export class DishKBSource implements NutritionSource {
         d.record_status,
         fts.rank as rawBm25
       FROM dish_fts fts
-      JOIN dish_definitions d ON d.id = fts.rowid
+      JOIN dish_definitions d ON d.search_rowid = fts.rowid
       WHERE dish_fts MATCH ?
       ORDER BY rawBm25
       LIMIT 10
@@ -34,7 +37,8 @@ export class DishKBSource implements NutritionSource {
 
     return rows.map((r) => {
       // Priority: Verified KB > Curated (DRAFT_CURATED)
-      const priority = r.record_status === 'VERIFIED' ? 70 : 60
+      const deterministic = r.record_status === 'VERIFIED' || r.record_status === 'CURATED'
+      const priority = r.record_status === 'VERIFIED' ? 70 : deterministic ? 60 : 25
       return {
         foodId: r.foodId,
         source: this.id,
@@ -43,11 +47,11 @@ export class DishKBSource implements NutritionSource {
         brand: null,
         category: r.category,
         prepFacet: null,
-        basisConfidence: 'high',
+        basisConfidence: deterministic ? 'high' : 'low',
         servingSizeG: null,
         energyKcal: null, // Computation done downstream
         popularityRank: 100,
-        completenessScore: 1.0,
+        completenessScore: deterministic ? 1.0 : 0,
         rawBm25: r.rawBm25,
       }
     })
@@ -76,10 +80,22 @@ export class DishKBSource implements NutritionSource {
       provenance: { recordStatus: row.record_status }
     } as any
 
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    const { computeDishNutrition } = await import('@nutai/indian-dishes')
-    const calculated = await computeDishNutrition({ dish, db: this.db, servings: 1 })
+    // Draft records are searchable for coverage/review, but are never presented
+    // as deterministic nutrition merely because an ID exists.
+    if (row.record_status !== 'CURATED' && row.record_status !== 'VERIFIED') return null
+
+    let calculated
+    try {
+      const { computeDishNutrition } = await import('@nutai/indian-dishes')
+      calculated = await computeDishNutrition({
+        dish,
+        nutritionDb: this.db,
+        ...(this.ifctDb ? { ifctDb: this.ifctDb } : {}),
+        servings: 1,
+      })
+    } catch {
+      return null
+    }
 
     // Normalizing to per-100g because standard resolved foods are per 100g.
     const multiplier = 100 / (calculated.servingSizeG || 100)
@@ -91,15 +107,15 @@ export class DishKBSource implements NutritionSource {
       attribution: 'Nut AI Dish KB',
       name: row.canonical_name,
       brand: null,
-      energyKcal: calculated.energyKcal * multiplier,
-      proteinG: calculated.proteinG * multiplier,
-      fatG: calculated.fatG * multiplier,
-      carbG: calculated.carbG * multiplier,
-      fiberG: calculated.fiberG * multiplier,
-      sugarG: calculated.sugarG * multiplier,
-      sodiumMg: calculated.sodiumMg * multiplier,
-      servingSizeG: 100,
-      servingDesc: '100g standard',
+      energyKcal: calculated.energyKcal === null ? null : calculated.energyKcal * multiplier,
+      proteinG: calculated.proteinG === null ? null : calculated.proteinG * multiplier,
+      fatG: calculated.fatG === null ? null : calculated.fatG * multiplier,
+      carbG: calculated.carbG === null ? null : calculated.carbG * multiplier,
+      fiberG: calculated.fiberG === null ? null : calculated.fiberG * multiplier,
+      sugarG: calculated.sugarG === null ? null : calculated.sugarG * multiplier,
+      sodiumMg: calculated.sodiumMg === null ? null : calculated.sodiumMg * multiplier,
+      servingSizeG: calculated.servingSizeG || 100,
+      servingDesc: `${calculated.servingSizeG || 100}g standard portion`,
       license: 'proprietary',
       source: this.id
     }

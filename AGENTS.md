@@ -1,317 +1,720 @@
-# AGENTS.md — Binding Rules for All Implementation Agents
+# AGENTS.md — Binding Rules for All Nut AI Coding Agents
 
-> **Every coding agent working on this repository MUST read this file before making
-> any change.** These rules are non-negotiable and override any implicit
-> assumption a model may carry.
+> **Read this entire file before changing the repository.**
+> This file defines the engineering contract for Nut AI. It is intentionally stricter than normal project notes because prior implementation passes repeatedly overstated completion, confused code inspection with runtime proof, and allowed user-visible defects to survive green test suites.
+>
+> If a task instruction conflicts with this file, stop and resolve the conflict using the precedence rules below. Do not improvise around it.
 
-## 1. Source-of-Truth Order
+---
 
-When requirements conflict, resolve using this precedence (highest first):
+## 0. Current Project Reality — Read This Before Planning Anything
 
-1. Explicit non-negotiable decisions in the master planning prompt.
-2. Agreed decisions and V3 additions in the master-plan PDF.
-3. Reproducible current repository behavior and tests.
-4. Existing README / VERIFICATION claims.
-5. Recommended reversible defaults in ADRs.
+This section is the current operational snapshot and must be kept honest. It is not marketing copy.
 
-Never weaken a non-negotiable requirement merely because the current app does not
-implement it.
+### 0.1 What is currently strong
+
+- The monorepo, strict TypeScript, SQLite foundation, migrations, operations/undo foundation, deterministic nutrition engine, IFCT/USDA integration, custom foods, recipes, and core food logging architecture are substantial.
+- The latest verified automated baseline is **583 tests across 71 files**, with lint, typecheck, node-purity, USDA data verification, IFCT verification, and Indian-dish verification passing.
+- The **Reliable Food Logging + Personal Food/Recipe Management** slice has been physically exercised on Android for review-before-save, historical dates, edit/delete/undo, repeats, custom foods, recipe logging/versioning, dirty-form protection, rapid-save protection, keyboard handling, and process-level persistence.
+- Core nutrition writes use immutable snapshots and deterministic arithmetic rather than trusting model-generated calories/macros.
+
+### 0.2 Known current shortcomings — do not silently relabel these as complete
+
+#### Home / Food UX
+- Home is still visually cluttered and lacks good previous-day navigation.
+- Eaten vs remaining nutrition hierarchy is weak.
+- Repeat-meal currently appears to reuse the prior meal timestamp instead of using the repeat time.
+- Undo/redo feedback does not clearly tell the user what action will be undone/redone.
+- Search/review/edit surfaces emphasize calories more than macros; protein/carbs/fat visibility needs work.
+- Food search appears to surface only one source family at a time instead of a useful combined candidate set from IFCT, USDA, user foods, recipes, and curated dish data.
+- Recipe ingredient rows do not clearly show the calories/macros contributed by the entered ingredient quantity.
+
+#### Indian Dish / Unknown Dish
+- There are **362 canonical dish records: 50 CURATED and 312 DRAFT_CURATED**.
+- The 312 drafts are **not trusted ready-to-log dishes** and must never be presented as such.
+- The current unknown-dish builder is a **manual deterministic fallback**, not semantic dish decomposition.
+- Unrelated unknown dishes can receive the same generic base-ingredient/fat/method choices. Do not call that dish-specific understanding.
+- A real dish editor/decomposition flow still needs dish-specific ingredients, editable quantities, yield, fat, portions, provenance, and uncertainty.
+
+#### Training
+- Training is **not complete** despite older planning documents claiming otherwise.
+- The Exercise Library has a confirmed serious device bug: it can show 0 exercises for 10–15 seconds, later load ~225, then fail selection; Done and Android Back can fail, trapping the user.
+- Active workout, rest timer, abandoned-workout recovery, history, unit handling, and the complete training journey still need a focused verification/fix pass.
+
+#### Progress / Reports / Check-ins
+- Analytics code exists, but user-facing verification is incomplete.
+- Charts may still have poor axes, misleading scale, weak touch interaction, and unclear sparse-data behavior.
+- Weekly/monthly reports and check-in discovery/consistency still require physical and arithmetic verification.
+
+#### Settings / Onboarding / Backup
+- Settings/profile management and onboarding remain partial.
+- Do not assume every onboarding promise is wired to production behavior.
+- Destructive restore/reset flows must not be tested casually against the owner's active data.
+
+#### AI / Photo
+- The user has not yet configured AI provider credentials for current QA.
+- Cloud AI behavior, assistant writes, semantic text decomposition, and photo recognition must therefore be treated as **NOT TESTED**, not failed and not complete.
+- AI features must route through the same reviewed deterministic logging path as manual food entry.
+
+#### Deferred physical checks
+- Full hardware network isolation and full device reboot persistence are currently deferred because the phone supplies internet connectivity to the development environment.
+- Process-level force-stop/relaunch is allowed and already used.
+
+### 0.3 Current priority order
+
+Unless the owner explicitly changes priority, prefer this order:
+
+1. **Training core reliability** — Exercise Library selection/navigation/loading, then active workout.
+2. **Food product-quality gaps** — merged source results, repeat timestamp, macro visibility, Home/day navigation, clearer undo/redo, recipe ingredient contributions.
+3. **Real Indian-dish workflow** — browseable dish library + dish-specific ingredient/quantity editor; do not fake semantic decomposition.
+4. **Workout UX/recovery/rest timer/units/history**.
+5. **Progress, analytics, reports, check-ins** with real data verification.
+6. **Settings, onboarding, backup/restore UX, global navigation, cross-app visual hierarchy**.
+7. **AI assistant/text interpretation/photo integration** after provider credentials are configured and the deterministic review pipeline is ready.
+
+Do not work from stale phase labels alone. Current user-visible evidence outranks an old “COMPLETE” row.
+
+---
+
+## 1. Source-of-Truth Precedence
+
+When information conflicts, use this order:
+
+1. **Explicit instructions from the project owner in the current task/conversation.**
+2. **Current physically verified user/device behavior and reproducible bug reports.**
+3. **Non-negotiable product decisions in the master-plan PDF and accepted planning decisions.**
+4. **Task acceptance criteria / ADRs / data-license requirements.**
+5. **Reproducible current repository behavior and automated tests.**
+6. **PLAN.md / VERIFICATION.md / walkthrough.md.**
+7. **README.md or other descriptive/marketing text.**
+
+Important consequences:
+
+- A green test cannot overrule a reproducible device bug.
+- A stale planning row marked `COMPLETE` cannot overrule a broken user journey.
+- README language is not proof of implementation.
+- If two higher-level requirements genuinely conflict, stop and report the conflict rather than choosing whichever is easiest to code.
+
+---
 
 ## 2. Repository Discipline
 
-- **This IS the application.** All work happens inside this monorepo. Do not
-  create a separate starter app, greenfield Expo project, parallel demo, or
-  replacement scaffold. Evolve the existing codebase.
-- **Do not commit or push** unless the task file explicitly requests it and the
-  project owner has approved.
-- **Inspect `git status`** before writing any file. Preserve all user changes
-  and unrelated work.
-- **Do not delete branches, rewrite Git history, or reset the worktree.**
+- **This monorepo is the product.** Do not create a replacement Expo app, demo app, alternate scaffold, or parallel rewrite unless the owner explicitly requests it.
+- Run `git status --short` before editing and record the baseline.
+- The worktree is intentionally dirty during development. Preserve unrelated edits.
+- **Do not commit, push, reset, clean, rebase, rewrite history, or delete branches** unless explicitly approved.
+- Do not mass-format unrelated files.
+- Do not delete apparently unused code before finding all callers and understanding whether it is part of a pending flow.
+- If an implementation task becomes blocked by a deeper issue, document the blocker. Do not opportunistically redesign half the app.
 
-## 3. Database Safety
+---
 
-- **Never edit the v1 migration** (`MIGRATIONS[0]` in
-  `packages/db-adapter/src/schema.ts`). It has shipped to real devices.
-- **Add forward-only migrations.** Each gets a new version number and its own
-  `Migration` entry. See `migrate.ts` for the runner.
-- **Every new persistent table** must be added to the backup allowlist in
-  `apps/mobile/src/data/backup-core.ts` (`EXPORT_TABLES`), exported in
-  foreign-key-safe order, and round-trip tested.
-- **Never silently rewrite historical data.** Logged nutrition snapshots are
-  immutable. Recipe edits create versions. Exercise replacement never merges
-  histories.
+## 3. Evidence Language — Mandatory
 
-## 4. Package Purity
+Every important claim must use one of these evidence classes:
 
-- `packages/*` MUST stay React-Native-free and importable under bare Node.
-- This is enforced by `npm run check:node-purity` and is load-bearing: the eval
-  harness runs the real engine under Node.
-- The Expo SQLite adapter lives in `apps/mobile/src/db/`, NOT in `packages/`.
-- When adding a new shared package, update the node-purity gate script
-  (`scripts/check-node-purity.mjs`) to include it.
+- **PHYSICALLY VERIFIED** — directly observed on the real device through the actual user path.
+- **AUTOMATICALLY VERIFIED** — confirmed by a test, command, DB query, build tool, or deterministic artifact check.
+- **CODE-INSPECTED** — supported by source inspection only.
+- **INFERRED** — expected from architecture but not directly proven.
+- **NOT TESTED** — no valid evidence.
+- **DEFERRED** — intentionally postponed for a named reason.
+
+Do not collapse these into a vague “PASS”.
+
+### 3.1 Words that require explicit evidence
+
+Do not use these casually:
+
+- complete
+- fully verified
+- production-ready
+- flawless
+- robust
+- guaranteed
+- zero data loss
+- safe
+- all criteria met
+- works offline
+
+If you use one, state the evidence immediately.
+
+### 3.2 Self-review is not independent verification
+
+An agent that wrote a feature must not treat its own summary as final proof.
+
+Preferred sequence:
+
+1. implement
+2. run targeted tests
+3. run full gate
+4. exercise the production path
+5. attempt adversarial failure cases
+6. have a separate reviewer/subagent inspect the result where practical
+
+For every feature believed correct, ask:
+
+> “What is one realistic way this could still be wrong?”
+
+Attempt that case before declaring completion.
+
+---
+
+## 4. Subagent / Multi-Agent Protocol
+
+If the environment supports subagents, use them to reduce context overload, not to create chaos.
+
+### Good uses
+- independent repository research
+- training vs progress vs settings audits in parallel
+- hostile review of an implementation
+- targeted root-cause analysis
+- device/logcat investigation separate from code inspection
+
+### Rules
+- The coordinator owns the final synthesis.
+- Audit subagents should default to **read-only**.
+- Do not have multiple editing agents change the same files concurrently unless isolated worktrees/branches are used.
+- Give each subagent a narrow contract and required evidence format.
+- Do not ask five subagents to “review the whole app”.
+- Do not treat subagent agreement as proof; two models can confidently agree on the same false inference.
+- Require subagents to report `PHYSICALLY VERIFIED / AUTOMATICALLY VERIFIED / CODE-INSPECTED / INFERRED / NOT TESTED`.
+
+For large QA passes, prefer domain splits such as:
+
+- Training + Exercise Library
+- Progress + Analytics
+- Reports + Check-ins
+- Profile + Settings + Onboarding
+- Global navigation + UI/UX + performance
+
+---
 
 ## 5. Immutable Product Principles
 
-Every agent must respect these in code, tests, and UI:
+1. **AI interprets; deterministic systems decide numbers.**
+   - Models may identify foods, parse text, suggest components, or ask clarifying questions.
+   - Models never own final calories, macros, micronutrients, PRs, report aggregates, target math, or historical facts.
 
-1. **AI interprets; deterministic systems decide numbers.** Models may identify
-   food or parse language. They never own final totals, historical facts, PRs,
-   adaptive targets, or report numbers.
-2. **Offline is a real mode, not an error screen.** With airplane mode and no API
-   key, users can search, log, edit, train, view history, export, and recover.
-3. **Historical records are stable.** Immutable per-100g snapshots at log time.
-   Recipe edits create versions. No silent rewrites.
-4. **Unknown ≠ zero.** Missing micronutrients stay unknown.
-5. **Uncertainty is honest.** Show ranges and contributors. Model self-confidence
-   is not calibrated probability.
-6. **Conflicts are surfaced**, not silently averaged.
-7. **Fast and calm daily interaction.** No shame colors, no streak manipulation,
-   no beginner clutter with advanced metrics.
-8. **Nutrition and training are one product** sharing identity, timeline, sync.
-9. **No separate Home Workout silo.** Location is metadata; equipment determines
-   suggestions.
-10. **User control wins.** AI suggestions require review. Writes are explicit,
-    undoable, auditable.
-11. **Private by default.** Photos local unless explicitly synced. EXIF/GPS
-    stripped before cloud. Users control retention.
-12. **No single health score.** Use transparent metrics and reports.
+2. **Unknown is not zero.**
+   - Missing nutrient values remain unknown/null unless a source explicitly says zero.
 
-## 6. Licensing
+3. **Historical records are stable.**
+   - Log-time per-100g snapshots are immutable.
+   - Recipe edits create versions.
+   - Later corpus updates do not silently rewrite old meals.
 
-- Preserve **AGPL-3.0-or-later** and the **§7 app-store permission**.
-- Track code and data licenses separately. See `THIRD-PARTY-DATA.md`.
-- **IFCT** is authorized for public inclusion by the project owner. Use it
-  through the `IFCTSource` adapter. Preserve attribution and provenance.
-- Open Food Facts has separate license/provenance obligations.
-- Never flatten source provenance into an untraceable master table.
+4. **User control wins.**
+   - Suggestions require review.
+   - Writes are explicit.
+   - Important mutations are undoable/auditable.
 
-## 7. Testing Requirements
+5. **Offline-first core.**
+   - Search, food logging, custom foods, recipes, training, history, and deterministic analytics must not require a cloud model.
+   - True hardware network isolation remains a release-gate test even when local code paths appear network-independent.
 
-Every implementation task MUST add or update tests. Required gates:
+6. **Uncertainty is honest.**
+   - A generic prior is not a measurement.
+   - Model self-confidence is not calibrated probability.
+
+7. **Conflicts are surfaced, not averaged away.**
+
+8. **No single opaque health score.**
+   - Prefer transparent metrics and reports.
+
+9. **Nutrition + training are one product.**
+   - Shared identity, timeline, history, settings, and future sync rules.
+
+10. **Privacy by default.**
+    - Photos local unless explicitly uploaded.
+    - Strip EXIF/GPS before cloud use.
+    - Never ship shared production provider secrets.
+
+11. **Fast, calm interaction.**
+    - No shame colors.
+    - No manipulative streak UX.
+    - Do not bury the primary daily action under developer/admin controls.
+
+---
+
+## 6. Nutrition and Food Rules
+
+### 6.1 Source hierarchy and provenance
+
+Every nutrition number must remain attributable to its source.
+
+Prefer, in practical order:
+
+1. exact packaged label / verified barcode
+2. user-measured recipe / household recipe
+3. curated Indian Dish KB recipe
+4. authoritative composition data such as IFCT
+5. official restaurant nutrition
+6. Open Food Facts where license/provenance permits
+7. USDA FoodData Central
+8. generic prior / structured estimate
+9. AI-only estimate only as an explicit last resort
+
+Do not flatten source identity into an untraceable master table.
+
+### 6.2 Search must not hide useful sources
+
+Do not implement “first source wins” if the product requirement is to let the user choose among meaningful candidates.
+
+When relevant, a search result set should be able to include:
+- IFCT
+- USDA
+- custom/user foods
+- household recipes
+- CURATED Indian dishes
+- packaged/barcode results
+
+Ranking may prioritize, but it must not silently erase useful alternate sources.
+
+### 6.3 Indian Dish KB status semantics
+
+- `DRAFT_CURATED`: structured draft; **not trusted nutrition-ready**.
+- `CURATED`: meaningfully reviewed recipe structure/ingredients/ratios/yield/portion with honest provenance.
+- `VERIFIED`: stricter evidence level; do not promote merely because IDs resolve or validators pass.
+
+Current reality: 50 CURATED, 312 DRAFT_CURATED.
+
+### 6.4 Unknown-dish fallback
+
+The current fallback is manual deterministic estimation.
+
+Never describe it as:
+- semantic dish understanding
+- mapped recipe decomposition
+- verified Indian dish nutrition
+
+unless the runtime actually has dish-specific component knowledge.
+
+A future proper flow should support:
+- dish/component candidates
+- editable ingredient list
+- ingredient quantities
+- cooking fat quantities
+- yield/cooked weight
+- portion strategy
+- uncertainty/provenance
+- high-impact clarification questions
+- deterministic final totals
+
+### 6.5 Food review UX
+
+Before persistence, the user should be able to understand/review the important facts:
+- food name
+- source/provenance
+- serving/count/grams
+- calories
+- protein/carbs/fat
+- selected date
+- meal slot
+- important assumptions when relevant
+
+Do not make calories the only visible nutrition signal while macros silently log in the background.
+
+---
+
+## 7. Training Rules
+
+Training is currently a high-risk area. Do not rely on older `Phase 3 COMPLETE` language.
+
+### 7.1 Exercise Library
+
+A valid Exercise Library journey must prove:
+- loading state is explicit
+- 0 exercises is not rendered as a fake final state while loading
+- rows become selectable
+- selected exercises return to the correct origin
+- Done/Confirm works
+- Android Back works
+- routine/program/workout contexts are preserved
+- loading does not take an unexplained 10–15 seconds without feedback
+
+### 7.2 Active workout
+
+Verify the actual user flow:
+- add exercise
+- add/edit/complete set
+- warmup vs working set
+- RPE/RIR where supported
+- duplicate/delete
+- previous values
+- rest timer
+- background/force-stop recovery
+- finish summary
+- history persistence
+
+Editing a completed set must not silently make it incomplete unless the user intentionally changes completion state.
+
+### 7.3 Units
+
+Canonical persisted load may remain kg, but display/input must respect the user's unit preference consistently across:
+- workout entry
+- previous sets
+- history
+- PRs
+- strength charts
+- reports
+- equipment/plate tools
+
+No scattered hardcoded `kg` labels.
+
+### 7.4 Abandoned sessions
+
+A stale active workout must not accumulate absurd duration forever.
+Provide a clear recovery decision when required: resume, discard, or correct duration.
+
+---
+
+## 8. UI / UX Rules
+
+Treat UI quality as product correctness, not decoration.
+
+### 8.1 Visual hierarchy
+
+- One obvious primary action per screen/state.
+- Secondary actions should not compete equally with the main task.
+- Avoid flat black-on-black layouts where cards/actions are visually indistinguishable.
+- Use spacing, elevation/borders, typography, and restrained accent treatment to create hierarchy.
+- Home should prioritize daily status, eaten/remaining nutrition, weight/check-in, and workout resume rather than duplicating full diary administration.
+
+### 8.2 Navigation
+
+- Back must always have a defined outcome.
+- No trapped screens.
+- `Done`, `Save`, `Finish`, `Cancel`, `Back`, and `Close` must have consistent meanings.
+- Preserve route context such as selected day and active workout origin.
+- A global search label must match what it actually searches.
+
+### 8.3 Forms
+
+- Preserve user input after validation failure.
+- Intermediate numeric text (`""`, `"1."`) must not explode into NaN state.
+- Dirty forms warn before destructive exit.
+- Keyboard must not hide required controls.
+- Rapid repeated taps must not create duplicate writes.
+
+### 8.4 Feedback
+
+Every async mutation needs clear states where relevant:
+- idle
+- pending
+- success
+- failure + retry
+
+Never show “saved successfully” before the write actually succeeds.
+
+### 8.5 Undo / redo
+
+Contextual undo must target a known operation ID/scope.
+The UI should tell the user what will be undone/redone, not just display anonymous “Undo” / “Redo”.
+
+### 8.6 Charts
+
+Charts must not visually exaggerate tiny changes without context.
+Use:
+- understandable dates/axes
+- sensible padding/domains
+- visible gaps for missing periods
+- practical touch/scrub regions
+- accessible textual summaries
+- correct unit formatting
+
+Never use internal session IDs as user-facing time axes.
+
+---
+
+## 9. AI / Assistant / Photo Rules
+
+### 9.1 No credentials means NOT TESTED
+
+Current QA has no configured provider key. Do not mark cloud behavior PASS/FAIL from absence of credentials.
+
+### 9.2 Structured observation only
+
+For food photos/text, AI should produce structured observations/candidates, not authoritative nutrition numbers.
+
+Expected high-level pipeline:
+
+`text/photo -> structured interpretation -> resolver/dish KB/ingredient mapping -> clarification if valuable -> Food Review -> deterministic calculation -> explicit save`
+
+### 9.3 Assistant writes
+
+- Proposal generation is not persistence.
+- A success message requires a completed write.
+- Writes must be validated, awaited, idempotent where appropriate, and produce pending/saved/failed/cancelled states.
+- Unsupported actions must be explicit rather than silently faked.
+
+### 9.4 Photo privacy and durability
+
+- Strip EXIF/GPS before cloud upload.
+- Pending scan state that promises recovery must be durable, not memory-only.
+- Retry must preserve capture mode and user corrections.
+- No shared production API secret in app bundle.
+
+---
+
+## 10. Database and Persistence Safety
+
+- Never edit the shipped v1 migration in `packages/db-adapter/src/schema.ts`.
+- Add forward-only numbered migrations.
+- Every new persistent table must be added to backup/export rules in FK-safe order and round-trip tested.
+- Multi-step writes must be transactional.
+- Undo/redo must preserve complete aggregates, including child rows and relevant ledger/provenance data.
+- Do not use destructive `INSERT OR REPLACE` patterns when they can detach/delete related rows.
+- Do not silently omit tables during restore.
+- Legacy/malformed data must be deterministically repaired when allowed or rejected with a clear error.
+
+---
+
+## 11. Package Purity
+
+- `packages/*` must remain React-Native-free and importable under bare Node.
+- Expo/native adapters belong under `apps/mobile`.
+- New shared packages must be included in `scripts/check-node-purity.mjs`.
+- Preserve explicit `.js` package import specifiers where required by the current Node/Metro compatibility setup.
+
+---
+
+## 12. Licensing and Data Governance
+
+- Preserve AGPL-3.0-or-later and the existing §7 app-store permission.
+- Track code and data licensing separately.
+- Preserve IFCT attribution/provenance and adapter boundaries.
+- Open Food Facts has separate ODbL/provenance obligations.
+- Do not silently ingest new datasets without documenting license, attribution, version, build process, and redistribution constraints.
+
+---
+
+## 13. Testing Requirements
+
+Every nontrivial implementation must add/update relevant tests.
+
+Core commands:
 
 ```bash
-npm run lint          # zero unexpected warnings
-npm run typecheck     # strict TypeScript for all packages + app
-npm run test          # vitest — unit + property + integration
-npm run check:node-purity  # all shared packages Node-importable
-npm run data:verify   # golden-query gate
+npm run lint
+npm run typecheck
+npm run test
+npm run check:node-purity
+npm run data:verify
+npm run ifct:verify
+npm run indian-dishes:verify
+npm run check
 ```
 
-Full gate: `npm run check`
+Current reference baseline at the time of this document:
+- 71 Vitest files
+- 583 tests
+- 18/18 node-pure shared packages
+- USDA golden-query gate passing
+- 528-row IFCT Table 1 corpus verification passing
+- 362 Indian dishes: 50 CURATED, 312 DRAFT_CURATED
 
-### Test types per change:
-- **Schema/migration**: migration tests from every shipped version
-- **Deterministic rules**: unit tests with edge cases
-- **Numeric invariants**: property tests (fast-check)
-- **Backup**: export/import round-trip tests
-- **UI routes**: component tests where valuable
-- **New packages**: add to node-purity gate
+If counts change, update PLAN.md and VERIFICATION.md after the full gate.
 
-## 8. Evidence-Driven Task Workflow
+### Required test style by change
 
-Passing tests are evidence, not proof that a product task is complete. An agent
-must prove that the task's contract is implemented through the real application
-paths and survives the relevant failure and recovery paths.
+- schema/migration: migration tests from every shipped version affected
+- deterministic math: unit + boundary tests
+- numeric invariants: property tests where useful
+- persistence: real repository/service path, not duplicated SQL in tests
+- backup: export/import/rollback/legacy tests
+- undo/redo: scoped operation tests with intervening unrelated actions
+- UI: production-path tests plus real device acceptance where interaction matters
+- performance-sensitive loading: timing/instrumentation plus device observation
 
-### 8.1 Orient Before Planning
+---
 
-1. Read this file (`AGENTS.md`).
-2. Run `git status --short`; preserve all existing work and record the baseline.
-3. Read `PLAN.md`, `docs/tasks/TASK_INDEX.md`, and the assigned task file.
-4. Read every linked requirement, ADR, data-license note, and relevant open
-   question. Do not plan from the task title alone.
-5. Inspect the current implementation and tests before proposing files or APIs.
-   Search for all readers, writers, migrations, backup entries, UI callers, and
-   platform adapters affected by the contract.
-6. Reproduce the current focused and full validation baselines. Distinguish a
-   pre-existing failure from one introduced by the task.
+## 14. Task Workflow
 
-### 8.2 Build an Acceptance Map
+### 14.1 Before editing
 
-Before editing, translate prose into a small internal acceptance map:
+1. Read this file.
+2. `git status --short`.
+3. Read PLAN.md and the assigned task/ADR.
+4. Inspect current implementation and all relevant callers.
+5. Reproduce the reported bug where possible.
+6. Build an acceptance map before touching architecture.
 
-| Requirement | Production path | Persistence/recovery impact | Test evidence | Runtime evidence |
-|---|---|---|---|---|
-| What must be true | Every real caller that must enforce it | Migration, backup, undo, sync, restart | Unit/property/integration test | Device/browser/data inspection |
+### 14.2 Acceptance map
 
-Use the map to find omissions. For example, adding UUID columns to a schema does
-not satisfy an identity requirement if onboarding, manual logging, exercise
-logging, or updates can still write null UUIDs. Testing a helper directly does
-not prove those production write paths call it.
+For each requirement identify:
 
-For each requirement, explicitly inspect these dimensions when relevant:
+| Requirement | User path | Writers/readers | Persistence/recovery | Automated evidence | Runtime evidence |
+|---|---|---|---|---|---|
 
-- **Create, update, delete, undo, and redo**, including idempotent replay.
-- **Fresh install and every shipped migration path**, with populated rows.
-- **Backup export, validation, import, rollback, and legacy-format import**.
-- **Process restart, offline behavior, and interrupted operations**.
-- **UI reachability and feedback**, including empty, error, and only-item states.
-- **Boundary validation and security**, including malformed and untrusted input.
-- **Data provenance and licensing**, especially for nutrition sources.
+Look for bypasses:
+- alternate write paths
+- direct SQL
+- stale UI state
+- background/process recovery
+- backup/restore
+- undo/redo
+- old migrations
+- route context
 
-### 8.3 Plan in Dependency and Risk Order
+### 14.3 Implement in dependency order
 
-1. Respect task dependencies and migration order. Do not start a blocked task
-   because its UI looks convenient to build first.
-2. Implement foundational contracts before their callers: types and invariants,
-   then migrations/storage, domain helpers, production adapters/write paths, UI,
-   and finally documentation.
-3. Identify high-risk invariants before coding. Examples include no data loss,
-   immutable nutrition snapshots, unknown not becoming zero, stable UUIDs,
-   atomic replay, and complete backup restoration.
-4. Keep scope inside the assigned task, but fix every production path required
-   for that task to be truthful. A narrowly passing helper with unwired callers
-   is unfinished, not good scope discipline.
-5. If the task text conflicts with a higher source of truth, follow the
-   precedence in Section 1 and document the discrepancy.
+Prefer:
 
-### 8.4 Implement From the Invariant Outward
+`schema/invariant -> domain API -> persistence -> all callers -> UI -> tests -> docs`
 
-1. Encode critical invariants at the strongest practical boundary: schema
-   constraints/triggers for persisted data, typed and validated domain APIs for
-   application input, and allowlists for dynamic database operations.
-2. Wire the shared implementation into **all** real mutation paths. Search again
-   after editing to catch bypasses and direct SQL writes.
-3. Keep multi-step writes atomic. Idempotency checks and writes belong in the
-   same transaction; backup import must either restore the whole valid snapshot
-   or leave the existing database unchanged.
-4. Preserve complete aggregates. Undoing or backing up a meal includes its
-   children and associated ledger/provenance rows, not only the parent record.
-5. Never use destructive convenience behavior such as silent table omission,
-   partial restore, or `INSERT OR REPLACE` when it can delete or detach related
-   rows.
-6. Treat legacy and malformed data as first-class cases. Forward migrations must
-   repair allowed legacy states deterministically or reject invalid states with
-   a clear error.
-7. Add tests while implementing so each discovered failure becomes a permanent
-   regression test.
+Do not start with cosmetic UI if the underlying contract is still wrong.
 
-### 8.5 Verify in Layers
+### 14.4 Verification layers
 
-Run verification from fastest and narrowest to broadest:
+1. static inspection
+2. focused tests
+3. production-path integration tests
+4. migration/recovery tests when relevant
+5. full `npm run check`
+6. `git diff --check`
+7. `git status --short`
+8. real-device acceptance where required
+9. adversarial failure case
 
-1. **Static inspection:** search for bypassing callers, stale schema versions,
-   incomplete backup allowlists, unsafe SQL interpolation, and false status text.
-2. **Focused tests:** exercise the changed unit or package and its edge cases.
-3. **Production-path integration tests:** call the same repository/service API
-   used by the app against a real in-memory database; do not duplicate its SQL in
-   the test.
-4. **Migration and recovery tests:** start from populated old schemas, migrate,
-   restart, export/import, corrupt input, and verify rollback/data equality.
-5. **Full gate:** run `npm run check` and report exact counts/results.
-6. **Artifact checks:** run `git diff --check`, Markdown/local-link validation,
-   and inspect `git status --short`.
-7. **Runtime verification:** when required, build and run the actual mobile/web
-   application. Perform the task file's exact manual journey and inspect durable
-   state after restart. A successful compilation or app launch alone is not the
-   journey.
+If runtime verification cannot be performed, mark it `NOT TESTED` or `DEFERRED`. Never infer it from compilation.
 
-If a runtime step cannot be performed, record it as pending. Do not convert an
-automated pass into a manual pass by inference.
+---
 
-### 8.6 Completion Is an Evidence Decision
+## 15. Completion Rules
 
-Use status words truthfully:
+Use task statuses truthfully:
 
-- `unstarted`: no implementation work has begun.
-- `ready`: dependencies are satisfied and work may begin.
-- `in_progress`: implementation or any required automated/manual verification is
-  still outstanding.
-- `blocked`: a named external decision or dependency prevents progress.
-- `deferred`: intentionally postponed by the roadmap or owner.
-- `complete`: every acceptance criterion and required automated and manual check
-  has passed, with no known contract gap.
+- `unstarted`
+- `ready`
+- `in_progress`
+- `blocked`
+- `deferred`
+- `complete`
 
-Before marking `complete`, re-read the task from top to bottom and check each
-acceptance criterion individually. Then update the task file,
-`docs/tasks/TASK_INDEX.md`, `PLAN.md`, and any verification count or schema
-version affected by the work. Never write "100% complete" while required device,
-browser, data, permission, or recovery checks remain pending.
+A task may be `complete` only when every required acceptance criterion has valid evidence and there is no known contract gap.
 
-### 8.7 Phase 1 Case Study: How to Audit a Plausible Implementation
+### Never mark complete when:
+- the main user journey is broken
+- required device testing is pending
+- a feature only exists as a route/component but is not reachable/usable
+- tests pass but a reproducible physical bug remains
+- a fallback is being mislabeled as the full feature
+- the UI claims success before persistence
+- the documentation disagrees with current behavior
 
-Phase 1 initially looked complete: migrations existed, helpers had tests, the
-suite passed, and the app built. A contract audit still found important gaps:
+When finishing a task, update:
+- its task file
+- `docs/tasks/TASK_INDEX.md`
+- `PLAN.md`
+- `VERIFICATION.md` where evidence changed
+- README only if user-facing public claims changed
 
-- UUID/sync columns were added and old rows were backfilled, but several normal
-  app write paths could create new rows without that metadata.
-- Undo restored a meal and items but omitted related scan-cost ledger rows; a
-  convenience replace operation could damage relationships.
-- Operation helpers accepted dynamic entity and column names without strict
-  allowlists, and idempotency checks were not consistently atomic.
-- Backup import could accept an incomplete table set and then erase omitted
-  tables; nested local photo paths were not fully scrubbed.
-- Day-status validation lived in a helper but could be bypassed by direct writes.
-- The undo control disappeared in the empty state after deleting the only meal.
-- Documentation reported completion before the required Android journeys ran.
+---
 
-The correction process was:
+## 16. Documentation Rules
 
-1. Convert each task requirement into invariants and list every production
-   writer/reader that could uphold or bypass it.
-2. Add database-level protections and deterministic migration repairs where
-   persisted correctness mattered.
-3. Route onboarding, meal, manual-food, weight, goal, and exercise writes through
-   the corrected contracts.
-4. Make operations, backup, and undo preserve complete related data and fail
-   atomically on invalid input.
-5. Add production-path integration tests and adversarial migration/backup tests,
-   not only helper tests.
-6. Run the full gate, link/diff checks, build the Android app, migrate a populated
-   physical-device database, inspect schema/data/triggers, and cold-restart it.
-7. Leave tasks requiring unperformed tap-throughs as `in_progress` even though
-   all automated checks passed.
+Documentation must distinguish:
+- implemented
+- automatically verified
+- physically verified
+- partially verified
+- deferred
+- not tested
 
-The reusable lesson is: reason from observable product invariants toward code,
-then gather independent evidence back from code toward the user journey. File
-existence, test count, compilation, and confident prose are never substitutes
-for that closed loop.
+Do not preserve stale test counts or stale “phase complete” claims.
 
-## 9. Scope Discipline
+README is public-facing and should be concise and honest.
+PLAN is the current execution/status map.
+VERIFICATION is evidence, not narrative optimism.
+walkthrough.md is a specific user-flow verification artifact, not the global project status.
+AGENTS.md is the binding engineering contract.
 
-- Implement exactly what the task file specifies.
-- Do not refactor unrelated code.
-- Do not add features not in the current task.
-- Do not rename files that other tasks reference unless the task requires it.
-- If you discover a blocking issue, document it and stop. Do not improvise a
-  redesign.
+---
 
-## 10. Commands Reference
+## 17. Physical Device Constraints for Current Development
+
+Current primary device: Android Samsung Galaxy M14 5G.
+
+Current constraint:
+- the phone may provide internet connectivity to the development environment
+- therefore do not disable connectivity or reboot it during an active tethered session unless the owner explicitly approves
+
+Allowed:
+- ADB inspection
+- screenshots
+- logcat
+- `am force-stop`
+- relaunch
+- non-destructive database inspection
+- normal user interaction
+
+Destructive reset/import/uninstall requires explicit approval.
+
+---
+
+## 18. Commands Reference
 
 ```bash
-# Development
-npm install                    # install all workspace deps
-npm run check                  # full gate: lint + typecheck + test + purity + data
-npm run test                   # vitest only
-npm run test -- --watch        # vitest watch mode
+# Baseline
+npm install
+npm run lint
+npm run typecheck
+npm run test
+npm run check:node-purity
+npm run data:verify
+npm run ifct:verify
+npm run indian-dishes:verify
+npm run check
 
-# Data pipeline
-npm run data:build             # build USDA nutrition.db
-npm run data:verify            # golden-query validation
+# Diff / state
+git status --short
+git diff --check
 
 # Mobile
 cd apps/mobile
-npx expo run:android --variant release   # build to device
-npm run typecheck                         # app-level typecheck
+npm run typecheck
+npx expo run:android --variant release
 
-# Purity
-npm run check:node-purity      # verify packages/* are Node-clean
+# Existing native release build path may also use Gradle directly
+cd apps/mobile/android
+./gradlew assembleRelease
 ```
 
-## 11. File Conventions
+Use Java/Android environment settings already proven for this repository. Do not casually change Gradle/JDK configuration while solving an unrelated product bug.
 
-- TypeScript strict mode everywhere.
-- Explicit `.js` import specifiers in `packages/*` (Metro compatibility).
-- Zod schemas in `@nutai/core-schema` for all domain contracts.
-- SQL migrations in `packages/db-adapter/src/schema.ts`.
-- Backup table allowlist in `apps/mobile/src/data/backup-core.ts`.
-- API keys in `expo-secure-store`, never in database or backups.
+---
 
-## 12. What Never Ships
+## 19. What Never Ships
 
-- Shared production API secrets in APK/web bundle/Expo config.
-- User photos with EXIF/GPS metadata to cloud services.
-- Unvalidated AI/OCR output treated as system instructions.
-- A single "health score" number.
-- Social feed, leaderboard, gamification, supplement marketplace.
-- Exercise-form camera scoring, smartwatch OS, GPS running platform.
+- shared production provider/API secrets in APK/web bundle/config
+- user photos with EXIF/GPS sent to cloud
+- unvalidated model/OCR output treated as trusted system data
+- fake save confirmations
+- missing nutrition silently converted to zero
+- DRAFT_CURATED dishes presented as verified nutrition
+- generic unknown-dish fallback presented as semantic decomposition
+- opaque health score
+- social feed / leaderboard / manipulative gamification
+- destructive data migration without explicit versioned migration and recovery tests
+
+---
+
+## 20. Final Agent Checklist
+
+Before ending an implementation task, answer all of these:
+
+1. What exact user-visible problem did I solve?
+2. What production path changed?
+3. What data invariant could I have broken?
+4. Did I inspect every real caller/writer?
+5. What tests were added?
+6. What full gates were run?
+7. What was physically verified?
+8. What remains only code-inspected/inferred?
+9. What adversarial case did I try?
+10. Did I introduce or preserve any false UI/documentation claim?
+11. Did I leave unrelated dirty work untouched?
+12. What is still NOT TESTED?
+
+If the answer to #12 is non-empty, report it plainly.

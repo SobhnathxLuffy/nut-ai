@@ -21,7 +21,7 @@ export type Goal = 'lose' | 'maintain' | 'gain'
 /** kcal per pound of body mass. The industry-standard simplification. */
 export const KCAL_PER_LB = 3500
 
-export const LB_PER_KG = 2.20462
+export const LB_PER_KG = 2.2046226218
 
 export interface BodyInputs {
   sex: Sex

@@ -39,10 +39,10 @@ async function main() {
   
   const insertDish = db.prepare(`
     INSERT INTO dish_definitions (
-      id, canonical_name, category, family, parent_dish_id,
+      id, search_rowid, canonical_name, category, family, parent_dish_id,
       cooking_methods_json, yield_model_json, recipe_template_json,
       portion_model_json, uncertainty_model_json, resolver_config_json, record_status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
   
   const insertAlias = db.prepare('INSERT INTO dish_aliases (dish_id, alias, is_search_term) VALUES (?, ?, ?)')
@@ -55,6 +55,7 @@ async function main() {
       count++
       insertDish.run(
         dish.id,
+        count,
         dish.canonicalName,
         dish.category,
         dish.family,

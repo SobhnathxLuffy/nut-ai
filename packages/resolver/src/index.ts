@@ -25,7 +25,7 @@ export interface NutritionSourceContext {
 function sourceRouter(nutritionDb: DbAdapter, context: NutritionSourceContext = {}): RouterSource {
   const sources = [
     ...(context.userDb ? [new UserFoodSource(context.userDb), new RecipeSource(context.userDb)] : []),
-    new DishKBSource(nutritionDb), // Priority is managed in scores, but order matters for short-circuits if needed
+    new DishKBSource(nutritionDb, context.ifctDb), // Draft dishes remain searchable but cannot resolve to nutrition.
     ...(context.ifctDb ? [new IFCTSource(context.ifctDb)] : []),
     new USDASource(nutritionDb),
     new OpenFoodFactsSource(),
@@ -107,7 +107,10 @@ export async function resolveByText(
   const normalizedLadder = matchLadder(normalizeIndianAliases(ctx.canonicalFoodKey))
   const ladder = Array.from(
     { length: Math.max(literalLadder.length, normalizedLadder.length) },
-    (_, index) => [literalLadder[index], normalizedLadder[index]],
+    // A recognized Indian alias (toor -> red gram, idly -> idli) is the more
+    // specific database identity. Try it before a literal term that could hit a
+    // lower-priority draft dish and stop the source cascade prematurely.
+    (_, index) => [normalizedLadder[index], literalLadder[index]],
   ).flat().filter((expression, index, all): expression is string => Boolean(expression) && all.indexOf(expression) === index)
   const source = sourceRouter(db, context)
 

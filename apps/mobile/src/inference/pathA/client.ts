@@ -496,3 +496,97 @@ export async function runCorrectionIntent(
     return { ok: false, error: { kind: 'error-retryable', message: err.message, retryable: true } }
   }
 }
+
+export async function runAssistantChatApi(
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number },
+  fetchImpl: typeof fetch = fetch
+) {
+  const fallbacks: { provider: ProviderId, model: string }[] = [
+    { provider: 'openai', model: 'gpt-4o' },
+    { provider: 'anthropic', model: 'claude-3-5-sonnet-20240620' }
+  ];
+  let lastError;
+  for (const fallback of fallbacks) {
+    const res = await runAssistantChatApiSingle({ ...req, provider: fallback.provider, model: fallback.model }, fetchImpl);
+    if (res.ok || (res as any).error?.retryable === false) {
+      return res;
+    }
+    lastError = res;
+  }
+  return lastError || { ok: false, error: { kind: 'error-retryable', message: 'All providers failed', retryable: true } };
+}
+
+export async function runAssistantChatApiSingle(
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number },
+  fetchImpl: typeof fetch = fetch
+): Promise<{ ok: true; text: string } | { ok: false; error: ScanFailure }> {
+  try {
+    const credObj = await loadCredential(req.provider)
+    if (!credObj || !credObj.value) {
+      return { ok: false, error: { kind: 'key-invalid', message: `No credentials for ${req.provider}`, retryable: false } }
+    }
+    const cred = credObj.value
+
+    const payload = {
+      model: req.model,
+      messages: [
+        { role: 'system', content: req.systemPrompt },
+        { role: 'user', content: req.userPrompt }
+      ],
+    }
+
+    let url = ''
+    let headers: any = {}
+    let bodyStr = ''
+
+    if (req.provider === 'openai') {
+      url = 'https://api.openai.com/v1/chat/completions'
+      headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cred}`,
+      }
+      bodyStr = JSON.stringify(payload)
+    } else if (req.provider === 'anthropic') {
+      url = 'https://api.anthropic.com/v1/messages'
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': cred,
+        'anthropic-version': '2023-06-01',
+      }
+      bodyStr = JSON.stringify({
+        model: payload.model,
+        system: payload.messages.find((m) => m.role === 'system')?.content,
+        messages: payload.messages.filter((m) => m.role !== 'system'),
+        max_tokens: 1024,
+      })
+    } else {
+      return { ok: false, error: { kind: 'error-retryable', message: 'Unsupported provider', retryable: false } }
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), req.timeoutMs || 15000)
+    let resp;
+    try {
+      resp = await fetchImpl(url, { method: 'POST', headers, body: bodyStr, signal: controller.signal })
+    } finally {
+      clearTimeout(timer)
+    }
+    const json = await resp.json()
+
+    if (!resp.ok) {
+      const isAuth = resp.status === 401 || resp.status === 403;
+      return { ok: false, error: { kind: isAuth ? 'key-invalid' : 'error-retryable', message: json?.error?.message || 'API Error', retryable: !isAuth, httpStatus: resp.status } }
+    }
+
+    let text = ''
+    if (req.provider === 'openai') {
+      text = json.choices?.[0]?.message?.content || ''
+    } else if (req.provider === 'anthropic') {
+      text = json.content?.[0]?.text || ''
+    }
+
+    return { ok: true, text }
+  } catch (e: any) {
+    return { ok: false, error: { kind: 'error-retryable', message: e.message, retryable: true } }
+  }
+}

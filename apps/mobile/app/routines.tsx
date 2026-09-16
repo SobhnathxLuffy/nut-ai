@@ -1,22 +1,24 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { useCallback, useState } from 'react'
-import { View } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BackHandler, View } from 'react-native'
 import { RoutineInput, type ProgressionRule, type SetValues, type RoutineInput as RoutineInputType } from '@nutai/core-schema'
 import {
   listRoutines,
   saveRoutine,
   launchRoutine,
   listExercises,
+  getExercise,
   type Routine,
   type Exercise,
 } from '@nutai/training'
 import { db, localDate } from '../src/data/repo'
+import { consumePendingRoutineExercises } from '../src/data/routine-draft'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 
 const PROGRESSION_KINDS = ['double', 'fixed', 'percentage', 'rir', 'manual'] as const
 
 export default function RoutinesScreen() {
-  const params = useLocalSearchParams<{ id?: string }>()
+  const params = useLocalSearchParams<{ id?: string; addExerciseId?: string }>()
   const [routines, setRoutines] = useState<Routine[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([])
 
@@ -32,6 +34,20 @@ export default function RoutinesScreen() {
       rule: ProgressionRule
     }>
   >([])
+  const initialLoadedRef = useRef(false)
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (editing) {
+        setEditing(false)
+        initialLoadedRef.current = false
+        return true
+      }
+      router.back()
+      return true
+    })
+    return () => sub.remove()
+  }, [editing])
 
   const refresh = useCallback(async () => {
     const h = await db()
@@ -40,7 +56,8 @@ export default function RoutinesScreen() {
     setRoutines(rList)
     setExercises(eList)
 
-    if (params.id) {
+    if (params.id && !initialLoadedRef.current) {
+      initialLoadedRef.current = true
       const target = rList.find((r) => r.id === Number(params.id))
       if (target) {
         setEditId(target.id)
@@ -56,13 +73,75 @@ export default function RoutinesScreen() {
     }
   }, [params.id])
 
+  const handleAddExercise = useCallback(
+    async (exerciseId: number) => {
+      let ex = exercises.find((e) => e.id === exerciseId)
+      if (!ex) {
+        const h = await db()
+        const fetched = await getExercise(h, exerciseId)
+        if (fetched) ex = fetched
+      }
+      if (!ex) return
+      const defaultSet: SetValues = {
+        load_kg: ex.tracking_type === 'weight_reps' ? 20 : null,
+        reps: ['weight_reps', 'bodyweight_reps', 'reps', 'assisted'].includes(ex.tracking_type) ? 10 : null,
+        duration_s: ['distance_time', 'time', 'weight_time'].includes(ex.tracking_type) ? 60 : null,
+        distance_m: ['distance_time', 'distance'].includes(ex.tracking_type) ? 1000 : null,
+        assistance_kg: ex.tracking_type === 'assisted' ? 20 : null,
+        rir: null,
+        rpe: null,
+        tempo: null,
+      }
+
+      const defaultRule: ProgressionRule = {
+        kind: 'double',
+        increment: 2.5,
+        min_reps: 8,
+        max_reps: 12,
+        target_rir: 2,
+      }
+
+      setSelectedExercises((prev) => {
+        if (prev.some((se) => se.exercise_id === exerciseId)) return prev
+        return [
+          ...prev,
+          {
+            exercise_id: exerciseId,
+            group: null,
+            sets: [defaultSet, { ...defaultSet }, { ...defaultSet }],
+            rule: defaultRule,
+          },
+        ]
+      })
+    },
+    [exercises],
+  )
+
   const action = useAction(refresh)
   useFocusEffect(
     useCallback(() => {
-      void action.run(refresh)
-    }, [refresh]),
+      void action.run(async () => {
+        await refresh()
+        const pending = consumePendingRoutineExercises()
+        if (pending.length > 0) {
+          for (const id of pending) {
+            await handleAddExercise(id)
+          }
+          setEditing(true)
+        }
+      })
+    }, [refresh, handleAddExercise]),
   )
 
+  useEffect(() => {
+    if (params.addExerciseId) {
+      const id = Number(params.addExerciseId)
+      if (Number.isInteger(id) && id > 0) {
+        setEditing(true)
+        void handleAddExercise(id)
+      }
+    }
+  }, [params.addExerciseId, handleAddExercise])
   const handleSave = async () => {
     if (!name.trim()) throw new Error('Enter a routine name')
     if (!selectedExercises.length) throw new Error('Add at least one exercise to the routine')
@@ -78,45 +157,13 @@ export default function RoutinesScreen() {
     setEditId(null)
     setName('')
     setSelectedExercises([])
+    initialLoadedRef.current = false
   }
 
   const handleLaunch = async (id: number) => {
     const h = await db()
     const workoutId = await launchRoutine(h, id, localDate(Date.now()))
     router.push({ pathname: '/workout', params: { id: workoutId } } as never)
-  }
-
-  const handleAddExercise = (exerciseId: number) => {
-    const ex = exercises.find((e) => e.id === exerciseId)
-    if (!ex) return
-    const defaultSet: SetValues = {
-      load_kg: ex.tracking_type === 'weight_reps' ? 20 : null,
-      reps: ['weight_reps', 'bodyweight_reps', 'reps', 'assisted'].includes(ex.tracking_type) ? 10 : null,
-      duration_s: ['distance_time', 'time', 'weight_time'].includes(ex.tracking_type) ? 60 : null,
-      distance_m: ['distance_time', 'distance'].includes(ex.tracking_type) ? 1000 : null,
-      assistance_kg: ex.tracking_type === 'assisted' ? 20 : null,
-      rir: null,
-      rpe: null,
-      tempo: null,
-    }
-
-    const defaultRule: ProgressionRule = {
-      kind: 'double',
-      increment: 2.5,
-      min_reps: 8,
-      max_reps: 12,
-      target_rir: 2,
-    }
-
-    setSelectedExercises([
-      ...selectedExercises,
-      {
-        exercise_id: exerciseId,
-        group: null,
-        sets: [defaultSet, { ...defaultSet }, { ...defaultSet }],
-        rule: defaultRule,
-      },
-    ])
   }
 
   const handleAddSet = (index: number) => {
@@ -263,20 +310,24 @@ export default function RoutinesScreen() {
             )
           })}
 
-          <Label muted>Add exercise from library:</Label>
-          <Row>
-            {exercises.slice(0, 10).map((e) => (
-              <Button
-                key={e.id}
-                label={`+ ${e.name}`}
-                onPress={() => handleAddExercise(e.id)}
-              />
-            ))}
-          </Row>
+          <Button
+            label="+ Add Exercises from Library"
+            selected
+            onPress={() => {
+              router.push({
+                pathname: '/search',
+                params: {
+                  mode: 'multi',
+                  routineId: editId ? String(editId) : undefined,
+                  initialSelected: selectedExercises.map((se) => se.exercise_id).join(','),
+                },
+              } as never)
+            }}
+          />
 
           <Row>
-            <Button label="Save Routine" selected onPress={() => void action.run(handleSave)} />
-            <Button label="Cancel" onPress={() => setEditing(false)} />
+            <Button label="Save Routine" selected disabled={action.busy} onPress={() => void action.run(handleSave)} />
+            <Button label="Cancel" onPress={() => { setEditing(false); initialLoadedRef.current = false }} />
           </Row>
         </Card>
       )}

@@ -45,7 +45,7 @@ export async function reviewCheckin(db:DbAdapter,end:string,now=Date.now()) {
   const profile=await db.get<{birth_year:number|null;sex:SafetyProfile['sex'];height_cm:number|null}>('SELECT * FROM user_profile WHERE id=1')
   const safety:SafetyProfile={...settings,age:profile?.birth_year?new Date(now).getFullYear()-profile.birth_year-1:null,sex:profile?.sex??'unspecified',bmr:goal?.bmr??0,weight_kg:metrics.weight_trend_kg,height_cm:profile?.height_cm??null}
   const old:AdaptiveTarget=goal?{kcal:goal.target_kcal,protein_g:goal.protein_g,fat_g:goal.fat_g,carbs_g:goal.carbs_g}:{kcal:0,protein_g:0,fat_g:0,carbs_g:0}
-  const signedRate=goal?.goal_type==='lose'?-Math.abs(goal.rate_lb_per_week??0.5)/2.20462:goal?.goal_type==='gain'?Math.abs(goal.rate_lb_per_week??0.5)/2.20462:0
+  const signedRate=goal?.goal_type==='lose'?-Math.abs(goal.rate_lb_per_week??0.5)/2.2046226218:goal?.goal_type==='gain'?Math.abs(goal.rate_lb_per_week??0.5)/2.2046226218:0
   const last=await db.get<{effective_from:number}>('SELECT effective_from FROM goals WHERE adaptive_evidence_json IS NOT NULL AND deleted_at IS NULL ORDER BY effective_from DESC LIMIT 1')
   const cooldown=last!==null&&now-last.effective_from<7*86400000
   const suggestion=goal&&!cooldown?suggestTargets(metrics,old,safety,signedRate,settings.locks):null

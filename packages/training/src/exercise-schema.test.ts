@@ -8,6 +8,7 @@ import {
   createExercise,
   startWorkout,
   addExercise,
+  EXERCISE_LIBRARY,
 } from './index.js'
 
 describe('TRN-001: Exercise and Equipment Schema & Tracking Types', () => {
@@ -25,6 +26,18 @@ describe('TRN-001: Exercise and Equipment Schema & Tracking Types', () => {
     expect(bench?.is_custom).toBe(0)
 
     await db.close()
+  })
+
+  it('EXERCISE_LIBRARY passes strict Zod validation without duplicate names', () => {
+    expect(EXERCISE_LIBRARY.length).toBeGreaterThan(200)
+    expect(Object.isFrozen(EXERCISE_LIBRARY)).toBe(true)
+    const names = new Set<string>()
+    for (const exercise of EXERCISE_LIBRARY) {
+      expect(exercise.name.length).toBeGreaterThan(0)
+      expect(exercise.primary_muscles.length).toBeGreaterThan(0)
+      expect(names.has(exercise.name)).toBe(false)
+      names.add(exercise.name)
+    }
   })
 
   it('allows creating valid custom exercises with stable UUID', async () => {

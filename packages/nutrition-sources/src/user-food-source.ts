@@ -56,7 +56,12 @@ export class UserFoodSource implements NutritionSource {
       sugarG: r.sugar_g,
       sodiumMg: r.sodium_mg,
       servingSizeG: r.serving_size_g,
-      servingDesc: null,
+      servingDesc:
+        r.serving_amount != null && r.serving_unit
+          ? `${r.serving_amount} ${r.serving_unit}`
+          : r.serving_size_g != null
+            ? `${r.serving_size_g} g`
+            : null,
       license: 'User Content',
       source: 'userfood'
     }
