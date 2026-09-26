@@ -8,6 +8,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         super().end_headers()
+        
+    def do_GET(self):
+        path = self.translate_path(self.path)
+        if not os.path.exists(path):
+            self.path = '/index.html'
+        super().do_GET()
 
 if __name__ == '__main__':
     port = 8081
