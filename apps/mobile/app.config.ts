@@ -100,6 +100,16 @@ const config: ExpoConfig = {
 
   experiments: { typedRoutes: true },
 
+  web: {
+    // The app bootstraps SQLite-WASM, its own web DB adapter and expo-router
+    // entirely on the client; prerendered static pages cannot run that boot
+    // sequence. 'single' ships the SPA bundle with one index.html so every
+    // route works from a static file server (see serve-coop.py).
+    output: 'single',
+    bundler: 'metro',
+    favicon: './assets/favicon.png',
+  },
+
   extra: {
     // NEVER put an API key here. Keys are written only from runtime user input
     // into expo-secure-store — never from EXPO_PUBLIC_*, app config, .env, or EAS

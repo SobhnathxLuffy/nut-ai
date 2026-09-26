@@ -31,7 +31,7 @@ export default function FoodReview() {
       }
       return { value: parsed, error: null } 
     }
-    catch (error) { 
+    catch { 
       return { value: null, error: 'Data corrupted, go back' } 
     }
   }, [params.payload])

@@ -288,7 +288,13 @@ export default function Profile() {
                   text: 'Erase and restart',
                   style: 'destructive',
                   onPress: () => {
-                    void resetEverything().then(() => router.replace('/onboarding' as never))
+                    void resetEverything()
+                      .then(() => router.replace('/onboarding' as never))
+                      .catch((error: unknown) => {
+                        // A half-completed wipe must not strand the user on a
+                        // broken profile screen; surface it and keep them here.
+                        console.error('[profile] resetEverything failed', error)
+                      })
                   },
                 },
               ],

@@ -16,7 +16,7 @@ import {
 import { ifctCorpusInfo, nutritionCorpusInfo, openIfctDb, openNutritionDb, resetCorpusPromises } from '../src/db/expo-adapter'
 import { db as openUserDb } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
-import { logManualFood, type ManualFoodSelection } from '../src/data/manual-food'
+import { type ManualFoodSelection } from '../src/data/manual-food'
 import { createCustomFood } from '../src/data/custom-foods'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'

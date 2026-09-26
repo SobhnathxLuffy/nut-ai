@@ -153,6 +153,11 @@ export async function persistOnboarding(
     }
   })
 
-  await db.close()
+  // Do NOT close the handle here. openUserDb() hands out a cached,
+  // app-lifetime singleton (and on web it is literally the same object
+  // repo.ts holds in `cached`); closing it pulls the database out from under
+  // every later reader — the whole app then fails with "DB has been closed."
+  // Nothing else in the app closes it either; reset keeps the handle and only
+  // deletes rows.
   await Storage.setItem(ONBOARDING_DONE_KEY, 'true')
 }

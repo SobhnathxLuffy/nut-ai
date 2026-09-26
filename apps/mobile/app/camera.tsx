@@ -50,7 +50,10 @@ export default function Camera() {
           });
           if (!result.canceled) {
             startScan(result.assets[0].uri);
-            router.replace('/scan-result');
+            // WEB-002: this previously replaced to '/scan-result', a route that
+            // does not exist on any platform — the scan pipeline lives behind
+            // /result (same hand-off the native shutter uses).
+            router.replace('/result');
           }
         }} />
         <Button title="Go Back" onPress={() => router.back()} />

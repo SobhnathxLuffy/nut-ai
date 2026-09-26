@@ -46,7 +46,7 @@ test.describe('BUG-007: Historical Day Navigation Blocked', () => {
 
     // We can't easily scroll horizontally in simple assertions, but we can assert
     // that there are many more days rendered than a single week.
-    const dayButtons = page.locator('div[role="button"]:has-text("Sun"), div[role="button"]:has-text("Mon")').first();
+    const _dayButtons = page.locator('div[role="button"]:has-text("Sun"), div[role="button"]:has-text("Mon")').first();
     // Assuming Playwright treats the Pressables as accessible roles
     const allDays = page.getByRole('button');
     const dayCount = await allDays.count();

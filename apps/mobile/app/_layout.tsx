@@ -6,6 +6,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider'
 
+// WEB-001: patches Alert.alert with a real dialog on web. Must be imported
+// before any screen module so every Alert.alert call site gets the patch.
+import '../src/ui/alert-web'
+
 import { ONBOARDING_DONE_KEY } from '../src/onboarding/done-key'
 export { ONBOARDING_DONE_KEY }
 

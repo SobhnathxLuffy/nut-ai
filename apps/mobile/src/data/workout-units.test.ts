@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { migrate, type DbAdapter } from '@nutai/db-adapter'
 import { openMemoryDb } from '@nutai/db-adapter/node'
-import { kgToLb, lbToKg, LB_PER_KG } from '@nutai/analytics'
+import { lbToKg, LB_PER_KG } from '@nutai/analytics'
 import { seedExercises, listExercises, startWorkout, addExercise, saveSet, workoutDetail } from '@nutai/training'
 import { readWeightUnit, writeWeightUnit } from './weight-units'
 import {
@@ -160,7 +160,7 @@ describe('workout load units and conversions (BUG-009)', () => {
 
       // Reload workout detail and format for UI in lb mode
       const detail = await workoutDetail(db, workoutId)
-      const savedSet = detail.exercises[0]?.sets[0]!
+      const savedSet = detail.exercises[0]!.sets[0]
       expect(savedSet).toBeDefined()
 
       const displayValues = setValuesToDisplay(savedSet, 'lb')
@@ -180,7 +180,7 @@ describe('workout load units and conversions (BUG-009)', () => {
       let unit = await readWeightUnit(db)
       expect(unit).toBe('kg')
       let detail = await workoutDetail(db, workoutId)
-      let display = setValuesToDisplay(detail.exercises[0]?.sets[0]!, unit)
+      let display = setValuesToDisplay(detail.exercises[0]!.sets[0], unit)
       expect(display.load_kg).toBe('100')
 
       // Switch preference to lb
@@ -190,7 +190,7 @@ describe('workout load units and conversions (BUG-009)', () => {
 
       // In lb mode, display is 220.46 lb
       detail = await workoutDetail(db, workoutId)
-      display = setValuesToDisplay(detail.exercises[0]?.sets[0]!, unit)
+      display = setValuesToDisplay(detail.exercises[0]!.sets[0], unit)
       expect(display.load_kg).toBe('220.46')
 
       // Crucial: canonical DB record is UNCHANGED
@@ -203,7 +203,7 @@ describe('workout load units and conversions (BUG-009)', () => {
       expect(unit).toBe('kg')
 
       detail = await workoutDetail(db, workoutId)
-      display = setValuesToDisplay(detail.exercises[0]?.sets[0]!, unit)
+      display = setValuesToDisplay(detail.exercises[0]!.sets[0], unit)
       expect(display.load_kg).toBe('100')
     })
 
@@ -226,7 +226,7 @@ describe('workout load units and conversions (BUG-009)', () => {
 
       // Check display
       const detail = await workoutDetail(db, workoutId)
-      const display = setValuesToDisplay(detail.exercises[0]?.sets[0]!, 'lb')
+      const display = setValuesToDisplay(detail.exercises[0]!.sets[0], 'lb')
       expect(display.load_kg).toBe('185')
     })
   })
