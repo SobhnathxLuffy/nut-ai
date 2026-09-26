@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from 'expo-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   Pressable,
   ScrollView,
@@ -177,10 +177,21 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
   const now = new Date()
   // Monday-first week containing today.
   const dow = (now.getDay() + 6) % 7
-  const days = Array.from({ length: 7 }, (_, i) => i - dow)
+  // PROTECT MOBILE: Render 8 weeks of history in a horizontal ScrollView. 
+  // We use scrollToEnd on mount so the user naturally lands on the current week.
+  // The fixed width ensures items don't stretch on iPad/Web.
+  const days = Array.from({ length: 56 }, (_, i) => i - dow - 49)
+  const scrollViewRef = useRef<ScrollView>(null)
 
   return (
-    <View style={styles.strip}>
+    <ScrollView
+      ref={scrollViewRef}
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
+      style={{ marginTop: space.lg }}
+      contentContainerStyle={{ paddingHorizontal: space.md }}
+    >
       {days.map((off) => {
         const d = new Date(Date.now() + off * 86_400_000)
         const isSel = off === selected
@@ -192,7 +203,7 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
             onPress={() => onSelect(off)}
             accessibilityRole="button"
             accessibilityState={{ selected: isSel, disabled: future }}
-            style={[styles.dayCol, isSel && { backgroundColor: theme.bgElevated }]}
+            style={[styles.dayCol, { width: 50 }, isSel && { backgroundColor: theme.bgElevated }]}
           >
             <Text style={[type.caption, { color: future ? theme.textFaint : theme.textMuted }]}>
               {DAY_LABELS[d.getDay()]}
@@ -214,7 +225,7 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
           </Pressable>
         )
       })}
-    </View>
+    </ScrollView>
   )
 }
 

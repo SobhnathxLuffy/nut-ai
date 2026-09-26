@@ -81,6 +81,18 @@ export async function openNutritionDb(): Promise<DbAdapter> {
         forceOverwrite: false,
       })
       const db = await SQLite.openDatabaseAsync('nutrition.db')
+      const check = await db.getFirstAsync<{ c: number }>(
+        "SELECT count(*) as c FROM sqlite_master WHERE type='table' AND name='dish_definitions'"
+      )
+      if (!check || check.c === 0) {
+        await db.closeAsync()
+        await SQLite.importDatabaseFromAssetAsync('nutrition.db', {
+          assetId: require('../../assets/nutrition.db'),
+          forceOverwrite: true,
+        })
+        const freshDb = await SQLite.openDatabaseAsync('nutrition.db')
+        return new ExpoDbAdapter(freshDb)
+      }
       return new ExpoDbAdapter(db)
     })().catch((error) => {
       nutritionOpenPromise = null

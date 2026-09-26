@@ -13,7 +13,7 @@ describe('assistant write tools', () => {
     expect(result.toolCard?.data.name).toBe('Push Day')
   })
 
-  it('Given "log 2 rotis", then a meal proposal shows nutrition sources before saving.', async () => {
+  it('Given "log 2 rotis", then a meal proposal uses Food Review-compatible payload.', async () => {
     const mockExecute = vi.fn(async () => '{"tool_name": "propose_meal", "arguments": {"name": "Lunch", "ingredients": [{"name": "Roti", "grams": 80}]}}')
 
     const result = await runAssistantChat('log 2 rotis', mockExecute)
@@ -21,5 +21,6 @@ describe('assistant write tools', () => {
     expect(result.toolCard).toBeDefined()
     expect(result.toolCard?.tool_name).toBe('propose_meal')
     expect(result.toolCard?.data.name).toBe('Lunch')
+    expect(result.toolCard?.data.ingredients[0].name).toBe('Roti')
   })
 })

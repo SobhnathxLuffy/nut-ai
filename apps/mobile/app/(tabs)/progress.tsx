@@ -66,7 +66,7 @@ export default function Progress() {
         {section === 'Overview' ? <Overview report={report} unit={weightUnit} /> : null}
         {section === 'Body' ? <Body report={report} unit={weightUnit} /> : null}
         {section === 'Nutrition' ? <Nutrition report={report} /> : null}
-        {section === 'Strength' ? <Strength report={report} /> : null}
+        {section === 'Strength' ? <Strength report={report} unit={weightUnit} /> : null}
         {section === 'Training' ? <Training report={report} /> : null}
       </> : null}
       <View style={styles.reportRow}>
@@ -123,20 +123,21 @@ function Nutrition({ report }: { report: PeriodReport }) {
   </>
 }
 
-function Strength({ report }: { report: PeriodReport }) {
+function Strength({ report, unit }: { report: PeriodReport; unit: WeightUnit }) {
   const theme = useTheme()
   const [exerciseId, setExerciseId] = useState<number | null>(report.training.exercise_trends[0]?.exercise_id ?? null)
   const exercise = report.training.exercise_trends.find((item) => item.exercise_id === exerciseId) ?? report.training.exercise_trends[0]
   if (!exercise) return <Card title="Strength"><Muted>No completed working sets in this period. Warmups are excluded.</Muted></Card>
+  const toUnit = (kg: number | null) => (kg === null ? null : unit === 'lb' ? kgToLb(kg) : kg)
   return <>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>{report.training.exercise_trends.map((item) => <Chip key={item.exercise_id} label={item.exercise_name} selected={item.exercise_id === exercise.exercise_id} onPress={() => setExerciseId(item.exercise_id)} />)}</ScrollView>
     <Card title={exercise.exercise_name}>
       <LineChart series={[
-        { key: 'e1rm', label: 'Estimated 1RM', color: theme.protein, points: exercise.points.map((point) => ({ x: point.session_id, y: point.e1rm_kg, id: point.session_id, label: point.date })) },
-        { key: 'heavy', label: 'Heaviest working set', color: theme.fat, points: exercise.points.map((point) => ({ x: point.session_id, y: point.heaviest_working_set_kg, id: point.session_id, label: point.date })), dashed: true },
-      ]} formatValue={(value) => `${value.toFixed(1)} kg`} />
+        { key: 'e1rm', label: 'Estimated 1RM', color: theme.protein, points: exercise.points.map((point) => ({ x: point.session_id, y: toUnit(point.e1rm_kg), id: point.session_id, label: point.date })) },
+        { key: 'heavy', label: 'Heaviest working set', color: theme.fat, points: exercise.points.map((point) => ({ x: point.session_id, y: toUnit(point.heaviest_working_set_kg), id: point.session_id, label: point.date })), dashed: true },
+      ]} formatValue={(value) => `${value.toFixed(1)} ${unit}`} />
       <DataRow label="Sessions" value={String(exercise.frequency)} /><DataRow label="Rep PRs" value={String(exercise.rep_prs.length)} />
-      {exercise.rep_prs.slice(-5).reverse().map((record) => <Muted key={`${record.reps}:${record.date}`}>{record.reps} reps × {record.load_kg.toFixed(1)} kg · {record.date}</Muted>)}
+      {exercise.rep_prs.slice(-5).reverse().map((record) => <Muted key={`${record.reps}:${record.date}`}>{record.reps} reps × {(toUnit(record.load_kg) ?? 0).toFixed(1)} ${unit} · {record.date}</Muted>)}
     </Card>
   </>
 }

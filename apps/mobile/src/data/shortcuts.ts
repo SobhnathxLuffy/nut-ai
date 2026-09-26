@@ -1,6 +1,7 @@
 import { createSyncMetadata, recordOperation, isValidOperationPayload, validateLocalDate, getOperationByIdempotencyKey, type BatchChange, type DbAdapter, type SqlValue } from '@nutai/db-adapter'
 import { writeRow } from '@nutai/training'
 import { emitFoodMutation } from './food-mutations'
+import { localDate } from './date-utils'
 type Row=Record<string,SqlValue>
 export interface MealSnapshot {meal:Row;items:Row[];ledger:Row[]}
 export interface Shortcut {id:number;meal_id:number;name:string;kind:'favorite'|'usual'|'saved';snapshot_json:string}
@@ -45,7 +46,14 @@ async function insertCopy(tx:DbAdapter,table:'meals'|'log_items',row:Row):Promis
   if(keys.some(k=>!allowed.has(k)))throw new Error('Invalid snapshot field')
   return Number((await tx.run(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,keys.map(k=>row[k]!))).lastInsertRowId)
 }
-export async function repeatSnapshots(db:DbAdapter,snapshots:MealSnapshot[],date:string,now=Date.now(),idempotencyKey?:string):Promise<number[]> {
+export async function repeatSnapshots(
+  db: DbAdapter,
+  snapshots: MealSnapshot[],
+  date: string,
+  now = Date.now(),
+  idempotencyKey?: string,
+  options?: { preserveOriginalTimeOfDay?: boolean },
+): Promise<number[]> {
   validateLocalDate(date)
   if(!snapshots.length)throw new Error('No meals to copy')
   if(snapshots.length>100)throw new Error('Copy at most 100 meals at a time')
@@ -61,7 +69,9 @@ export async function repeatSnapshots(db:DbAdapter,snapshots:MealSnapshot[],date
     const changes:BatchChange[]=[];const ids:number[]=[]
     for(const snapshot of snapshots){
       if(!isValidOperationPayload('meals',JSON.stringify(snapshot))||!snapshot.items.length)throw new Error('Invalid meal snapshot')
-      const at=remapTimestamp(Number(snapshot.meal['logged_at']),date)
+      const at = options?.preserveOriginalTimeOfDay
+        ? remapTimestamp(Number(snapshot.meal['logged_at']), date)
+        : (date === localDate(now) ? now : remapTimestamp(now, date))
       const meal={...snapshot.meal,...createSyncMetadata(now),logged_at:at,local_date:date,photo_uri:null}
       const id=await insertCopy(tx,'meals',meal)
       const items:Row[]=[]
@@ -78,7 +88,7 @@ export async function repeatSnapshots(db:DbAdapter,snapshots:MealSnapshot[],date
 export async function copyYesterday(db:DbAdapter,date:string,now=Date.now(),key?:string):Promise<number[]> {
   const rows=await db.all<{id:number}>("SELECT id FROM meals WHERE local_date=? AND deleted_at IS NULL AND analysis_status IN ('complete','manual') ORDER BY logged_at,id",[dateOffset(date,-1)])
   const snapshots:MealSnapshot[]=[];for(const row of rows)snapshots.push(await mealSnapshot(db,row.id))
-  return repeatSnapshots(db,snapshots,date,now,key)
+  return repeatSnapshots(db,snapshots,date,now,key,{preserveOriginalTimeOfDay:true})
 }
 export interface RecentFood {id:number;name:string;last_used_at:number;frequency:number}
 export async function recentFoods(db:DbAdapter,now:number):Promise<RecentFood[]> {

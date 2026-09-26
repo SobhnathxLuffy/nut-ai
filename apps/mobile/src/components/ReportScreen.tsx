@@ -103,7 +103,7 @@ function ReportBody({ report, unit }: { report: PeriodReport; unit: WeightUnit }
     </Card>
     <Card><SectionTitle>Strength</SectionTitle>
       <DataRow label="PRs" value={String(report.prs.length)} />
-      {report.prs.slice(-8).reverse().map((pr) => <Label key={`${pr.exercise_name}:${pr.kind}:${pr.date}`} muted>{pr.exercise_name}: {pr.value.toFixed(1)} {pr.unit} · {pr.date}</Label>)}
+      {report.prs.slice(-8).reverse().map((pr) => <Label key={`${pr.exercise_name}:${pr.kind}:${pr.date}`} muted>{pr.exercise_name}: {formatPr(pr, unit)} · {pr.date}</Label>)}
       {improvements.slice(0, 6).map((item) => <Label key={item.name} muted>{item.name} e1RM {item.change >= 0 ? 'increased' : 'decreased'} {Math.abs(item.change).toFixed(1)}% during this period. Average protein was {number(report.nutrition.avg_protein_g, ' g/day')}.</Label>)}
       {report.prs.length === 0 && improvements.length === 0 ? <Label muted>No strength changes with enough comparable data.</Label> : null}
     </Card>
@@ -132,6 +132,15 @@ function Stat({ label, value }: { label: string; value: string }) { const t = us
 function number(value: number | null, suffix: string): string { return value === null || !Number.isFinite(value) ? '—' : `${Math.round(value)}${suffix}` }
 function rate(value: number | null, denominator: number): string { return value === null ? `— (0 days)` : `${Math.round(value * 100)}% (${denominator} days)` }
 function signedWeight(kg: number, unit: WeightUnit): string { const value = unit === 'kg' ? kg : kgToLb(kg); return `${value > 0 ? '+' : ''}${value.toFixed(1)} ${unit}` }
+function formatPr(pr: { value: number; unit: string }, unit: WeightUnit): string {
+  if (unit === 'lb') {
+    if (pr.unit === 'kg') return `${kgToLb(pr.value).toFixed(1)} lb`
+    if (pr.unit === 'kg assistance') return `${kgToLb(pr.value).toFixed(1)} lb assistance`
+    if (pr.unit === 'kg·reps') return `${kgToLb(pr.value).toFixed(1)} lb·reps`
+    if (pr.unit === 'kg (Epley)') return `${kgToLb(pr.value).toFixed(1)} lb (Epley)`
+  }
+  return `${pr.value.toFixed(1)} ${pr.unit}`
+}
 
 const styles = StyleSheet.create({
   periodHeader: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm },

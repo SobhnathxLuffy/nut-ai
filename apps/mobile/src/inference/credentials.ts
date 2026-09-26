@@ -22,6 +22,8 @@ import type { ProviderId } from '@nutai/prompt'
  * the reason someone stops logging.
  */
 
+import { Platform } from 'react-native'
+
 export type CredentialKind = 'api_key' | 'oauth'
 
 export interface StoredCredential {
@@ -36,6 +38,11 @@ export async function saveCredential(
   provider: ProviderId,
   cred: StoredCredential,
 ): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(keyFor(provider), cred.value);
+    localStorage.setItem(kindFor(provider), cred.kind);
+    return;
+  }
   await SecureStore.setItemAsync(keyFor(provider), cred.value, {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   })
@@ -43,6 +50,12 @@ export async function saveCredential(
 }
 
 export async function loadCredential(provider: ProviderId): Promise<StoredCredential | null> {
+  if (Platform.OS === 'web') {
+    const value = localStorage.getItem(keyFor(provider));
+    if (!value) return null;
+    const kind = localStorage.getItem(kindFor(provider)) as CredentialKind | null;
+    return { kind: kind ?? 'api_key', value };
+  }
   const value = await SecureStore.getItemAsync(keyFor(provider))
   if (!value) return null
   const kind = (await SecureStore.getItemAsync(kindFor(provider))) as CredentialKind | null
@@ -50,9 +63,15 @@ export async function loadCredential(provider: ProviderId): Promise<StoredCreden
 }
 
 export async function clearCredential(provider: ProviderId): Promise<void> {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem(keyFor(provider));
+    localStorage.removeItem(kindFor(provider));
+    return;
+  }
   await SecureStore.deleteItemAsync(keyFor(provider))
   await SecureStore.deleteItemAsync(kindFor(provider))
 }
+
 
 /** `sk-ant-…a8f2` — never the whole thing, not even to its owner by default. */
 export function maskCredential(value: string): string {

@@ -48,6 +48,7 @@ export default function Food() {
       <Row>
         <Button label="Search everything" onPress={() => router.push({ pathname: '/food-search', params: { date: localDate(Date.now()) } } as never)} />
         <Button label="Scan food" onPress={() => router.push('/camera')} />
+        <Button label="Indian Dishes" onPress={() => router.push({ pathname: '/indian-dishes', params: { date: localDate(Date.now()) } } as never)} />
         <Button label="Recipes" onPress={() => router.push({ pathname: '/recipes', params: { date: localDate(Date.now()) } } as never)} />
         <Button label="Custom food" onPress={() => router.push({ pathname: '/custom-food', params: { date: localDate(Date.now()) } } as never)} />
       </Row>

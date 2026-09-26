@@ -26,3 +26,33 @@ export function slotFor(ms: number): string {
   if (h < 21) return 'dinner'
   return 'snack'
 }
+
+/** Returns an array of local dates for "This Week" (Monday to Sunday) containing `ms` */
+export function getThisWeek(ms: number): string[] {
+  const d = new Date(ms)
+  const dayOfWeek = d.getDay()
+  const diffToMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek)
+
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMonday)
+  const dates: string[] = []
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i)
+    dates.push(localDate(cur.getTime()))
+  }
+  return dates
+}
+
+/** Returns an array of local dates for "Last Week" (the Monday to Sunday preceding `ms`'s week) */
+export function getLastWeek(ms: number): string[] {
+  const d = new Date(ms)
+  const dayOfWeek = d.getDay()
+  const diffToLastMonday = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek) - 7
+
+  const lastMonday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToLastMonday)
+  const dates: string[] = []
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(lastMonday.getFullYear(), lastMonday.getMonth(), lastMonday.getDate() + i)
+    dates.push(localDate(cur.getTime()))
+  }
+  return dates
+}

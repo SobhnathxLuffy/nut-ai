@@ -34,6 +34,30 @@ const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
  * way fast.
  */
 export default function Camera() {
+  if (require('react-native').Platform.OS === 'web') {
+    const { View, Text, Button } = require('react-native');
+    const { router } = require('expo-router');
+    const { startScan } = require('../src/scan/orchestrator');
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 18, marginBottom: 20 }}>Camera is not supported on Web.</Text>
+        <Button title="Pick an Image" onPress={async () => {
+          // Fallback to ImagePicker
+          const ImagePicker = require('expo-image-picker');
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            base64: false,
+          });
+          if (!result.canceled) {
+            startScan(result.assets[0].uri);
+            router.replace('/scan-result');
+          }
+        }} />
+        <Button title="Go Back" onPress={() => router.back()} />
+      </View>
+    );
+  }
+
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const [permission, requestPermission] = useCameraPermissions()

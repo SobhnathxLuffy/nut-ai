@@ -58,7 +58,7 @@ const s = StyleSheet.create({
   btnText: { fontWeight: 'bold' }
 })
 
-export function MealProposalCard({ data, onConfirm, onCancel }: { data: any, onConfirm?: () => void, onCancel?: () => void }) {
+export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
   const t = useTheme()
   return (
     <View style={[s.card, { backgroundColor: t.bgElevated }]}>
@@ -66,19 +66,26 @@ export function MealProposalCard({ data, onConfirm, onCancel }: { data: any, onC
       {data.ingredients.map((ing: any, i: number) => (
         <Text key={i} style={[s.body, { color: t.text }]}>• {ing.name} ({ing.grams}g)</Text>
       ))}
-      <View style={s.row}>
-        <Pressable onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
-          <Text style={[s.btnText, { color: t.bgElevated }]}>Confirm</Text>
-        </Pressable>
-        <Pressable onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
-          <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
-        </Pressable>
-      </View>
+      {status === 'SAVED' && <Text style={[s.body, { color: t.protein, fontWeight: 'bold' }]}>✓ SAVED</Text>}
+      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>✗ FAILED (Tap to retry)</Text>}
+      {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
+      {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
+
+      {(status === 'PROPOSED' || status === 'FAILED') && (
+        <View style={s.row}>
+          <Pressable onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
+            <Text style={[s.btnText, { color: t.bgElevated }]}>Review & Save</Text>
+          </Pressable>
+          <Pressable onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
+            <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   )
 }
 
-export function WorkoutRoutineProposalCard({ data, onConfirm, onCancel }: { data: any, onConfirm?: () => void, onCancel?: () => void }) {
+export function WorkoutRoutineProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
   const t = useTheme()
   return (
     <View style={[s.card, { backgroundColor: t.bgElevated }]}>
@@ -86,14 +93,21 @@ export function WorkoutRoutineProposalCard({ data, onConfirm, onCancel }: { data
       {data.exercises.map((ex: any, i: number) => (
         <Text key={i} style={[s.body, { color: t.text }]}>• {ex.name}: {ex.sets} sets x {ex.reps}</Text>
       ))}
-      <View style={s.row}>
-        <Pressable onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
-          <Text style={[s.btnText, { color: t.bgElevated }]}>Confirm</Text>
-        </Pressable>
-        <Pressable onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
-          <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
-        </Pressable>
-      </View>
+      {status === 'SAVED' && <Text style={[s.body, { color: t.protein, fontWeight: 'bold' }]}>✓ SAVED</Text>}
+      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>✗ FAILED (Tap to retry)</Text>}
+      {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
+      {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
+
+      {(status === 'PROPOSED' || status === 'FAILED') && (
+        <View style={s.row}>
+          <Pressable onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
+            <Text style={[s.btnText, { color: t.bgElevated }]}>Confirm</Text>
+          </Pressable>
+          <Pressable onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
+            <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
+          </Pressable>
+        </View>
+      )}
     </View>
   )
 }

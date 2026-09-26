@@ -50,6 +50,7 @@ export function OptionScreen<K extends keyof OnboardingAnswers>({
       // a greyed button is a clearer instruction than an enabled one that does
       // nothing.
       ctaDisabled={current == null}
+      disabledHint="Select an option to continue"
       onCta={() => router.push(nextRoute(step) as never)}
     >
       <ScrollView scrollEnabled={false} contentContainerStyle={{ paddingBottom: 8 }}>

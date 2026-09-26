@@ -1,6 +1,6 @@
 import { chartExtent, normalizeChartPoints } from '@nutai/analytics'
 import { useMemo, useState } from 'react'
-import { Text, View } from 'react-native'
+import { Text, View, Platform } from 'react-native'
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg'
 import { useTheme } from '../theme/ThemeProvider'
 import { radius, space, type } from '../theme/tokens'
@@ -22,6 +22,9 @@ export interface LineSeries {
 
 const HEIGHT = 188
 const PAD = { left: 10, right: 10, top: 14, bottom: 18 }
+
+const createPressProps = (handler: () => void) =>
+  Platform.OS === 'web' ? { onClick: handler } : { onPress: handler }
 
 function pathFor(
   points: ReturnType<typeof normalizeChartPoints>,
@@ -104,11 +107,11 @@ export function LineChart({
                 cy={position.y}
                 r={item.points.length === 1 ? 5 : 3}
                 fill={item.color}
-                onPress={() => setSelected({
+                {...createPressProps(() => setSelected({
                   series: item.label,
                   value: point.y,
                   label: point.id == null ? undefined : item.labels.get(point.id),
-                })}
+                }))}
               />
             )
           }))}
@@ -175,7 +178,7 @@ export function BarChart({
                 height={Math.max(point.y === 0 ? 1 : 2, height)}
                 rx={2}
                 fill={color}
-                onPress={() => setSelected({ ...point, label: point.id == null ? undefined : labels.get(point.id) })}
+                {...createPressProps(() => setSelected({ ...point, label: point.id == null ? undefined : labels.get(point.id) }))}
               />
             )
           })}

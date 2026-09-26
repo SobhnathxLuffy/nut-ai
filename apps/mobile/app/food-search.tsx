@@ -267,7 +267,12 @@ export default function FoodSearch() {
     setError(null)
     try {
       if (candidate.source === 'indian_dish_kb' && candidate.basisConfidence === 'low') {
-        throw new Error('This dish is still under review. Build an ingredient estimate before logging it.')
+        setSelectingId(null)
+        router.push({
+          pathname: '/dish-composer',
+          params: { dishId: candidate.foodId, date: intendedDate },
+        } as never)
+        return
       }
       const selection = await selectFoodForReview(db, candidate, sourceContext)
       setSelectingId(null)
@@ -306,31 +311,26 @@ export default function FoodSearch() {
     }
   }
 
-  async function handleLogDecomposed() {
-    if (!computedDecomp || savingDecomp) return
+  function handleLogDecomposed() {
+    if (!computedDecomp) return
     if (computedDecomp.per100g.kcal === null || computedDecomp.per100g.protein_g === null || computedDecomp.per100g.carbs_g === null || computedDecomp.per100g.fat_g === null) {
       setError('Core nutrition is unavailable for one of these ingredients. Choose another ingredient before logging.')
       return
     }
-    setSavingDecomp(true)
     setError(null)
-    try {
-      const userDb = await openUserDb()
-      const selection: ManualFoodSelection = {
-        foodId: null,
-        matchedFoodSource: 'ingredient_decomposition',
-        displayName: computedDecomp.dishName,
-        grams: computedDecomp.portionGrams,
-        gramPathway: 'decomposed_recipe',
-        portionSource: 'user_decomposition',
-        nutrientSnapshot: computedDecomp.per100g,
-      }
-      await logManualFood(userDb, selection, Date.now())
-      router.back()
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not log decomposed dish')
-      setSavingDecomp(false)
+    const selection: ManualFoodSelection = {
+      foodId: null,
+      matchedFoodSource: 'ingredient_decomposition',
+      displayName: computedDecomp.dishName,
+      grams: computedDecomp.portionGrams,
+      gramPathway: 'decomposed_recipe',
+      portionSource: 'user_decomposition',
+      nutrientSnapshot: computedDecomp.per100g,
     }
+    router.push({
+      pathname: '/food-review',
+      params: { payload: encodeFoodReview({ selection, date: intendedDate }) },
+    } as never)
   }
 
   async function handleSaveCustomFood() {
@@ -459,7 +459,7 @@ export default function FoodSearch() {
           key={r.foodId}
           testID={`food-search-row-${r.foodId}`}
           accessibilityRole="button"
-          accessibilityLabel={`Review ${r.name}`}
+          accessibilityLabel={r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? `Customize draft recipe ${r.name}` : `Review ${r.name}`}
           disabled={selectingId != null}
           onPress={() => handleSelect(r)}
           style={({ pressed }) => [
@@ -469,12 +469,23 @@ export default function FoodSearch() {
         >
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: theme.text }]} numberOfLines={2}>{r.name}</Text>
-            <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-              {r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? 'Under review · nutrition unavailable' : r.energyKcal != null ? `${Math.round(r.energyKcal)} kcal / 100 g` : 'Nutrition shown during review'}
+            {r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? (
+              <View style={{ marginVertical: 4, paddingVertical: 2, paddingHorizontal: 6, borderRadius: radius.sm, backgroundColor: theme.bgSunken, borderWidth: 1, borderColor: theme.safety, alignSelf: 'flex-start' }}>
+                <Text style={[type.micro, { color: theme.safety, fontWeight: '700' }]}>
+                  ⚠️ DRAFT RECIPE · UNVERIFIED NUTRITION · TAP TO CUSTOMIZE
+                </Text>
+              </View>
+            ) : null}
+            <Text style={[type.caption, { color: r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? theme.safety : theme.textMuted, marginTop: 2 }]}>
+              {r.source === 'indian_dish_kb' && r.basisConfidence === 'low'
+                ? 'Recipe under review · nutrition unavailable · tap to customize in recipe composer'
+                : r.energyKcal != null
+                ? `${Math.round(r.energyKcal)} kcal / 100 g`
+                : 'Nutrition shown during review'}
               {r.brand ? ` · ${r.brand}` : ''}
             </Text>
             <Text style={[type.micro, { color: theme.textFaint, marginTop: 2 }]}>
-              {sourceLabel(r.source)}
+              {sourceLabel(r.source, r.basisConfidence)}
             </Text>
           </View>
           {selectingId === r.foodId ? <ActivityIndicator color={theme.textFaint} /> : null}
@@ -633,11 +644,12 @@ export default function FoodSearch() {
           <View style={{ flexDirection: 'row', gap: space.md, marginTop: space.md }}>
             <Pressable
               accessibilityRole="button"
+              accessibilityLabel="Review and log decomposed dish"
               disabled={savingDecomp || !computedDecomp}
               onPress={handleLogDecomposed}
               style={[styles.actionBtn, { flex: 1, backgroundColor: theme.protein, borderColor: theme.protein }]}
             >
-              <Text style={[type.body, { color: '#fff', fontWeight: '600' }]}>Log to Today</Text>
+              <Text style={[type.body, { color: '#fff', fontWeight: '600' }]}>Review & Log Dish</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -721,11 +733,13 @@ const styles = StyleSheet.create({
   },
 })
 
-function sourceLabel(source: string | undefined): string {
+function sourceLabel(source: string | undefined, basisConfidence?: string): string {
   if (source === 'ifct') return 'IFCT 2017 · ICMR-NIN'
   if (source === 'recipe') return 'HOUSEHOLD RECIPE'
   if (source === 'userfood') return 'YOUR FOOD'
   if (source === 'off') return 'OPEN FOOD FACTS · ODbL 1.0'
-  if (source === 'indian_dish_kb') return 'INDIAN DISH KB'
+  if (source === 'indian_dish_kb') {
+    return basisConfidence === 'low' ? 'INDIAN DISH KB · DRAFT / UNVERIFIED' : 'INDIAN DISH KB · CURATED'
+  }
   return 'USDA FOODDATA CENTRAL'
 }

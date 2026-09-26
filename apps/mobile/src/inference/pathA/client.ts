@@ -502,8 +502,12 @@ export async function runAssistantChatApi(
   fetchImpl: typeof fetch = fetch
 ) {
   const fallbacks: { provider: ProviderId, model: string }[] = [
-    { provider: 'openai', model: 'gpt-4o' },
-    { provider: 'anthropic', model: 'claude-3-5-sonnet-20240620' }
+    { provider: req.provider, model: req.model },
+    ...(req.provider === 'openai'
+      ? [{ provider: 'anthropic' as ProviderId, model: 'claude-3-5-sonnet-20240620' }]
+      : req.provider === 'anthropic'
+      ? [{ provider: 'openai' as ProviderId, model: 'gpt-4o' }]
+      : [{ provider: 'openai' as ProviderId, model: 'gpt-4o' }, { provider: 'anthropic' as ProviderId, model: 'claude-3-5-sonnet-20240620' }])
   ];
   let lastError;
   for (const fallback of fallbacks) {
@@ -559,6 +563,16 @@ export async function runAssistantChatApiSingle(
         messages: payload.messages.filter((m) => m.role !== 'system'),
         max_tokens: 1024,
       })
+    } else if (req.provider === 'google') {
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${cred}`
+      headers = {
+        'Content-Type': 'application/json',
+      }
+      bodyStr = JSON.stringify({
+        contents: [
+          { role: 'user', parts: [{ text: `${req.systemPrompt}\n\n${req.userPrompt}` }] }
+        ]
+      })
     } else {
       return { ok: false, error: { kind: 'error-retryable', message: 'Unsupported provider', retryable: false } }
     }
@@ -583,6 +597,8 @@ export async function runAssistantChatApiSingle(
       text = json.choices?.[0]?.message?.content || ''
     } else if (req.provider === 'anthropic') {
       text = json.content?.[0]?.text || ''
+    } else if (req.provider === 'google') {
+      text = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
     }
 
     return { ok: true, text }

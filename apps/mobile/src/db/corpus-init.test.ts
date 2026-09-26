@@ -31,11 +31,12 @@ import {
 
 describe('corpus initialization & retry logic', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    resetCorpusPromises()
-    mockSQLite.openDatabaseAsync.mockResolvedValue(mockDbInstance)
-    mockSQLite.importDatabaseFromAssetAsync.mockResolvedValue(undefined)
-  })
+  vi.clearAllMocks()
+  resetCorpusPromises()
+  mockSQLite.openDatabaseAsync.mockResolvedValue(mockDbInstance)
+  mockDbInstance.getFirstAsync.mockResolvedValue({ c: 1 })
+})
+
 
   it('caches open promise on success and does not re-import', async () => {
     const first = await openNutritionDb()
@@ -79,12 +80,16 @@ describe('corpus initialization & retry logic', () => {
   })
 
   it('reads nutrition corpus info row counts and metadata correctly', async () => {
-    mockDbInstance.getFirstAsync
-      .mockResolvedValueOnce({ c: 8520 }) // foods
-      .mockResolvedValueOnce({ c: 14200 }) // portions
-      .mockResolvedValueOnce({ value: '2026-09-14T00:00:00Z' }) // built_at
+    mockDbInstance.getFirstAsync.mockImplementation(async (sql) => {
+      if (sql.includes("sqlite_master")) return { c: 1 }
+      if (sql.includes("FROM foods")) return { c: 8520 }
+      if (sql.includes("food_portions")) return { c: 14200 }
+      if (sql.includes("build_manifest")) return { value: '2026-09-14T00:00:00Z' }
+      return null;
+    });
 
     const fakeAdapter = await openNutritionDb()
+
     const info = await nutritionCorpusInfo(fakeAdapter)
 
     expect(info).toEqual({
@@ -95,11 +100,15 @@ describe('corpus initialization & retry logic', () => {
   })
 
   it('reads IFCT corpus info correctly', async () => {
-    mockDbInstance.getFirstAsync
-      .mockResolvedValueOnce({ c: 528 }) // ifct foods
-      .mockResolvedValueOnce({ value: '2024.1' }) // version
+    mockDbInstance.getFirstAsync.mockImplementation(async (sql) => {
+      if (sql.includes("sqlite_master")) return { c: 1 }
+      if (sql.includes("FROM foods")) return { c: 528 }
+      if (sql.includes("build_manifest")) return { value: '2024.1' }
+      return null;
+    });
 
     const fakeAdapter = await openIfctDb()
+
     const info = await ifctCorpusInfo(fakeAdapter)
 
     expect(info).toEqual({

@@ -64,6 +64,8 @@ export interface OnboardingScreenProps {
   cta?: string
   onCta: () => void
   ctaDisabled?: boolean
+  /** Hint label to show above CTA when disabled */
+  disabledHint?: string
   /** Secondary action beneath the primary, e.g. Skip or No. */
   secondaryLabel?: string
   onSecondary?: () => void
@@ -82,6 +84,7 @@ export function OnboardingScreen({
   cta = 'Continue',
   onCta,
   ctaDisabled = false,
+  disabledHint,
   secondaryLabel,
   onSecondary,
   scroll = false,
@@ -127,6 +130,12 @@ export function OnboardingScreen({
           },
         ]}
       >
+        {ctaDisabled && disabledHint ? (
+          /* PROTECT MOBILE: Render disabled hint with proper margin inside the flex container so we don't break layout on Android/iOS */
+          <Text style={{ textAlign: 'center', marginBottom: 12, color: theme.textMuted, fontSize: 14 }}>
+            {disabledHint}
+          </Text>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: ctaDisabled }}
@@ -134,10 +143,10 @@ export function OnboardingScreen({
           onPress={onCta}
           style={[
             styles.primary,
-            { backgroundColor: ctaDisabled ? (theme.isDark ? theme.border : '#B7B7BD') : theme.text },
+            { backgroundColor: ctaDisabled ? (theme.isDark ? theme.border : '#E5E5EA') : theme.text },
           ]}
         >
-          <Text style={[type.bodyStrong, { color: ctaDisabled ? '#FFFFFF' : theme.bg, fontSize: 18 }]}>
+          <Text style={[type.bodyStrong, { color: ctaDisabled ? theme.textMuted : theme.bg, fontSize: 18 }]}>
             {cta}
           </Text>
         </Pressable>

@@ -1,6 +1,6 @@
+import { Platform } from 'react-native';
 import Constants from 'expo-constants'
 import * as DocumentPicker from 'expo-document-picker'
-import { Directory, File, Paths } from 'expo-file-system'
 import * as Sharing from 'expo-sharing'
 import Storage from 'expo-sqlite/kv-store'
 import { currentVersion } from '@nutai/db-adapter'
@@ -16,14 +16,10 @@ import {
   type ParseFailure,
 } from './backup-core'
 
-/**
- * The expo-facing half of backup/restore: file I/O and share/pick sheets.
- * All logic that can corrupt data lives in backup-core.ts, under tests.
- *
- * iPad note: sharing presents as an iPhone-style sheet because app.config.ts
- * sets supportsTablet: false. If that flag ever flips, shareAsync needs a
- * real-iPad retest (UIActivityViewController popover anchoring).
- */
+// We require expo-file-system only if not on web, as it crashes the web bundler
+const { Directory, File, Paths } = Platform.OS === 'web' 
+  ? { Directory: null, File: null, Paths: null } 
+  : require('expo-file-system');
 
 function stamp(now: Date): string {
   const p = (n: number) => String(n).padStart(2, '0')
@@ -44,10 +40,21 @@ export async function exportAndShareBackup(): Promise<ExportResult> {
     now: Date.now(),
   })
   const json = serializeBackup(payload)
+  const name = `nutai-backup-${stamp(new Date())}.json`
+
+  if (Platform.OS === 'web') {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+    return { uri: '', name, shared: true }
+  }
 
   const dir = new Directory(Paths.cache, 'backups')
   dir.create({ intermediates: true, idempotent: true })
-  const name = `nutai-backup-${stamp(new Date())}.json`
   const file = new File(dir, name)
   file.create({ overwrite: true })
   file.write(json)
@@ -68,11 +75,6 @@ export type PickOutcome =
   | { ok: true; payload: BackupPayload }
   | { ok: false; reason: ParseFailure | 'cancelled' }
 
-/**
- * copyToCacheDirectory matters: it makes the OS copy whatever the user picked
- * (including Android content:// documents from Drive) into our own sandbox
- * and hand back a plain file:// URI — the entire SAF quirk class, sidestepped.
- */
 export async function pickBackupFile(): Promise<PickOutcome> {
   const res = await DocumentPicker.getDocumentAsync({
     type: 'application/json',
@@ -81,8 +83,14 @@ export async function pickBackupFile(): Promise<PickOutcome> {
   })
   if (res.canceled || !res.assets?.[0]) return { ok: false, reason: 'cancelled' }
 
-  // Never trust the picker's MIME filter — providers mislabel. Parse and check.
-  const raw = await new File(res.assets[0].uri).text()
+  let raw = '';
+  if (Platform.OS === 'web') {
+    // on web res.assets[0].uri is a Blob URI or we use fetch
+    const response = await fetch(res.assets[0].uri);
+    raw = await response.text();
+  } else {
+    raw = await new File(res.assets[0].uri).text()
+  }
   const parsed = parseBackup(raw)
   if (!parsed.ok) return { ok: false, reason: parsed.reason }
   return { ok: true, payload: parsed.payload }
@@ -93,7 +101,6 @@ export async function importBackup(payload: BackupPayload): Promise<ImportOutcom
   return importBackupPayload(h, payload, await currentVersion(h))
 }
 
-/** After a successful restore: the app is set up. Skip onboarding forever. */
 export async function finishRestore(): Promise<void> {
   await Storage.setItem(ONBOARDING_DONE_KEY, 'true')
 }

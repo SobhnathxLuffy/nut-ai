@@ -51,7 +51,7 @@ export async function db(): Promise<DbAdapter> {
   if (!opening) opening = (async () => {
     const handle = await openUserDb()
     await migrate(handle, Date.now())
-    await seedExercises(handle)
+    console.log("--- MIGRATION FINISHED ---"); await seedExercises(handle)
     cached = handle
     return handle
   })().catch(error => { opening = null; throw error })

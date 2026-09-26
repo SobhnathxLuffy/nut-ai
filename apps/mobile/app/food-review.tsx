@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router'
+import { assistantGlobalStatus } from '../src/inference/pathA/assistant'
 import { useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -19,10 +20,20 @@ const SOURCE_NAMES: Record<string, string> = {
 export default function FoodReview() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ payload?: string }>()
+  const params = useLocalSearchParams<{ payload?: string; assistantMsgId?: string }>()
   const decoded = useMemo(() => {
-    try { return { value: decodeFoodReview(params.payload), error: null } }
-    catch (error) { return { value: null, error: error instanceof Error ? error.message : String(error) } }
+    try { 
+      const parsed = decodeFoodReview(params.payload)
+      // PROTECT MOBILE: Ensure nutrientSnapshot exists to prevent fatal JS crashes during render.
+      // A crash here causes the Expo app to reload and drop the user at Onboarding.
+      if (parsed?.selection && !parsed.selection.nutrientSnapshot) {
+        throw new Error('Data corrupted')
+      }
+      return { value: parsed, error: null } 
+    }
+    catch (error) { 
+      return { value: null, error: 'Data corrupted, go back' } 
+    }
   }, [params.payload])
   const base = decoded.value?.selection
   const [name, setName] = useState(base?.displayName ?? '')
@@ -37,7 +48,18 @@ export default function FoodReview() {
   const updateQuantity = (value: string) => {
     setQuantity(value)
     const count = Number(value)
-    if (base && Number.isFinite(count) && count > 0) setGrams(String(Math.round(base.grams * count * 10) / 10))
+    if (base && Number.isFinite(count) && count > 0) {
+      setGrams(String(Math.round(base.grams * count * 10) / 10))
+    }
+  }
+
+  const updateGrams = (value: string) => {
+    setGrams(value)
+    const weight = Number(value)
+    if (base && base.grams > 0 && Number.isFinite(weight) && weight > 0) {
+      const calculatedServings = Math.round((weight / base.grams) * 100) / 100
+      setQuantity(String(calculatedServings))
+    }
   }
 
   async function save() {
@@ -63,6 +85,9 @@ export default function FoodReview() {
       } else {
         await logManualFood(await db(), { ...base, displayName: name.trim(), grams: weight }, Date.now(), options)
       }
+      if (params.assistantMsgId) {
+        assistantGlobalStatus[params.assistantMsgId] = 'SAVED';
+      }
       if (router.canDismiss?.()) {
         router.dismissAll()
       } else {
@@ -82,11 +107,30 @@ export default function FoodReview() {
         <Field label="Food name" value={name} onChange={setName}/>
         <Text style={[type.caption,{color:theme.textMuted}]}>{SOURCE_NAMES[base.matchedFoodSource] ?? 'Food database'}{base.matchedFoodSource === 'ingredient_decomposition' ? ' · cooking amounts are estimates' : ''}</Text>
         {decoded.value?.selections && decoded.value.selections.length > 1 ? <Text style={[type.caption,{color:theme.textMuted}]}>{decoded.value.selections.map(item=>item.displayName).join(' · ')}</Text> : null}
-        <View style={styles.row}><Field label="Servings" value={quantity} onChange={updateQuantity} numeric/><Field label="Total grams" value={grams} onChange={setGrams} numeric/></View>
+        <View style={styles.row}>
+          <Field label="Servings" value={quantity} onChange={updateQuantity} numeric/>
+          <Field label="Total grams" value={grams} onChange={updateGrams} numeric/>
+        </View>
+        {base.grams > 0 ? (
+          <Text style={[type.micro, { color: theme.textMuted, marginTop: -space.xs }]}>
+            Reference serving: 1 serving = {Math.round(base.grams * 10) / 10} g
+          </Text>
+        ) : null}
         <Field label="Date (YYYY-MM-DD)" value={date} onChange={setDate}/>
         <Text style={[type.caption,{color:theme.textMuted}]}>Meal</Text>
         <View style={styles.slots}>{SLOTS.map(value=><Pressable key={value} accessibilityRole="button" accessibilityLabel={`Select ${value} meal slot`} onPress={()=>setSlot(value)} style={[styles.slot,{borderColor:theme.border,backgroundColor:slot===value?theme.text:theme.bgElevated}]}><Text style={[type.label,{color:slot===value?theme.bg:theme.text}]}>{value[0]!.toUpperCase()+value.slice(1)}</Text></Pressable>)}</View>
-        <Text style={[type.bodyStrong,{color:theme.text}]}>{Math.round((base.nutrientSnapshot.kcal ?? 0) * (Number(grams) || 0) / 100)} kcal</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.md, marginVertical: space.xs }}>
+          <Text style={[type.title, { color: theme.text }]}>
+            {base.nutrientSnapshot.kcal !== null
+              ? `${Math.round((base.nutrientSnapshot.kcal ?? 0) * (Number(grams) || 0) / 100)} kcal`
+              : 'Calories unavailable'}
+          </Text>
+          <Text style={[type.caption, { color: theme.textMuted }]}>
+            P: {base.nutrientSnapshot.protein_g !== null ? `${Math.round(((base.nutrientSnapshot.protein_g ?? 0) * (Number(grams) || 0) / 100) * 10) / 10}g` : '—'} ·
+            C: {base.nutrientSnapshot.carbs_g !== null ? `${Math.round(((base.nutrientSnapshot.carbs_g ?? 0) * (Number(grams) || 0) / 100) * 10) / 10}g` : '—'} ·
+            F: {base.nutrientSnapshot.fat_g !== null ? `${Math.round(((base.nutrientSnapshot.fat_g ?? 0) * (Number(grams) || 0) / 100) * 10) / 10}g` : '—'}
+          </Text>
+        </View>
         {error ? <Text style={[type.caption,{color:theme.safety}]}>{error}</Text> : null}
         <Pressable accessibilityRole="button" accessibilityLabel="Save to diary" disabled={busy} onPress={()=>void save()} style={[styles.primary,{backgroundColor:busy?theme.border:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>{busy?'Saving…':'Save to diary'}</Text></Pressable>
       </> : <><Text style={[type.body,{color:theme.safety}]}>{error}</Text><Pressable accessibilityRole="button" onPress={()=>router.back()} style={[styles.primary,{backgroundColor:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>Back</Text></Pressable></>}

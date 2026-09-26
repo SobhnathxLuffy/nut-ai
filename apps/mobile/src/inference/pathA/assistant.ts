@@ -1,7 +1,7 @@
 import { AssistantToolCallZ, type AssistantToolCall } from '@nutai/core-schema'
 import { ASSISTANT_SYSTEM_PROMPT } from '@nutai/prompt'
 import { db, dayTotals, getDayStatus } from '../../data/repo'
-import { localDate } from '../../data/date-utils'
+import { localDate, getThisWeek, getLastWeek } from '../../data/date-utils'
 import { dateOffset } from '../../data/shortcuts'
 
 // A lightweight chat execution loop
@@ -41,7 +41,12 @@ async function executeToolLocally(tool: AssistantToolCall): Promise<any> {
   if (tool.tool_name === 'get_last_workout') {
     const h = await db()
     const rows = await h.all(
-      `SELECT * FROM exercise_entries WHERE name LIKE ? ORDER BY local_date DESC, logged_at DESC LIMIT 1`,
+      `SELECT w.id, w.name, w.local_date, w.started_at, w.finished_at, w.status
+       FROM workouts w
+       JOIN workout_exercises we ON we.workout_id = w.id
+       JOIN exercises e ON we.exercise_id = e.id
+       WHERE e.name LIKE ? AND w.deleted_at IS NULL
+       ORDER BY w.local_date DESC, w.started_at DESC LIMIT 1`,
       ['%' + tool.arguments.exercise_name + '%']
     )
     if (rows.length === 0) return null
@@ -92,17 +97,13 @@ async function executeToolLocally(tool: AssistantToolCall): Promise<any> {
 }
 
 function resolveTimeframe(timeframe: 'today' | 'yesterday' | 'this_week' | 'last_week'): string[] {
-  const today = localDate(Date.now())
+  const now = Date.now()
+  const today = localDate(now)
   if (timeframe === 'today') return [today]
   if (timeframe === 'yesterday') return [dateOffset(today, -1)]
 
-  // Minimal week logic for tests
-  if (timeframe === 'this_week') {
-    return [today, dateOffset(today, -1), dateOffset(today, -2)] // Simplified
-  }
-  if (timeframe === 'last_week') {
-    return [dateOffset(today, -7), dateOffset(today, -8)] // Simplified
-  }
+  if (timeframe === 'this_week') return getThisWeek(now)
+  if (timeframe === 'last_week') return getLastWeek(now)
   return [today]
 }
 
@@ -114,3 +115,5 @@ export async function applyProposal(tool_name: string, data: any) {
     console.log("Saving meal", data)
   }
 }
+
+export const assistantGlobalStatus: Record<string, string> = {};

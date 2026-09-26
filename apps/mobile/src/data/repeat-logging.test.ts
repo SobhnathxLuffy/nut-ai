@@ -127,11 +127,13 @@ describe('Repeat Logging and Copy-Yesterday Actions (SRH-005)', () => {
       local_date: string
       meal_slot: string
       photo_uri: string | null
+      logged_at: number
     }>('SELECT * FROM meals WHERE id = ?', [newMealId])
     expect(meal?.local_date).toBe(TODAY)
     expect(meal?.meal_slot).toBe('breakfast')
     expect(meal?.uuid).not.toBe(snapshot.meal['uuid'])
     expect(meal?.photo_uri).toBeNull()
+    expect(meal?.logged_at).toBe(NOW)
 
     // Inspect repeated log items
     const items = await db.all<{
@@ -143,6 +145,22 @@ describe('Repeat Logging and Copy-Yesterday Actions (SRH-005)', () => {
     expect(items[0]?.display_name).toBe('Oatmeal & Milk')
     expect(items[0]?.snap_energy_kcal).toBe(250)
     expect(items[0]?.snap_protein_g).toBe(15)
+  })
+
+  it('repeats meal with the repeat time (now) instead of reusing prior meal timestamp (BUG-015)', async () => {
+    // Meal from yesterday logged at 8:00 AM
+    const priorTimestamp = NOW - 86_400_000
+    await seedMeal(1, 'lunch', 'Rajma Chawal', priorTimestamp, YESTERDAY)
+    const snapshot = await mealSnapshot(db, 1)
+
+    // Repeat now (e.g. 3:30 PM today)
+    const repeatTime = NOW + 3_600_000
+    const repeatedIds = await repeatSnapshots(db, [snapshot], TODAY, repeatTime)
+    const repeated = await db.get<{ logged_at: number }>('SELECT logged_at FROM meals WHERE id = ?', [repeatedIds[0]!])
+
+    // Must be the repeat time, NOT the prior timestamp!
+    expect(repeated?.logged_at).toBe(repeatTime)
+    expect(repeated?.logged_at).not.toBe(priorTimestamp)
   })
 
   it('copies yesterday meals into today with copyYesterday', async () => {

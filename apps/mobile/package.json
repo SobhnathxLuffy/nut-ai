@@ -14,9 +14,7 @@
     "use-release": "node scripts/use-release-scheme.mjs"
   },
   "dependencies": {
-    "@nutai/training": "*",
-    "@nutai/search": "*",
-    "@nutai/timeline": "*",
+    "@expo/metro-runtime": "~57.0.15",
     "@expo/ui": "~57.0.8",
     "@kingstinct/react-native-healthkit": "^14.0.2",
     "@nutai/clamp": "*",
@@ -29,7 +27,11 @@
     "@nutai/prompt": "*",
     "@nutai/repair": "*",
     "@nutai/resolver": "*",
+    "@nutai/search": "*",
+    "@nutai/timeline": "*",
     "@nutai/totals": "*",
+    "@nutai/training": "*",
+    "@sqlite.org/sqlite-wasm": "^3.53.4-build1",
     "expo": "~57.0.9",
     "expo-camera": "~57.0.3",
     "expo-clipboard": "~57.0.1",
@@ -49,15 +51,21 @@
     "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
+    "react-dom": "19.2.3",
     "react-native": "0.86.2",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2",
+    "sql.js": "^1.14.2",
+    "wa-sqlite": "^1.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/react": "~19.2.2",
+    "playwright": "^1.63.0",
     "typescript": "~5.9.0"
   }
 }
