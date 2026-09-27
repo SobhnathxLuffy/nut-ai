@@ -27,6 +27,23 @@ export function slotFor(ms: number): string {
   return 'snack'
 }
 
+/**
+ * Strict validation for user-typed YYYY-MM-DD dates (P1-6).
+ *
+ * A regex alone is not enough: `2026-02-30` matches the pattern but is not a
+ * real day. Date.parse rejects out-of-range ISO dates on spec-compliant
+ * engines, and the component round-trip below keeps the check honest even on
+ * engines that are lenient about them. Noon is used so a UTC-offset boundary
+ * can never shift the calendar day.
+ */
+export function isValidLocalDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T12:00:00`)
+  if (Number.isNaN(parsed.getTime())) return false
+  const [y, m, d] = value.split('-').map(Number)
+  return parsed.getFullYear() === y && parsed.getMonth() + 1 === m && parsed.getDate() === d
+}
+
 /** Returns an array of local dates for "This Week" (Monday to Sunday) containing `ms` */
 export function getThisWeek(ms: number): string[] {
   const d = new Date(ms)

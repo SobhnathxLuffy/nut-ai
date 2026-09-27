@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { db, deleteMeal } from '../src/data/repo'
+import { isValidLocalDate } from '../src/data/date-utils'
 import { getLoggedMeal, updateLoggedMeal, type LoggedMealDetail } from '../src/data/logged-meals'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
@@ -83,7 +84,7 @@ export default function MealDetail() {
   async function save() {
     if (!meal || busy || isSavingRef.current) return
     isSavingRef.current = true
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(meal.date) || Number.isNaN(Date.parse(meal.date))) {
+    if (!isValidLocalDate(meal.date)) {
       isSavingRef.current = false
       setError('Choose a valid date in YYYY-MM-DD format')
       return

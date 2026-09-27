@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { decodeFoodReview } from '../src/data/food-review'
 import { logManualFood, logManualMealWithItems } from '../src/data/manual-food'
 import { db } from '../src/data/repo'
-import { slotFor } from '../src/data/date-utils'
+import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -39,7 +39,7 @@ export default function FoodReview() {
   const [name, setName] = useState(base?.displayName ?? '')
   const [quantity, setQuantity] = useState('1')
   const [grams, setGrams] = useState(base ? String(Math.round(base.grams * 10) / 10) : '')
-  const [date, setDate] = useState(decoded.value?.date ?? '')
+  const [date, setDate] = useState(decoded.value?.date || localDate(Date.now()))
   const [slot, setSlot] = useState<(typeof SLOTS)[number]>(slotFor(Date.now()) as (typeof SLOTS)[number])
   const [busy, setBusy] = useState(false)
   const isSavingRef = useRef(false)
@@ -62,6 +62,10 @@ export default function FoodReview() {
     }
   }
 
+  // P1-6: the date field is free text, so validate it live instead of letting
+  // the user discover the problem through a database error on save.
+  const dateValid = isValidLocalDate(date)
+
   async function save() {
     if (!base || busy || isSavingRef.current) return
     isSavingRef.current = true
@@ -73,6 +77,10 @@ export default function FoodReview() {
     if (!Number.isFinite(weight) || weight <= 0) {
       isSavingRef.current = false
       return setError('Grams must be greater than zero')
+    }
+    if (!dateValid) {
+      isSavingRef.current = false
+      return setError('Enter a real calendar date in YYYY-MM-DD format, like 2026-02-27')
     }
     setBusy(true); setError(null)
     try {
@@ -117,6 +125,7 @@ export default function FoodReview() {
           </Text>
         ) : null}
         <Field label="Date (YYYY-MM-DD)" value={date} onChange={setDate}/>
+        {!dateValid ? <Text style={[type.caption,{color:theme.safety}]}>Enter a real calendar date in YYYY-MM-DD format, like {localDate(Date.now())}.</Text> : null}
         <Text style={[type.caption,{color:theme.textMuted}]}>Meal</Text>
         <View style={styles.slots}>{SLOTS.map(value=><Pressable key={value} accessibilityRole="button" accessibilityLabel={`Select ${value} meal slot`} onPress={()=>setSlot(value)} style={[styles.slot,{borderColor:theme.border,backgroundColor:slot===value?theme.text:theme.bgElevated}]}><Text style={[type.label,{color:slot===value?theme.bg:theme.text}]}>{value[0]!.toUpperCase()+value.slice(1)}</Text></Pressable>)}</View>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space.md, marginVertical: space.xs }}>
@@ -132,7 +141,7 @@ export default function FoodReview() {
           </Text>
         </View>
         {error ? <Text style={[type.caption,{color:theme.safety}]}>{error}</Text> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Save to diary" disabled={busy} onPress={()=>void save()} style={[styles.primary,{backgroundColor:busy?theme.border:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>{busy?'Saving…':'Save to diary'}</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Save to diary" disabled={busy || !dateValid} onPress={()=>void save()} style={[styles.primary,{backgroundColor:busy||!dateValid?theme.border:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>{busy?'Saving…':'Save to diary'}</Text></Pressable>
       </> : <><Text style={[type.body,{color:theme.safety}]}>{error}</Text><Pressable accessibilityRole="button" onPress={()=>router.back()} style={[styles.primary,{backgroundColor:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>Back</Text></Pressable></>}
     </ScrollView>
   </KeyboardAvoidingView>

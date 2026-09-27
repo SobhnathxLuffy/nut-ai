@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
+import { Alert, StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
@@ -13,7 +13,7 @@ import { per100Snapshot } from '../src/data/dish-snapshot'
 import { resolveByText } from '@nutai/resolver'
 
 type DishDef = any
-type Component = { id: string, name: string, foodId: string | null, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null, searchResults?: any[] }
+type Component = { id: string, name: string, foodId: string | null, resolvedName: string | null, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null, searchResults?: any[] }
 
 // WEB-003: household variants are persisted in the writable user DB. The table
 // mirrors the corpus schema columns this screen reads and writes.
@@ -111,14 +111,21 @@ export default function DishComposerScreen() {
             const name = slot.label
             const grams = 50 // default
             let nutrient = { kcal: null as number|null, protein_g: null as number|null, carbs_g: null as number|null, fat_g: null as number|null }
-            
-            if (foodId) {
+            let resolvedName: string | null = null
+
+            if (foodId?.startsWith('ifct:')) {
               const res = await ifctDb.get<any>('SELECT * FROM foods WHERE source_id = ?', [foodId.replace('ifct:', '')])
               if (res) {
                  nutrient = { kcal: res.energy_kcal, protein_g: res.protein_g, carbs_g: res.carb_g, fat_g: res.fat_g }
+                 // P1-9: keep the human-readable food name for the UI.
+                 resolvedName = res.name ?? null
               }
+            } else if (foodId?.startsWith('usda:') && db) {
+              // USDA-mapped slots live in the nutrition corpus (fdc ids).
+              const res = await db.get<any>('SELECT name FROM foods WHERE source_id = ?', [foodId.replace('usda:', '')])
+              if (res) resolvedName = res.name ?? null
             }
-            comps.push({ id: Math.random().toString(), name, foodId, grams, ...nutrient })
+            comps.push({ id: Math.random().toString(), name, foodId, resolvedName, grams, ...nutrient })
           }
         }
         if (alive) {
@@ -135,7 +142,7 @@ export default function DishComposerScreen() {
 
   const addIngredient = () => {
     // For testing, just add a dummy empty ingredient
-    setComponents([...components, { id: Math.random().toString(), name: 'New Ingredient', foodId: null, grams: 0, kcal: null, protein_g: null, carbs_g: null, fat_g: null }])
+    setComponents([...components, { id: Math.random().toString(), name: 'New Ingredient', foodId: null, resolvedName: null, grams: 0, kcal: null, protein_g: null, carbs_g: null, fat_g: null }])
   }
 
   const removeComponent = (id: string) => {
@@ -144,7 +151,7 @@ export default function DishComposerScreen() {
 
   
   const updateName = (id: string, text: string) => {
-    setComponents(components.map(c => c.id === id ? { ...c, name: text, foodId: null, kcal: null, protein_g: null, carbs_g: null, fat_g: null, searchResults: [] } : c))
+    setComponents(components.map(c => c.id === id ? { ...c, name: text, foodId: null, resolvedName: null, kcal: null, protein_g: null, carbs_g: null, fat_g: null, searchResults: [] } : c))
   }
 
   const searchIngredient = async (id: string, query: string) => {
@@ -163,6 +170,7 @@ export default function DishComposerScreen() {
       ...x, 
       foodId: candidate.foodId, 
       name: candidate.name, 
+      resolvedName: candidate.name,
       kcal: candidate.energyKcal, 
       protein_g: candidate.proteinG, 
       carbs_g: candidate.carbG, 
@@ -200,8 +208,8 @@ export default function DishComposerScreen() {
   const portionF = hasUnknowns ? null : totalF * multiplier
 
     const logDish = async () => {
-    if (hasUnknowns) return alert("Resolve all ingredients first")
-    if (!(portionG > 0)) return alert("Enter a valid portion weight")
+    if (hasUnknowns) return Alert.alert('Resolve all ingredients first', 'Every component needs a nutrition match before the dish can be logged.')
+    if (!(portionG > 0)) return Alert.alert('Enter a valid portion weight', 'The final portion must be a number greater than zero grams.')
     
     // Create/update the Household Variant in dish_definitions
     const isEditingHousehold = dish?.recordStatus === 'HOUSEHOLD'
@@ -223,7 +231,7 @@ export default function DishComposerScreen() {
     // SQLITE_DESERIALIZE_READONLY, so every save used to fail silently and the
     // user's "My Version" dish was never persisted.
     if (!userDb) {
-      alert('Database is still loading — please try again in a moment.')
+      Alert.alert('Database is still loading', 'Please try again in a moment.')
       return
     }
     try {
@@ -234,7 +242,7 @@ export default function DishComposerScreen() {
       )
     } catch (e) {
       console.error('Failed to save household variant:', e)
-      alert('Could not save your version of this dish. ' + String(e))
+      Alert.alert('Could not save your version of this dish', String(e))
       return
     }
 
@@ -285,7 +293,9 @@ export default function DishComposerScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ flex: 1 }}>
                <TextInput style={[type.body, { color: t.text, padding: 0, margin: 0, fontWeight: 'bold' }]} value={c.name} onChangeText={t => updateName(c.id, t)} placeholder="Ingredient Name" placeholderTextColor={t.textMuted} />
-               {c.foodId ? <Text style={[type.micro, { color: t.protein }]}>Resolved: {c.foodId}</Text> : <Text style={[type.micro, { color: t.safety }]}>Unresolved Ingredient</Text>}
+               {/* P1-9: show the resolved food's NAME — a raw source id like
+                   ifct:A019 tells the user nothing about the ingredient. */}
+               {c.foodId ? <Text style={[type.micro, { color: t.protein }]} numberOfLines={2}>Resolved: {c.resolvedName ?? c.foodId}</Text> : <Text style={[type.micro, { color: t.safety }]}>Unresolved Ingredient</Text>}
                <Text style={[type.caption, { color: t.textMuted }]}>
                  {c.kcal !== null ? `${Math.round(c.kcal * (c.grams/100))} kcal · ${Math.round((c.protein_g||0)*(c.grams/100))}g P` : 'Unknown nutrition'}
                </Text>

@@ -202,6 +202,14 @@ export default function Recipes() {
       return parsed
     }
     const optionalNumber = (value: string, field: string) => value.trim() ? number(value, field) : null
+    // P1-4: name the exact ingredient that is missing its source, instead of
+    // the blanket "Every ingredient needs a name and source ID".
+    ingredients.forEach((ingredient, position) => {
+      const named = ingredient.displayName.trim()
+      if (named && !ingredient.foodId.trim()) {
+        throw new RangeError(`"${named}" (ingredient ${position + 1}) has no nutrition source — tap Find nutrition, or set its Source ID under Nutrition details`)
+      }
+    })
     return {
       name,
       preparation,
@@ -262,44 +270,68 @@ export default function Recipes() {
     setMatchingIndex(index)
     setMatches([])
     setError(null)
-    const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
-    const result = await resolveByText(nutritionDb, {
-      canonicalFoodKey: query,
-      observedBrand: null,
-      prepFacet: null,
-      modelCategory: null,
-      estimatedGrams: Number(ingredients[index]?.grams) || 100,
-    }, { ifctDb, userDb })
-    const candidates = result.outcome.kind === 'auto_accept'
-      ? [result.outcome.match]
-      : result.outcome.kind === 'disambiguate' ? result.outcome.candidates : []
-    setMatches(candidates)
-    if (candidates.length === 0) setError(`No nutrition match for ${query}`)
+    try {
+      const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
+      const result = await resolveByText(nutritionDb, {
+        canonicalFoodKey: query,
+        observedBrand: null,
+        prepFacet: null,
+        modelCategory: null,
+        estimatedGrams: Number(ingredients[index]?.grams) || 100,
+      }, { ifctDb, userDb })
+      const candidates = result.outcome.kind === 'auto_accept'
+        ? [result.outcome.match]
+        : result.outcome.kind === 'disambiguate' ? result.outcome.candidates : []
+      if (candidates.length === 0) {
+        setError(`No nutrition match for ${query} — try a simpler name, or fill the nutrition details by hand`)
+        return
+      }
+      // P1-4: when the resolver is confident (exactly one match), apply it
+      // immediately. Requiring a second tap on the lone candidate row made
+      // "Find nutrition" look finished while ingredient.foodId stayed empty,
+      // so Save then false-rejected with "Every ingredient needs a name and
+      // source ID".
+      if (candidates.length === 1) {
+        setMatchingIndex(null)
+        await chooseIngredient(index, candidates[0]!)
+        return
+      }
+      setMatches(candidates)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : `Could not look up nutrition for ${query}`)
+    }
   }
 
   async function chooseIngredient(index: number, candidate: ScoredCandidate) {
-    const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
-    const food = await loadFood(nutritionDb, candidate.foodId, { ifctDb, userDb })
-    if (!food) {
-      setError('That food is no longer available')
-      return
+    // P1-4: this used to run under `void` with no catch, so a failed food
+    // lookup died silently and the ingredient stayed unresolved while the
+    // user moved on to Save.
+    try {
+      const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
+      const food = await loadFood(nutritionDb, candidate.foodId, { ifctDb, userDb })
+      if (!food) {
+        setError('That food is no longer available — pick another match')
+        return
+      }
+      if (food.energyKcal === null || food.proteinG === null || food.fatG === null || food.carbG === null) {
+        setError('Core nutrition is unavailable for that ingredient')
+        return
+      }
+      setIngredients((current) => current.map((ingredient, itemIndex) => itemIndex === index ? {
+        ...ingredient,
+        foodId: food.foodId,
+        displayName: food.name,
+        kcal: String(food.energyKcal),
+        protein: String(food.proteinG),
+        fat: String(food.fatG),
+        carbs: String(food.carbG),
+        fiber: food.fiberG === null ? '' : String(food.fiberG),
+      } : ingredient))
+      setMatchingIndex(null)
+      setMatches([])
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not load that ingredient — pick the match again')
     }
-    if (food.energyKcal === null || food.proteinG === null || food.fatG === null || food.carbG === null) {
-      setError('Core nutrition is unavailable for that ingredient')
-      return
-    }
-    setIngredients((current) => current.map((ingredient, itemIndex) => itemIndex === index ? {
-      ...ingredient,
-      foodId: food.foodId,
-      displayName: food.name,
-      kcal: String(food.energyKcal),
-      protein: String(food.proteinG),
-      fat: String(food.fatG),
-      carbs: String(food.carbG),
-      fiber: food.fiberG === null ? '' : String(food.fiberG),
-    } : ingredient))
-    setMatchingIndex(null)
-    setMatches([])
   }
 
   if (editingId != null) {

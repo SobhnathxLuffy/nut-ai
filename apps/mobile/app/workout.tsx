@@ -8,6 +8,7 @@ import { db, setting, putSetting, undoLastOperation, redoLastOperation } from '.
 import { readWeightUnit } from '../src/data/weight-units'
 import { Screen, Button, Card, Field, Label, Row, useAction } from '../src/components/Screen'
 import { canonicalizeFieldValue, describeSet, getFieldLabels, setValuesToDisplay } from '../src/data/workout-load'
+import { friendlySetValueError } from '../src/data/workout-errors'
 
 export default function WorkoutScreen(){const {id}=useLocalSearchParams<{id:string}>();const [detail,setDetail]=useState<Awaited<ReturnType<typeof workoutDetail>>|null>(null);const [advanced,setAdvanced]=useState(false);const [unit,setUnit]=useState<WeightUnit>('kg');const [group,setGroup]=useState<number[]>([]);const [clock,setClock]=useState(Date.now())
  const refresh=useCallback(async()=>{const h=await db();const [nextDetail,nextAdvanced,nextUnit]=await Promise.all([workoutDetail(h,Number(id)),setting('training.advanced','false'),readWeightUnit(h)]);setDetail(nextDetail);setAdvanced(nextAdvanced==='true');setUnit(nextUnit)},[id]);const action=useAction(refresh)
@@ -36,14 +37,14 @@ export default function WorkoutScreen(){const {id}=useLocalSearchParams<{id:stri
 }
 function SavedText({label,initial,save}:{label:string;initial:string;save:(v:string)=>Promise<void>}){const [value,setValue]=useState(initial);const [error,setError]=useState('');const queue=useRef(Promise.resolve())
  useEffect(()=>{setValue(initial)},[initial])
- return <><Field label={label} value={value} onChangeText={v=>{setValue(v);queue.current=queue.current.then(()=>save(v)).catch(e=>setError(String(e)))}}/>{!!error&&<Label>{error}</Label>}</>
+ return <><Field label={label} value={value} onChangeText={v=>{setValue(v);queue.current=queue.current.then(()=>save(v)).catch(e=>setError(friendlySetValueError(e)))}}/>{!!error&&<Label>{error}</Label>}</>
 }
 function SetEditor({exercise:e,set:s,active,advanced,refresh,unit}:{exercise:WorkoutExercise;set:WorkoutSet;active:boolean;advanced:boolean;refresh:()=>Promise<void>;unit:WeightUnit}){
  const labels=getFieldLabels(unit)
  const toDisplayValues=useCallback((parsed:SetValues)=>setValuesToDisplay(parsed,unit),[unit])
  const [values,setValues]=useState<Record<string,string>>(()=>toDisplayValues(SetValues.parse(s)));const [kind,setKind]=useState(s.kind);const [error,setError]=useState('');const queue=useRef(Promise.resolve());const draft=useRef(SetValues.parse(s));const [saving,setSaving]=useState(false)
  useEffect(()=>{const parsed=SetValues.parse(s);setValues(toDisplayValues(parsed));draft.current=parsed;setKind(s.kind)},[s.id,s.completed_at,unit,JSON.stringify(SetValues.parse(s)),toDisplayValues])
- const persist=(next:SetValues,completed=false,nextKind=kind,refreshAfter=false)=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,next,{id:s.id,completed,kind:nextKind});if(refreshAfter)await refresh();setError('')}).catch(err=>setError(String(err))).finally(()=>setSaving(false))}
+ const persist=(next:SetValues,completed=false,nextKind=kind,refreshAfter=false)=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,next,{id:s.id,completed,kind:nextKind});if(refreshAfter)await refresh();setError('')}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}
  if(!active)return <Label>Set {s.sort_order+1} · {s.kind} · {describeSet(s,unit)}{s.completed_at?' · done':' · not completed'}</Label>
  const fields=[...TRACKING_FIELDS[e.tracking_type],...(advanced?['rir','rpe','tempo'] as const:[])]
  return <View style={{gap:8,borderLeftWidth:e.superset_group_id?3:0,paddingLeft:e.superset_group_id?12:0}}><Label>Set {s.sort_order+1} · {s.completed_at?'Complete':'Draft'}{saving?' · Saving…':''}</Label>
@@ -57,6 +58,6 @@ function SetEditor({exercise:e,set:s,active,advanced,refresh,unit}:{exercise:Wor
     persist(next,!!s.completed_at)
   }}/></View>)}</Row>
   {advanced&&<Row>{SetKind.options.map(k=><Button key={k} label={k} selected={kind===k} disabled={saving} onPress={()=>{setKind(k);persist(draft.current,!!s.completed_at,k)}}/>)}</Row>}
-  <Row><Button label={s.completed_at?'Mark set incomplete':'Complete set'} selected={!!s.completed_at} disabled={saving} onPress={()=>persist(draft.current,!s.completed_at,kind,true)}/><Button label="Duplicate set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,draft.current,{completed:false,kind});await refresh()}).catch(err=>setError(String(err))).finally(()=>setSaving(false))}}/><Button label="Delete set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await removeSet(await db(),s.id);await refresh()}).catch(err=>setError(String(err))).finally(()=>setSaving(false))}}/>{fields.includes('load_kg')&&<Button label="Plate helper" onPress={()=>router.push({pathname:'/equipment',params:{target:draft.current.load_kg!=null?String(Math.round(draft.current.load_kg*100)/100):''}} as never)}/>}</Row>{!!error&&<Label>{error}</Label>}
+  <Row><Button label={s.completed_at?'Mark set incomplete':'Complete set'} selected={!!s.completed_at} disabled={saving} onPress={()=>persist(draft.current,!s.completed_at,kind,true)}/><Button label="Duplicate set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,draft.current,{completed:false,kind});await refresh()}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}}/><Button label="Delete set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await removeSet(await db(),s.id);await refresh()}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}}/>{fields.includes('load_kg')&&<Button label="Plate helper" onPress={()=>router.push({pathname:'/equipment',params:{target:draft.current.load_kg!=null?String(Math.round(draft.current.load_kg*100)/100):''}} as never)}/>}</Row>{!!error&&<Label>{error}</Label>}
  </View>
 }

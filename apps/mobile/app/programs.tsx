@@ -12,6 +12,8 @@ import {
   type Routine,
 } from '@nutai/training'
 import { db, localDate } from '../src/data/repo'
+import { isValidLocalDate } from '../src/data/date-utils'
+import { friendlySetValueError } from '../src/data/workout-errors'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
@@ -53,7 +55,14 @@ export default function ProgramsScreen() {
       weeks: w,
       schedule,
     }
-    ProgramInput.parse(input)
+    // P1-6: the start date is typed by hand — reject impossible dates with a
+    // sentence instead of letting the schema throw raw zod JSON at the user.
+    if (!isValidLocalDate(startDate)) throw new Error('Choose a real calendar date in YYYY-MM-DD format, like 2026-02-27')
+    try {
+      ProgramInput.parse(input)
+    } catch (error) {
+      throw new Error(friendlySetValueError(error))
+    }
     const h = await db()
     await saveProgram(h, input)
     setEditing(false)

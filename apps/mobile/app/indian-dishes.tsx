@@ -59,7 +59,10 @@ export default function IndianDishesScreen() {
       if (conditions.length > 0) {
         sql += ' WHERE ' + conditions.join(' AND ')
       }
-      sql += ' ORDER BY d.canonical_name LIMIT 100'
+      // P1-8: the corpus holds 362 dish identities and the old LIMIT 100 made
+      // 262 of them unreachable in this browser. 500 keeps a defensive ceiling
+      // (corpus + household variants) without hiding anything.
+      sql += ' ORDER BY d.canonical_name LIMIT 500'
       
       try {
         const rows = await db.all<any>(sql, args)
@@ -79,7 +82,7 @@ export default function IndianDishesScreen() {
           }
           const where = userConditions.length > 0 ? ' WHERE ' + userConditions.join(' AND ') : ''
           userRows = await userDb.all<any>(
-            `SELECT d.id, d.canonical_name as name, d.category, d.record_status as status, '' as aliases FROM dish_definitions d${where} ORDER BY d.canonical_name LIMIT 100`,
+            `SELECT d.id, d.canonical_name as name, d.category, d.record_status as status, '' as aliases FROM dish_definitions d${where} ORDER BY d.canonical_name LIMIT 500`,
             userArgs
           )
         } catch (userErr) {
@@ -96,7 +99,7 @@ export default function IndianDishesScreen() {
         merged.sort((a, b) => String(a.name).localeCompare(String(b.name)))
         if (alive) {
           setError(null)
-          setDishes(merged.slice(0, 100))
+          setDishes(merged.slice(0, 500))
         }
       } catch (e) {
         console.error('IndianDishes query error:', e)

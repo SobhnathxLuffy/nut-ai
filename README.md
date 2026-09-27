@@ -173,6 +173,7 @@ above.
 - [docs/planning/00_INDEX.md](docs/planning/00_INDEX.md) links the implementation-grade product plan, ADRs, task backlog, traceability matrix, and release gates.
 - [docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md) records the web QA round and the closing evidence for every web P0 (WEB-001 … WEB-011).
 - [docs/qa/p0-product-audit-fixes.md](docs/qa/p0-product-audit-fixes.md) records the product audit round (Section B, P0-1 … P0-6): trusted-nutrition scaling, resolver cascade, dish-KB build pipeline, gate integrity.
+- [docs/qa/p1-section-c-fixes.md](docs/qa/p1-section-c-fixes.md) records the Section-C P1 round: recipe auto-resolve, friendly workout errors, recoverable dates, full dish-KB browsing, readable dish components — plus the verdict that seven reported P1s were already fixed.
 
 ## Licensing
 

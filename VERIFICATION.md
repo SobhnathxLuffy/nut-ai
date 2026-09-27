@@ -6,7 +6,7 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **626 passed**, 77 files |
+| Unit + property + integration tests | `npx vitest run` | **639 passed**, 78 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
@@ -105,6 +105,57 @@ Gates at this round: **626/626 unit tests (77 files)**, typecheck clean,
 ESLint 0 warnings, node-purity 18/18, `npm run check` exit 0 (including the
 dish-KB integrity gate), e2e 2 passed + 2 `fixme`, web boot smoke 0 console
 errors.
+
+---
+
+## Product QA Section-C round — every P1 verified or closed (2026-09-27)
+
+The Section-C P1 report (P1-1 … P1-12) was verified item by item against
+current main before any code changed: **seven of the twelve were already
+closed by the earlier WEB and Section-B rounds** (the report had been produced
+against a pre-fix build), and the five genuinely open ones were fixed here.
+Per-bug evidence and repro notes in
+[docs/qa/p1-section-c-fixes.md](docs/qa/p1-section-c-fixes.md).
+
+Already fixed on main before this round (code-verified + e2e-verified now):
+P1-1 dead dialogs (web `Alert` shim, reset-chain `.catch`), P1-2 visible
+save failures + duplicate-name guard, P1-3 backup import (DocumentPicker web
+wiring), P1-7 repeat-meal busy guard (synchronous `isBusyRef`), P1-10
+`serve-coop.py` SPA fallback, P1-11 web keys in `localStorage`, P1-12 user DB
+on OPFS (not localStorage).
+
+Fixed this round:
+
+- **P1-4 recipe false-reject:** `Find nutrition` now auto-applies the
+  resolver's confident single match instead of demanding a second tap on the
+  lone candidate row, `chooseIngredient` failures surface instead of dying
+  under `void`, and Save names the exact ingredient that is missing its
+  source instead of a blanket rejection.
+- **P1-5 raw zod JSON in the workout UI:** set auto-save failures render
+  field-level sentences ("Reps must be a whole number (like 8, not 8.5)")
+  with the draft kept; the same mapper covers programs.
+- **P1-6 hostile date handling:** a review payload with a missing or
+  impossible date no longer renders the "Data corrupted, go back" card —
+  decode degrades the date and the screen defaults to today with live
+  validation that blocks Save; impossible calendar dates (`2026-02-30`) are
+  rejected everywhere via a shared strict validator (review, meal detail,
+  programs).
+- **P1-8 dish browser cap:** the `LIMIT 100` slice that made 262 of the 362
+  dish identities unreachable is lifted (500 ceiling for corpus + household
+  variants).
+- **P1-9 raw source ids:** dish-composer components show the resolved food's
+  NAME (from IFCT or the nutrition corpus) instead of `ifct:A019`.
+
+New regression locks: 6 unit tests (zod error mapper, strict date validator,
+review-date decode contract) and a 6-test Playwright suite
+(`e2e/p1-regression.spec.ts`) that drives the restore journey end to end —
+file chooser → shimmed confirm dialog → tabs, review-date recovery, custom
+food duplicate/validation dialogs, full dish KB listing, and idli composer
+name resolution.
+
+Gates at this round: **639/639 unit tests (78 files)**, typecheck clean,
+ESLint 0 warnings, node-purity 18/18, `npm run check` exit 0,
+**e2e 8 passed + 2 `fixme`**.
 
 Strict mode means `strict` plus `noUncheckedIndexedAccess`,
 `exactOptionalPropertyTypes`, `noImplicitOverride`,

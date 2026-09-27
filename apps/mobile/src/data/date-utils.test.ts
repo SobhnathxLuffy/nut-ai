@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { getThisWeek, getLastWeek } from './date-utils'
+import { getThisWeek, getLastWeek, isValidLocalDate } from './date-utils'
+
+describe('isValidLocalDate (P1-6)', () => {
+  it('accepts real calendar dates', () => {
+    expect(isValidLocalDate('2026-02-27')).toBe(true)
+    expect(isValidLocalDate('2024-02-29')).toBe(true) // leap day
+    expect(isValidLocalDate('2023-12-31')).toBe(true)
+  })
+
+  it('rejects impossible dates that match the shape', () => {
+    expect(isValidLocalDate('2026-02-30')).toBe(false)
+    expect(isValidLocalDate('2026-13-01')).toBe(false)
+    expect(isValidLocalDate('2026-00-10')).toBe(false)
+    expect(isValidLocalDate('2026-04-31')).toBe(false)
+  })
+
+  it('rejects non-dates and wrong shapes', () => {
+    expect(isValidLocalDate('')).toBe(false)
+    expect(isValidLocalDate('not-a-date')).toBe(false)
+    expect(isValidLocalDate('2026/02/27')).toBe(false)
+    expect(isValidLocalDate('27-02-2026')).toBe(false)
+  })
+})
 
 describe('date-utils', () => {
   it('Monday', () => {
