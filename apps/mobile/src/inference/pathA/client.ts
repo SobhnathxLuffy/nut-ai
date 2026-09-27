@@ -8,6 +8,7 @@ import {
   buildTextJsonRequest,
   buildWebLookupRequest,
   computeScanCost,
+  cheapestModel,
   EXERCISE_ESTIMATE_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
@@ -501,23 +502,45 @@ export async function runAssistantChatApi(
   req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number },
   fetchImpl: typeof fetch = fetch
 ) {
+  // WEB-007 fix: fallback models used to be hardcoded (`gpt-4o`,
+  // `claude-3-5-sonnet-20240620`). Dated snapshots silently EXPIRE — the
+  // "safe" cross-provider path kept failing with model-unavailable long after
+  // the provider retired the snapshot. Fallbacks are now derived from the live
+  // catalogue via cheapestModel(), so a model change lands in exactly one
+  // place: PROVIDER_MODELS in @nutai/prompt.
   const fallbacks: { provider: ProviderId, model: string }[] = [
     { provider: req.provider, model: req.model },
-    ...(req.provider === 'openai'
-      ? [{ provider: 'anthropic' as ProviderId, model: 'claude-3-5-sonnet-20240620' }]
-      : req.provider === 'anthropic'
-      ? [{ provider: 'openai' as ProviderId, model: 'gpt-4o' }]
-      : [{ provider: 'openai' as ProviderId, model: 'gpt-4o' }, { provider: 'anthropic' as ProviderId, model: 'claude-3-5-sonnet-20240620' }])
+    ...(['openai', 'anthropic', 'google'] as ProviderId[])
+      .filter((p) => p !== req.provider)
+      .map((p) => ({ provider: p, model: cheapestModel(p).id })),
   ];
-  let lastError;
-  for (const fallback of fallbacks) {
-    const res = await runAssistantChatApiSingle({ ...req, provider: fallback.provider, model: fallback.model }, fetchImpl);
-    if (res.ok || (res as any).error?.retryable === false) {
+  let primaryError: Awaited<ReturnType<typeof runAssistantChatApiSingle>> | null = null;
+  let lastError: Awaited<ReturnType<typeof runAssistantChatApiSingle>> | null = null;
+  for (let i = 0; i < fallbacks.length; i++) {
+    const res = await runAssistantChatApiSingle({ ...req, provider: fallbacks[i].provider, model: fallbacks[i].model }, fetchImpl);
+    if (res.ok) {
       return res;
+    }
+    // A definitive rejection on the PRIMARY (rejected key, unknown model) is
+    // the answer — silently retrying on another provider would hide the real
+    // problem from the user. Preserve the short-circuit.
+    if (i === 0 && (res as any).error?.retryable === false) {
+      return res;
+    }
+    if (i === 0) {
+      primaryError = res;
+      continue;
+    }
+    // Chain fix: a fallback provider without a saved key is "unavailable",
+    // not "the answer" — skip it and keep trying instead of aborting the
+    // whole chain with "No credentials for X".
+    if ((res as any).error?.kind === 'key-invalid') {
+      continue;
     }
     lastError = res;
   }
-  return lastError || { ok: false, error: { kind: 'error-retryable', message: 'All providers failed', retryable: true } };
+  return primaryError || lastError
+    || { ok: false, error: { kind: 'error-retryable', message: 'All providers failed', retryable: true } };
 }
 
 export async function runAssistantChatApiSingle(

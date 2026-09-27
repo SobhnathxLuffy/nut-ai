@@ -1,0 +1,83 @@
+# WEB-009: the Playwright e2e suite (apps/mobile/e2e/wave1.spec.ts) shipped
+# with no config and no CI job, so it never ran. This workflow runs every
+# quality gate on push/PR: typecheck, unit tests, node purity, lint, and the
+# full web e2e suite against the real exported bundle.
+
+name: web ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: web-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Node purity
+        run: npm run check:node-purity
+
+      - name: Lint
+        run: npm run lint
+
+  web-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web bundle
+        working-directory: apps/mobile
+        run: npx expo export --platform web
+        env:
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+
+      - name: Install Playwright browser
+        working-directory: apps/mobile
+        run: npx playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        working-directory: apps/mobile
+        run: npx playwright test
+        env:
+          CI: '1'
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/mobile/test-results/
+          retention-days: 7

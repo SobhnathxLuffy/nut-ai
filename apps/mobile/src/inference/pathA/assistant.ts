@@ -1,5 +1,7 @@
 import { AssistantToolCallZ, type AssistantToolCall } from '@nutai/core-schema'
+import { SetValues, TRACKING_FIELDS, type RoutineInput, type TrackingType } from '@nutai/core-schema'
 import { ASSISTANT_SYSTEM_PROMPT } from '@nutai/prompt'
+import { listExercises, saveRoutine } from '@nutai/training'
 import { db, dayTotals, getDayStatus } from '../../data/repo'
 import { localDate, getThisWeek, getLastWeek } from '../../data/date-utils'
 import { dateOffset } from '../../data/shortcuts'
@@ -107,13 +109,129 @@ function resolveTimeframe(timeframe: 'today' | 'yesterday' | 'this_week' | 'last
   return [today]
 }
 
-export async function applyProposal(tool_name: string, data: any) {
-  if (tool_name === 'propose_workout_routine') {
-    // Scaffold for when routine DB methods are available
-    console.log("Saving routine", data)
-  } else if (tool_name === 'propose_meal') {
-    console.log("Saving meal", data)
+export interface ProposalApplyResult {
+  ok: boolean
+  routineId?: number
+  skippedExercises?: string[]
+}
+
+const num = (v: any): number | null =>
+  typeof v === 'number' && Number.isFinite(v) ? v : null
+
+/**
+ * Build one planned set for an exercise's tracking type from an
+ * assistant-provided spec. Returns null when the tracking type requires a
+ * number the proposal did not provide (e.g. distance) — the app never invents
+ * a number the model did not give us.
+ */
+function plannedSetFor(type: TrackingType, spec: any): SetValues | null {
+  const fields = TRACKING_FIELDS[type]
+  const distance = num(spec?.distance_m)
+  if (fields.includes('distance_m') && !(distance !== null && distance > 0)) return null
+  const set: Record<string, number | string | null> = {
+    load_kg: null, reps: null, duration_s: null, distance_m: null,
+    assistance_kg: null, rir: null, rpe: null, tempo: null,
   }
+  // saveRoutine validates sets with completed=true, so load-bearing fields
+  // must be non-null; load fields accept 0 as "user will decide".
+  if (fields.includes('reps')) set.reps = num(spec?.reps) ?? 10
+  if (fields.includes('load_kg')) set.load_kg = num(spec?.load_kg ?? spec?.weight_kg) ?? 0
+  if (fields.includes('duration_s')) set.duration_s = num(spec?.duration_s) ?? 600
+  if (fields.includes('distance_m')) set.distance_m = distance
+  if (fields.includes('assistance_kg')) set.assistance_kg = num(spec?.assistance_kg) ?? 0
+  return SetValues.parse(set)
+}
+
+/**
+ * WEB-008 fix: applying a proposal used to be a console.log stub — the UI
+ * flipped the routine card to "Saved" while nothing was written anywhere (a
+ * false save, the exact class of bug the P0 list exists for). The proposal is
+ * now matched against the user's exercise library, validated through
+ * RoutineInput + saveRoutine (every planned set is checked against the
+ * exercise's tracking type) and PERSISTED to the user DB. Failures throw so
+ * the UI shows the real state instead of a fake success.
+ */
+export async function applyProposal(tool_name: string, data: any): Promise<ProposalApplyResult> {
+  if (tool_name === 'propose_workout_routine') {
+    const h = await db()
+    const catalog = await listExercises(h)
+    const byName = new Map(catalog.map((e) => [e.name.toLowerCase(), e]))
+    const exercises: RoutineInput['exercises'] = []
+    const skipped: string[] = []
+    const proposals = Array.isArray(data?.exercises) ? data.exercises : []
+
+    for (const raw of proposals) {
+      const name = typeof raw === 'string' ? raw : raw?.name
+      const match = name ? byName.get(String(name).trim().toLowerCase()) : undefined
+      if (!match) {
+        if (name) skipped.push(String(name))
+        continue
+      }
+
+      // The model may express sets as a count ("sets": 3), a list of set
+      // objects, or neither. "8-12" style rep ranges resolve to the lower
+      // bound — the honest, achievable end of what the model said.
+      const template = typeof raw === 'object' && raw !== null ? raw : {}
+      const repsFromRange = typeof template.reps === 'string'
+        ? Number(template.reps.match(/\d+/)?.[0] ?? NaN)
+        : NaN
+      const spec: any = {
+        ...template,
+        sets: undefined,
+        reps: typeof template.reps === 'number'
+          ? template.reps
+          : Number.isFinite(repsFromRange) ? repsFromRange : undefined,
+      }
+      const setList = Array.isArray(template.sets) && template.sets.length > 0
+        ? template.sets
+        : null
+      const count = typeof template.sets === 'number' && Number.isFinite(template.sets) && template.sets > 0
+        ? Math.min(Math.floor(template.sets), 100)
+        : setList ? setList.length : 3
+
+      const sets: SetValues[] = []
+      for (let s = 0; s < count; s++) {
+        const item = setList ? setList[Math.min(s, setList.length - 1)] : {}
+        const built = plannedSetFor(match.tracking_type, { ...spec, ...(typeof item === 'object' && item !== null ? item : {}) })
+        if (!built) break
+        sets.push(built)
+      }
+      if (sets.length === 0) {
+        skipped.push(String(name))
+        continue
+      }
+      exercises.push({
+        exercise_id: match.id,
+        group: null,
+        sets,
+        // ProgressionRule defaults (2.5kg increments, 8-12 reps, RIR 2) with a
+        // manual start — the user adjusts progression when editing the routine.
+        rule: { kind: 'manual', increment: 2.5, min_reps: 8, max_reps: 12, target_rir: 2 },
+      })
+    }
+
+    if (exercises.length === 0) {
+      throw new Error(
+        skipped.length > 0
+          ? `No exercises in your library match: ${skipped.join(', ')}`
+          : 'The proposal contained no exercises from your library'
+      )
+    }
+
+    const name = typeof data?.name === 'string' && data.name.trim()
+      ? data.name.trim().slice(0, 120)
+      : 'Assistant Routine'
+    const routineId = await saveRoutine(h, { name, exercises })
+    return skipped.length > 0
+      ? { ok: true, routineId, skippedExercises: skipped }
+      : { ok: true, routineId }
+  }
+  if (tool_name === 'propose_meal') {
+    // Meal proposals are confirmed through the food-review flow
+    // (resolveMealProposal -> /food-review), never saved here.
+    throw new Error('Confirm the meal through the food review screen')
+  }
+  throw new Error(`Unsupported proposal type: ${tool_name}`)
 }
 
 export const assistantGlobalStatus: Record<string, string> = {};

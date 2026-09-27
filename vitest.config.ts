@@ -26,6 +26,7 @@ export default defineConfig({
       '@nutai/prompt': pkg('prompt'),
       '@nutai/nutrition-sources': pkg('nutrition-sources'),
       '@nutai/recipe-engine': pkg('recipe-engine'),
+      '@nutai/indian-dishes': pkg('indian-dishes'),
       '@nutai/db-adapter/node': fileURLToPath(new URL('./packages/db-adapter/src/node.ts', import.meta.url)),
       '@nutai/db-adapter': pkg('db-adapter'),
       '@nutai/clamp': pkg('clamp'),

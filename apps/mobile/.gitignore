@@ -39,3 +39,7 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Playwright artifacts
+test-results/
+playwright-report/

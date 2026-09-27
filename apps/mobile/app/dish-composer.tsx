@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndic
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
-import { openNutritionDb, openIfctDb } from '../src/db/expo-adapter'
+import { openNutritionDb, openIfctDb, openUserDb } from '../src/db/expo-adapter'
 
 import type { DbAdapter } from '@nutai/db-adapter'
 
@@ -14,6 +14,24 @@ import { resolveByText } from '@nutai/resolver'
 type DishDef = any
 type Component = { id: string, name: string, foodId: string | null, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null, searchResults?: any[] }
 
+// WEB-003: household variants are persisted in the writable user DB. The table
+// mirrors the corpus schema columns this screen reads and writes.
+async function ensureUserDishTable(u: DbAdapter): Promise<void> {
+  await u.run(
+    `CREATE TABLE IF NOT EXISTS dish_definitions (
+      id TEXT PRIMARY KEY NOT NULL,
+      search_rowid INTEGER,
+      canonical_name TEXT,
+      category TEXT,
+      family TEXT,
+      parent_dish_id TEXT,
+      recipe_template_json TEXT,
+      portion_model_json TEXT,
+      record_status TEXT
+    )`
+  )
+}
+
 export default function DishComposerScreen() {
   const t = useTheme()
   const insets = useSafeAreaInsets()
@@ -21,24 +39,31 @@ export default function DishComposerScreen() {
   
   const [db, setDb] = useState<DbAdapter | null>(null)
   const [ifctDb, setIfctDb] = useState<DbAdapter | null>(null)
+  const [userDb, setUserDb] = useState<DbAdapter | null>(null)
   const [dish, setDish] = useState<DishDef | null>(null)
   const [components, setComponents] = useState<Component[]>([])
   const [loading, setLoading] = useState(true)
-  const [_, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   
   const [portion, setPortion] = useState('150')
   const [fatGrams, setFatGrams] = useState('14')
   
   useEffect(() => {
     let alive = true
-    Promise.all([openNutritionDb(), openIfctDb()]).then(([h, ih]) => {
-      if (alive) { setDb(h); setIfctDb(ih) }
+    // WEB-003: the user DB is the writable store. Household variants are user
+    // data and must never be written into the read-only nutrition corpus.
+    Promise.all([openNutritionDb(), openIfctDb(), openUserDb()]).then(async ([h, ih, u]) => {
+      if (!alive) return
+      await ensureUserDishTable(u)
+      if (alive) { setDb(h); setIfctDb(ih); setUserDb(u) }
+    }).catch(e => {
+      if (alive) { setError(String(e)); setLoading(false) }
     })
     return () => { alive = false }
   }, [])
 
   useEffect(() => {
-    if (!db || !ifctDb) return
+    if (!db || !ifctDb || !userDb) return
     let alive = true
     const load = async () => {
       try {
@@ -60,7 +85,10 @@ export default function DishComposerScreen() {
            return
         }
 
-        const row = await db.get<any>('SELECT * FROM dish_definitions WHERE id = ?', [params.dishId as string])
+        // WEB-003: household variants live in the user DB; the corpus is
+        // read-only and only holds curated/draft definitions.
+        const row = (await userDb.get<any>('SELECT * FROM dish_definitions WHERE id = ?', [params.dishId as string]))
+          ?? (await db.get<any>('SELECT * FROM dish_definitions WHERE id = ?', [params.dishId as string]))
         if (!row) throw new Error('Dish not found')
         const parsed = {
            id: row.id,
@@ -102,7 +130,7 @@ export default function DishComposerScreen() {
     }
     load()
     return () => { alive = false }
-  }, [db, ifctDb, params.dishId])
+  }, [db, ifctDb, userDb, params.dishId])
 
   const addIngredient = () => {
     // For testing, just add a dummy empty ingredient
@@ -188,13 +216,24 @@ export default function DishComposerScreen() {
       }))
     }
     
+    // WEB-003: save the household variant to the WRITABLE user DB, not the
+    // read-only nutrition corpus. On web the corpus is deserialized with
+    // SQLITE_DESERIALIZE_READONLY, so every save used to fail silently and the
+    // user's "My Version" dish was never persisted.
+    if (!userDb) {
+      alert('Database is still loading — please try again in a moment.')
+      return
+    }
     try {
-      await db?.run(
+      await ensureUserDishTable(userDb)
+      await userDb.run(
         'INSERT OR REPLACE INTO dish_definitions (id, search_rowid, canonical_name, category, family, parent_dish_id, recipe_template_json, portion_model_json, record_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [newId, searchRowId, canonicalName, dish?.category || '', dish?.family || '', parentDishId, JSON.stringify(recipeTemplate), '{}', 'HOUSEHOLD']
       )
     } catch (e) {
-      console.error(e)
+      console.error('Failed to save household variant:', e)
+      alert('Could not save your version of this dish. ' + String(e))
+      return
     }
 
     const selection = {
@@ -210,6 +249,17 @@ export default function DishComposerScreen() {
   }
 
   if (loading) return <View style={s.container}><ActivityIndicator /></View>
+
+  if (error) {
+    return (
+      <View style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom, padding: space.md }]}>
+        <Text style={[type.body, { color: t.safety }]}>{error}</Text>
+        <Pressable onPress={() => router.back()} style={[s.btn, { borderColor: t.border, marginTop: space.md }]}>
+          <Text style={{ color: t.text, textAlign: 'center' }}>Back</Text>
+        </Pressable>
+      </View>
+    )
+  }
 
   return (
     <ScrollView style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>

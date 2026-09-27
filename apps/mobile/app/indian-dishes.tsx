@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndic
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type, MIN_TAP_TARGET } from '../src/theme/tokens'
-import { openNutritionDb } from '../src/db/expo-adapter'
+import { openNutritionDb, openUserDb } from '../src/db/expo-adapter'
 import type { DbAdapter } from '@nutai/db-adapter'
 
 type DishRow = { id: string, name: string, category: string, status: string, aliases: string }
@@ -15,6 +15,7 @@ export default function IndianDishesScreen() {
   const params = useLocalSearchParams<{ date?: string }>()
   
   const [db, setDb] = useState<DbAdapter | null>(null)
+  const [userDb, setUserDb] = useState<DbAdapter | null>(null)
   const [query, setQuery] = useState('')
   const [dishes, setDishes] = useState<DishRow[]>([])
   const [filter, setFilter] = useState<'ALL' | 'CURATED' | 'DRAFT_CURATED' | 'HOUSEHOLD'>('ALL')
@@ -23,8 +24,10 @@ export default function IndianDishesScreen() {
 
   useEffect(() => {
     let alive = true
-    openNutritionDb().then(h => {
-      if (alive) { setDb(h); setLoading(false) }
+    // WEB-003: household variants the user saved live in the writable user DB
+    // and must appear alongside the curated corpus entries.
+    Promise.all([openNutritionDb(), openUserDb()]).then(([h, u]) => {
+      if (alive) { setDb(h); setUserDb(u); setLoading(false) }
     }).catch(e => {
       if (alive) { setError(e.message); setLoading(false) }
     })
@@ -32,7 +35,7 @@ export default function IndianDishesScreen() {
   }, [])
 
   useEffect(() => {
-    if (!db) return
+    if (!db || !userDb) return
     let alive = true
     const search = async () => {
       let sql = `
@@ -60,10 +63,40 @@ export default function IndianDishesScreen() {
       
       try {
         const rows = await db.all<any>(sql, args)
-        console.log('IndianDishes loaded rows:', rows.length, 'query:', query, 'filter:', filter)
+        // WEB-003: merge in the user's own household variants. The user DB has
+        // no dish_aliases table, so its copy of the query is alias-free.
+        let userRows: any[] = []
+        try {
+          const userConditions: string[] = []
+          const userArgs: any[] = []
+          if (filter !== 'ALL') {
+            userConditions.push('d.record_status = ?')
+            userArgs.push(filter)
+          }
+          if (query.trim().length >= 2) {
+            userConditions.push('d.canonical_name LIKE ?')
+            userArgs.push(`%${query.trim()}%`)
+          }
+          const where = userConditions.length > 0 ? ' WHERE ' + userConditions.join(' AND ') : ''
+          userRows = await userDb.all<any>(
+            `SELECT d.id, d.canonical_name as name, d.category, d.record_status as status, '' as aliases FROM dish_definitions d${where} ORDER BY d.canonical_name LIMIT 100`,
+            userArgs
+          )
+        } catch (userErr) {
+          // Fresh installs may not have the table yet — the list is still valid.
+          console.warn('User dish query skipped:', userErr)
+        }
+        const seen = new Set<string>()
+        const merged: DishRow[] = []
+        for (const row of [...rows, ...userRows]) {
+          if (seen.has(row.id)) continue
+          seen.add(row.id)
+          merged.push(row)
+        }
+        merged.sort((a, b) => String(a.name).localeCompare(String(b.name)))
         if (alive) {
           setError(null)
-          setDishes(rows)
+          setDishes(merged.slice(0, 100))
         }
       } catch (e) {
         console.error('IndianDishes query error:', e)
@@ -72,7 +105,7 @@ export default function IndianDishesScreen() {
     }
     const timer = setTimeout(search, 200)
     return () => { alive = false; clearTimeout(timer) }
-  }, [db, query, filter])
+  }, [db, userDb, query, filter])
 
   const openDish = (dish: DishRow) => {
     router.push({ pathname: '/dish-composer', params: { dishId: dish.id, date: params.date } } as never)
