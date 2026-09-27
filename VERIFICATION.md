@@ -6,7 +6,7 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **612 passed**, 75 files |
+| Unit + property + integration tests | `npx vitest run` | **626 passed**, 77 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
@@ -72,6 +72,39 @@ Gates at this round, all rerun clean: **612/612 unit tests (75 files)**
 and app, strict), ESLint 0 warnings, node-purity 18/18, e2e 2 passed + 2
 specs marked `fixme` with documented reasons, and a web boot smoke
 (onboarding gate, state surviving reload) with **0 console errors**.
+
+---
+
+## Product QA Section-B round — trusted-nutrition and pipeline P0s closed (2026-09-27)
+
+A second, product-level audit (Section B, P0-1 … P0-6) was verified item by
+item against the code and closed. Per-bug evidence in
+[docs/qa/p0-product-audit-fixes.md](docs/qa/p0-product-audit-fixes.md). Headlines:
+
+- **P0-1 double-scaling:** the dish composer sent a PORTION TOTAL in the
+  food-review payload's `nutrientSnapshot` (contract: per-100 g), inflating
+  every household-variant log by (portion/100) — 1,465 kcal logged for a
+  916 kcal portion. Snapshot now built per-100 g; contract test locks the
+  QA's litti numbers.
+- **P0-2 resolver:** two stacked defects — alias rungs ran before literal
+  rungs, and the dish KB (priority 65) sat below USDA (70) so any USDA row
+  sharing one FTS token with a dish name shadowed the CURATED identity
+  ("Bread, chapati or roti, commercially prepared" beat CURATED Roti).
+  Literal-first ladder, dish KB to priority 75 (above generic corpora, below
+  IFCT), KB-less artifacts yield instead of throw. Golden queries lock
+  biryani/paneer/poha/roti/rajma/upma/idli identities against the real corpus.
+- **P0-5 gate:** `npm run check` runs green end to end on a fresh clone —
+  `indian-dishes:verify` builds the packages it needs and fails with a remedy
+  instead of an ENOENT stack.
+- **P0-6 dish KB pipeline:** `npm run data:build` now compiles the 362-dish
+  KB in the same documented step, and the verify gate asserts the bundled DB
+  carries 362 dish rows plus a CURATED biryani FTS probe. The exported web
+  bundle ships the 6.5 MB with-dishes artifact.
+
+Gates at this round: **626/626 unit tests (77 files)**, typecheck clean,
+ESLint 0 warnings, node-purity 18/18, `npm run check` exit 0 (including the
+dish-KB integrity gate), e2e 2 passed + 2 `fixme`, web boot smoke 0 console
+errors.
 
 Strict mode means `strict` plus `noUncheckedIndexedAccess`,
 `exactOptionalPropertyTypes`, `noImplicitOverride`,

@@ -120,7 +120,7 @@ listing taking a cut. One-time setup, ~20 minutes.
 ```bash
 git clone https://github.com/Blueturboguy07/nut-ai.git
 cd nut-ai && npm install
-npm run data:build                      # builds the bundled USDA nutrition database
+npm run data:build                      # builds the bundled corpus: USDA + IFCT portions + the 362-dish Indian Dish KB
 cd apps/mobile && npm run prebuild      # generates the native project
 open ios/NutAI.xcworkspace              # then: pick your phone, press Run (⌘R)
 ```
@@ -159,7 +159,7 @@ Requires Node ≥ 20.19.
 
 ```bash
 npm install
-npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT data checks
+npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT/dish-KB data checks
 ```
 
 **Expo Go is not a supported development mode.** The camera, SQLite, Keychain key storage, HealthKit,
@@ -172,6 +172,7 @@ above.
 - [PLAN.md](PLAN.md) records the current planning status, next task, blockers, and validation commands.
 - [docs/planning/00_INDEX.md](docs/planning/00_INDEX.md) links the implementation-grade product plan, ADRs, task backlog, traceability matrix, and release gates.
 - [docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md) records the web QA round and the closing evidence for every web P0 (WEB-001 … WEB-011).
+- [docs/qa/p0-product-audit-fixes.md](docs/qa/p0-product-audit-fixes.md) records the product audit round (Section B, P0-1 … P0-6): trusted-nutrition scaling, resolver cascade, dish-KB build pipeline, gate integrity.
 
 ## Licensing
 

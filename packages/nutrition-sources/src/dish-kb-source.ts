@@ -3,12 +3,41 @@ import type { NutritionSource, SourceResolvedFood, SourceCandidate, SourceLicens
 
 export class DishKBSource implements NutritionSource {
   readonly id = 'indian_dish_kb'
-  readonly priority = 65
+  // P0-2: 75 — ABOVE the generic corpora (USDA 70, OFF 60), BELOW IFCT (80).
+  // At 65 the KB sat under USDA, so any USDA row sharing one FTS token with a
+  // dish name ("Bread, chapati or roti, commercially prepared", "Groundcherries,
+  // (cape-gooseberries or poha)") ended the source cascade and shadowed the
+  // CURATED dish identity entirely. IFCT stays first so ingredient queries
+  // ("paneer", "rice", "toor") keep resolving to ingredient rows.
+  readonly priority = 75
 
   constructor(
     private readonly db: DbAdapter,
     private readonly ifctDb?: DbAdapter,
   ) {}
+
+  /**
+   * True when the artifact this adapter opens actually carries the dish KB.
+   * Fixture databases and pre-P0-6 builds have no dish tables — the source
+   * must yield nothing there, not throw (P0-2 follow-up: at priority 75 this
+   * source is consulted BEFORE USDA, so a throw on a KB-less fixture would
+   * break every fixture-backed resolver/pipeline path).
+   */
+  private kbPresent?: Promise<boolean>
+
+  private kbReady(): Promise<boolean> {
+    this.kbPresent ??= (async () => {
+      try {
+        const row = await this.db.get(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='dish_definitions'",
+        )
+        return row !== null
+      } catch {
+        return false
+      }
+    })()
+    return this.kbPresent
+  }
 
   getLicenseInfo(): SourceLicenseInfo {
     return {
@@ -21,6 +50,7 @@ export class DishKBSource implements NutritionSource {
   }
 
   async search(ftsExpression: string): Promise<SourceCandidate[]> {
+    if (!(await this.kbReady())) return []
     const rows = await this.db.all<any>(`
       SELECT
         d.id as foodId,
@@ -58,6 +88,7 @@ export class DishKBSource implements NutritionSource {
   }
 
   async resolveById(id: string): Promise<SourceResolvedFood | null> {
+    if (!(await this.kbReady())) return null
     const row = await this.db.get<any>(
       'SELECT * FROM dish_definitions WHERE id = ?',
       [id]

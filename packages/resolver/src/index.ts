@@ -107,10 +107,14 @@ export async function resolveByText(
   const normalizedLadder = matchLadder(normalizeIndianAliases(ctx.canonicalFoodKey))
   const ladder = Array.from(
     { length: Math.max(literalLadder.length, normalizedLadder.length) },
-    // A recognized Indian alias (toor -> red gram, idly -> idli) is the more
-    // specific database identity. Try it before a literal term that could hit a
-    // lower-priority draft dish and stop the source cascade prematurely.
-    (_, index) => [normalizedLadder[index], literalLadder[index]],
+    // P0-2: the LITERAL term goes first at every depth. Broad alias expansions
+    // (biryani -> 'mixed rice', poha -> 'cape gooseberry', upma -> 'savory
+    // porridge') matched acceptable-scoring junk from low-priority sources and
+    // ended the cascade before the literal dish name ever reached the CURATED
+    // dish KB (source priority 60/70). Specific aliases (toor -> red gram,
+    // idly -> idli) still catch everything the literal term misses — one rung
+    // later, only when the literal term had no acceptable hit.
+    (_, index) => [literalLadder[index], normalizedLadder[index]],
   ).flat().filter((expression, index, all): expression is string => Boolean(expression) && all.indexOf(expression) === index)
   const source = sourceRouter(db, context)
 

@@ -30,8 +30,13 @@ describe('bundled IFCT corpus', () => {
   })
 
   it('routes a common alias to IFCT before USDA', async () => {
+    // P0-2 note: the dish KB now outranks USDA, and the KB curates "Toor Dal"
+    // (CURATED, verified yield) — so the literal query "toor dal" resolves to
+    // the curated dish identity and never reaches this rung. The alias path
+    // (X -> red gram -> IFCT B021, ahead of USDA junk) is locked with "tuvar
+    // dal", the same pulse under a spelling no curated dish aliases.
     const result = await resolveByText(nutritionDb, {
-      canonicalFoodKey: 'toor dal',
+      canonicalFoodKey: 'tuvar dal',
       observedBrand: null,
       prepFacet: null,
       modelCategory: null,

@@ -9,6 +9,7 @@ import { openNutritionDb, openIfctDb, openUserDb } from '../src/db/expo-adapter'
 import type { DbAdapter } from '@nutai/db-adapter'
 
 import { encodeFoodReview } from '../src/data/food-review'
+import { per100Snapshot } from '../src/data/dish-snapshot'
 import { resolveByText } from '@nutai/resolver'
 
 type DishDef = any
@@ -200,6 +201,7 @@ export default function DishComposerScreen() {
 
     const logDish = async () => {
     if (hasUnknowns) return alert("Resolve all ingredients first")
+    if (!(portionG > 0)) return alert("Enter a valid portion weight")
     
     // Create/update the Household Variant in dish_definitions
     const isEditingHousehold = dish?.recordStatus === 'HOUSEHOLD'
@@ -243,7 +245,9 @@ export default function DishComposerScreen() {
         grams: portionG,
         gramPathway: 'decomposed_recipe',
         portionSource: 'user_decomposition',
-        nutrientSnapshot: { kcal: portionKcal || 0, protein_g: portionP || 0, carbs_g: portionC || 0, fat_g: portionF || 0, fiber_g: 0, sugar_g: 0, sodium_mg: 0 }
+        // P0-1: nutrientSnapshot is PER-100 g — food-review renders value × grams/100.
+        // Sending the portion total here double-scaled every household-variant log.
+        nutrientSnapshot: per100Snapshot({ kcal: portionKcal, protein_g: portionP, carbs_g: portionC, fat_g: portionF }, portionG)
     }
     router.push({ pathname: '/food-review', params: { payload: encodeFoodReview({ selection, date: params.date || '' }) } } as never)
   }
