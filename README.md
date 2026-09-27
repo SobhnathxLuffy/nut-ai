@@ -8,8 +8,12 @@ and instantly. No subscription, no paywall, no account, no server.
 
 <img src="docs/img/hero.png" alt="Nut AI home screen" width="320" />
 
-> **Status: alpha.** The full loop works on iPhone and Android — scan, review, correct, log, track.
-> On-device inference and the published accuracy numbers are still ahead. Expect sharp edges.
+> **Status: alpha.** The full loop works on iPhone, Android, and the web — scan, review, correct,
+> log, track. On-device inference and the published accuracy numbers are still ahead. Expect sharp edges.
+>
+> The web app runs the same Expo Router code and the same deterministic engine; the web QA round
+> that closed every P0 blocker (WEB-001 … WEB-011) is documented in
+> [docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md) and [VERIFICATION.md](VERIFICATION.md).
 
 ## What works today
 
@@ -167,6 +171,7 @@ above.
 - [AGENTS.md](AGENTS.md) defines the binding implementation rules for coding agents.
 - [PLAN.md](PLAN.md) records the current planning status, next task, blockers, and validation commands.
 - [docs/planning/00_INDEX.md](docs/planning/00_INDEX.md) links the implementation-grade product plan, ADRs, task backlog, traceability matrix, and release gates.
+- [docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md) records the web QA round and the closing evidence for every web P0 (WEB-001 … WEB-011).
 
 ## Licensing
 

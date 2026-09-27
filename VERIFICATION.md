@@ -6,7 +6,7 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **583 passed**, 71 files |
+| Unit + property + integration tests | `npx vitest run` | **612 passed**, 75 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
@@ -32,6 +32,46 @@ Phase 6 physical-device verification was completed on Samsung Galaxy M14 5G (SM-
 2. **Food Search & Knowledge Base:** Offline search queried curated Indian dishes with verified portion sizes (e.g. 40g per roti, 50g per idli).
 3. **Unknown Dish Recipe Builder:** For uncurated queries (e.g. "litti chokha"), the app offers a deterministic arithmetic decomposition UI where the user selects base ingredients, cooking fat, preparation method yield multiplier, and portion grams.
 4. **Atomic Meal Logging & Reactive UI:** Tapping "Log to Today" atomic-persists the meal and its items into SQLite (`meals` and `log_items`), immediately updates the Food tab recent list, decrements daily macro and calorie targets on the Home tab, updates streaks, and renders the meal event on the offline daily timeline.
+
+---
+
+## Web P0 round — every web blocker closed (2026-09-27)
+
+A full web QA pass over the real exported web bundle produced eleven findings
+(WEB-001 … WEB-011). All P0s are closed across commits `f0ae3b0` and `9824c95`;
+per-bug "was / fix / files" evidence lives in
+[docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md). What changed:
+
+- **Dead dialogs and broken routes (WEB-001, WEB-002):** `Alert.alert` was a
+  silent no-op on react-native-web, leaving ~25 confirm flows dead (including
+  "Redo onboarding"); a DOM shim now renders them. The camera's web fallback
+  routed to a nonexistent `/scan-result`; it now lands on `/result`.
+- **False saves on write paths (WEB-003, WEB-008, WEB-011):** the dish composer
+  was INSERTing household variants into the read-only deserialized corpus and
+  swallowing the throw — nothing was ever persisted; variants now live in the
+  writable user DB and are listed in the Indian dishes screen. Assistant
+  routine proposals flipped to "SAVED" while only `console.log` ran; they now
+  really persist through `saveRoutine` and throw on failure so the UI cannot
+  fake a save. Web persistence also called `close()` on the singleton DB and
+  hung every later read; removed.
+- **Storage that lost user data (WEB-005, WEB-006):** the user DB moved off
+  localStorage's ~5 MB quota onto the OPFS VFS with a guarded one-time
+  migration; provider API keys moved from sessionStorage (gone on every
+  refresh) to localStorage with one-time legacy promotion.
+- **Inference resilience (WEB-007):** cross-provider fallback models derive
+  from the live `PROVIDER_MODELS` catalogue via `cheapestModel()` instead of
+  hardcoded, expired snapshots (`claude-3-5-sonnet-20240620`); fallback
+  providers without keys are skipped, not fatal.
+- **Regression protection (WEB-009) and audit (WEB-010):** the Playwright e2e
+  suite is wired to a config and a GitHub Actions workflow that builds the real
+  web bundle on every push/PR; the native-module audit found no unguarded
+  native imports on any web-reachable path.
+
+Gates at this round, all rerun clean: **612/612 unit tests (75 files)**
+(up from 583/71 — the round added regression tests), typecheck clean (packages
+and app, strict), ESLint 0 warnings, node-purity 18/18, e2e 2 passed + 2
+specs marked `fixme` with documented reasons, and a web boot smoke
+(onboarding gate, state surviving reload) with **0 console errors**.
 
 Strict mode means `strict` plus `noUncheckedIndexedAccess`,
 `exactOptionalPropertyTypes`, `noImplicitOverride`,
