@@ -101,7 +101,7 @@ function RecentFoodList({
     <>
       {foods.slice(0, 8).map((r) => (
         <Card key={`${r.id}:${r.name}`}>
-          <Label>{r.name} · {r.frequency} logs</Label>
+          <Label>{r.name} · {r.frequency} {r.frequency === 1 ? 'log' : 'logs'}</Label>
           <Button
             label="Repeat today"
             onPress={() => {

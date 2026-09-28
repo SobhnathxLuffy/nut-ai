@@ -52,6 +52,9 @@ export function DayTimeline({
   const [history, setHistory] = useState<OperationRecord[]>([])
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
   const [mealUndoUuid, setMealUndoUuid] = useState<string | null>(getLastDeletedMealUndoUuid())
+  // AGENTS §8.5: undo/redo must say WHAT will be undone, not show anonymous buttons.
+  const [undoTarget, setUndoTarget] = useState<{ op_type: string; entity_type: string } | null>(null)
+  const [redoTarget, setRedoTarget] = useState<{ op_type: string; entity_type: string } | null>(null)
 
   const refresh = useCallback(async () => {
     const h = await db()
@@ -63,6 +66,10 @@ export function DayTimeline({
       listOperations(h, { entityType: 'day_status', entityId: Number(date.replaceAll('-', '')), limit: 4 }),
       readWeightUnit(h),
     ])
+    const [undoOp, redoOp] = await Promise.all([
+      h.get<{ op_type: string; entity_type: string }>('SELECT op_type, entity_type FROM operations WHERE undone_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1'),
+      h.get<{ op_type: string; entity_type: string }>('SELECT op_type, entity_type FROM operations WHERE undone_at IS NOT NULL ORDER BY undone_at DESC, id DESC LIMIT 1'),
+    ])
     setEvents(e)
     setStatus(s?.completion ?? 'unknown')
     setTotals(t)
@@ -70,6 +77,8 @@ export function DayTimeline({
     setHistory(o)
     setWeightUnit(unit)
     setMealUndoUuid(getLastDeletedMealUndoUuid())
+    setUndoTarget(undoOp ?? null)
+    setRedoTarget(redoOp ?? null)
     setLoaded(true)
   }, [date])
 
@@ -83,13 +92,13 @@ export function DayTimeline({
     {!hideDateControls && (
       <>
         <Row><Button label="Previous day" onPress={() => setDate(dateOffset(date, -1))} /><Button label="Today" onPress={() => setDate(localDate(Date.now()))} /><Button label="Next day" onPress={() => setDate(dateOffset(date, 1))} /></Row>
-        <Field label="Selected day (YYYY-MM-DD)" value={date} onChangeText={(v) => { if (/^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v))) setDate(v) }} />
+        <Field label="Selected day" placeholder="YYYY-MM-DD" accessibilityLabel="Selected day, YYYY-MM-DD format" value={date} onChangeText={(v) => { if (/^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v))) setDate(v) }} />
       </>
     )}
 
     {!hideTotals && (
       <Card>
-        <Label>{!loaded ? 'Loading your day…' : totals?.mealCount ? `${Math.round(totals.kcal)} kcal logged${goal ? ` · Target ${goal.targetKcal} kcal` : ''}` : 'No food entries logged'}</Label>
+        <Label>{!loaded ? 'Loading your day…' : totals?.mealCount ? `${Math.round(totals.kcal)} kcal logged${goal ? ` · Target ${Math.round(goal.targetKcal)} kcal` : ''}` : 'No food entries logged'}</Label>
         {!!totals?.mealCount && <Label muted>Protein {Math.round(totals.protein_g)} g · Carbs {Math.round(totals.carbs_g)} g · Fat {Math.round(totals.fat_g)} g</Label>}
         {!!totals?.pendingCount && <Label muted>{totals.pendingCount} entries still need analysis.</Label>}
       </Card>
@@ -122,7 +131,7 @@ export function DayTimeline({
 
     <Row><Button label="Log food" onPress={()=>router.push({pathname:'/food-search',params:{date}} as never)}/><Button label="Add weight" onPress={()=>router.push('/log-weight')}/><Button label="Start workout" onPress={()=>router.push('/(tabs)/train' as never)}/></Row>
     {food&&<Button label="Copy yesterday into this day" disabled={action.busy} onPress={()=>showAlert('Copy yesterday?',`Meals will be added to ${date}. Existing entries stay in place. You can undo the entire copy.`,[{text:'Cancel',style:'cancel'},{text:'Add meals',onPress:()=>perform(async()=>copyYesterday(await db(),date))}])}/>}
-    {action.feedback}{mealUndoUuid&&<Button label="Undo deleted meal" onPress={()=>perform(async()=>{const r=await undoRecordedOperation(mealUndoUuid);if(!r.success)throw new Error(r.error??'Could not restore meal');setMealUndoUuid(null);setLastDeletedMealUndoUuid(null)})}/>}<Row><Button label="Undo last action" onPress={()=>perform(async()=>{const r=await undoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to undo')})}/><Button label="Redo" onPress={()=>perform(async()=>{const r=await redoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to redo')})}/></Row>
+    {action.feedback}{mealUndoUuid&&<Button label="Undo deleted meal" onPress={()=>perform(async()=>{const r=await undoRecordedOperation(mealUndoUuid);if(!r.success)throw new Error(r.error??'Could not restore meal');setMealUndoUuid(null);setLastDeletedMealUndoUuid(null)})}/>}<Row><Button label={undoTarget?`Undo: ${describeOperation(undoTarget)}`:'Undo last action'} onPress={()=>perform(async()=>{const r=await undoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to undo')})}/><Button label={redoTarget?`Redo: ${describeOperation(redoTarget)}`:'Redo'} onPress={()=>perform(async()=>{const r=await redoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to redo')})}/></Row>
     <Label>Daily timeline · available offline</Label>
     {loaded&&events.length===0&&<Card><Label>No entries for this day yet.</Label><Label muted>Use the logging actions above whenever you’re ready.</Label></Card>}
     {events.map(e=><Card key={e.id}><PressableMeal enabled={e.type==='meal'} onPress={()=>router.push({pathname:'/meal-detail',params:{id:e.entity_id}} as never)}><Label>{new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · {e.label}</Label><Label muted>{e.type === 'weight' && e.weight_kg != null ? formatWeightKg(e.weight_kg, weightUnit) : e.detail}</Label></PressableMeal>
@@ -134,4 +143,11 @@ export function DayTimeline({
 function PressableMeal({enabled,onPress,children}:{enabled:boolean;onPress:()=>void;children:React.ReactNode}) {
   if (!enabled) return <>{children}</>
   return <Pressable onPress={onPress} accessibilityRole="button">{children}</Pressable>
+}
+
+const OPERATION_VERBS: Record<string, string> = { insert: 'add', update: 'edit', delete: 'delete' }
+function describeOperation(op: { op_type: string; entity_type: string }): string {
+  const verb = OPERATION_VERBS[op.op_type] ?? op.op_type
+  const entity = op.entity_type === 'day_status' ? 'day status' : op.entity_type.replaceAll('_', ' ')
+  return `${verb} ${entity}`
 }

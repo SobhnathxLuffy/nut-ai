@@ -52,7 +52,15 @@ export default function TabLayout() {
   return (
     <>
       <Tabs
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: theme.bg } }}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: theme.bg },
+          // P2-11: inactive tab screens stayed fully rendered on web and leaked
+          // their entire text into the accessibility tree / text dumps (welcome
+          // screen behind the onboarding gate, Home behind Food). Freezing
+          // unmounts the hidden subtree while keeping each tab's state.
+          freezeOnBlur: true,
+        }}
         tabBar={({ state, navigation }) => (
           <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.md) }]}>
             <View style={[styles.pill, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>

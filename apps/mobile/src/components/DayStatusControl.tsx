@@ -243,11 +243,15 @@ const styles = StyleSheet.create({
   },
   optionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: space.xs,
     marginTop: space.xs,
   },
   optionButton: {
-    flex: 1,
+    // P2-13: four equal-flex pills clipped the "Unconfirmed" label at 390px.
+    // A wrapping 2×2 grid keeps every label fully visible at any width.
+    flexGrow: 1,
+    flexBasis: '47%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

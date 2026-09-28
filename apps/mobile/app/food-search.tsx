@@ -66,6 +66,7 @@ export default function FoodSearch() {
     builtAt: string | null
     ifctFoods: number
     ifctVersion: string | null
+    dishes: number
   } | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ScoredCandidate[]>([])
@@ -77,6 +78,13 @@ export default function FoodSearch() {
   // Composite Meal state
   const [compositeMeal, setCompositeMeal] = useState<CompositeMealMatch | null>(null)
   const [loggingComposite, setLoggingComposite] = useState(false)
+  // P2-7: free-form "a + b + c" queries are only a GUESS at a multi-item meal.
+  // They surface as a passive suggestion the user must tap to build — never as
+  // a pre-built confident composition.
+  const [compositeSuggestion, setCompositeSuggestion] = useState<{
+    displayName: string
+    components: Array<{ name: string; query: string; quantity?: number; defaultPortionGrams?: number }>
+  } | null>(null)
 
   // Unknown Dish Fallback / Decomposition state
   const [showDecompose, setShowDecompose] = useState(false)
@@ -139,6 +147,19 @@ export default function FoodSearch() {
       if (isCompositeMealQuery(query)) {
         const decomposed = decomposeCompositeMeal(query)
         if (decomposed && decomposed.components.length >= 2) {
+          if (decomposed.source !== 'known_pairing') {
+            // P2-7: a delimiter split of arbitrary text is NOT user intent.
+            // Never auto-build a composition from it — offer a suggestion the
+            // user must explicitly tap. Splits with more than 5 parts are
+            // almost always noise, so do not even suggest those.
+            setCompositeMeal(null)
+            setCompositeSuggestion(
+              decomposed.components.length <= 5
+                ? { displayName: decomposed.displayName, components: decomposed.components }
+                : null,
+            )
+          } else {
+            setCompositeSuggestion(null)
           const compSelections: ManualFoodSelection[] = []
           let possible = true
           for (const comp of decomposed.components) {
@@ -198,9 +219,11 @@ export default function FoodSearch() {
           } else if (alive) {
             setCompositeMeal(null)
           }
+          }
         }
       } else {
         setCompositeMeal(null)
+        setCompositeSuggestion(null)
       }
 
       // 2. Regular candidate resolution
@@ -226,6 +249,7 @@ export default function FoodSearch() {
         if (alive) {
           setResults([])
           setCompositeMeal(null)
+          setCompositeSuggestion(null)
           setOutcome('')
           setError(cause instanceof Error ? cause.message : 'Search failed')
         }
@@ -311,6 +335,62 @@ export default function FoodSearch() {
     }
   }
 
+  /**
+   * P2-7: builds the suggested combo ONLY after the user taps it, and ONLY
+   * from components the resolver is confident about (auto_accept). If any
+   * component would require guessing a candidate, refuse with a clear
+   * message instead of fabricating a composition.
+   */
+  async function handleBuildSuggestedCombo() {
+    if (!db || !compositeSuggestion || loggingComposite) return
+    setLoggingComposite(true)
+    setError(null)
+    try {
+      const compSelections: ManualFoodSelection[] = []
+      for (const comp of compositeSuggestion.components) {
+        const compRes = await resolveByText(db, {
+          canonicalFoodKey: comp.query,
+          observedBrand: null,
+          prepFacet: null,
+          modelCategory: null,
+          estimatedGrams: comp.defaultPortionGrams ?? 100,
+        }, sourceContext)
+        const match = compRes.outcome.kind === 'auto_accept' ? compRes.outcome.match : null
+        if (!match) {
+          setCompositeSuggestion(null)
+          setError(`Could not confidently match “${comp.name}”. Search it on its own, or use “Decompose into ingredients” below.`)
+          return
+        }
+        const resolved = await loadFood(db, match.foodId, sourceContext)
+        if (!resolved) {
+          setCompositeSuggestion(null)
+          setError(`Could not confidently match “${comp.name}”. Search it on its own, or use “Decompose into ingredients” below.`)
+          return
+        }
+        const sel = await resolveSelection(db, match, resolved)
+        if (comp.quantity && comp.quantity > 1) {
+          sel.grams = sel.grams * comp.quantity
+        } else if (comp.defaultPortionGrams && !resolved.servingSizeG) {
+          sel.grams = comp.defaultPortionGrams
+        }
+        compSelections.push(sel)
+      }
+      setCompositeMeal({
+        displayName: compositeSuggestion.displayName,
+        selections: compSelections,
+        totalKcal: compSelections.reduce((sum, s) => sum + ((s.nutrientSnapshot.kcal * s.grams) / 100), 0),
+        totalProtein: compSelections.reduce((sum, s) => sum + ((s.nutrientSnapshot.protein_g * s.grams) / 100), 0),
+        totalCarbs: compSelections.reduce((sum, s) => sum + ((s.nutrientSnapshot.carbs_g * s.grams) / 100), 0),
+        totalFat: compSelections.reduce((sum, s) => sum + ((s.nutrientSnapshot.fat_g * s.grams) / 100), 0),
+      })
+      setCompositeSuggestion(null)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not build that combo meal')
+    } finally {
+      setLoggingComposite(false)
+    }
+  }
+
   function handleLogDecomposed() {
     if (!computedDecomp) return
     if (computedDecomp.per100g.kcal === null || computedDecomp.per100g.protein_g === null || computedDecomp.per100g.carbs_g === null || computedDecomp.per100g.fat_g === null) {
@@ -366,7 +446,8 @@ export default function FoodSearch() {
     if (initialization === 'loading') return 'Loading offline food data…'
     if (initialization === 'error') return error ?? 'Offline food data could not be opened.'
     if (!corpus) return ''
-    return `${corpus.ifctFoods.toLocaleString()} IFCT foods · ${corpus.foods.toLocaleString()} USDA foods · offline`
+    // P2-14: the header must also account for the dish knowledge base.
+    return `${corpus.ifctFoods.toLocaleString()} IFCT foods · ${corpus.foods.toLocaleString()} USDA foods · ${corpus.dishes.toLocaleString()} dish KB · offline`
   }, [corpus, initialization, error])
 
   return (
@@ -420,6 +501,29 @@ export default function FoodSearch() {
 
       {error != null && (
         <Text style={[type.caption, { color: theme.safety, marginTop: space.md }]}>{error}</Text>
+      )}
+
+      {/* Composite Meal suggestion (P2-7) — passive until tapped */}
+      {compositeSuggestion && !compositeMeal && (
+        <View style={[styles.compositeCard, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
+          <Text style={[type.caption, { color: theme.textMuted }]}>
+            Looks like several items in one meal — nothing is assumed yet:
+          </Text>
+          <Text style={[type.body, { color: theme.text, marginTop: space.xs }]}>
+            {compositeSuggestion.components.map((c) => (c.quantity && c.quantity > 1 ? `${c.quantity}× ${c.name}` : c.name)).join('  +  ')}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Build and review this combo meal"
+            disabled={loggingComposite}
+            onPress={handleBuildSuggestedCombo}
+            style={[styles.actionBtn, { alignSelf: 'flex-start', marginTop: space.sm, backgroundColor: theme.bg, borderColor: theme.protein }]}
+          >
+            <Text style={[type.label, { color: theme.protein, fontWeight: '600' }]}>
+              {loggingComposite ? 'Building…' : 'Review this combo'}
+            </Text>
+          </Pressable>
+        </View>
       )}
 
       {/* Composite Meal Banner */}
@@ -493,7 +597,12 @@ export default function FoodSearch() {
       ))}
 
       {/* Unknown Dish / Zero Matches Fallback Button */}
-      {initialization === 'ready' && query.trim().length >= 2 && !busy && results.length === 0 && !showDecompose && (
+      {initialization === 'ready' && query.trim().length === 2 && !busy && (
+        <Text style={[type.caption, { color: theme.textMuted, marginTop: space.lg }]}>
+          Keep typing — search and ingredient decomposition need at least 3 characters.
+        </Text>
+      )}
+      {initialization === 'ready' && query.trim().length >= 3 && !busy && results.length === 0 && !showDecompose && (
         <View style={{ marginTop: space.lg }}>
           <Text style={[type.caption, { color: theme.textMuted }]}>
             Nothing matched directly. Build an estimate from ingredients and a cooking method.

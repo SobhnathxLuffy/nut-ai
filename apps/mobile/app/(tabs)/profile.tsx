@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Alert, Linking } from 'react-native'
+import { Alert, Linking, Platform } from 'react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WeightUnit } from '@nutai/analytics'
@@ -231,6 +231,9 @@ export default function Profile() {
         </View>
       </Section>
 
+      {/* P2-10: Apple Health has no web implementation — the section was a dead
+          control on web and leaked an "iOS only" row into screenshots. */}
+      {Platform.OS !== 'web' && (
       <Section title="Apple Health">
         {healthAvail === 'available' ? (
           <>
@@ -249,6 +252,7 @@ export default function Profile() {
           <Row label="Apple Health" value={healthAvail === 'not-ios' ? 'iOS only' : 'Unavailable on this device'} />
         )}
       </Section>
+      )}
 
       <Section title="Your data">
         <Row label={dataBusy ? 'Working…' : 'Export data'} value="" onPress={exportData} />

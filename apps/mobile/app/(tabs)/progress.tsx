@@ -137,7 +137,7 @@ function Strength({ report, unit }: { report: PeriodReport; unit: WeightUnit }) 
         { key: 'heavy', label: 'Heaviest working set', color: theme.fat, points: exercise.points.map((point) => ({ x: point.session_id, y: toUnit(point.heaviest_working_set_kg), id: point.session_id, label: point.date })), dashed: true },
       ]} formatValue={(value) => `${value.toFixed(1)} ${unit}`} />
       <DataRow label="Sessions" value={String(exercise.frequency)} /><DataRow label="Rep PRs" value={String(exercise.rep_prs.length)} />
-      {exercise.rep_prs.slice(-5).reverse().map((record) => <Muted key={`${record.reps}:${record.date}`}>{record.reps} reps × {(toUnit(record.load_kg) ?? 0).toFixed(1)} ${unit} · {record.date}</Muted>)}
+      {exercise.rep_prs.slice(-5).reverse().map((record) => <Muted key={`${record.reps}:${record.date}`}>{record.reps} reps × {(toUnit(record.load_kg) ?? 0).toFixed(1)} {unit} · {record.date}</Muted>)}
     </Card>
   </>
 }

@@ -9,6 +9,10 @@ import type { DbAdapter } from '@nutai/db-adapter'
 
 type DishRow = { id: string, name: string, category: string, status: string, aliases: string }
 
+// P2-6: dish rows showed raw snake-case codes like "street_food_snack".
+const prettyCategory = (category: string): string =>
+  category.replaceAll('_', ' ').replace(/(^|[\s-])\S/g, (ch) => ch.toUpperCase())
+
 export default function IndianDishesScreen() {
   const t = useTheme()
   const insets = useSafeAreaInsets()
@@ -117,8 +121,8 @@ export default function IndianDishesScreen() {
   return (
     <View style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={s.headerRow}>
-        <Text style={[type.title, { color: t.text }]}>Indian Dishes</Text>
-        <Pressable onPress={() => router.back()} hitSlop={space.md}>
+        <Text accessibilityRole="header" style={[type.title, { color: t.text }]}>Indian Dishes</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={space.md}>
           <Text style={[type.body, { color: t.textMuted }]}>Done</Text>
         </Pressable>
       </View>
@@ -127,8 +131,10 @@ export default function IndianDishesScreen() {
       
       <View style={s.filterRow}>
         {['ALL', 'CURATED', 'DRAFT_CURATED', 'HOUSEHOLD'].map(f => (
-          <Pressable 
-            key={f} 
+          <Pressable
+            key={f}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filter === f }}
             onPress={() => setFilter(f as any)}
             style={[s.filterBtn, { backgroundColor: filter === f ? t.protein : t.bgSunken, borderColor: filter === f ? t.protein : t.border }]}
           >
@@ -147,24 +153,35 @@ export default function IndianDishesScreen() {
         placeholderTextColor={t.textFaint}
       />
       
-      <Text style={{ color: t.textMuted, paddingHorizontal: space.md, marginTop: space.xs }}>Showing {dishes.length} dishes</Text>
+      <Text style={{ color: t.textMuted, paddingHorizontal: space.md, marginTop: space.xs }}>Showing {dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'}</Text>
       
       {loading ? <ActivityIndicator style={{ marginTop: space.lg }} /> : (
         <ScrollView style={s.scroll}>
           {dishes.map(d => (
-            <Pressable key={d.id} onPress={() => openDish(d)} style={[s.row, { borderColor: t.border }]}>
+            <Pressable key={d.id} accessibilityRole="button" accessibilityLabel={`Open ${d.name}`} onPress={() => openDish(d)} style={[s.row, { borderColor: t.border }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[type.body, { color: t.text }]}>{d.name}</Text>
                 {d.aliases ? <Text style={[type.caption, { color: t.textMuted }]}>Also known as: {d.aliases}</Text> : null}
                 <Text style={[type.micro, { color: d.status === 'CURATED' ? t.protein : d.status === 'HOUSEHOLD' ? "#3b82f6" : t.safety, marginTop: space.xs }]}>
-                  {d.status === 'CURATED' ? '✓ CURATED RECIPE' : d.status === 'HOUSEHOLD' ? '🏠 MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {d.category}
+                  {d.status === 'CURATED' ? '✓ CURATED RECIPE' : d.status === 'HOUSEHOLD' ? '🏠 MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {prettyCategory(d.category)}
                 </Text>
               </View>
             </Pressable>
           ))}
-          {dishes.length === 0 && query.length >= 2 && (
-            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>No dishes found.</Text>
-          )}
+          {dishes.length === 0 && !loading && (query.trim().length >= 2 ? (
+            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
+              No dishes match “{query.trim()}”. Try a shorter prefix like “idli”, or clear the search to browse all {filter === 'ALL' ? '362' : ''} identities.
+            </Text>
+          ) : filter === 'HOUSEHOLD' ? (
+            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
+              You have not saved any household versions yet.{'\n'}
+              Open any dish and use “Log Household Variant” to keep your own ingredients and portions.
+            </Text>
+          ) : filter === 'DRAFT_CURATED' ? (
+            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
+              No draft dishes right now. Drafts appear here while a curated recipe is still under review.
+            </Text>
+          ) : null)}
         </ScrollView>
       )}
     </View>

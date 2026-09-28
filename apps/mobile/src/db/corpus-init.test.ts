@@ -84,6 +84,7 @@ describe('corpus initialization & retry logic', () => {
       if (sql.includes("sqlite_master")) return { c: 1 }
       if (sql.includes("FROM foods")) return { c: 8520 }
       if (sql.includes("food_portions")) return { c: 14200 }
+      if (sql.includes("dish_definitions")) return { c: 362 }
       if (sql.includes("build_manifest")) return { value: '2026-09-14T00:00:00Z' }
       return null;
     });
@@ -95,6 +96,7 @@ describe('corpus initialization & retry logic', () => {
     expect(info).toEqual({
       foods: 8520,
       portions: 14200,
+      dishes: 362,
       builtAt: '2026-09-14T00:00:00Z',
     })
   })

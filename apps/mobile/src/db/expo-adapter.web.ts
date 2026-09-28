@@ -19,7 +19,13 @@ class SqliteWasmAdapter implements DbAdapter {
   ) {}
 
   private executeSql(sql: string, params: readonly SqlValue[] = []): any[] {
-    console.log('EXEC:', sql.substring(0, 100)); const results: any[] = [];
+    // P2-15: per-statement EXEC logging was pure console noise in production
+    // (one line per SQL statement). It stays available as an explicit opt-in
+    // debug flag instead.
+    if (typeof globalThis !== 'undefined' && (globalThis as { __NUTAI_SQL_DEBUG__?: boolean }).__NUTAI_SQL_DEBUG__) {
+      console.log('EXEC:', sql.substring(0, 100));
+    }
+    const results: any[] = [];
     const bindParams = params.map(p => typeof p === 'bigint' ? Number(p) : p);
     
     // Web DB Adapter Polyfill: Replace FTS5 with regular tables for migrations
@@ -261,11 +267,20 @@ export function resetCorpusPromises(): void {
   ifctOpenPromise = null;
 }
 
-export async function nutritionCorpusInfo(db: DbAdapter): Promise<{ foods: number; portions: number; builtAt: string | null }> {
+export async function nutritionCorpusInfo(db: DbAdapter): Promise<{ foods: number; portions: number; dishes: number; builtAt: string | null }> {
   const foods = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods');
   const portions = await db.get<{ c: number }>('SELECT COUNT(*) c FROM food_portions');
   const built = await db.get<{ value: string }>("SELECT value FROM build_manifest WHERE key = 'built_at'");
-  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, builtAt: built?.value ?? null };
+  // P2-14: surface the bundled dish knowledge base size alongside the food
+  // corpora. Older dish-less bundles simply report 0.
+  let dishes = 0;
+  try {
+    const dishRows = await db.get<{ c: number }>('SELECT COUNT(*) c FROM dish_definitions');
+    dishes = dishRows?.c ?? 0;
+  } catch {
+    dishes = 0;
+  }
+  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, dishes, builtAt: built?.value ?? null };
 }
 
 export async function ifctCorpusInfo(db: DbAdapter): Promise<{ foods: number; version: string | null }> {

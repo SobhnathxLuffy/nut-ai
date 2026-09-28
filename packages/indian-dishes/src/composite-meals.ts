@@ -9,6 +9,15 @@ export interface DecomposedMeal {
   rawQuery: string
   displayName: string
   components: CompositeMealComponent[]
+  /**
+   * 'known_pairing' — a curated, dietitian-vetted combination (Litti Chokha,
+   * Idli Sambar, …) whose component queries and portions are fixed.
+   * 'delimiter' — a free-form split on +/and/with/aur/&/, of whatever the
+   * user typed. Free-form splits are only a GUESS about intent, so callers
+   * must not present them as a confident composition without the user
+   * explicitly opting in (P2-7).
+   */
+  source: 'known_pairing' | 'delimiter'
 }
 
 interface KnownPairing {
@@ -152,6 +161,7 @@ export function decomposeCompositeMeal(query: string): DecomposedMeal | null {
         rawQuery: trimmed,
         displayName: pairing.displayName,
         components: pairing.components.map((c) => ({ ...c })),
+        source: 'known_pairing',
       }
     }
   }
@@ -176,5 +186,6 @@ export function decomposeCompositeMeal(query: string): DecomposedMeal | null {
     rawQuery: trimmed,
     displayName,
     components,
+    source: 'delimiter',
   }
 }

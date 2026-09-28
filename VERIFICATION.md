@@ -6,12 +6,12 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **639 passed**, 78 files |
+| Unit + property + integration tests | `npx vitest run` | **649 passed**, 80 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted |
-| IFCT corpus verification | `npm run ifct:verify` | **528-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
+| IFCT corpus verification | `npm run ifct:verify` | **542-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
 | Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 50 CURATED with 100% deep validation pass (6 stages) |
 | Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
 | Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
@@ -20,7 +20,7 @@ Reproduce with `npm run check`.
 | Android unknown dish builder | recipe decomposition UI | **Deterministic arithmetic** (IFCT/USDA base + fat + method yield multiplier + portion grams) |
 | Android SQLite atomic log & timeline | interactive tap "Log to Today" | **Logged to SQLite**, instant UI reactivity: daily targets deducted, streak updated, timeline populated |
 | Android schema upgrade | cold launch, inspect app-private `user.db` | **migrations 1-11 present**, integrity check clean |
-| Android IFCT asset | inspect app-private `ifct.db` | **528 rows**, official PDF SHA-256 matches manifest |
+| Android IFCT asset | inspect app-private `ifct.db` | **542 rows**, official PDF SHA-256 matches manifest |
 
 The complete `npm run check` gate was rerun on 2026-09-13 after the Phase 6
 Indian Dish Knowledge Base curation, composite meal decomposition, and unknown
@@ -326,3 +326,26 @@ Tested live on connected Samsung Galaxy M14 5G (`SM-M146B`, Android 14, serial `
 | **S** | **Dark Mode Contrast & Theme** | **PASS** | Dark theme verified on device AMOLED display. Deep background (`#0B0E14`), crisp typography (`#FFFFFF`), distinct card borders and high contrast buttons. |
 | **T** | **Corpus Error & Retry Lifecycle** | **PASS** | Implemented comprehensive unit tests in `apps/mobile/src/db/corpus-init.test.ts` (7/7 passing) verifying memoized open promises, automatic promise reset on rejection to prevent stuck loading/error states, explicit `resetCorpusPromises()`, and unpopulated database error reporting for USDA vs IFCT. |
 | **U** | **Network Isolation & Device Reboot** | **DEFERRED** | Deferred per host environment constraint (phone tethering active). Local offline operation and process lifecycle persistence validated via app force-stops and local SQLite inspection. |
+
+---
+
+## Product QA Section-D round — every P2 verified and fixed (2026-09-28)
+
+The Section-D P2 report (18 findings) was verified item by item against
+current main — every finding was reproduced or code-located on the live
+build, then fixed, regression-locked, and gated. Highlights: the `$kg`
+template leak, duplicate same-day PR rows in reports, the composite-meal
+fabrication (free-form `a + b + c` queries are now tap-gated suggestions, never
+pre-built compositions), the web camera gaining all capture modes plus a
+manual-GTIN path, contextual undo/redo labels (AGENTS §8.5), a11y roles on
+every primary control, the 390px `Unconfirmed` pill clip, the search header
+now accounting for the dish knowledge base (`542 IFCT · 7,928 USDA · 362 dish
+KB · offline`), SQL console noise gated behind a debug flag, and the 528-vs-542
+IFCT doc correction. Per-bug evidence in
+[docs/qa/p2-section-d-fixes.md](docs/qa/p2-section-d-fixes.md).
+
+Gate results for this round: `npm run check` exit 0 — **files): 649/649 tests (80
+files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
+26/26, IFCT golden queries (542 rows), indian-dishes verify (362 dishes);
+Playwright e2e on the exported web bundle **15 passed + 2 fixme** (6 new P2
+journeys); web boot smoke 0 console errors with gate persistence.

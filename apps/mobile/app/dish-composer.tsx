@@ -266,7 +266,7 @@ export default function DishComposerScreen() {
     return (
       <View style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom, padding: space.md }]}>
         <Text style={[type.body, { color: t.safety }]}>{error}</Text>
-        <Pressable onPress={() => router.back()} style={[s.btn, { borderColor: t.border, marginTop: space.md }]}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} style={[s.btn, { borderColor: t.border, marginTop: space.md }]}>
           <Text style={{ color: t.text, textAlign: 'center' }}>Back</Text>
         </Pressable>
       </View>
@@ -276,8 +276,8 @@ export default function DishComposerScreen() {
   return (
     <ScrollView style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={s.headerRow}>
-        <Text style={[type.title, { color: t.text }]}>Compose: {dish?.canonicalName}</Text>
-        <Pressable onPress={() => router.back()} hitSlop={space.md}>
+        <Text accessibilityRole="header" style={[type.title, { color: t.text }]}>Compose: {dish?.canonicalName}</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={space.md}>
           <Text style={[type.body, { color: t.textMuted }]}>Cancel</Text>
         </Pressable>
       </View>
@@ -303,15 +303,15 @@ export default function DishComposerScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={String(c.grams)} onChangeText={t => updateGrams(c.id, t)} keyboardType="numeric" />
               <Text style={{ color: t.text, marginLeft: 4 }}>g</Text>
-              <Pressable onPress={() => removeComponent(c.id)} style={{ marginLeft: space.md }}><Text style={{ color: t.safety }}>✕</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${c.name}`} onPress={() => removeComponent(c.id)} style={{ marginLeft: space.md }}><Text style={{ color: t.safety }}>✕</Text></Pressable>
             </View>
           </View>
           
           {!c.foodId && (
             <View style={{ marginTop: space.sm }}>
-               <Pressable onPress={() => searchIngredient(c.id, c.name)} style={[s.btn, { borderColor: t.protein, paddingVertical: 4 }]}><Text style={{ color: t.protein, textAlign: 'center' }}>Search Database</Text></Pressable>
+               <Pressable accessibilityRole="button" onPress={() => searchIngredient(c.id, c.name)} style={[s.btn, { borderColor: t.protein, paddingVertical: 4 }]}><Text style={{ color: t.protein, textAlign: 'center' }}>Search Database</Text></Pressable>
                {c.searchResults && c.searchResults.map((res: any) => (
-                  <Pressable key={res.foodId} onPress={() => selectCandidate(c.id, res)} style={{ padding: space.sm, borderBottomWidth: 1, borderColor: t.border }}>
+                  <Pressable key={res.foodId} accessibilityRole="button" accessibilityLabel={`Select ${res.name}`} onPress={() => selectCandidate(c.id, res)} style={{ padding: space.sm, borderBottomWidth: 1, borderColor: t.border }}>
                      <Text style={{ color: t.text }}>{res.name}</Text>
                      <Text style={[type.micro, { color: t.textMuted }]}>{res.energyKcal} kcal / 100g</Text>
                   </Pressable>
@@ -321,7 +321,7 @@ export default function DishComposerScreen() {
         </View>
       ))}
 
-      <Pressable onPress={addIngredient} style={[s.btn, { borderColor: t.border }]}><Text style={{ color: t.text }}>+ Add Ingredient</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={addIngredient} style={[s.btn, { borderColor: t.border }]}><Text style={{ color: t.text }}>+ Add Ingredient</Text></Pressable>
 
       <View style={[s.row, { borderColor: t.border }]}>
         <Text style={[type.body, { color: t.text, flex: 1 }]}>Cooking Fat (g)</Text>
@@ -344,7 +344,7 @@ export default function DishComposerScreen() {
         )}
       </View>
 
-      <Pressable onPress={logDish} style={[s.saveBtn, { backgroundColor: hasUnknowns ? t.bgElevated : t.text, borderColor: t.border }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Log Household Variant" onPress={logDish} style={[s.saveBtn, { backgroundColor: hasUnknowns ? t.bgElevated : t.text, borderColor: t.border }]}>
         <Text style={{ color: hasUnknowns ? t.textMuted : t.bg, fontWeight: 'bold', textAlign: 'center' }}>Log Household Variant</Text>
       </Pressable>
     </ScrollView>

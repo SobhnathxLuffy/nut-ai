@@ -163,15 +163,10 @@ export async function loadReport(
     distance_m: row['distance_m'] == null ? null : Number(row['distance_m']),
   }))
   const exerciseById = new Map(exercises.map((exercise) => [exercise.id, exercise.name]))
-  const prs = deriveRecords(performances)
-    .filter((record) => record.local_date >= start && record.local_date <= end)
-    .map((record) => ({
-      exercise_name: exerciseById.get(record.exercise_id) ?? `Exercise ${record.exercise_id}`,
-      kind: record.kind,
-      value: record.value,
-      unit: record.unit,
-      date: record.local_date,
-    }))
+  const prs = collapseDailyPrs(
+    deriveRecords(performances).filter((record) => record.local_date >= start && record.local_date <= end),
+    (exerciseId) => exerciseById.get(exerciseId) ?? `Exercise ${exerciseId}`,
+  )
   const latestGoal = goalForDate(goals, end)
   const direction = latestGoal?.goal_type === 'lose' ? -1 : latestGoal?.goal_type === 'gain' ? 1 : 0
 
@@ -198,4 +193,37 @@ export async function analyticsStartDate(db: DbAdapter, fallback: string): Promi
     db.get<{ date: string | null }>('SELECT MIN(local_date) AS date FROM day_status'),
   ])
   return rows.map((row) => row?.date).filter((date): date is string => Boolean(date)).sort()[0] ?? fallback
+}
+
+export interface DailyPrRow { exercise_name: string; kind: string; value: number; unit: string; date: string }
+interface RawPrRecord { exercise_id: number; kind: string; value: number; unit: string; local_date: string }
+
+/**
+ * P2-2: deriveRecords emits one row per improvement, so a single session that
+ * beats its own best twice (100 kg × 8 then 102.5 kg × 8) produced two report
+ * rows with the same exercise, kind and date — "Barbell Bench Press: 340.0
+ * kg·reps" appeared twice. Collapse to one row per exercise/kind/day, keeping
+ * the best value (lowest for assistance work, where less is better).
+ */
+export function collapseDailyPrs(
+  records: readonly RawPrRecord[],
+  nameFor: (exerciseId: number) => string,
+): DailyPrRow[] {
+  const byKey = new Map<string, DailyPrRow>()
+  for (const record of records) {
+    const key = `${record.exercise_id}:${record.kind}:${record.local_date}`
+    const previous = byKey.get(key)
+    const better = previous === undefined
+      || (record.unit === 'kg assistance' ? record.value < previous.value : record.value > previous.value)
+    if (better) {
+      byKey.set(key, {
+        exercise_name: nameFor(record.exercise_id),
+        kind: record.kind,
+        value: record.value,
+        unit: record.unit,
+        date: record.local_date,
+      })
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind))
 }

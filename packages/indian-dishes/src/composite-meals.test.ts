@@ -59,3 +59,37 @@ describe('composite-meals', () => {
     expect(decomposeCompositeMeal('roti')).toBeNull()
   })
 })
+
+describe('composite meals source discrimination (P2-7)', () => {
+  it('curated pairings are marked known_pairing', () => {
+    for (const q of ['litti chokha', 'litti + chokha', 'idli and sambar', 'rajma with rice', 'medu vada aur sambar']) {
+      const d = decomposeCompositeMeal(q)
+      expect(d?.source).toBe('known_pairing')
+      expect(d?.components.length).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('free-form delimiter splits are marked delimiter', () => {
+    const d = decomposeCompositeMeal('butter chicken + extra rice')
+    expect(d?.source).toBe('delimiter')
+    expect(d?.components.map((c) => c.name)).toEqual(['Butter chicken', 'Extra rice'])
+  })
+
+  it('garbage long queries never fabricate a confident composition (P2-7)', () => {
+    const nonsense = 'butter chicken + Extra rice + Dal fry → hash browns + pineapple + dal fry'
+    const d = decomposeCompositeMeal(nonsense)
+    // The delimiter split still works mechanically — the QA-reported query
+    // yields exactly 5 components —…
+    expect(d?.source).toBe('delimiter')
+    expect(d!.components.length).toBe(5)
+    // …but the source marker forces the UI to tap-gate it, and anything with
+    // more than 5 parts is treated as pure noise and not even suggested:
+    expect(decomposeCompositeMeal(`${nonsense} + papad`)!.components.length).toBeGreaterThan(5)
+  })
+
+  it('2-char and 3-char prefix behavior stays deterministic', () => {
+    expect(isCompositeMealQuery('pa')).toBe(false)
+    expect(decomposeCompositeMeal('pa')).toBeNull()
+    expect(splitCompositeQuery('dal fry + rice')).toHaveLength(2)
+  })
+})

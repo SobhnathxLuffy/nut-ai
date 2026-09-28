@@ -107,7 +107,7 @@ export async function openIfctDb(): Promise<DbAdapter> {
   if (!ifctOpenPromise) {
     // The corpus is generated, not user data. Overwrite once per process so an
     // install that previously imported the two-row development fixture receives
-    // the current 528-row authorized corpus after an app update.
+    // the current 542-row authorized corpus after an app update.
     ifctOpenPromise = (async () => {
       await SQLite.importDatabaseFromAssetAsync('ifct.db', {
         assetId: require('../../assets/ifct.db'),
@@ -137,13 +137,22 @@ export function resetCorpusPromises(): void {
  */
 export async function nutritionCorpusInfo(
   db: DbAdapter,
-): Promise<{ foods: number; portions: number; builtAt: string | null }> {
+): Promise<{ foods: number; portions: number; dishes: number; builtAt: string | null }> {
   const foods = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods')
     const portions = await db.get<{ c: number }>('SELECT COUNT(*) c FROM food_portions')
     const built = await db.get<{ value: string }>(
       "SELECT value FROM build_manifest WHERE key = 'built_at'",
     )
-  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, builtAt: built?.value ?? null }
+  // P2-14: surface the bundled dish knowledge base size alongside the food
+  // corpora. Older dish-less bundles simply report 0.
+  let dishes = 0
+  try {
+    const dishRows = await db.get<{ c: number }>('SELECT COUNT(*) c FROM dish_definitions')
+    dishes = dishRows?.c ?? 0
+  } catch {
+    dishes = 0
+  }
+  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, dishes, builtAt: built?.value ?? null }
 }
 
 export async function ifctCorpusInfo(

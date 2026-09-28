@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { router } from 'expo-router'
 import { useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../src/components/Icon'
 import { startBarcodeScan, startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
@@ -34,32 +34,10 @@ const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
  * way fast.
  */
 export default function Camera() {
-  if (require('react-native').Platform.OS === 'web') {
-    const { View, Text, Button } = require('react-native');
-    const { router } = require('expo-router');
-    const { startScan } = require('../src/scan/orchestrator');
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontSize: 18, marginBottom: 20 }}>Camera is not supported on Web.</Text>
-        <Button title="Pick an Image" onPress={async () => {
-          // Fallback to ImagePicker
-          const ImagePicker = require('expo-image-picker');
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            base64: false,
-          });
-          if (!result.canceled) {
-            startScan(result.assets[0].uri);
-            // WEB-002: this previously replaced to '/scan-result', a route that
-            // does not exist on any platform — the scan pipeline lives behind
-            // /result (same hand-off the native shutter uses).
-            router.replace('/result');
-          }
-        }} />
-        <Button title="Go Back" onPress={() => router.back()} />
-      </View>
-    );
-  }
+  // P2-9: the web fallback previously exposed none of the capture modes and
+  // offered no manual-GTIN path for barcodes. WebCameraFallback now mirrors
+  // the native mode pills and routes each mode to its real pipeline.
+  if (Platform.OS === 'web') return <WebCameraFallback />
 
   const theme = useTheme()
   const insets = useSafeAreaInsets()
@@ -181,8 +159,141 @@ export default function Camera() {
   )
 }
 
+/**
+ * P2-9: web capture surface. No live camera exists in the browser flow, but
+ * every mode still works — food/label/receipt go through the same pick-image
+ * hand-off and pipeline as before, and barcode gains the manual-GTIN path the
+ * native view never needed. Same invariant as native: the pipeline lives
+ * behind /result (WEB-002), and the draft exists from the hand-off moment.
+ */
+function WebCameraFallback() {
+  const theme = useTheme()
+  const insets = useSafeAreaInsets()
+  const [mode, setMode] = useState<CameraMode>('food')
+  const [gtin, setGtin] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [gtinError, setGtinError] = useState('')
+
+  async function pickImage() {
+    if (busy) return
+    setBusy(true)
+    try {
+      const ImagePicker = require('expo-image-picker')
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        base64: false,
+      })
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri as string
+        setPhase({ kind: 'captured', photoUri: uri })
+        router.replace('/result')
+        if (mode === 'label') void startLabelScan(uri)
+        else if (mode === 'receipt') void startReceiptScan(uri)
+        else void startScan(uri)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function submitGtin() {
+    const value = gtin.replace(/\D/g, '')
+    if (value.length < 8 || value.length > 14) {
+      setGtinError('Enter the 8–14 digit number printed under the bars.')
+      return
+    }
+    setGtinError('')
+    router.replace('/result')
+    void startBarcodeScan(value)
+  }
+
+  return (
+    <View style={[styles.webWrap, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl, paddingBottom: Math.max(insets.bottom, space.xl) }]}>
+      <Text accessibilityRole="header" style={[type.heading, { color: theme.text }]}>Scan food</Text>
+      <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.sm }]}>
+        The live camera is not available here. Pick a photo, or type a barcode number.
+      </Text>
+
+      <View style={styles.modeRow}>
+        {MODES.map((m) => {
+          const active = mode === m.id
+          return (
+            <Pressable
+              key={m.id}
+              accessibilityRole="button"
+              accessibilityLabel={m.label}
+              accessibilityState={{ selected: active }}
+              onPress={() => { setGtinError(''); setMode(m.id) }}
+              style={[styles.modePill, active && styles.modePillActive, { backgroundColor: active ? theme.text : theme.bgSunken, borderColor: theme.border }]}
+            >
+              <Icon name={m.icon} size={18} color={active ? theme.bg : theme.text} />
+              <Text style={[type.label, { color: active ? theme.bg : theme.text }]}>{m.label}</Text>
+            </Pressable>
+          )
+        })}
+      </View>
+
+      {mode === 'barcode' ? (
+        <View style={{ width: '100%', maxWidth: 420, gap: space.sm }}>
+          <TextInput
+            accessibilityLabel="Barcode number (GTIN)"
+            placeholder="e.g. 8901058000224"
+            placeholderTextColor={theme.textFaint}
+            value={gtin}
+            onChangeText={(text) => { setGtinError(''); setGtin(text) }}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            style={[styles.gtinInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+          />
+          {gtinError ? <Text accessibilityRole="alert" style={[type.caption, { color: theme.safety }]}>{gtinError}</Text> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Look up barcode"
+            onPress={submitGtin}
+            disabled={busy}
+            style={[styles.webButton, { backgroundColor: theme.text }]}
+          >
+            <Text style={[type.bodyStrong, { color: theme.bg }]}>Look up barcode</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={mode === 'label' ? 'Pick a nutrition label photo' : mode === 'receipt' ? 'Pick a receipt photo' : 'Pick a food photo'}
+          onPress={pickImage}
+          disabled={busy}
+          style={[styles.webButton, { backgroundColor: theme.text, opacity: busy ? 0.5 : 1 }]}
+        >
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>
+            {busy ? 'Opening picker…' : mode === 'label' ? 'Pick a label photo' : mode === 'receipt' ? 'Pick a receipt photo' : 'Pick a food photo'}
+          </Text>
+        </Pressable>
+      )}
+
+      <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={space.md} style={{ marginTop: space.lg }}>
+        <Text style={[type.body, { color: theme.textMuted }]}>Go back</Text>
+      </Pressable>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
+  webWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl, gap: space.lg },
+  webButton: {
+    minHeight: MIN_TAP_TARGET,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    justifyContent: 'center',
+  },
+  gtinInput: {
+    minHeight: MIN_TAP_TARGET,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    fontSize: 17,
+  },
   primary: {
     paddingHorizontal: space.xl,
     paddingVertical: space.md,
