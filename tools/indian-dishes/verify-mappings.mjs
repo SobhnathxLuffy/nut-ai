@@ -56,6 +56,9 @@ async function main() {
   let checkedSlots = 0
   let ifctHits = 0
   let usdaHits = 0
+  let curatedDishes = 0
+  let draftDishes = 0
+  let fullyMappedDishes = 0
 
   const cache = new Map()
   const loadFood = async (foodId) => {
@@ -76,8 +79,48 @@ async function main() {
   }
 
   for (const dish of dishes) {
-    for (const slot of dish.recipeTemplate?.ingredientSlots ?? []) {
+    const slots = dish.recipeTemplate?.ingredientSlots ?? []
+    const isCurated = dish.provenance?.recordStatus === 'CURATED' || dish.provenance?.recordStatus === 'VERIFIED'
+    if (isCurated) curatedDishes += 1
+    else draftDishes += 1
+
+    // Graduation gates — a CURATED record claims deterministic nutrition, so
+    // every element computeDishNutrition() requires must actually be verified.
+    if (isCurated) {
+      if (dish.recipeTemplate?.numericRatiosVerified !== true) {
+        hardErrors.push(`${dish.id} (${dish.canonicalName}): CURATED but numericRatiosVerified is not true`)
+      }
+      const yieldValue = dish.cooking?.yieldModel?.verifiedNumericYield
+      if (!(typeof yieldValue === 'number' && Number.isFinite(yieldValue) && yieldValue > 0)) {
+        hardErrors.push(`${dish.id} (${dish.canonicalName}): CURATED but cooked yield is not verified`)
+      }
+      if (dish.cooking?.yieldModel?.status !== 'verified') {
+        hardErrors.push(`${dish.id} (${dish.canonicalName}): CURATED but yieldModel.status is not 'verified'`)
+      }
+      const portion = dish.portionModel?.standardPortionGrams
+      if (!(typeof portion === 'number' && Number.isFinite(portion) && portion > 0) || dish.portionModel?.standardPortionStatus !== 'verified') {
+        hardErrors.push(`${dish.id} (${dish.canonicalName}): CURATED but standard portion is not verified`)
+      }
+      if (dish.recipeTemplate?.templateStatus !== 'CURATED' && dish.recipeTemplate?.templateStatus !== 'VERIFIED') {
+        hardErrors.push(`${dish.id} (${dish.canonicalName}): record is CURATED but templateStatus is '${dish.recipeTemplate?.templateStatus}'`)
+      }
+    }
+
+    let allSlotsMapped = slots.length > 0
+    for (const slot of slots) {
       const mapping = slot.nutritionMapping
+      const mapped = mapping && MAPPED_STATUSES.has(mapping.mappingStatus) && mapping.canonicalFoodId
+      if (!mapped) allSlotsMapped = false
+      if (isCurated) {
+        // A CURATED dish has no room for pending-ambiguity statuses.
+        if (!mapping || !MAPPED_STATUSES.has(mapping.mappingStatus) || !mapping.canonicalFoodId) {
+          hardErrors.push(`${dish.id} (${dish.canonicalName}): CURATED but slot "${slot.label}" is not mapped`)
+          continue
+        }
+        if (slot.amountPrior?.verified !== true) {
+          hardErrors.push(`${dish.id} (${dish.canonicalName}): CURATED but slot "${slot.label}" amount prior is not verified`)
+        }
+      }
       if (!mapping || !MAPPED_STATUSES.has(mapping.mappingStatus) || !mapping.canonicalFoodId) continue
       mappedSlots += 1
 
@@ -103,11 +146,27 @@ async function main() {
         sanityWarnings.push(`${dish.id} (${dish.canonicalName}) slot "${slot.label}": ${mapping.canonicalFoodId} (${food.name}) has ${food.protein_g ?? 'null'} g protein/100g — low for a protein slot`)
       }
     }
+    if (allSlotsMapped) fullyMappedDishes += 1
+    // A draft with every slot still ambiguous cannot justify shipping a
+    // search result at all — that dish needs curation, not a pass.
+    if (!isCurated && slots.length > 0 && !slots.some((slot) => {
+      const mapping = slot.nutritionMapping
+      return mapping && MAPPED_STATUSES.has(mapping.mappingStatus) && mapping.canonicalFoodId
+    })) {
+      hardErrors.push(`${dish.id} (${dish.canonicalName}): DRAFT record has zero verified mappings — curation required`)
+    }
+  }
+
+  if (draftDishes === 0 && curatedDishes > 0 && fullyMappedDishes !== dishes.length) {
+    hardErrors.push(`${dishes.length - fullyMappedDishes} dishes are not fully mapped despite ${draftDishes} drafts remaining`)
   }
 
   const report = {
     generatedAt: new Date().toISOString(),
     totalDishes: dishes.length,
+    curatedDishes,
+    draftDishes,
+    fullyMappedDishes,
     mappedSlots,
     checkedSlots,
     ifctMapped: ifctHits,

@@ -10,6 +10,67 @@ const REPO = join(HERE, '../..')
 const DB_PATH = join(REPO, 'apps/mobile/assets/nutrition.db')
 const MAPPED_JSON = join(REPO, 'docs', 'data', 'indian-dishes.mapped.json')
 
+// ---------------------------------------------------------------------------
+// Supplemental ingredient rows.
+//
+// Plain tea and brewed coffee are genuinely absent from BOTH bundled corpora
+// (IFCT 2017 subset: no tea/coffee rows; the shipped USDA release: only
+// ready-to-drink and herbal variants). The dish curation needs them for
+// Masala Chai, Milk Tea and Filter Coffee, so they ship as USDA FoodData
+// Central reference values in a dedicated `fdc_supplemental` source — never
+// misrepresented as verbatim SR Legacy rows. The `fdc_%` source pattern means
+// the existing USDA source, resolver and mapping loader pick them up as
+// ordinary usda: foods with zero special-casing, and the source_id `SUP-`
+// namespace can never collide with a real FDC id.
+// ---------------------------------------------------------------------------
+const SUPPLEMENTAL_FOODS = [
+  {
+    sourceId: 'SUP-TEA-001',
+    name: 'Tea, black, brewed, plain',
+    energy: 1, protein: 0, fat: 0, carb: 0.3, fiber: 0, sugar: 0, sodium: 3,
+    note: 'USDA FDC reference values for plain brewed black tea (~1 kcal/100 g).',
+  },
+  {
+    sourceId: 'SUP-COF-001',
+    name: 'Coffee, brewed, plain',
+    energy: 1, protein: 0.1, fat: 0, carb: 0, fiber: 0, sugar: 0, sodium: 2,
+    note: 'USDA FDC reference values for plain brewed coffee (~1 kcal/100 g).',
+  },
+]
+
+function ensureSupplementalFoods(db) {
+  const schemaRow = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='foods'").get()
+  if (!schemaRow) return 0 // fixture/food-less DB — nothing to do
+  let inserted = 0
+  const insertFood = db.prepare(`
+    INSERT INTO foods (source, source_id, name, basis, basis_confidence,
+                       energy_kcal, protein_g, fat_g, sat_fat_g, carb_g, fiber_g,
+                       sugar_g, sodium_mg, completeness_score, popularity_rank,
+                       license, updated_at)
+    VALUES ('fdc_supplemental', ?, ?, 'per_100g', 'reviewed',
+            ?, ?, ?, NULL, ?, ?, ?, ?, 1.0, 50,
+            'Public domain (USDA FoodData Central reference values)', ?)
+  `)
+  const now = Date.now()
+  const tx = db.transaction(() => {
+    for (const food of SUPPLEMENTAL_FOODS) {
+      const existing = db.prepare("SELECT id FROM foods WHERE source = 'fdc_supplemental' AND source_id = ?").get(food.sourceId)
+      if (existing) continue
+      const info = insertFood.run(food.sourceId, food.name, food.energy, food.protein, food.fat, food.carb, food.fiber, food.sugar, food.sodium, now)
+      const rowId = Number(info.lastInsertRowid)
+      // Keep the FTS indexes in sync so search finds the new rows.
+      const ftsTables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('food_fts','food_fts_trigram')").all()
+      for (const t of ftsTables) {
+        if (t.name === 'food_fts') db.prepare('INSERT INTO food_fts (rowid, name, brand, synonyms) VALUES (?, ?, NULL, ?)').run(rowId, food.name, food.sourceId)
+        if (t.name === 'food_fts_trigram') db.prepare('INSERT INTO food_fts_trigram (rowid, name) VALUES (?, ?)').run(rowId, food.name)
+      }
+      inserted += 1
+    }
+  })
+  tx()
+  return inserted
+}
+
 async function main() {
   const src = await readFile(join(REPO, 'packages/db-adapter/src/schema.ts'), 'utf8')
   const grab = (name) => {
@@ -112,8 +173,9 @@ async function main() {
   })
   
   tx()
+  const supplemental = ensureSupplementalFoods(db)
   db.close()
-  console.log(`Compiled ${count} dishes into ${DB_PATH} (${injected} draft dishes carry ingredient suggestions).`)
+  console.log(`Compiled ${count} dishes into ${DB_PATH} (${injected} draft dishes carry ingredient suggestions; ${supplemental} supplemental ingredients ensured).`)
 }
 
 main().catch(err => {

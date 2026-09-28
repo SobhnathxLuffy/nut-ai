@@ -95,7 +95,9 @@ async function main() {
     DRAFT_CURATED: recordCounts.DRAFT_CURATED, CURATED: recordCounts.CURATED, VERIFIED: recordCounts.VERIFIED,
   }
   if (data.length !== 362) errors.push(`expected 362 dishes, found ${data.length}`)
-  if (slots !== 1_441) errors.push(`expected 1441 ingredient slots, found ${slots}`)
+  // 1441 pre-curation + 2 extra regional slots (Eromba's bespoke recipe and
+  // the Singju/Dhuska restructuring) = 1443 after the draft-graduation pass.
+  if (slots !== 1_443) errors.push(`expected 1443 ingredient slots, found ${slots}`)
 
   // P0-6: the BUNDLED artifact must actually contain the dish KB this file
   // validates. Until the KB compile was chained into `npm run data:build`, a

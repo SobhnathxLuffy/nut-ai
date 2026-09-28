@@ -25,6 +25,15 @@ export class DishKBSource implements NutritionSource {
    */
   private kbPresent?: Promise<boolean>
 
+  /**
+   * Memoized deterministic resolutions. Search and resolveById both need the
+   * computed per-100 g numbers for CURATED/VERIFIED dishes; computeDishNutrition
+   * is a handful of SQL lookups per slot, but a search can surface up to 10
+   * dish rows per keystroke — cache the promise so each dish computes once per
+   * adapter instance.
+   */
+  private resolvedCache = new Map<string, Promise<SourceResolvedFood | null>>()
+
   private kbReady(): Promise<boolean> {
     this.kbPresent ??= (async () => {
       try {
@@ -65,10 +74,14 @@ export class DishKBSource implements NutritionSource {
       LIMIT 10
     `, [ftsExpression])
 
-    return rows.map((r) => {
+    return Promise.all(rows.map(async (r) => {
       // Priority: Verified KB > Curated (DRAFT_CURATED)
       const deterministic = r.record_status === 'VERIFIED' || r.record_status === 'CURATED'
       const priority = r.record_status === 'VERIFIED' ? 70 : deterministic ? 60 : 25
+      // A CURATED dish can show its deterministic per-100 g number right in
+      // the search row — the same computation resolveById performs. Draft
+      // rows stay energyless and low-confidence on purpose.
+      const resolved = deterministic ? await this.resolveById(r.foodId).catch(() => null) : null
       return {
         foodId: r.foodId,
         source: this.id,
@@ -78,16 +91,24 @@ export class DishKBSource implements NutritionSource {
         category: r.category,
         prepFacet: null,
         basisConfidence: deterministic ? 'high' : 'low',
-        servingSizeG: null,
-        energyKcal: null, // Computation done downstream
+        servingSizeG: resolved?.servingSizeG ?? null,
+        energyKcal: resolved?.energyKcal ?? null, // Draft rows: computed downstream or never.
         popularityRank: 100,
         completenessScore: deterministic ? 1.0 : 0,
         rawBm25: r.rawBm25,
       }
-    })
+    }))
   }
 
   async resolveById(id: string): Promise<SourceResolvedFood | null> {
+    const cached = this.resolvedCache.get(id)
+    if (cached) return cached
+    const promise = this.resolveByIdUncached(id)
+    this.resolvedCache.set(id, promise)
+    return promise
+  }
+
+  private async resolveByIdUncached(id: string): Promise<SourceResolvedFood | null> {
     if (!(await this.kbReady())) return null
     const row = await this.db.get<any>(
       'SELECT * FROM dish_definitions WHERE id = ?',

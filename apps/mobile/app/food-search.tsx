@@ -799,7 +799,7 @@ export default function FoodSearch() {
               setIngredientQuery(text)
               setShowCreateIngredient(false)
             }}
-            placeholder="e.g. methi, kurd, soya chunks…"
+            placeholder="e.g. methi, curd, soya chunks…"
             placeholderTextColor={theme.textFaint}
             autoCorrect={false}
             autoCapitalize="none"

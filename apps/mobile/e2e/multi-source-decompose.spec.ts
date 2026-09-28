@@ -106,4 +106,46 @@ test.describe('decomposer', () => {
     await expect(page.getByLabel('Grams of Zzyzx Custom Masala')).toBeVisible()
     await expect(page.getByText(/Zzyzx Custom Masala · 100g → \d+ kcal/)).toBeVisible()
   })
+
+  test('ingredient search resolves synonyms across databases (methi → fenugreek, curd → yogurt)', async ({ page }) => {
+    await restoreOnboarding(page)
+    await page.goto('/food-search')
+    const search = page.getByLabel('Search foods')
+    await expect(search).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/\d+ IFCT foods/)).toBeVisible({ timeout: 30_000 })
+
+    await search.fill('xzqv zzzq')
+    await page.getByRole('button', { name: /Decompose/ }).click()
+
+    // "methi" never matched IFCT's "Fenugreek leaves" before the alias
+    // expansion — the Hindi word and the English corpus name are different
+    // words. The picker must now resolve BOTH directions of that bridge.
+    await page.getByLabel('Search ingredients').fill('methi')
+    await expect(page.getByText('IFCT 2017 · ICMR-NIN').first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: /Add ingredient Fenugreek/ }).first()).toBeVisible({ timeout: 20_000 })
+
+    // "curd" resolves USDA yogurt rows (IFCT ships no curd row at all).
+    await page.getByLabel('Search ingredients').fill('curd')
+    await expect(page.getByText('USDA FOODDATA CENTRAL').first()).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: /Add ingredient .*[Yy]ogurt/ }).first()).toBeVisible({ timeout: 20_000 })
+  })
+})
+
+test.describe('graduated dish KB', () => {
+  test('formerly-draft dishes resolve with deterministic nutrition', async ({ page }) => {
+    await restoreOnboarding(page)
+    await page.goto('/food-search')
+    const search = page.getByLabel('Search foods')
+    await expect(search).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/\d+ IFCT foods/)).toBeVisible({ timeout: 30_000 })
+
+    // "Aloo Matar" was a DRAFT_CURATED dish: it showed "unverified nutrition"
+    // and resolved to nothing. After graduation it carries verified slots and
+    // must surface as a dish-KB row with a computed kcal value.
+    await search.fill('aloo matar')
+    await expect(page.getByText('INDIAN DISH KB').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/Aloo Matar/).first()).toBeVisible()
+    // Deterministic arithmetic, not a guess: a kcal number is shown.
+    await expect(page.getByText(/\d+ kcal/).first()).toBeVisible({ timeout: 30_000 })
+  })
 })

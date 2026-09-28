@@ -1,7 +1,7 @@
 # PLAN.md — Current Nut AI Implementation Status
 
 > **Last updated:** 2026-09-28
-> **Evidence baseline:** 655 tests / 81 test files, Playwright web e2e 18 passed + 2 fixme, 18/18 node-pure packages, USDA (26/26) + IFCT (542 rows) + Indian-dish (362) + dish-mapping (371/371 slots) verification passing, Android food-flow device verification completed, four QA rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D).
+> **Evidence baseline:** 667 tests / 82 test files, Playwright web e2e 20 passed + 2 skipped, 18/18 node-pure packages, USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,443 slots) + dish-mapping (1,443/1,443 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round).
 > **Worktree:** Currently clean — all fix rounds are pushed. Preserve unrelated future edits; do not reset or clean them.
 
 ## 1. Executive Status
@@ -14,7 +14,7 @@ The previous phase labels overstated completion in several places. Current statu
 
 - **The web app is built and gated** — same Expo Router screens + deterministic engine, offline, with the user DB on OPFS, a DOM `Alert` shim, all four camera modes plus manual-GTIN entry, and a Playwright e2e suite run by GitHub Actions on every push.
 - **Four QA rounds closed** (36 findings total): web P0 (WEB-001…011), product Section-B P0, Section-C P1, Section-D P2 — per-bug evidence in `docs/qa/`.
-- **Indian Dish KB pipeline shipped** — 362 dishes bundled by `data:build` behind an integrity gate, resolver ranks CURATED identities above generic corpora, full dish browsing, household variants persisting to the writable user DB AND searchable/resolvable through `HouseholdDishSource`, tap-gated combo suggestions, name-derived ingredient suggestions baked into 164 draft dishes.
+- **Indian Dish KB pipeline shipped** — 362 dishes bundled by `data:build` behind an integrity gate, ALL 362 records CURATED via the draft-graduation pass (`curate-drafts.mjs`: family priors + name-derived mappings + ~150 audited per-dish overrides), resolver ranks dish identities above generic corpora and shows their deterministic kcal in search rows, full dish browsing, household variants persisting to the writable user DB AND searchable/resolvable through `HouseholdDishSource`, tap-gated combo suggestions, synonym-expanded ingredient search (methi → fenugreek, curd → yogurt) across user foods + IFCT + USDA.
 - **Multi-source search shipped** — one query merges rows from user foods, household recipes/dishes, dish KB, IFCT, USDA and Open Food Facts with per-source BM25 normalization and a tier-gated accept decision.
 - **Food/Home fixes landed** — repeat-meal timestamp (BUG-015), contextual undo/redo labels, recoverable review dates, friendly workout validation errors, day-status wrap, report PR hygiene.
 
@@ -49,12 +49,12 @@ Latest verified gate:
 
 - ESLint: clean, 0 errors/warnings
 - TypeScript: strict, packages + mobile clean
-- Vitest: **655 passed across 81 files**
+- Vitest: **667 passed across 82 files**
 - Node purity: **18/18** packages
 - USDA `data:verify`: **26/26** golden queries passing
 - IFCT verification: **542-row Table 1 corpus** accepted
-- Indian dishes: **362 total**, **50 CURATED**, **312 DRAFT_CURATED**, bundled + integrity-gated
-- Dish mapping verification: **371/371** mapped slots resolve in the shipped corpus (157 IFCT + 214 USDA), 0 errors, 0 sanity warnings
+- Indian dishes: **362 total, 362 CURATED, 0 DRAFT_CURATED** (draft-graduation pass), bundled + integrity-gated
+- Dish mapping verification: **1,443/1,443** mapped slots resolve in the shipped corpus (1,061 IFCT + 382 USDA), 0 errors, graduation gates active
 - Playwright web e2e: **18 passed + 2 fixme** (exported bundle, CI on every push)
 - `git diff --check`: clean
 
@@ -102,14 +102,14 @@ These are real product gaps. Do not mark the entire Food area complete until res
 
 - 362 canonical dish records
 - 50 `CURATED`
-- 312 `DRAFT_CURATED`
+- 0 `DRAFT_CURATED` (312 graduated 2026-09-28; the graduation pass is part of `data:build`)
 
 ### What exists
 
 - curated dish arithmetic through verified ingredient mappings/recipes where available
 - draft dish discoverability with explicit untrusted/unavailable status
 - a multi-ingredient deterministic decomposer: searchable cross-corpus ingredient picker (user foods + IFCT + USDA), editable grams per ingredient, editable oil amount, shared cooked-yield model, live per-ingredient kcal/P/C/F breakdown, inline custom-ingredient creation that saves into the searchable custom food DB
-- name-derived ingredient suggestions for 164 draft dishes, baked into the KB at build time from a corpus-validated pin list
+- draft-graduation pass (`tools/indian-dishes/curate-drafts.mjs`) + name-derived ingredient mappings from a corpus-validated pin list; supplemental USDA reference rows for plain tea and brewed coffee (the only ingredient words genuinely absent from both corpora)
 - mapping integrity gate (`indian-dishes:verify-mappings`): every mapped slot resolves in the shipped corpora, with fat/protein label sanity checks
 
 ### What does **not** exist yet

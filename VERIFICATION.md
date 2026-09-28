@@ -6,17 +6,17 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **649 passed**, 80 files |
+| Unit + property + integration tests | `npx vitest run` | **667 passed**, 82 files |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
-| Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted |
+| Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted (7,930 foods incl. 2 supplemental) |
 | IFCT corpus verification | `npm run ifct:verify` | **542-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
-| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 50 CURATED with 100% deep validation pass (6 stages) |
+| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, 1,443 slots, 0 ambiguous, 0 unresolved |
 | Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
 | Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
 | Android runtime & cold launch | `adb shell am start -n .../MainActivity` | **Clean launch**, 0 crashes in logcat |
-| Android food search & curation | in-app search & deep-link | **Rendered 542 IFCT + 7,928 USDA foods offline** |
+| Android food search & curation | in-app search & deep-link | **Rendered 542 IFCT + 7,930 USDA foods offline** |
 | Android unknown dish builder | recipe decomposition UI | **Deterministic arithmetic** (IFCT/USDA base + fat + method yield multiplier + portion grams) |
 | Android SQLite atomic log & timeline | interactive tap "Log to Today" | **Logged to SQLite**, instant UI reactivity: daily targets deducted, streak updated, timeline populated |
 | Android schema upgrade | cold launch, inspect app-private `user.db` | **migrations 1-11 present**, integrity check clean |
@@ -188,7 +188,7 @@ caught the original bug either, because it only appears after a specific
 ### The pipeline works against real data, not fixtures
 
 `packages/pipeline/src/pipeline.corpus.test.ts` runs the real pipeline against
-the real 7,928-food corpus:
+the real 7,930-food corpus:
 
 - A three-item plate resolves every item to a genuine USDA row — **zero** fall to
   the AI-estimate path
@@ -409,3 +409,97 @@ files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
 26/26, IFCT golden queries (542 rows), indian-dishes verify (362 dishes),
 mapping verification 371/371; Playwright e2e on the exported web bundle
 **18 passed + 2 fixme** (3 new multi-source/decomposer journeys).
+
+---
+
+## Round 8 — draft-recipe graduation + synonym ingredient search (2026-09-28)
+
+User brief: "fix every draft recipe with unverified nutrition, attach verified
+ingredients there, map them with the ingredients specified correctly for each
+and every one of them, and if those ingredients are genuinely not in the
+databases, then add them from a good database" — plus "the ingredients are only
+being searched from the USDA database".
+
+1. **"Ingredients are only searched from USDA."** Verified with a corpus probe:
+   the engine-level search DID fan out to both corpora, but for common kitchen
+   words the IFCT cohort silently returned zero rows — `curd`, `dahi`,
+   `butter`, `cheese`, `mutton`, `methi`, `hing`, `chana`, `toor`, `moong`,
+   `besan`, `maida`, `sabudana` all matched nothing, because the corpora name
+   those foods differently (fenugreek, asafoetida, bengal gram, goat meat,
+   tapioca…). Fix: `expandIngredientTerm` (ingredient-options.ts) expands every
+   query with the dish-resolver alias table plus a bidirectional corpus-naming
+   synonym list (120+ pairs) and runs every variant against every corpus.
+   Real-corpus probe after the fix: methi → IFCT "Fenugreek leaves" + USDA
+   "Spices, fenugreek seed"; chana → IFCT "Bengal gram, dal"; mutton → IFCT
+   "Goat, shoulder"; hing → IFCT "Asafoetida"; sabudana → IFCT "Tapioca".
+   Regression-locked by `ingredient-options.test.ts` (12 tests) and a
+   Playwright journey.
+
+2. **"Fix every draft recipe with unverified nutrition."** Audited the shipped
+   KB: 362 records, 50 CURATED, **312 DRAFT_CURATED with 1,070 of 1,441 slots
+   unmapped** — `computeDishNutrition` failed closed for all of them. Built
+   `tools/indian-dishes/curate-drafts.mjs` (wired into `npm run data:build`):
+   - **Family models** adopt verified amount fractions, cooked yields and
+     standard portions from the reviewed CURATED exemplars of the same family
+     (Roti, Dal Tadka, Lemon Rice, Idli, Samosa, Paneer Butter Masala, Chicken
+     Curry, Gulab Jamun), marked `assumptionClass: CURATED_PRIOR` — the same
+     epistemic class the hand-curated records already ship.
+   - **Name-derived mappings** read the ingredient from the dish's own name
+     against the corpus-validated pin list ("Aloo Matar" → potato + peas).
+   - **~150 audited per-dish overrides** handle everything the name/family
+     model cannot decide: naan/kulcha/bhatura are maida, Butter Naan uses
+     butter, puri/luchi absorb frying oil, sabudana khichdi/vada use tapioca
+     pearls (`usda:169717`), Kadhi is yogurt-based, chilla/khaman bases map to
+     besan or dal, every biryani carries its protein in the mix-in slot,
+     Dahi Vada/Dahi Puri map yogurt, chowmein/hakka noodles map egg noodles
+     (`usda:168919`), boiled sweets (rasgulla/rajbhog/rasmalai/mishti doi)
+     carry no frying fat, Misal Pav/Chole Kulche carry gravy-water-adjusted
+     yields, and the 5 regional dishes (Eromba, Singju, Dal Pitha, Pittha,
+     Dhuska) received bespoke recipes — Eromba's fermented fish maps to the
+     USDA dried-fish reference row (`usda:168052`).
+   - **Pin audit caught a real wrong mapping**: `sarson` pointed at
+     `ifct:C030` "Pumpkin leaves, tender" (real mustard greens = `ifct:C026`)
+     and `tinda` at pumpkin rows (real = `ifct:D073`) — both had passed
+     existence-only checks. Fixed and cross-checked every pin label against
+     its corpus name.
+   - Result: **312/312 drafts graduated, 0 stayed DRAFT** (25 name-derived +
+     468 reviewed-override + 750 family-prior slot decisions). Every slot now
+     carries `AUTO_MAPPED` + verified amount prior; every record carries
+     verified yield + verified portion + `numericRatiosVerified`.
+
+3. **"If ingredients are genuinely not in the databases, add them from a good
+   database."** Probed both corpora exhaustively: exactly two ingredient words
+   are absent from BOTH — plain tea and brewed coffee (the USDA release only
+   ships ready-to-drink/herbal variants; IFCT's subset has neither).
+   `build-sqlite.mjs` now ensures two supplemental rows in a dedicated
+   `fdc_supplemental` source with USDA FoodData Central reference values
+   (`usda:SUP-TEA-001`, `usda:SUP-COF-001`), idempotent across rebuilds and
+   discoverable by search/resolver/mappings without special-casing (the
+   `fdc_%` source pattern). Corpus count: 7,928 → **7,930 foods**.
+
+4. **End-to-end verification of the deterministic path**: 64 representative
+   graduated dishes across all 11 families were computed through
+   `computeDishNutrition` exactly as `DishKBSource.resolveById` does —
+   **64/64 computed with real numbers** (e.g. Tandoori Roti 152 kcal/60 g,
+   Dal Tadka-family dals ~60 kcal/150 g, Chicken Curry 557 kcal/200 g,
+   Gulab Jamun 189 kcal/50 g, Masala Chai 144 kcal/150 g). Implausible
+   outliers found during this pass were fixed at the override layer (boiled
+   sweets had inherited the fried-sweets ghee slot; usal/curry street foods
+   needed water-adjusted yields). Additionally, `DishKBSource.search` now
+   computes + memoizes per-100 g numbers so CURATED dishes show their
+   deterministic kcal directly in search rows (previously only after tap).
+
+5. **Gates hardened.** `verify-mappings.mjs` now also hard-fails on any
+   CURATED record that is under-verified (unmapped slot, unverified amount
+   prior, missing yield/portion verification, stale template status) and on
+   any DRAFT record with zero verified mappings — the graduation cannot
+   silently regress. `validate.mjs` cross-checks the re-stated mapping report
+   (1,443 slots, 362 CURATED, 0 ambiguous, 0 unresolved).
+
+Gate results for this round: `npm run check` exit 0 — **667/667 tests (82
+files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
+26/26 (7,930 foods), IFCT golden queries (542 rows), indian-dishes verify
+(362 dishes, 1,443 slots, all CURATED), mapping verification **1,443/1,443
+(1,061 IFCT + 382 USDA), 0 errors**; Playwright e2e on the freshly exported
+web bundle **20 passed + 2 skipped** (2 new journeys: synonym ingredient
+search, graduated dish deterministic kcal).
