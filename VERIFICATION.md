@@ -344,7 +344,7 @@ KB · offline`), SQL console noise gated behind a debug flag, and the 528-vs-542
 IFCT doc correction. Per-bug evidence in
 [docs/qa/p2-section-d-fixes.md](docs/qa/p2-section-d-fixes.md).
 
-Gate results for this round: `npm run check` exit 0 — **files): 649/649 tests (80
+Gate results for this round: `npm run check` exit 0 — **649/649 tests (80
 files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
 26/26, IFCT golden queries (542 rows), indian-dishes verify (362 dishes);
 Playwright e2e on the exported web bundle **15 passed + 2 fixme** (6 new P2
