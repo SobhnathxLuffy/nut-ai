@@ -218,17 +218,23 @@ let ifctOpenPromise: Promise<DbAdapter> | null = null;
 
 async function loadStaticDb(assetId: any, dbName: string): Promise<DbAdapter> {
   await loadSqliteWasm();
-  
-  // Actually on web, Expo Router uses fetch() or an internal bundler URL for assets.
-  // To load the DB file, we can require it and fetch the URI.
-  // Assuming require() returns an asset object or a URI on web.
-  let uri = typeof assetId === 'string' ? assetId : assetId; // Default fallback
-  
+
+  // On web we only need the asset's URL — the bytes are fetched straight into
+  // memory and deserialized below. Deliberately NOT using Asset.loadAsync():
+  // its download cache writes through OPFS, and two parallel loadAsync() calls
+  // (nutrition.db + ifct.db both load on first launch) open exclusive
+  // createSyncAccessHandle()s on the same cache file, which throws
+  // NoModificationAllowedError and crashes first load. Asset.fromModule()
+  // resolves the served URL synchronously without touching OPFS at all.
+  let uri: string;
+
   // Expo's Asset resolution on Web
   if (typeof assetId === 'number' || (assetId && assetId.uri)) {
     const { Asset } = require('expo-asset');
-    const asset = await Asset.loadAsync(assetId);
-    uri = asset[0].localUri || asset[0].uri;
+    const asset = Asset.fromModule(assetId);
+    uri = asset.uri || asset.localUri;
+  } else {
+    uri = String(assetId);
   }
   
   console.log(`Fetching ${dbName} from ${uri}`);
