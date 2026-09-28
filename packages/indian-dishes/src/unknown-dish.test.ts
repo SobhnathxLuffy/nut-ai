@@ -112,4 +112,88 @@ describe('unknown-dish fallback', () => {
       ),
     ).rejects.toThrow('Ingredient mass must be positive')
   })
+
+  it('computes a multi-ingredient dish with per-ingredient breakdown', async () => {
+    if (!db || !ifctDb) return
+
+    // Aloo Matar-ish: potato 200g + green peas 100g + oil 10g, sautéed.
+    const result = await computeUnknownDishNutrition(
+      {
+        dishName: 'Aloo Matar',
+        baseIngredientId: 'ifct:F006', // Potato
+        baseIngredientGrams: 200,
+        fatId: 'ifct:T012', // Sunflower oil
+        fatGrams: 10,
+        extraIngredients: [
+          { foodId: 'ifct:D058', grams: 100 }, // Green peas
+          { foodId: 'ifct:G017', grams: 30 },  // Onion
+          { foodId: 'ifct:F006', grams: 50 },  // Duplicate potato — grams must SUM, not duplicate
+        ],
+        cookingMethod: 'sauteed',
+        portionGrams: 150,
+      },
+      db,
+      ifctDb,
+    )
+
+    // 200 + 50 deduped into one 250 g potato row: 250 + 100 + 30 + 10 oil = 390 g raw.
+    expect(result.rawMassGrams).toBe(390)
+    const potatoParts = result.ingredientBreakdown.filter((p) => p.foodId === 'ifct:F006')
+    expect(potatoParts).toHaveLength(1)
+    expect(potatoParts[0]!.grams).toBe(250)
+    // Breakdown contributions must sum to the serving totals (sauteed yield 0.85).
+    const kcalSum = result.ingredientBreakdown.reduce((sum, p) => sum + (p.kcal ?? 0), 0)
+    expect(kcalSum).toBeCloseTo(result.serving.kcal!, 5)
+    const proteinSum = result.ingredientBreakdown.reduce((sum, p) => sum + (p.protein_g ?? 0), 0)
+    expect(proteinSum).toBeCloseTo(result.serving.protein_g!, 5)
+  })
+
+  it('accepts a custom user ingredient (userfood:) as a full participant', async () => {
+    if (!db) return
+    const userDb = openMemoryDb()
+    await userDb.exec(
+      `CREATE TABLE IF NOT EXISTS user_foods (
+        uuid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, brand TEXT, barcode TEXT, basis TEXT NOT NULL,
+        serving_size_g REAL, serving_amount REAL, serving_unit TEXT, energy_kcal REAL NOT NULL DEFAULT 0,
+        protein_g REAL NOT NULL DEFAULT 0, fat_g REAL NOT NULL DEFAULT 0, carb_g REAL NOT NULL DEFAULT 0,
+        fiber_g REAL, sugar_g REAL, sodium_mg REAL, created_at INTEGER, uuid_sync TEXT, updated_at INTEGER,
+        revision INTEGER, deleted_at INTEGER, sync_state TEXT)`,
+    ).catch(async () => {
+      // Schema differs between environments; the identity of the query under
+      // test is the userfood: prefix dispatch, so retry with the adapter's
+      // canonical schema when the bare CREATE conflicts.
+      await userDb.exec('DROP TABLE IF EXISTS user_foods')
+      await userDb.exec(
+        `CREATE TABLE user_foods (
+          uuid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, brand TEXT, barcode TEXT, basis TEXT NOT NULL,
+          serving_size_g REAL, serving_amount REAL, serving_unit TEXT, energy_kcal REAL NOT NULL DEFAULT 0,
+          protein_g REAL NOT NULL DEFAULT 0, fat_g REAL NOT NULL DEFAULT 0, carb_g REAL NOT NULL DEFAULT 0,
+          fiber_g REAL, sugar_g REAL, sodium_mg REAL, created_at INTEGER, uuid_sync TEXT, updated_at INTEGER,
+          revision INTEGER, deleted_at INTEGER, sync_state TEXT)`,
+      )
+    })
+    await userDb.run(
+      `INSERT INTO user_foods (uuid, name, basis, energy_kcal, protein_g, fat_g, carb_g, serving_size_g)
+       VALUES ('018f7fc7-7c00-7000-8000-000000000abc', 'Soya chaap custom', 'per_100g', 345, 36, 10, 25, 100)`,
+    )
+
+    const result = await computeUnknownDishNutrition(
+      {
+        dishName: 'Custom Dish',
+        baseIngredientId: 'userfood:018f7fc7-7c00-7000-8000-000000000abc',
+        baseIngredientGrams: 100,
+        fatId: null,
+        fatGrams: 0,
+        cookingMethod: 'boiled',
+        portionGrams: 105, // boiled yield 1.05 × 100 g — the whole dish
+      },
+      db,
+      ifctDb,
+      userDb,
+    )
+    expect(result.serving.kcal).toBeCloseTo(345, 5)
+    expect(result.serving.protein_g).toBeCloseTo(36, 5)
+    expect(result.ingredientBreakdown[0]!.foodId).toBe('userfood:018f7fc7-7c00-7000-8000-000000000abc')
+    await userDb.close()
+  })
 })

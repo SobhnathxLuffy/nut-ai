@@ -14,9 +14,14 @@ This section is the current operational snapshot and must be kept honest. It is 
 ### 0.1 What is currently strong
 
 - The monorepo, strict TypeScript, SQLite foundation, migrations, operations/undo foundation, deterministic nutrition engine, IFCT/USDA integration, custom foods, recipes, and core food logging architecture are substantial.
-- The latest verified automated baseline is **649 tests across 80 files**, with lint, strict typecheck, node-purity (18/18), USDA data verification (26/26 golden queries), IFCT verification (542 rows), Indian-dish verification (362 dishes, 50 CURATED), and the Playwright web e2e suite (**15 passed + 2 documented `fixme`**) all passing.
+- The latest verified automated baseline is **655 tests across 81 files**, with lint, strict typecheck, node-purity (18/18), USDA data verification (26/26 golden queries), IFCT verification (542 rows), Indian-dish verification (362 dishes, 50 CURATED), dish-mapping verification (371/371 mapped slots resolve in the shipped corpus), and the Playwright web e2e suite (**18 passed + 2 documented `fixme`**) all passing.
 - The full loop — scan, review, correct, log, track — ships on **Android, iPhone, and the web**. The web build runs the same Expo Router screens and the same deterministic engine: the user DB lives on the OPFS VFS (WASM SQLite) with a guarded one-time migration, provider keys live in `localStorage`, `Alert.alert` has a DOM shim, the camera fallback exposes all four capture modes plus a manual-GTIN path, and the Playwright suite runs against the real exported bundle on every push via `.github/workflows/web-e2e.yml`.
 - The Indian Dish KB pipeline is part of the shipped artifact: `npm run data:build` bundles the 362-dish KB into `nutrition.db`, the verify gate asserts the row count plus a CURATED FTS probe, the resolver ranks the dish KB (priority 75) above generic corpora with a literal-first alias ladder, and the dish browser reaches all 362 identities.
+- **Search is genuinely multi-source.** `RouterSource.search` fans out to EVERY registered source (user foods, household recipes, saved "My Version" dishes, dish KB, IFCT, USDA, Open Food Facts), caps each corpus at 15 rows, and `normalizeBm25` normalizes per source cohort so cross-corpus BM25 scales stay incomparable-but-fair. A single query surfaces IFCT and USDA rows side by side with source labels. The auto-accept DECISION is still tier-gated to the highest-priority source present, preserving the P0-2 guarantee that a dish-KB identity or IFCT row out-decides a generic USDA row.
+- **The unknown-dish decomposer is a real multi-ingredient builder.** It accepts any number of ingredients (deduped by food id, grams summed), each with an editable gram amount, an editable oil amount, the shared cooked-yield model (`resolveCookedYieldGrams`), a live per-ingredient kcal/P/C/F breakdown scaled to the requested portion, and it accepts `userfood:` ids so custom ingredients participate fully. Ingredients are picked through a cross-database search (user foods + IFCT + USDA); when an ingredient exists in no database, an inline per-100 g form creates it in the custom food DB where it is immediately searchable.
+- **Saved "My Version" dishes are searchable.** The dish composer persists confirmed grams, fat, method, and portion into the household template, and `HouseholdDishSource` (priority 85) replays that arithmetic per-100 g, failing closed on any missing piece.
+- **Dish-to-ingredient mappings are integrity-checked.** `npm run indian-dishes:verify-mappings` resolves every mapped slot against the shipped corpora, hard-fails on unresolvable/empty foods, and reports label-based sanity warnings (fat slots must be fat-dense, protein slots protein-rich). 371/371 mapped slots verified (157 IFCT + 214 USDA), zero errors, zero warnings.
+- **Draft dishes ship name-derived ingredient suggestions.** `tools/indian-dishes/dish-ingredient-suggestions.mjs` resolves dish-name tokens ("Aloo Matar" → potato + peas) against a reviewed, corpus-validated pin list (68 distinct IFCT ids) and `build-sqlite.mjs` bakes the suggestions into the shipped KB for every draft whose required slots are not already fully mapped (164 dishes). The dish composer pre-seeds the ingredient list from them so a person confirms grams instead of facing generic labels like `primary_vegetable`.
 - Four QA rounds are closed with per-bug evidence: web P0 (WEB-001…011), product Section-B P0 (P0-1…6), Section-C P1 (P1-1…12), Section-D P2 (P2-1…18) — see `docs/qa/` and `VERIFICATION.md`. Do not re-report those findings as open without fresh evidence.
 - The **Reliable Food Logging + Personal Food/Recipe Management** slice has been physically exercised on Android for review-before-save, historical dates, edit/delete/undo, repeats, custom foods, recipe logging/versioning, dirty-form protection, rapid-save protection, keyboard handling, and process-level persistence.
 - Core nutrition writes use immutable snapshots and deterministic arithmetic rather than trusting model-generated calories/macros.
@@ -27,18 +32,17 @@ This section is the current operational snapshot and must be kept honest. It is 
 - Home is still visually cluttered and lacks good previous-day navigation.
 - Eaten vs remaining nutrition hierarchy is weak.
 - Search/review/edit surfaces emphasize calories more than macros; protein/carbs/fat visibility needs work.
-- Search now reaches IFCT, USDA, user foods and the dish KB (header counts included), but a single ranked candidate set that also folds in recipes still needs verification before it is called merged.
+- Search is multi-source end to end: the merged candidate list shows user foods, dish KB, IFCT, USDA and Open Food Facts rows with source labels, per-source BM25 normalization keeps ranking fair, and the accept decision stays tier-gated (see §6.2).
 - Recipe ingredient rows do not clearly show the calories/macros contributed by the entered ingredient quantity.
 
 Fixed by recent rounds — do not re-report without fresh evidence: repeat-meal reusing the prior timestamp (BUG-015, regression-locked), anonymous undo/redo labels (now contextual, see §8.5), the `Unconfirmed` pill clipping at 390 px, the report `$kg` template leak, duplicate same-day PR rows, unrounded kcal targets, fabricated composite-meal suggestions (now tap-gated), and the dish browser capping at 100 rows.
 
 #### Indian Dish / Unknown Dish
 - There are **362 canonical dish records: 50 CURATED and 312 DRAFT_CURATED**.
-- The 312 drafts are **not trusted ready-to-log dishes** and must never be presented as such.
-- The current unknown-dish builder is a **manual deterministic fallback**, not semantic dish decomposition.
-- Unrelated unknown dishes can receive the same generic base-ingredient/fat/method choices. Do not call that dish-specific understanding.
-- A real dish editor/decomposition flow still needs dish-specific ingredients, editable quantities, yield, fat, portions, provenance, and uncertainty.
-- Shipped by recent rounds: the KB builds into the bundled corpus behind an integrity gate, the resolver puts CURATED identities above generic corpora, the browser reaches all 362 dishes, and household variants persist to the writable user DB (OPFS on web). Free-form "a + b + c" combo queries are tap-gated suggestions — nothing is composed until every component auto-accepts and the user confirms.
+- The 312 drafts are **not trusted ready-to-log dishes** and must never be presented as such. Draft dishes ARE resolvable through two honest paths: the name-derived ingredient suggestions pre-seeding the composer (164 drafts), or the multi-ingredient decomposer — but a draft's own generic template is still not deterministic nutrition.
+- The unknown-dish builder is now a genuine multi-ingredient decomposer (searchable cross-corpus ingredient picker, editable grams and oil, shared yield model, per-ingredient breakdown, custom-ingredient creation, save-to-foods). It is still an ESTIMATE built from user-selected ingredients — never call its output verified dish nutrition.
+- Uncertainty modeling and provenance capture inside the decomposition flow are still minimal; the composer does not yet ask high-impact clarification questions from the dish uncertainty models.
+- Shipped by recent rounds: the KB builds into the bundled corpus behind an integrity gate, the resolver puts CURATED identities above generic corpora, the browser reaches all 362 dishes, household variants persist to the writable user DB (OPFS on web) AND are searchable/resolvable via `HouseholdDishSource`. Free-form "a + b + c" combo queries are tap-gated suggestions — nothing is composed until every component auto-accepts and the user confirms.
 
 #### Training
 - Training is **not complete** despite older planning documents claiming otherwise.
@@ -266,14 +270,20 @@ Do not flatten source identity into an untraceable master table.
 
 ### 6.2 Search must not hide useful sources
 
-Do not implement “first source wins” if the product requirement is to let the user choose among meaningful candidates.
+This is now IMPLEMENTED, not just a requirement. The router fans out to every source and merges; it must stay that way — do not regress to “first source wins”:
 
-When relevant, a search result set should be able to include:
+- `RouterSource.search` queries all sources in parallel, caps each corpus at 15 rows, and merges in priority order (user foods 100 → household recipes 90 → household dishes 85 → IFCT 80 → dish KB 75 → USDA 70 → Open Food Facts 60).
+- `normalizeBm25` normalizes WITHIN each source cohort — cross-corpus BM25 magnitudes must never be compared directly.
+- The accept/decision step in `resolveByText` is gated to the highest-priority source tier present, so a generic USDA row still cannot out-decide a matching dish-KB identity or IFCT row (P0-2 contract, locked by `resolver.golden.test.ts`).
+- `ResolveResult.topCandidates` carries the merged ranked list so UIs can show every database's matches even when one row auto-accepts.
+
+A search result set can therefore include:
 - IFCT
 - USDA
 - custom/user foods
 - household recipes
-- CURATED Indian dishes
+- saved household ("My Version") dishes
+- CURATED and draft Indian dishes
 - packaged/barcode results
 
 Ranking may prioritize, but it must not silently erase useful alternate sources.
@@ -286,29 +296,25 @@ Ranking may prioritize, but it must not silently erase useful alternate sources.
 
 Current reality: 50 CURATED, 312 DRAFT_CURATED.
 
-The KB ships inside `apps/mobile/assets/nutrition.db` via `npm run data:build`; `npm run indian-dishes:verify` fails if the bundled rows or the CURATED FTS probe are missing. Household variants saved from the dish composer go to the writable user DB (OPFS on web), never the read-only corpus, and the per-100 g snapshot contract (`apps/mobile/src/data/dish-snapshot.ts`) must be preserved by any new write path.
+The KB ships inside `apps/mobile/assets/nutrition.db` via `npm run data:build`; `npm run indian-dishes:verify` fails if the bundled rows or the CURATED FTS probe are missing, and `npm run indian-dishes:verify-mappings` hard-fails if any mapped slot's food id stops resolving in the shipped corpora (plus label-based fat/protein sanity warnings). Household variants saved from the dish composer go to the writable user DB (OPFS on web), never the read-only corpus, and the per-100 g snapshot contract (`apps/mobile/src/data/dish-snapshot.ts`) must be preserved by any new write path. Household variants are searchable and resolvable through `HouseholdDishSource`, which requires each saved slot to carry both a food id and the user's confirmed grams.
 
 ### 6.4 Unknown-dish fallback
 
-The current fallback is manual deterministic estimation.
+The fallback is deterministic estimation from user-selected ingredients. It is now a real multi-ingredient builder:
 
-Never describe it as:
+- any number of ingredients (`extraIngredients`), deduped by food id with grams summed
+- a searchable ingredient picker spanning user foods + IFCT + USDA (`apps/mobile/src/data/ingredient-options.ts`)
+- inline creation of missing ingredients on a per-100 g basis (`createIngredientFood`) — saved into the custom food DB and immediately searchable
+- editable grams per ingredient, an editable oil amount, and the shared cooked-yield model (`resolveCookedYieldGrams`)
+- a live per-ingredient kcal/P/C/F breakdown scaled to the requested portion (`ingredientBreakdown`)
+- `userfood:` ids participate in the arithmetic exactly like corpus rows
+
+Never describe its output as:
 - semantic dish understanding
-- mapped recipe decomposition
+- mapped recipe decomposition from KB data
 - verified Indian dish nutrition
 
-unless the runtime actually has dish-specific component knowledge.
-
-A future proper flow should support:
-- dish/component candidates
-- editable ingredient list
-- ingredient quantities
-- cooking fat quantities
-- yield/cooked weight
-- portion strategy
-- uncertainty/provenance
-- high-impact clarification questions
-- deterministic final totals
+It is an estimate the user composes and confirms. Still missing from the flow: uncertainty/provenance capture and high-impact clarification questions from the dish uncertainty models.
 
 ### 6.5 Food review UX
 
@@ -517,16 +523,19 @@ npm run check:node-purity
 npm run data:verify
 npm run ifct:verify
 npm run indian-dishes:verify
+npm run indian-dishes:verify-mappings
 npm run check
 ```
 
 Current reference baseline at the time of this document:
-- 80 Vitest files, 649 tests
+- 81 Vitest files, 655 tests
 - 18/18 node-pure shared packages
 - USDA golden-query gate passing (26/26)
 - 542-row IFCT Table 1 corpus verification passing
 - 362 Indian dishes: 50 CURATED, 312 DRAFT_CURATED (bundled + integrity-gated)
-- Playwright web e2e: 15 passed + 2 documented `fixme`, run on every push by GitHub Actions
+- 371/371 mapped dish slots resolve in the shipped corpus (mapping-verification gate)
+- 164 draft dishes ship name-derived ingredient suggestions baked into the KB
+- Playwright web e2e: 18 passed + 2 documented `fixme`, run on every push by GitHub Actions
 
 If counts change, update PLAN.md and VERIFICATION.md after the full gate.
 
@@ -686,6 +695,7 @@ npm run check:node-purity
 npm run data:verify
 npm run ifct:verify
 npm run indian-dishes:verify
+npm run indian-dishes:verify-mappings
 npm run check
 
 # Diff / state

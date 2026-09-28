@@ -76,22 +76,39 @@ export const AUTO_ACCEPT = {
  * result set onto 0-1 by its own range, so a query whose best hit is weak does not
  * get a free 1.0 just for being the best of a bad set — which is exactly what the
  * absolute auto-accept floor then catches.
+ *
+ * Multi-source search: normalization happens WITHIN each source cohort. BM25
+ * magnitudes from two independent FTS tables are not comparable — merging USDA
+ * and IFCT rows into one normalization pool would let the numerically larger
+ * corpus's scale silently redefine relevance for the other. Cohort-local
+ * normalization keeps every corpus on the same 0-1 footing, which is what makes
+ * a merged result list fair to rank at all.
  */
 export function normalizeBm25(candidates: readonly Candidate[]): Map<string, number> {
   const out = new Map<string, number>()
   if (candidates.length === 0) return out
 
-  const scores = candidates.map((c) => -c.rawBm25)
-  const min = Math.min(...scores)
-  const max = Math.max(...scores)
-  const range = max - min
-
+  const cohorts = new Map<string, number[]>()
   candidates.forEach((c, i) => {
-    const s = scores[i] ?? 0
-    // A single candidate, or an all-equal set, gets a neutral 0.5 rather than a
-    // free 1.0 — being the only option is not evidence of being a good one.
-    out.set(c.foodId, range === 0 ? 0.5 : (s - min) / range)
+    const key = c.source ?? ''
+    const bucket = cohorts.get(key)
+    if (bucket) bucket.push(i)
+    else cohorts.set(key, [i])
   })
+
+  for (const indices of cohorts.values()) {
+    const scores = indices.map((i) => -candidates[i]!.rawBm25)
+    const min = Math.min(...scores)
+    const max = Math.max(...scores)
+    const range = max - min
+
+    indices.forEach((candidateIndex, i) => {
+      const s = scores[i] ?? 0
+      // A single candidate, or an all-equal set, gets a neutral 0.5 rather than a
+      // free 1.0 — being the only option is not evidence of being a good one.
+      out.set(candidates[candidateIndex]!.foodId, range === 0 ? 0.5 : (s - min) / range)
+    })
+  }
   return out
 }
 

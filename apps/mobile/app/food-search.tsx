@@ -18,6 +18,7 @@ import { db as openUserDb } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import { type ManualFoodSelection } from '../src/data/manual-food'
 import { createCustomFood } from '../src/data/custom-foods'
+import { searchIngredientOptions, createIngredientFood, type IngredientOption } from '../src/data/ingredient-options'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -89,12 +90,30 @@ export default function FoodSearch() {
   // Unknown Dish Fallback / Decomposition state
   const [showDecompose, setShowDecompose] = useState(false)
   const [decomposeName, setDecomposeName] = useState('')
-  const [selectedBaseId, setSelectedBaseId] = useState<string>(COMMON_BASE_INGREDIENTS[0].optionId)
+  const [decompItems, setDecompItems] = useState<Array<{ key: string; foodId: string; label: string; source: string; grams: string }>>([])
   const [selectedFatId, setSelectedFatId] = useState<string>(COOKING_FAT_OPTIONS[0].optionId)
+  const [fatGrams, setFatGrams] = useState<string>(String(COOKING_FAT_OPTIONS[0].defaultGrams))
   const [selectedMethod, setSelectedMethod] = useState<'curried' | 'sauteed' | 'deep_fried' | 'roasted' | 'boiled'>('curried')
   const [decomposePortion, setDecomposePortion] = useState('150')
   const [computedDecomp, setComputedDecomp] = useState<UnknownDishNutritionResult | null>(null)
   const [savingDecomp, setSavingDecomp] = useState(false)
+  // Ingredient picker: search every corpus (user foods + IFCT + USDA) and,
+  // when a genuinely missing ingredient turns up, create it on the spot.
+  const [ingredientQuery, setIngredientQuery] = useState('')
+  const [ingredientResults, setIngredientResults] = useState<IngredientOption[]>([])
+  const [ingredientSearching, setIngredientSearching] = useState(false)
+  const [showCreateIngredient, setShowCreateIngredient] = useState(false)
+  const [newIngredient, setNewIngredient] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
+  const [creatingIngredient, setCreatingIngredient] = useState(false)
+
+  function openDecompose(name: string) {
+    setDecomposeName(name)
+    if (decompItems.length === 0) {
+      const first = COMMON_BASE_INGREDIENTS[0]
+      setDecompItems([{ key: `seed-${first.optionId}`, foodId: first.foodId, label: first.label, source: 'ifct', grams: String(first.defaultRawGrams) }])
+    }
+    setShowDecompose(true)
+  }
 
   const initialize = useCallback(async (isAlive: () => boolean) => {
     setInitialization('loading')
@@ -236,11 +255,11 @@ export default function FoodSearch() {
       }, sourceContext)
       if (!alive) return
       if (r.outcome.kind === 'auto_accept') {
-        setResults([r.outcome.match])
+        setResults(r.topCandidates)
         setOutcome('Best match')
       } else if (r.outcome.kind === 'disambiguate') {
-        setResults(r.outcome.candidates)
-        setOutcome(`${r.outcome.candidates.length} matches`)
+        setResults(r.topCandidates)
+        setOutcome(`${r.topCandidates.length} matches`)
       } else {
         setResults([])
         setOutcome('no match — decompose into ingredients below')
@@ -264,26 +283,96 @@ export default function FoodSearch() {
   useEffect(() => {
     if (!showDecompose || !db) return
     let alive = true
-    const baseOpt = COMMON_BASE_INGREDIENTS.find((b) => b.optionId === selectedBaseId) || COMMON_BASE_INGREDIENTS[0]
+    const items = decompItems
+      .map((item) => ({ foodId: item.foodId, grams: parseFloat(item.grams) || 0 }))
+      .filter((item) => item.grams > 0)
     const fatOpt = COOKING_FAT_OPTIONS.find((f) => f.optionId === selectedFatId) ?? COOKING_FAT_OPTIONS[0]
+    const fatG = fatOpt.foodId ? parseFloat(fatGrams) || 0 : 0
     const portionG = parseFloat(decomposePortion) || 150
+
+    if (items.length === 0) {
+      setComputedDecomp(null)
+      return
+    }
 
     computeUnknownDishNutrition({
       dishName: decomposeName.trim() || query.trim() || 'Custom Recipe',
-      baseIngredientId: baseOpt.foodId,
-      baseIngredientGrams: baseOpt.defaultRawGrams,
+      baseIngredientId: items[0]!.foodId,
+      baseIngredientGrams: items[0]!.grams,
       fatId: fatOpt.foodId,
-      fatGrams: fatOpt.defaultGrams,
+      fatGrams: fatG,
+      extraIngredients: items.slice(1),
       cookingMethod: selectedMethod,
       portionGrams: portionG,
-    }, db, sourceContext.ifctDb).then((res) => {
+    }, db, sourceContext.ifctDb, sourceContext.userDb).then((res) => {
       if (alive) setComputedDecomp(res)
     }).catch(() => {
       if (alive) setComputedDecomp(null)
     })
 
     return () => { alive = false }
-  }, [showDecompose, db, selectedBaseId, selectedFatId, selectedMethod, decomposePortion, decomposeName, query, sourceContext])
+  }, [showDecompose, db, decompItems, selectedFatId, fatGrams, selectedMethod, decomposePortion, decomposeName, query, sourceContext])
+
+  // Ingredient picker: search user foods + IFCT + USDA as the user types.
+  useEffect(() => {
+    if (!showDecompose || !db) return
+    const term = ingredientQuery.trim()
+    if (term.length < 2) {
+      setIngredientResults([])
+      setIngredientSearching(false)
+      return
+    }
+    let alive = true
+    setIngredientSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const options = await searchIngredientOptions(db, sourceContext.ifctDb, sourceContext.userDb, term)
+        if (alive) {
+          setIngredientResults(options)
+          setIngredientSearching(false)
+        }
+      } catch {
+        if (alive) setIngredientSearching(false)
+      }
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [ingredientQuery, showDecompose, db, sourceContext])
+
+  function addDecompItem(foodId: string, label: string, source: string, grams: number) {
+    setDecompItems((prev) => {
+      if (prev.some((item) => item.foodId === foodId)) return prev
+      return [...prev, { key: `${foodId}-${Date.now()}`, foodId, label, source, grams: String(grams) }]
+    })
+  }
+
+  async function handleCreateIngredient() {
+    if (!sourceContext.userDb || creatingIngredient) return
+    const name = newIngredient.name.trim()
+    const kcal = parseFloat(newIngredient.kcal)
+    const protein = parseFloat(newIngredient.protein) || 0
+    const carbs = parseFloat(newIngredient.carbs) || 0
+    const fat = parseFloat(newIngredient.fat) || 0
+    if (!name || !Number.isFinite(kcal) || kcal < 0) {
+      setError('Give the ingredient a name and its kcal per 100 g.')
+      return
+    }
+    setCreatingIngredient(true)
+    setError(null)
+    try {
+      const food = await createIngredientFood(sourceContext.userDb, {
+        name, kcal, protein_g: protein, carbs_g: carbs, fat_g: fat,
+      }, Date.now())
+      addDecompItem(`userfood:${food.uuid}`, food.name, 'userfood', 100)
+      setNewIngredient({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
+      setShowCreateIngredient(false)
+      setIngredientQuery('')
+      setIngredientResults([])
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save the ingredient')
+    } finally {
+      setCreatingIngredient(false)
+    }
+  }
 
   async function handleSelect(candidate: ScoredCandidate) {
     if (!db || selectingId != null) return
@@ -309,8 +398,7 @@ export default function FoodSearch() {
       setError(msg)
       setSelectingId(null)
       if (candidate.source === 'indian_dish_kb') {
-        setDecomposeName(candidate.name)
-        setShowDecompose(true)
+        openDecompose(candidate.name)
       }
     }
   }
@@ -609,10 +697,7 @@ export default function FoodSearch() {
           </Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              setDecomposeName(query)
-              setShowDecompose(true)
-            }}
+            onPress={() => openDecompose(query)}
             style={[styles.actionBtn, { backgroundColor: theme.bgSunken, borderColor: theme.protein }]}
           >
             <Text style={[type.body, { color: theme.protein, fontWeight: '600' }]}>
@@ -648,23 +733,56 @@ export default function FoodSearch() {
             style={[styles.smallInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
           />
 
-          {/* Base Ingredient */}
-          <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Primary Ingredient (IFCT/USDA)</Text>
+          {/* Ingredient list — every ingredient, its grams, removable */}
+          <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Ingredients (grams as used in the whole dish)</Text>
+          {decompItems.map((item) => (
+            <View key={item.key} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[type.caption, { color: theme.text }]} numberOfLines={2}>{item.label}</Text>
+                <Text style={[type.micro, { color: theme.textFaint }]}>{sourceLabel(item.source, undefined)}</Text>
+              </View>
+              <TextInput
+                accessibilityLabel={`Grams of ${item.label}`}
+                value={item.grams}
+                onChangeText={(text) => setDecompItems((prev) => prev.map((row) => (row.key === item.key ? { ...row, grams: text } : row)))}
+                keyboardType="numeric"
+                style={[styles.smallInput, { width: 72, textAlign: 'center', color: theme.text, borderColor: theme.border, backgroundColor: theme.bg, marginTop: 0 }]}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${item.label}`}
+                onPress={() => setDecompItems((prev) => prev.filter((row) => row.key !== item.key))}
+                hitSlop={space.sm}
+              >
+                <Text style={[type.caption, { color: theme.safety }]}>✕</Text>
+              </Pressable>
+            </View>
+          ))}
+          {decompItems.length === 0 && (
+            <Text style={[type.micro, { color: theme.textMuted, marginTop: space.xs }]}>
+              Add at least one ingredient below — the estimate needs some mass to work with.
+            </Text>
+          )}
+
+          {/* Quick-add common ingredients */}
+          <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Common ingredients (tap to add)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
             <View style={{ flexDirection: 'row', gap: space.xs }}>
               {COMMON_BASE_INGREDIENTS.map((item) => (
                 <Pressable
                   key={item.optionId}
-                  onPress={() => setSelectedBaseId(item.optionId)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${item.label}`}
+                  onPress={() => addDecompItem(item.foodId, item.label, 'ifct', item.defaultRawGrams)}
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: selectedBaseId === item.optionId ? theme.protein : theme.bg,
+                      backgroundColor: decompItems.some((row) => row.foodId === item.foodId) ? theme.protein : theme.bg,
                       borderColor: theme.border,
                     },
                   ]}
                 >
-                  <Text style={[type.micro, { color: selectedBaseId === item.optionId ? '#fff' : theme.text }]}>
+                  <Text style={[type.micro, { color: decompItems.some((row) => row.foodId === item.foodId) ? '#fff' : theme.text }]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -672,14 +790,110 @@ export default function FoodSearch() {
             </View>
           </ScrollView>
 
+          {/* Searchable ingredient picker across ALL databases */}
+          <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Add any ingredient (searches your foods · IFCT · USDA)</Text>
+          <TextInput
+            accessibilityLabel="Search ingredients"
+            value={ingredientQuery}
+            onChangeText={(text) => {
+              setIngredientQuery(text)
+              setShowCreateIngredient(false)
+            }}
+            placeholder="e.g. methi, kurd, soya chunks…"
+            placeholderTextColor={theme.textFaint}
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={[styles.smallInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
+          />
+          {ingredientSearching && <ActivityIndicator style={{ marginTop: space.xs }} color={theme.textFaint} />}
+          {ingredientQuery.trim().length >= 2 && !ingredientSearching && ingredientResults.length === 0 && !showCreateIngredient && (
+            <View style={{ marginTop: space.xs }}>
+              <Text style={[type.micro, { color: theme.textMuted }]}>
+                No ingredient named “{ingredientQuery.trim()}” in any database yet.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setNewIngredient((prev) => ({ ...prev, name: ingredientQuery.trim() }))
+                  setShowCreateIngredient(true)
+                }}
+                style={[styles.actionBtn, { alignSelf: 'flex-start', marginTop: space.xs, backgroundColor: theme.bg, borderColor: theme.protein }]}
+              >
+                <Text style={[type.label, { color: theme.protein, fontWeight: '600' }]}>+ Create “{ingredientQuery.trim()}” as a custom ingredient</Text>
+              </Pressable>
+            </View>
+          )}
+          {ingredientResults.map((option) => (
+            <Pressable
+              key={option.foodId}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ingredient ${option.label}`}
+              onPress={() => addDecompItem(option.foodId, option.label, option.source, 100)}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[type.caption, { color: theme.text }]} numberOfLines={2}>{option.label}</Text>
+                <Text style={[type.micro, { color: theme.textFaint }]}>
+                  {sourceLabel(option.source, undefined)}{option.kcalPer100g != null ? ` · ${Math.round(option.kcalPer100g)} kcal/100g` : ''}
+                </Text>
+              </View>
+              <Text style={[type.label, { color: theme.protein, fontWeight: '700' }]}>+ Add</Text>
+            </Pressable>
+          ))}
+
+          {/* Create-new-ingredient mini form (per-100 g basis) */}
+          {showCreateIngredient && (
+            <View style={[styles.nutritionBox, { backgroundColor: theme.bg, borderColor: theme.border, marginTop: space.xs }]}>
+              <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>New ingredient (values per 100 g)</Text>
+              <TextInput
+                accessibilityLabel="Ingredient name"
+                value={newIngredient.name}
+                onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, name: text }))}
+                placeholder="Name"
+                placeholderTextColor={theme.textFaint}
+                style={[styles.smallInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+              />
+              <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xs }}>
+                {([
+                  ['kcal', 'kcal'], ['protein', 'P g'], ['carbs', 'C g'], ['fat', 'F g'],
+                ] as const).map(([field, placeholder]) => (
+                  <TextInput
+                    key={field}
+                    accessibilityLabel={`${placeholder} per 100 grams`}
+                    value={newIngredient[field]}
+                    onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, [field]: text }))}
+                    placeholder={placeholder}
+                    placeholderTextColor={theme.textFaint}
+                    keyboardType="numeric"
+                    style={[styles.smallInput, { flex: 1, textAlign: 'center', color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken, marginTop: 0 }]}
+                  />
+                ))}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save custom ingredient"
+                disabled={creatingIngredient}
+                onPress={handleCreateIngredient}
+                style={[styles.actionBtn, { marginTop: space.sm, backgroundColor: theme.protein, borderColor: theme.protein }]}
+              >
+                <Text style={[type.label, { color: '#fff', fontWeight: '700' }]}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
+              </Pressable>
+            </View>
+          )}
+
           {/* Cooking Fat / Oil Clarification */}
-          <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Cooking Fat / Clarification</Text>
+          <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Cooking Fat / Oil (and how much)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
             <View style={{ flexDirection: 'row', gap: space.xs }}>
               {COOKING_FAT_OPTIONS.map((item) => (
                 <Pressable
                   key={item.optionId}
-                  onPress={() => setSelectedFatId(item.optionId)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${item.label}`}
+                  onPress={() => {
+                    setSelectedFatId(item.optionId)
+                    setFatGrams(String(item.defaultGrams))
+                  }}
                   style={[
                     styles.chip,
                     {
@@ -695,6 +909,22 @@ export default function FoodSearch() {
               ))}
             </View>
           </ScrollView>
+          {(() => {
+            const fatOpt = COOKING_FAT_OPTIONS.find((f) => f.optionId === selectedFatId) ?? COOKING_FAT_OPTIONS[0]
+            if (!fatOpt.foodId) return null
+            return (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs }}>
+                <Text style={[type.micro, { color: theme.textMuted }]}>Oil used (g):</Text>
+                <TextInput
+                  accessibilityLabel="Grams of cooking oil"
+                  value={fatGrams}
+                  onChangeText={setFatGrams}
+                  keyboardType="numeric"
+                  style={[styles.smallInput, { width: 72, textAlign: 'center', color: theme.text, borderColor: theme.border, backgroundColor: theme.bg, marginTop: 0 }]}
+                />
+              </View>
+            )
+          })()}
 
           {/* Cooking Method / Yield Clarification */}
           <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Cooking Method & Yield</Text>
@@ -746,6 +976,21 @@ export default function FoodSearch() {
               <Text style={[type.micro, { color: theme.textFaint, marginTop: 4 }]}>
                 Raw mass: {computedDecomp.rawMassGrams}g → Cooked yield: {Math.round(computedDecomp.cookedYieldGrams)}g
               </Text>
+              {computedDecomp.ingredientBreakdown.length > 0 && (
+                <View style={{ marginTop: 6 }}>
+                  <Text style={[type.micro, { color: theme.textMuted, fontWeight: '700' }]}>
+                    By ingredient (in your {computedDecomp.portionGrams}g serving):
+                  </Text>
+                  {computedDecomp.ingredientBreakdown.map((part) => {
+                    const label = decompItems.find((row) => row.foodId === part.foodId)?.label ?? part.foodId
+                    return (
+                      <Text key={part.foodId} style={[type.micro, { color: theme.textFaint, marginTop: 2 }]}>
+                        • {label} · {Math.round(part.grams)}g → {part.kcal === null ? 'kcal unknown' : `${Math.round(part.kcal)} kcal`}{part.protein_g != null ? `, P ${part.protein_g.toFixed(1)}g` : ''}{part.carbs_g != null ? `, C ${part.carbs_g.toFixed(1)}g` : ''}{part.fat_g != null ? `, F ${part.fat_g.toFixed(1)}g` : ''}
+                      </Text>
+                    )
+                  })}
+                </View>
+              )}
             </View>
           )}
 
@@ -846,6 +1091,7 @@ function sourceLabel(source: string | undefined, basisConfidence?: string): stri
   if (source === 'ifct') return 'IFCT 2017 · ICMR-NIN'
   if (source === 'recipe') return 'HOUSEHOLD RECIPE'
   if (source === 'userfood') return 'YOUR FOOD'
+  if (source === 'household_dish') return 'YOUR VERSION'
   if (source === 'off') return 'OPEN FOOD FACTS · ODbL 1.0'
   if (source === 'indian_dish_kb') {
     return basisConfidence === 'low' ? 'INDIAN DISH KB · DRAFT / UNVERIFIED' : 'INDIAN DISH KB · CURATED'

@@ -1,0 +1,2416 @@
+{
+  "dish:in:tandoori-roti": {
+    "dishName": "Tandoori Roti",
+    "matchedTokens": [
+      "roti"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (roti base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:roomali-roti": {
+    "dishName": "Roomali Roti",
+    "matchedTokens": [
+      "roti"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (roti base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:missi-roti": {
+    "dishName": "Missi Roti",
+    "matchedTokens": [
+      "roti"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (roti base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:makki-di-roti": {
+    "dishName": "Makki di Roti",
+    "matchedTokens": [
+      "makki",
+      "roti"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A006",
+        "label": "Maize, dry (Makki)",
+        "defaultGrams": 80
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (roti base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:bajra-roti": {
+    "dishName": "Bajra Roti",
+    "matchedTokens": [
+      "bajra",
+      "roti"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A003",
+        "label": "Bajra (pearl millet)",
+        "defaultGrams": 80
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (roti base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:jowar-bhakri": {
+    "dishName": "Jowar Bhakri",
+    "matchedTokens": [
+      "jowar"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A005",
+        "label": "Jowar (sorghum)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:ragi-roti": {
+    "dishName": "Ragi Roti",
+    "matchedTokens": [
+      "ragi",
+      "roti"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A010",
+        "label": "Ragi (finger millet)",
+        "defaultGrams": 80
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (roti base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:methi-thepla": {
+    "dishName": "Methi Thepla",
+    "matchedTokens": [
+      "methi"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C020",
+        "label": "Fenugreek leaves (Methi)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:bajra-rotla": {
+    "dishName": "Bajra Rotla",
+    "matchedTokens": [
+      "bajra"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A003",
+        "label": "Bajra (pearl millet)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:garlic-naan": {
+    "dishName": "Garlic Naan",
+    "matchedTokens": [
+      "garlic"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:G011",
+        "label": "Garlic, big clove",
+        "defaultGrams": 10
+      }
+    ]
+  },
+  "dish:in:plain-paratha": {
+    "dishName": "Plain Paratha",
+    "matchedTokens": [
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:gobi-paratha": {
+    "dishName": "Gobi Paratha",
+    "matchedTokens": [
+      "gobi",
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D036",
+        "label": "Cauliflower (Gobi)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:paneer-paratha": {
+    "dishName": "Paneer Paratha",
+    "matchedTokens": [
+      "paneer",
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:mooli-paratha": {
+    "dishName": "Mooli Paratha",
+    "matchedTokens": [
+      "mooli",
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F010",
+        "label": "Radish (Mooli)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:methi-paratha": {
+    "dishName": "Methi Paratha",
+    "matchedTokens": [
+      "methi",
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C020",
+        "label": "Fenugreek leaves (Methi)",
+        "defaultGrams": 150
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:sattu-paratha": {
+    "dishName": "Sattu Paratha",
+    "matchedTokens": [
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:lachha-paratha": {
+    "dishName": "Lachha Paratha",
+    "matchedTokens": [
+      "paratha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (paratha base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:puri": {
+    "dishName": "Puri",
+    "matchedTokens": [
+      "puri"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (puri base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:steamed-rice": {
+    "dishName": "Steamed Rice",
+    "matchedTokens": [
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:jeera-rice": {
+    "dishName": "Jeera Rice",
+    "matchedTokens": [
+      "jeera",
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:G025",
+        "label": "Cumin seeds",
+        "defaultGrams": 5
+      },
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:ghee-rice": {
+    "dishName": "Ghee Rice",
+    "matchedTokens": [
+      "ghee",
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:T013",
+        "label": "Ghee",
+        "defaultGrams": 14
+      },
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:tamarind-rice": {
+    "dishName": "Tamarind Rice",
+    "matchedTokens": [
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:coconut-rice": {
+    "dishName": "Coconut Rice",
+    "matchedTokens": [
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:tomato-rice": {
+    "dishName": "Tomato Rice",
+    "matchedTokens": [
+      "tomato",
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D076",
+        "label": "Tomato, ripe, local",
+        "defaultGrams": 50
+      },
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:moong-dal-khichdi": {
+    "dishName": "Moong Dal Khichdi",
+    "matchedTokens": [
+      "moong",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B010",
+        "label": "Green gram dal (Moong)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:egg-biryani": {
+    "dishName": "Egg Biryani",
+    "matchedTokens": [
+      "egg"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:M001",
+        "label": "Egg, whole, raw",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:hyderabadi-mutton-biryani": {
+    "dishName": "Hyderabadi Mutton Biryani",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:kolkata-chicken-biryani": {
+    "dishName": "Kolkata Chicken Biryani",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:kolkata-mutton-biryani": {
+    "dishName": "Kolkata Mutton Biryani",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:lucknowi-chicken-biryani": {
+    "dishName": "Lucknowi Chicken Biryani",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:lucknowi-mutton-biryani": {
+    "dishName": "Lucknowi Mutton Biryani",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:thalassery-chicken-biryani": {
+    "dishName": "Thalassery Chicken Biryani",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:ambur-chicken-biryani": {
+    "dishName": "Ambur Chicken Biryani",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:dindigul-chicken-biryani": {
+    "dishName": "Dindigul Chicken Biryani",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:bagara-rice": {
+    "dishName": "Bagara Rice",
+    "matchedTokens": [
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:onion-rava-dosa": {
+    "dishName": "Onion Rava Dosa",
+    "matchedTokens": [
+      "onion",
+      "rava"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:G017",
+        "label": "Onion, big",
+        "defaultGrams": 50
+      },
+      {
+        "foodId": "ifct:A022",
+        "label": "Semolina (Rava/Suji)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:onion-uttapam": {
+    "dishName": "Onion Uttapam",
+    "matchedTokens": [
+      "onion"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:G017",
+        "label": "Onion, big",
+        "defaultGrams": 50
+      }
+    ]
+  },
+  "dish:in:kanda-poha": {
+    "dishName": "Kanda Poha",
+    "matchedTokens": [
+      "poha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A011",
+        "label": "Rice flakes (Poha)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:indori-poha": {
+    "dishName": "Indori Poha",
+    "matchedTokens": [
+      "poha"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A011",
+        "label": "Rice flakes (Poha)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:aval-upma": {
+    "dishName": "Aval Upma",
+    "matchedTokens": [
+      "upma"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A022",
+        "label": "Semolina (upma base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:rava-upma": {
+    "dishName": "Rava Upma",
+    "matchedTokens": [
+      "rava",
+      "upma"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A022",
+        "label": "Semolina (Rava/Suji)",
+        "defaultGrams": 80
+      },
+      {
+        "foodId": "ifct:A022",
+        "label": "Semolina (upma base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:semiya-upma": {
+    "dishName": "Semiya Upma",
+    "matchedTokens": [
+      "upma"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A022",
+        "label": "Semolina (upma base)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:moong-dal-chilla": {
+    "dishName": "Moong Dal Chilla",
+    "matchedTokens": [
+      "moong",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B010",
+        "label": "Green gram dal (Moong)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:besan-chilla": {
+    "dishName": "Besan Chilla",
+    "matchedTokens": [
+      "besan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B001",
+        "label": "Bengal gram dal (Besan)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:paneer-chilla": {
+    "dishName": "Paneer Chilla",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:moong-dal": {
+    "dishName": "Moong Dal",
+    "matchedTokens": [
+      "moong",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B010",
+        "label": "Green gram dal (Moong)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:moong-dal-tadka": {
+    "dishName": "Moong Dal Tadka",
+    "matchedTokens": [
+      "moong",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B010",
+        "label": "Green gram dal (Moong)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:masoor-dal": {
+    "dishName": "Masoor Dal",
+    "matchedTokens": [
+      "masoor",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B013",
+        "label": "Lentil dal (Masoor)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:masoor-dal-tadka": {
+    "dishName": "Masoor Dal Tadka",
+    "matchedTokens": [
+      "masoor",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B013",
+        "label": "Lentil dal (Masoor)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:chana-dal": {
+    "dishName": "Chana Dal",
+    "matchedTokens": [
+      "chana",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B002",
+        "label": "Bengal gram, whole (Chana)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:chana-dal-tadka": {
+    "dishName": "Chana Dal Tadka",
+    "matchedTokens": [
+      "chana",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B002",
+        "label": "Bengal gram, whole (Chana)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:urad-dal": {
+    "dishName": "Urad Dal",
+    "matchedTokens": [
+      "urad",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B003",
+        "label": "Black gram dal (Urad)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:dal-makhani": {
+    "dishName": "Dal Makhani",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:panchmel-dal": {
+    "dishName": "Panchmel Dal",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:dal-baati-style-dal": {
+    "dishName": "Dal Baati Style Dal",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:tomato-pappu": {
+    "dishName": "Tomato Pappu",
+    "matchedTokens": [
+      "tomato"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D076",
+        "label": "Tomato, ripe, local",
+        "defaultGrams": 50
+      }
+    ]
+  },
+  "dish:in:palak-pappu": {
+    "dishName": "Palak Pappu",
+    "matchedTokens": [
+      "palak"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C033",
+        "label": "Spinach (Palak)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:rajma-masala": {
+    "dishName": "Rajma Masala",
+    "matchedTokens": [
+      "rajma"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B020",
+        "label": "Rajmah, red",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:kala-chana-curry": {
+    "dishName": "Kala Chana Curry",
+    "matchedTokens": [
+      "chana"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B002",
+        "label": "Bengal gram, whole (Chana)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:moong-usal": {
+    "dishName": "Moong Usal",
+    "matchedTokens": [
+      "moong"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B010",
+        "label": "Green gram dal (Moong)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:cholar-dal": {
+    "dishName": "Cholar Dal",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:maa-ki-dal": {
+    "dishName": "Maa ki Dal",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:kulthi-dal": {
+    "dishName": "Kulthi Dal",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:aloo-gobi": {
+    "dishName": "Aloo Gobi",
+    "matchedTokens": [
+      "aloo",
+      "gobi"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:D036",
+        "label": "Cauliflower (Gobi)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:aloo-matar": {
+    "dishName": "Aloo Matar",
+    "matchedTokens": [
+      "aloo",
+      "matar"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:D061",
+        "label": "Green peas (Matar)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:aloo-palak": {
+    "dishName": "Aloo Palak",
+    "matchedTokens": [
+      "aloo",
+      "palak"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:C033",
+        "label": "Spinach (Palak)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:aloo-jeera": {
+    "dishName": "Aloo Jeera",
+    "matchedTokens": [
+      "aloo",
+      "jeera"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:G025",
+        "label": "Cumin seeds",
+        "defaultGrams": 5
+      }
+    ]
+  },
+  "dish:in:dum-aloo": {
+    "dishName": "Dum Aloo",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:kashmiri-dum-aloo": {
+    "dishName": "Kashmiri Dum Aloo",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:bombay-aloo": {
+    "dishName": "Bombay Aloo",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:bhindi-masala": {
+    "dishName": "Bhindi Masala",
+    "matchedTokens": [
+      "bhindi"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D056",
+        "label": "Okra (Bhindi)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:bhindi-fry": {
+    "dishName": "Bhindi Fry",
+    "matchedTokens": [
+      "bhindi"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D056",
+        "label": "Okra (Bhindi)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:bharwa-bhindi": {
+    "dishName": "Bharwa Bhindi",
+    "matchedTokens": [
+      "bhindi"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D056",
+        "label": "Okra (Bhindi)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:baingan-bharta": {
+    "dishName": "Baingan Bharta",
+    "matchedTokens": [
+      "baingan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D010",
+        "label": "Brinjal (Baingan)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:baingan-masala": {
+    "dishName": "Baingan Masala",
+    "matchedTokens": [
+      "baingan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D010",
+        "label": "Brinjal (Baingan)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:bharwa-baingan": {
+    "dishName": "Bharwa Baingan",
+    "matchedTokens": [
+      "baingan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D010",
+        "label": "Brinjal (Baingan)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:aloo-baingan": {
+    "dishName": "Aloo Baingan",
+    "matchedTokens": [
+      "aloo",
+      "baingan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:D010",
+        "label": "Brinjal (Baingan)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:lauki-sabzi": {
+    "dishName": "Lauki Sabzi",
+    "matchedTokens": [
+      "lauki"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D008",
+        "label": "Bottle gourd (Lauki)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:lauki-chana-dal": {
+    "dishName": "Lauki Chana Dal",
+    "matchedTokens": [
+      "lauki",
+      "chana",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D008",
+        "label": "Bottle gourd (Lauki)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:B002",
+        "label": "Bengal gram, whole (Chana)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:tinda-masala": {
+    "dishName": "Tinda Masala",
+    "matchedTokens": [
+      "tinda"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D066",
+        "label": "Round gourd (Tinda)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:karela-sabzi": {
+    "dishName": "Karela Sabzi",
+    "matchedTokens": [
+      "karela"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D004",
+        "label": "Bitter gourd (Karela)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:bharwa-karela": {
+    "dishName": "Bharwa Karela",
+    "matchedTokens": [
+      "karela"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D004",
+        "label": "Bitter gourd (Karela)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:patta-gobi-sabzi": {
+    "dishName": "Patta Gobi Sabzi",
+    "matchedTokens": [
+      "gobi"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D036",
+        "label": "Cauliflower (Gobi)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:gobi-matar": {
+    "dishName": "Gobi Matar",
+    "matchedTokens": [
+      "gobi",
+      "matar"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D036",
+        "label": "Cauliflower (Gobi)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:D061",
+        "label": "Green peas (Matar)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:matar-mushroom": {
+    "dishName": "Matar Mushroom",
+    "matchedTokens": [
+      "matar",
+      "mushroom"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D061",
+        "label": "Green peas (Matar)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:J001",
+        "label": "Button mushroom",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:mushroom-masala": {
+    "dishName": "Mushroom Masala",
+    "matchedTokens": [
+      "mushroom"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:J001",
+        "label": "Button mushroom",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:mushroom-do-pyaza": {
+    "dishName": "Mushroom Do Pyaza",
+    "matchedTokens": [
+      "mushroom"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:J001",
+        "label": "Button mushroom",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:palak-corn": {
+    "dishName": "Palak Corn",
+    "matchedTokens": [
+      "palak"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C033",
+        "label": "Spinach (Palak)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:methi-malai-matar": {
+    "dishName": "Methi Malai Matar",
+    "matchedTokens": [
+      "methi",
+      "matar"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C020",
+        "label": "Fenugreek leaves (Methi)",
+        "defaultGrams": 150
+      },
+      {
+        "foodId": "ifct:D061",
+        "label": "Green peas (Matar)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:sarson-ka-saag": {
+    "dishName": "Sarson ka Saag",
+    "matchedTokens": [
+      "sarson"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C030",
+        "label": "Mustard greens (Sarson)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:palak-saag": {
+    "dishName": "Palak Saag",
+    "matchedTokens": [
+      "palak"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:C033",
+        "label": "Spinach (Palak)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:chana-saag": {
+    "dishName": "Chana Saag",
+    "matchedTokens": [
+      "chana"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B002",
+        "label": "Bengal gram, whole (Chana)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:beans-poriyal": {
+    "dishName": "Beans Poriyal",
+    "matchedTokens": [
+      "beans"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D049",
+        "label": "French beans",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:karela-fry": {
+    "dishName": "Karela Fry",
+    "matchedTokens": [
+      "karela"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D004",
+        "label": "Bitter gourd (Karela)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:aloo-chokha": {
+    "dishName": "Aloo Chokha",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:baingan-chokha": {
+    "dishName": "Baingan Chokha",
+    "matchedTokens": [
+      "baingan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D010",
+        "label": "Brinjal (Baingan)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:tomato-chokha": {
+    "dishName": "Tomato Chokha",
+    "matchedTokens": [
+      "tomato"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D076",
+        "label": "Tomato, ripe, local",
+        "defaultGrams": 50
+      }
+    ]
+  },
+  "dish:in:sukhi-aloo-sabzi": {
+    "dishName": "Sukhi Aloo Sabzi",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:shahi-paneer": {
+    "dishName": "Shahi Paneer",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:matar-paneer": {
+    "dishName": "Matar Paneer",
+    "matchedTokens": [
+      "matar",
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D061",
+        "label": "Green peas (Matar)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:paneer-tikka-masala": {
+    "dishName": "Paneer Tikka Masala",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:paneer-bhurji": {
+    "dishName": "Paneer Bhurji",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:malai-paneer": {
+    "dishName": "Malai Paneer",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:paneer-do-pyaza": {
+    "dishName": "Paneer Do Pyaza",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:kadai-chicken": {
+    "dishName": "Kadai Chicken",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-korma": {
+    "dishName": "Chicken Korma",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-do-pyaza": {
+    "dishName": "Chicken Do Pyaza",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-saag": {
+    "dishName": "Chicken Saag",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-tikka-masala": {
+    "dishName": "Chicken Tikka Masala",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-65": {
+    "dishName": "Chicken 65",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-chettinad": {
+    "dishName": "Chicken Chettinad",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-sukka": {
+    "dishName": "Chicken Sukka",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-cafreal": {
+    "dishName": "Chicken Cafreal",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-xacuti": {
+    "dishName": "Chicken Xacuti",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-vindaloo": {
+    "dishName": "Chicken Vindaloo",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-kolhapuri": {
+    "dishName": "Chicken Kolhapuri",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-handi": {
+    "dishName": "Chicken Handi",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-changezi": {
+    "dishName": "Chicken Changezi",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:champaran-chicken": {
+    "dishName": "Champaran Chicken",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chicken-stew": {
+    "dishName": "Chicken Stew",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-curry": {
+    "dishName": "Mutton Curry",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-korma": {
+    "dishName": "Mutton Korma",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-do-pyaza": {
+    "dishName": "Mutton Do Pyaza",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-saag": {
+    "dishName": "Mutton Saag",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-vindaloo": {
+    "dishName": "Mutton Vindaloo",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-sukka": {
+    "dishName": "Mutton Sukka",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:mutton-pepper-fry": {
+    "dishName": "Mutton Pepper Fry",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:champaran-mutton": {
+    "dishName": "Champaran Mutton",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:keema-matar": {
+    "dishName": "Keema Matar",
+    "matchedTokens": [
+      "matar"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:D061",
+        "label": "Green peas (Matar)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:mutton-keema": {
+    "dishName": "Mutton Keema",
+    "matchedTokens": [
+      "mutton"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O001",
+        "label": "Goat meat (Mutton)",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:pork-vindaloo": {
+    "dishName": "Pork Vindaloo",
+    "matchedTokens": [
+      "pork"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O048",
+        "label": "Pork",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:pork-curry": {
+    "dishName": "Pork Curry",
+    "matchedTokens": [
+      "pork"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O048",
+        "label": "Pork",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:pork-with-bamboo-shoot": {
+    "dishName": "Pork with Bamboo Shoot",
+    "matchedTokens": [
+      "pork"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O048",
+        "label": "Pork",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:smoked-pork": {
+    "dishName": "Smoked Pork",
+    "matchedTokens": [
+      "pork"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:O048",
+        "label": "Pork",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:fish-curry": {
+    "dishName": "Fish Curry",
+    "matchedTokens": [
+      "fish"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S006",
+        "label": "Rohu fish",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:bengali-fish-curry": {
+    "dishName": "Bengali Fish Curry",
+    "matchedTokens": [
+      "fish"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S006",
+        "label": "Rohu fish",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:goan-fish-curry": {
+    "dishName": "Goan Fish Curry",
+    "matchedTokens": [
+      "fish"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S006",
+        "label": "Rohu fish",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:kerala-fish-curry": {
+    "dishName": "Kerala Fish Curry",
+    "matchedTokens": [
+      "fish"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S006",
+        "label": "Rohu fish",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:fish-fry": {
+    "dishName": "Fish Fry",
+    "matchedTokens": [
+      "fish"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S006",
+        "label": "Rohu fish",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:amritsari-fish": {
+    "dishName": "Amritsari Fish",
+    "matchedTokens": [
+      "fish"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S006",
+        "label": "Rohu fish",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:prawn-curry": {
+    "dishName": "Prawn Curry",
+    "matchedTokens": [
+      "prawn"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S008",
+        "label": "Prawns",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:prawn-masala": {
+    "dishName": "Prawn Masala",
+    "matchedTokens": [
+      "prawn"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S008",
+        "label": "Prawns",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:prawn-fry": {
+    "dishName": "Prawn Fry",
+    "matchedTokens": [
+      "prawn"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:S008",
+        "label": "Prawns",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:anda-bhurji": {
+    "dishName": "Anda Bhurji",
+    "matchedTokens": [
+      "anda"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:M001",
+        "label": "Egg, whole, raw (Anda)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:egg-roast": {
+    "dishName": "Egg Roast",
+    "matchedTokens": [
+      "egg"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:M001",
+        "label": "Egg, whole, raw",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:aloo-samosa": {
+    "dishName": "Aloo Samosa",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:dal-kachori": {
+    "dishName": "Dal Kachori",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:pyaz-kachori": {
+    "dishName": "Pyaz Kachori",
+    "matchedTokens": [
+      "pyaz"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:G017",
+        "label": "Onion, big (Pyaz)",
+        "defaultGrams": 50
+      }
+    ]
+  },
+  "dish:in:onion-pakora": {
+    "dishName": "Onion Pakora",
+    "matchedTokens": [
+      "onion"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:G017",
+        "label": "Onion, big",
+        "defaultGrams": 50
+      }
+    ]
+  },
+  "dish:in:paneer-pakora": {
+    "dishName": "Paneer Pakora",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:aloo-tikki": {
+    "dishName": "Aloo Tikki",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:aloo-tikki-chaat": {
+    "dishName": "Aloo Tikki Chaat",
+    "matchedTokens": [
+      "aloo"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      }
+    ]
+  },
+  "dish:in:sev-puri": {
+    "dishName": "Sev Puri",
+    "matchedTokens": [
+      "puri"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (puri base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:dahi-puri": {
+    "dishName": "Dahi Puri",
+    "matchedTokens": [
+      "puri"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (puri base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:chole-kulche": {
+    "dishName": "Chole Kulche",
+    "matchedTokens": [
+      "chole"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B002",
+        "label": "Bengal gram, whole (Chole)",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:aloo-puri": {
+    "dishName": "Aloo Puri",
+    "matchedTokens": [
+      "aloo",
+      "puri"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F006",
+        "label": "Potato (Aloo)",
+        "defaultGrams": 200
+      },
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (puri base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:puri-sabzi": {
+    "dishName": "Puri Sabzi",
+    "matchedTokens": [
+      "puri"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta (puri base)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:paneer-roll": {
+    "dishName": "Paneer Roll",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:chicken-momos": {
+    "dishName": "Chicken Momos",
+    "matchedTokens": [
+      "chicken"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:N001",
+        "label": "Chicken, leg, skinless",
+        "defaultGrams": 250
+      }
+    ]
+  },
+  "dish:in:chilli-paneer": {
+    "dishName": "Chilli Paneer",
+    "matchedTokens": [
+      "paneer"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L003",
+        "label": "Paneer",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:kaju-katli": {
+    "dishName": "Kaju Katli",
+    "matchedTokens": [
+      "kaju"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:H005",
+        "label": "Cashew nut",
+        "defaultGrams": 20
+      }
+    ]
+  },
+  "dish:in:besan-ladoo": {
+    "dishName": "Besan Ladoo",
+    "matchedTokens": [
+      "besan"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B001",
+        "label": "Bengal gram dal (Besan)",
+        "defaultGrams": 60
+      }
+    ]
+  },
+  "dish:in:atta-ladoo": {
+    "dishName": "Atta Ladoo",
+    "matchedTokens": [
+      "atta"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A019",
+        "label": "Wheat flour, atta",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:milk-cake": {
+    "dishName": "Milk Cake",
+    "matchedTokens": [
+      "milk"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L002",
+        "label": "Milk, cow",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:gajar-halwa": {
+    "dishName": "Gajar Halwa",
+    "matchedTokens": [
+      "gajar"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:F002",
+        "label": "Carrot (Gajar)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:sooji-halwa": {
+    "dishName": "Sooji Halwa",
+    "matchedTokens": [
+      "sooji"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A022",
+        "label": "Semolina (Sooji)",
+        "defaultGrams": 80
+      }
+    ]
+  },
+  "dish:in:moong-dal-halwa": {
+    "dishName": "Moong Dal Halwa",
+    "matchedTokens": [
+      "moong",
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B010",
+        "label": "Green gram dal (Moong)",
+        "defaultGrams": 100
+      },
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  },
+  "dish:in:rice-kheer": {
+    "dishName": "Rice Kheer",
+    "matchedTokens": [
+      "rice"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:A015",
+        "label": "Rice, raw, milled",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:milk-tea": {
+    "dishName": "Milk Tea",
+    "matchedTokens": [
+      "milk"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:L002",
+        "label": "Milk, cow",
+        "defaultGrams": 150
+      }
+    ]
+  },
+  "dish:in:dal-pitha": {
+    "dishName": "Dal Pitha",
+    "matchedTokens": [
+      "dal"
+    ],
+    "suggestions": [
+      {
+        "foodId": "ifct:B021",
+        "label": "Red gram dal (Toor)",
+        "defaultGrams": 100
+      }
+    ]
+  }
+}

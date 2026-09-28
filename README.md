@@ -30,8 +30,16 @@ and instantly. No subscription, no paywall, no account, no server.
   542 Indian food rows, stable IFCT source codes, attribution, and USDA fallback.
 - **A 362-dish Indian Dish Knowledge Base** — curated identities (idli, roti, poha, rajma…) with
   honest portion sizes, household variants you compose from named ingredients and save to your own
-  database, and combo suggestions that are never auto-built — every component must resolve and you
-  tap to confirm.
+  database — searchable afterwards by name — and combo suggestions that are never auto-built —
+  every component must resolve and you tap to confirm.
+- **Search that shows every database at once** — one query merges your saved foods, household
+  recipes and dishes, the dish KB, IFCT 2017, USDA and Open Food Facts rows, each labeled with its
+  source, so a match in one corpus never hides its counterpart in another.
+- **A multi-ingredient dish decomposer** for anything the databases don't know: pick ingredients
+  from all databases at once (or create a missing ingredient per-100 g on the spot), set the grams
+  you actually used and the oil in the pan, choose the cooking method, and watch a live per-
+  ingredient kcal/protein/carb/fat breakdown scale to your portion. Save it to your foods and it
+  is searchable from then on.
 - **Household recipes** with immutable versions, raw-to-cooked yield, oil/ghee accounting, and
   per-serving logging.
 - **Web lookup for branded and restaurant food**: when the local database misses — or a logo in
@@ -96,7 +104,7 @@ apps/mobile/      the Expo app — the ONLY package with React Native imports
 packages/         pure TypeScript, importable under plain Node:
   core-schema     Zod source of truth for every payload shape
   gram-engine     the reconciliation ladder, densities, yields, oil absorption
-  nutrition-sources  USDA, IFCT, dish-KB, user-food, recipe and Open Food Facts adapters
+  nutrition-sources  USDA, IFCT, dish-KB, user-food, recipe, household-dish and Open Food Facts adapters
   resolver        food name → source-qualified database row
   indian-dishes   the 362-dish Dish KB: portions, composite meals, household variants
   recipe-engine   recipe version arithmetic: prep method, oil/water, cooked yield, servings
@@ -170,7 +178,7 @@ Requires Node ≥ 20.19.
 
 ```bash
 npm install
-npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT/dish-KB data checks
+npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT/dish-KB/mapping data checks
 ```
 
 **Expo Go is not a supported development mode.** The camera, SQLite, Keychain key storage, HealthKit,
@@ -195,6 +203,7 @@ npx playwright test              # 17-journey e2e suite against the exported bun
 - [docs/qa/p0-product-audit-fixes.md](docs/qa/p0-product-audit-fixes.md) records the product audit round (Section B, P0-1 … P0-6): trusted-nutrition scaling, resolver cascade, dish-KB build pipeline, gate integrity.
 - [docs/qa/p1-section-c-fixes.md](docs/qa/p1-section-c-fixes.md) records the Section-C P1 round: recipe auto-resolve, friendly workout errors, recoverable dates, full dish-KB browsing, readable dish components — plus the verdict that seven reported P1s were already fixed.
 - [docs/qa/p2-section-d-fixes.md](docs/qa/p2-section-d-fixes.md) records the Section-D P2 round: all 18 UX/product defects closed — report template leak and duplicate PRs, tap-gated combo suggestions, rest-timer controls, web camera modes with manual GTIN, contextual undo, a11y roles and a11y-tree leaks, header dish-KB counts, console hygiene.
+- [docs/qa/product-round-search-decompose-fixes.md](docs/qa/product-round-search-decompose-fixes.md) records the multi-source search + decomposer round: search now merges every database in one ranked list, the decomposer takes unlimited ingredients with grams/oil/breakdown and cross-DB ingredient picking, saved "My Version" dishes became searchable (`HouseholdDishSource`), all 371 mapped dish slots verified against the shipped corpora, and 164 draft dishes ship name-derived ingredient suggestions.
 
 ## Licensing
 

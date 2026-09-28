@@ -1,7 +1,7 @@
 # PLAN.md — Current Nut AI Implementation Status
 
 > **Last updated:** 2026-09-28
-> **Evidence baseline:** 649 tests / 80 test files, Playwright web e2e 15 passed + 2 fixme, 18/18 node-pure packages, USDA (26/26) + IFCT (542 rows) + Indian-dish (362) verification passing, Android food-flow device verification completed, four QA rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D).
+> **Evidence baseline:** 655 tests / 81 test files, Playwright web e2e 18 passed + 2 fixme, 18/18 node-pure packages, USDA (26/26) + IFCT (542 rows) + Indian-dish (362) + dish-mapping (371/371 slots) verification passing, Android food-flow device verification completed, four QA rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D).
 > **Worktree:** Currently clean — all fix rounds are pushed. Preserve unrelated future edits; do not reset or clean them.
 
 ## 1. Executive Status
@@ -14,7 +14,8 @@ The previous phase labels overstated completion in several places. Current statu
 
 - **The web app is built and gated** — same Expo Router screens + deterministic engine, offline, with the user DB on OPFS, a DOM `Alert` shim, all four camera modes plus manual-GTIN entry, and a Playwright e2e suite run by GitHub Actions on every push.
 - **Four QA rounds closed** (36 findings total): web P0 (WEB-001…011), product Section-B P0, Section-C P1, Section-D P2 — per-bug evidence in `docs/qa/`.
-- **Indian Dish KB pipeline shipped** — 362 dishes bundled by `data:build` behind an integrity gate, resolver ranks CURATED identities above generic corpora, full dish browsing, household variants persisting to the writable user DB, tap-gated combo suggestions.
+- **Indian Dish KB pipeline shipped** — 362 dishes bundled by `data:build` behind an integrity gate, resolver ranks CURATED identities above generic corpora, full dish browsing, household variants persisting to the writable user DB AND searchable/resolvable through `HouseholdDishSource`, tap-gated combo suggestions, name-derived ingredient suggestions baked into 164 draft dishes.
+- **Multi-source search shipped** — one query merges rows from user foods, household recipes/dishes, dish KB, IFCT, USDA and Open Food Facts with per-source BM25 normalization and a tier-gated accept decision.
 - **Food/Home fixes landed** — repeat-meal timestamp (BUG-015), contextual undo/redo labels, recoverable review dates, friendly workout validation errors, day-status wrap, report PR hygiene.
 
 ### Overall
@@ -25,8 +26,8 @@ The previous phase labels overstated completion in several places. Current statu
 | Food logging core | **Strong / physically verified** | Search → Review → dated save → edit/delete/undo → persistence |
 | Custom foods | **Strong / physically verified** | CRUD, validation, g/oz, Save & Log, dirty-state protection |
 | Recipes | **Strong / physically verified** | Ingredient search, yield, servings, versioning, log via Food Review, delete/undo |
-| Indian Dish KB | **Partial / pipeline shipped** | 362 dishes bundled + integrity-gated; browser reaches all; household variants persist to user DB; drafts still not nutrition-ready; no semantic decomposition editor yet |
-| Unknown dish fallback | **Partial / generic** | Manual deterministic estimate exists; real semantic dish decomposition does not |
+| Indian Dish KB | **Partial / pipeline shipped** | 362 dishes bundled + integrity-gated; browser reaches all; household variants persist AND are searchable; drafts get name-derived ingredient suggestions; drafts still not nutrition-ready as-is |
+| Unknown dish fallback | **Strong / deterministic** | Multi-ingredient decomposer: cross-corpus ingredient picker, editable grams/oil, shared yield model, per-ingredient breakdown, custom-ingredient creation, save-to-foods; still an estimate, not semantic KB nutrition |
 | Home / Food UX | **Partial** | Clutter, weak hierarchy, macro visibility, recipe-contribution gaps remain; repeat timestamp, named undo, day-status wrap, dish browsing are fixed |
 | Training | **Broken in critical path (reported, unverified since)** | Exercise Library trap last reproduced on device 2026-09-14; no commit has targeted it since — re-verify on current main |
 | Web app | **Built / automated-verified** | Offline Expo web build; OPFS user DB, DOM alert shim, camera modes + manual GTIN; Playwright e2e in CI; not yet device/browser-matrix QA'd |
@@ -48,12 +49,13 @@ Latest verified gate:
 
 - ESLint: clean, 0 errors/warnings
 - TypeScript: strict, packages + mobile clean
-- Vitest: **649 passed across 80 files**
+- Vitest: **655 passed across 81 files**
 - Node purity: **18/18** packages
 - USDA `data:verify`: **26/26** golden queries passing
 - IFCT verification: **542-row Table 1 corpus** accepted
 - Indian dishes: **362 total**, **50 CURATED**, **312 DRAFT_CURATED**, bundled + integrity-gated
-- Playwright web e2e: **15 passed + 2 fixme** (exported bundle, CI on every push)
+- Dish mapping verification: **371/371** mapped slots resolve in the shipped corpus (157 IFCT + 214 USDA), 0 errors, 0 sanity warnings
+- Playwright web e2e: **18 passed + 2 fixme** (exported bundle, CI on every push)
 - `git diff --check`: clean
 
 Run `npm run check` after every substantive implementation slice.
@@ -86,7 +88,7 @@ Status after the 2026-09 QA rounds:
 4. Repeat Meal preserves the original meal timestamp. — **FIXED** (BUG-015; repeat time used; regression-locked in `repeat-logging.test.ts`)
 5. Day status text such as `Unconfirmed` wraps poorly. — **FIXED** (2×2 wrapping grid at narrow widths)
 6. Search/review/edit show calories more clearly than protein/carbs/fat. — **OPEN**
-7. Search should offer a merged/ranked candidate set across sources. — **PARTIALLY ADDRESSED** (IFCT + USDA + user foods + dish KB all reachable, header counts shown; recipes in one ranked list still unverified)
+7. Search should offer a merged/ranked candidate set across sources. — **DONE** (`RouterSource` fan-out merge with per-source BM25 normalization, `ResolveResult.topCandidates`, tier-gated auto-accept; regression-locked in `multi-source.test.ts` and the multi-source e2e spec)
 8. Undo/Redo UI should identify the action being undone/redone. — **FIXED** (live contextual labels, AGENTS §8.5)
 9. Recipe ingredient rows should show nutrient contribution for the entered amount. — **OPEN**
 
@@ -106,27 +108,15 @@ These are real product gaps. Do not mark the entire Food area complete until res
 
 - curated dish arithmetic through verified ingredient mappings/recipes where available
 - draft dish discoverability with explicit untrusted/unavailable status
-- a manual deterministic fallback using selected base ingredient + fat + cooking method + portion
+- a multi-ingredient deterministic decomposer: searchable cross-corpus ingredient picker (user foods + IFCT + USDA), editable grams per ingredient, editable oil amount, shared cooked-yield model, live per-ingredient kcal/P/C/F breakdown, inline custom-ingredient creation that saves into the searchable custom food DB
+- name-derived ingredient suggestions for 164 draft dishes, baked into the KB at build time from a corpus-validated pin list
+- mapping integrity gate (`indian-dishes:verify-mappings`): every mapped slot resolves in the shipped corpora, with fat/protein label sanity checks
 
 ### What does **not** exist yet
 
-A real semantic dish-specific decomposition flow for arbitrary Indian foods.
+Uncertainty/provenance capture inside the decomposition flow, and high-impact clarification questions from the dish uncertainty models.
 
-Current owner QA demonstrated that an unknown query such as `litti chokha` can fall into the same generic selector used for unrelated foods. That fallback must not be described as mapped litti/chokha nutrition.
-
-### Needed future work
-
-- browseable Indian Dishes library
-- clear curated vs draft status
-- dish-specific aliases/components/templates
-- editable ingredient list
-- editable ingredient quantities
-- fat quantities
-- cooked yield / cooked mass
-- portion strategy
-- provenance and uncertainty
-- household/custom variant save path
-- later: AI/text/photo can propose structure, but deterministic engine remains source of numbers
+The decomposer's output is an estimate the user composes and confirms — it must not be described as verified KB nutrition. Draft templates with generic slots still fail closed.
 
 ---
 

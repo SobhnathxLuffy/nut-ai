@@ -349,3 +349,63 @@ files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
 26/26, IFCT golden queries (542 rows), indian-dishes verify (362 dishes);
 Playwright e2e on the exported web bundle **15 passed + 2 fixme** (6 new P2
 journeys); web boot smoke 0 console errors with gate persistence.
+
+---
+
+## Product round — multi-source search, decomposer v2, mapping verification (2026-09-28)
+
+User-reported defects, verified against current main and fixed:
+
+1. **"Only one database gives results — either USDA or IFCT."** Root cause:
+   `RouterSource.search` was a first-match cascade, so a query could only ever
+   surface rows from the highest-priority corpus that matched. Fixed by a
+   fan-out merge (all sources queried in parallel, per-corpus cap of 15 rows,
+   merged in priority order) plus per-source-cohort BM25 normalization in
+   `scoreCandidates`, so cross-corpus score scales stay incomparable-but-fair.
+   The auto-accept decision remains tier-gated to the highest-priority source
+   present — the P0-2 golden queries (dish-KB identity beats generic USDA
+   rows) still pass unmodified. Locked by `multi-source.test.ts` (updated to
+   the merged contract) and the new e2e spec asserting both IFCT and USDA
+   labels in one result list.
+
+2. **"Decompose only had a main ingredient, an oil, and a cooking method."**
+   The engine now accepts an arbitrary ingredient list (`extraIngredients`,
+   deduped by food id with grams summed), a `userfood:` custom-ingredient id
+   participates exactly like a corpus row, and the result carries a
+   per-ingredient kcal/P/C/F breakdown scaled to the requested portion. The
+   search screen's decomposer exposes: multi-ingredient rows with editable
+   grams, quick-add chips, a live searchable picker across user foods + IFCT +
+   USDA, an editable oil amount, and the shared cooked-yield model
+   (`resolveCookedYieldGrams`, now also used by the dish composer, which
+   previously added fat as mass while silently dropping its calories).
+
+3. **"Does the decomposed food get saved into the custom food DB and stay
+   searchable?"** Verified and locked: "Save to Foods" writes a custom food
+   (searchable through `UserFoodSource`). The composer's saved "My Version"
+   dishes were NOT searchable before this round — `HouseholdDishSource`
+   (priority 85) now surfaces them and replays the user's confirmed grams,
+   fat, method and portion per-100 g, failing closed on any missing piece.
+   Missing ingredients can be created inline (per-100 g) and are immediately
+   searchable.
+
+4. **"Check whether the verified dish mappings are actually correct."** Built
+   `tools/indian-dishes/verify-mappings.mjs` (now part of `npm run check`):
+   resolves every mapped slot against the shipped corpora with label-based
+   fat/protein sanity checks. Result: **371/371 mapped slots resolve (157
+   IFCT + 214 USDA), 0 hard errors, 0 sanity warnings.** The mappings the
+   pipeline claimed were real.
+
+5. **"Map foods whose ingredients are unmapped."** 312 draft dishes carry
+   generic slots with no per-dish identity; blind auto-mapping would fabricate
+   confidence. The honest fix: `dish-ingredient-suggestions.mjs` derives
+   ingredients from each dish's own name against a reviewed pin list (68
+   distinct corpus-validated IFCT ids — a stale id fails the build), and
+   `build-sqlite.mjs` bakes suggestions into 164 draft dishes. The dish
+   composer pre-seeds its ingredient list from them, so a person confirms real
+   ingredients and grams instead of facing labels like `primary_vegetable`.
+
+Gate results for this round: `npm run check` exit 0 — **655/655 tests (81
+files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
+26/26, IFCT golden queries (542 rows), indian-dishes verify (362 dishes),
+mapping verification 371/371; Playwright e2e on the exported web bundle
+**18 passed + 2 fixme** (3 new multi-source/decomposer journeys).

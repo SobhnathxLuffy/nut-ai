@@ -71,6 +71,14 @@ export interface UnknownDishDecompositionInput {
   fatGrams: number
   secondaryIngredientId?: string | null
   secondaryIngredientGrams?: number
+  /**
+   * Additional ingredients beyond the primary/secondary pair. A real dish has
+   * more than two components — the decomposer accepts the full list, dedupes
+   * by foodId (summing grams), and folds everything into the same arithmetic.
+   * `userfood:` IDs are allowed: custom ingredients the user created live in
+   * the user DB and participate exactly like corpus rows.
+   */
+  extraIngredients?: Array<{ foodId: string; grams: number }>
   cookingMethod: 'curried' | 'sauteed' | 'deep_fried' | 'roasted' | 'boiled'
   customYieldMultiplier?: number
   portionGrams?: number
@@ -85,6 +93,19 @@ export interface UnknownDishNutritionResult {
   serving: NutrientRow100g
   isEstimate: true
   assumptions: string[]
+  /**
+   * Per-ingredient contribution to the REQUESTED PORTION (grams as entered;
+   * kcal/macros scaled by portion/cookedYield so the breakdown sums to the
+   * serving numbers). Ingredients whose nutrient rows are null propagate null.
+   */
+  ingredientBreakdown: Array<{
+    foodId: string
+    grams: number
+    kcal: number | null
+    protein_g: number | null
+    carbs_g: number | null
+    fat_g: number | null
+  }>
 }
 
 interface FoodNutrientRow {
@@ -101,6 +122,7 @@ async function fetchNutrientRow(
   foodId: string,
   nutritionDb: DbAdapter,
   ifctDb?: DbAdapter,
+  userDb?: DbAdapter,
 ): Promise<FoodNutrientRow | null> {
   const fields = 'energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg'
   if (foodId.startsWith('ifct:')) {
@@ -110,7 +132,45 @@ async function fetchNutrientRow(
   if (foodId.startsWith('usda:')) {
     return nutritionDb.get<FoodNutrientRow>(`SELECT ${fields} FROM foods WHERE source LIKE 'fdc_%' AND source_id = ?`, [foodId.slice(5)])
   }
+  if (foodId.startsWith('userfood:')) {
+    // Custom ingredients created by the user are stored per-100 g in user_foods.
+    if (!userDb) return null
+    return userDb.get<FoodNutrientRow>(`SELECT ${fields} FROM user_foods WHERE uuid = ? AND deleted_at IS NULL`, [foodId.slice('userfood:'.length)])
+  }
   return null
+}
+
+/**
+ * The single cooked-yield model shared by the decomposer and the dish
+ * composer: water-adding methods scale the pot UP, moisture-loss methods
+ * shrink it, deep frying absorbs extra oil beyond what the user explicitly
+ * counted. One model, two UIs, zero drift.
+ */
+export function resolveCookedYieldGrams(
+  rawMassGrams: number,
+  explicitFatGrams: number,
+  method: UnknownDishDecompositionInput['cookingMethod'],
+): { cookedYieldGrams: number; absorbedOilGrams: number } {
+  const methodOpt = COOKING_METHOD_OPTIONS.find((m) => m.method === method)
+  const prior = methodOpt?.yieldPrior
+  let cookedYieldGrams = rawMassGrams
+  let absorbedOilGrams = 0
+
+  if (prior?.waterYieldModifier) {
+    cookedYieldGrams = rawMassGrams * prior.waterYieldModifier
+  } else if (prior?.moistureLossFraction) {
+    cookedYieldGrams = rawMassGrams * (1 - prior.moistureLossFraction)
+  }
+
+  if (prior?.oilAbsorptionFraction) {
+    const absorbedOil = rawMassGrams * prior.oilAbsorptionFraction
+    if (absorbedOil > explicitFatGrams) {
+      absorbedOilGrams = absorbedOil - explicitFatGrams
+      cookedYieldGrams += absorbedOilGrams
+    }
+  }
+
+  return { cookedYieldGrams, absorbedOilGrams }
 }
 
 /**
@@ -122,50 +182,44 @@ export async function computeUnknownDishNutrition(
   input: UnknownDishDecompositionInput,
   nutritionDb: DbAdapter,
   ifctDb?: DbAdapter,
+  userDb?: DbAdapter,
 ): Promise<UnknownDishNutritionResult> {
-  const ingredients: Array<{ foodId: string; grams: number }> = [
-    { foodId: input.baseIngredientId, grams: input.baseIngredientGrams },
-  ]
-
-  let explicitFatGrams = 0
-  if (input.fatId && input.fatGrams > 0) {
-    ingredients.push({ foodId: input.fatId, grams: input.fatGrams })
-    explicitFatGrams = input.fatGrams
+  const merged = new Map<string, number>()
+  const addIngredient = (foodId: string, grams: number): void => {
+    if (!Number.isFinite(grams) || grams <= 0) return
+    merged.set(foodId, (merged.get(foodId) ?? 0) + grams)
   }
+  addIngredient(input.baseIngredientId, input.baseIngredientGrams)
+  if (input.fatId && input.fatGrams > 0) addIngredient(input.fatId, input.fatGrams)
+  if (input.secondaryIngredientId) addIngredient(input.secondaryIngredientId, input.secondaryIngredientGrams ?? 0)
+  for (const extra of input.extraIngredients ?? []) addIngredient(extra.foodId, extra.grams)
 
-  if (input.secondaryIngredientId && (input.secondaryIngredientGrams ?? 0) > 0) {
-    ingredients.push({ foodId: input.secondaryIngredientId, grams: input.secondaryIngredientGrams! })
-  }
+  const explicitFatGrams = input.fatId && input.fatGrams > 0 ? input.fatGrams : 0
+  const ingredients = [...merged.entries()].map(([foodId, grams]) => ({
+    foodId,
+    grams,
+    row: null as FoodNutrientRow | null,
+  }))
 
   const rawMassGrams = ingredients.reduce((sum, ing) => sum + ing.grams, 0)
   if (rawMassGrams <= 0) throw new Error('Ingredient mass must be positive')
 
-  let cookedYieldGrams = rawMassGrams
-  const methodOpt = COOKING_METHOD_OPTIONS.find((m) => m.method === input.cookingMethod)
-
-  if (methodOpt?.yieldPrior) {
-    const prior = methodOpt.yieldPrior
-    if (prior.waterYieldModifier) {
-      cookedYieldGrams = rawMassGrams * prior.waterYieldModifier
-    } else if (prior.moistureLossFraction) {
-      cookedYieldGrams = rawMassGrams * (1 - prior.moistureLossFraction)
-    }
-
-    if (prior.oilAbsorptionFraction) {
-      const absorbedOil = rawMassGrams * prior.oilAbsorptionFraction
-      if (absorbedOil > explicitFatGrams) {
-        const addedOil = absorbedOil - explicitFatGrams
-        const oilId = input.fatId || 'ifct:T012'
-        const existing = ingredients.find((i) => i.foodId === oilId)
-        if (existing) existing.grams += addedOil
-        else ingredients.push({ foodId: oilId, grams: addedOil })
-        cookedYieldGrams += addedOil
-      }
-    }
-  }
-
+  let cookedYieldGrams: number
+  let absorbedOilGrams: number
   if (input.customYieldMultiplier) {
     cookedYieldGrams = rawMassGrams * input.customYieldMultiplier
+    absorbedOilGrams = 0
+  } else {
+    const yieldModel = resolveCookedYieldGrams(rawMassGrams, explicitFatGrams, input.cookingMethod)
+    cookedYieldGrams = yieldModel.cookedYieldGrams
+    absorbedOilGrams = yieldModel.absorbedOilGrams
+  }
+  if (absorbedOilGrams > 0) {
+    const oilId = input.fatId || 'ifct:T012'
+    addIngredient(oilId, absorbedOilGrams)
+    const existing = ingredients.find((i) => i.foodId === oilId)
+    if (existing) existing.grams += absorbedOilGrams
+    else ingredients.push({ foodId: oilId, grams: absorbedOilGrams, row: null })
   }
 
   const portionGrams = input.portionGrams ?? (cookedYieldGrams > 0 ? cookedYieldGrams : 100)
@@ -178,8 +232,9 @@ export async function computeUnknownDishNutrition(
   }
 
   for (const ing of ingredients) {
-    const row = await fetchNutrientRow(ing.foodId, nutritionDb, ifctDb)
+    const row = await fetchNutrientRow(ing.foodId, nutritionDb, ifctDb, userDb)
     if (!row) throw new Error(`Ingredient ${ing.foodId} is unavailable in the bundled food data`)
+    ing.row = row
     const factor = ing.grams / 100
     for (const key of Object.keys(totals) as Array<keyof FoodNutrientRow>) {
       const value = row[key]
@@ -219,6 +274,22 @@ export async function computeUnknownDishNutrition(
     sodium_mg: scaled('sodium_mg', portionMultiplier),
   }
 
+  // Per-ingredient contribution to the requested portion.
+  const ingredientBreakdown = ingredients.map((ing) => {
+    const factor = (ing.grams / 100) * portionMultiplier
+    const row = ing.row!
+    const at = (key: keyof FoodNutrientRow): number | null =>
+      row[key] === null || factor <= 0 ? (row[key] === null ? null : 0) : row[key]! * factor
+    return {
+      foodId: ing.foodId,
+      grams: ing.grams,
+      kcal: at('energy_kcal'),
+      protein_g: at('protein_g'),
+      carbs_g: at('carb_g'),
+      fat_g: at('fat_g'),
+    }
+  })
+
   return {
     dishName: input.dishName,
     rawMassGrams,
@@ -228,5 +299,6 @@ export async function computeUnknownDishNutrition(
     serving,
     isEstimate: true,
     assumptions: ['Nutrition is estimated from the ingredients and cooking method you selected.'],
+    ingredientBreakdown,
   }
 }

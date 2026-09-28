@@ -1,5 +1,5 @@
 import type { DbAdapter } from '@nutai/db-adapter'
-import { USDASource, OpenFoodFactsSource, IFCTSource, UserFoodSource, RecipeSource, RouterSource, DishKBSource } from '@nutai/nutrition-sources'
+import { USDASource, OpenFoodFactsSource, IFCTSource, UserFoodSource, RecipeSource, RouterSource, DishKBSource, HouseholdDishSource } from '@nutai/nutrition-sources'
 import { normalizeGtin } from './gtin.js'
 import { matchLadder } from './query.js'
 import { normalizeIndianAliases } from './aliases.js'
@@ -7,6 +7,7 @@ import {
   type Candidate,
   type ResolutionOutcome,
   type ScoringContext,
+  type ScoredCandidate,
   decideOutcome,
   scoreCandidates,
 } from './scoring.js'
@@ -24,7 +25,13 @@ export interface NutritionSourceContext {
 
 function sourceRouter(nutritionDb: DbAdapter, context: NutritionSourceContext = {}): RouterSource {
   const sources = [
-    ...(context.userDb ? [new UserFoodSource(context.userDb), new RecipeSource(context.userDb)] : []),
+    ...(context.userDb ? [
+      new UserFoodSource(context.userDb),
+      new RecipeSource(context.userDb),
+      // Saved "My Version" household dishes: previously written to the user DB
+      // where no source could find them again.
+      new HouseholdDishSource(context.userDb, nutritionDb, context.ifctDb),
+    ] : []),
     new DishKBSource(nutritionDb, context.ifctDb), // Draft dishes remain searchable but cannot resolve to nutrition.
     ...(context.ifctDb ? [new IFCTSource(context.ifctDb)] : []),
     new USDASource(nutritionDb),
@@ -92,6 +99,13 @@ export interface ResolveResult {
   ladderStep: number
   /** True when every rung returned nothing — this is what the 5% trigger counts. */
   zeroHit: boolean
+  /**
+   * The best-scoring candidates of the winning ladder rung, ACROSS every
+   * source. Multi-source search: the auto-accept decision picks one match,
+   * but the searcher still gets to see what the other databases hold — an
+   * IFCT row beside its USDA counterpart — instead of a single enforced row.
+   */
+  topCandidates: ScoredCandidate[]
 }
 
 /**
@@ -136,7 +150,16 @@ export async function resolveByText(
     }
 
     const scored = scoreCandidates(rows, ctx)
-    const outcome = decideOutcome(scored)
+
+    // The accept/decision runs on the highest-priority source tier only — the
+    // same trust ordering the old source cascade enforced structurally. The
+    // merged LIST (topCandidates) still shows every corpus, but a generic USDA
+    // row must not out-decide a matching dish-KB identity or IFCT row merely
+    // because BM25 magnitudes differ across corpora (P0-2 contract, golden
+    // queries). Within the tier, the two-part auto-accept rule applies as-is.
+    const topTier = scored.reduce((max, c) => Math.max(max, c.sourcePriority ?? 0), 0)
+    const tierScored = scored.filter((c) => (c.sourcePriority ?? 0) === topTier)
+    const outcome = decideOutcome(tierScored)
 
     if (outcome.kind === 'miss') {
       // If we got rows but they all completely missed, keep going down the ladder.
@@ -148,6 +171,7 @@ export async function resolveByText(
       outcome,
       ladderStep: step,
       zeroHit: false,
+      topCandidates: scored.slice(0, 12),
     }
   }
 
@@ -155,5 +179,6 @@ export async function resolveByText(
     outcome: { kind: 'miss' },
     ladderStep: ladder.length,
     zeroHit: true,
+    topCandidates: [],
   }
 }

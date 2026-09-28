@@ -25,19 +25,23 @@ describe('multi-source resolver', () => {
     await seedFood(ifctDb, 'ifct', 'A015', 345)
   })
 
-  it('keeps identical local row IDs source-qualified and resolves each from its own database', async () => {
+  it('shows BOTH corpora for one query, with the higher-priority source first', async () => {
     const context = { ifctDb }
     const usda = await loadFood(usdaDb, 'usda:168878', context)
     const ifct = await loadFood(usdaDb, 'ifct:A015', context)
     expect(usda?.energyKcal).toBe(130)
     expect(ifct?.energyKcal).toBe(345)
 
+    // Multi-source search: a single query must surface rows from every
+    // database that matches — not just whichever corpus the old cascade
+    // stopped at first.
     const result = await resolveByText(usdaDb, {
       canonicalFoodKey: 'rice raw', observedBrand: null, prepFacet: 'raw', modelCategory: null, estimatedGrams: 100,
     }, context)
-    const candidates = result.outcome.kind === 'disambiguate' ? result.outcome.candidates : []
-    expect(candidates.map((candidate) => candidate.foodId)).toContain('ifct:A015')
-    expect(candidates.map((candidate) => candidate.foodId)).not.toContain('usda:168878')
+    const ids = result.topCandidates.map((candidate) => candidate.foodId)
+    expect(ids).toContain('ifct:A015')
+    expect(ids).toContain('usda:168878')
+    expect(ids.indexOf('ifct:A015')).toBeLessThan(ids.indexOf('usda:168878'))
   })
 
   it('falls back to USDA only when the higher-priority IFCT corpus misses', async () => {
@@ -69,9 +73,12 @@ describe('multi-source resolver', () => {
       canonicalFoodKey: 'rice raw', observedBrand: null, prepFacet: null,
       modelCategory: null, estimatedGrams: 100,
     }, { ifctDb, userDb })
-    const ids = result.outcome.kind === 'auto_accept'
-      ? [result.outcome.match.foodId]
-      : result.outcome.kind === 'disambiguate' ? result.outcome.candidates.map((candidate) => candidate.foodId) : []
-    expect(ids).toEqual(['userfood:018f7fc7-7c00-7000-8000-000000000099'])
+    // The user's own food WINS the decision, and still leads the merged list
+    // that also carries the bundled-corpus rows.
+    expect(result.topCandidates[0]?.foodId).toBe('userfood:018f7fc7-7c00-7000-8000-000000000099')
+    expect(result.topCandidates.map((candidate) => candidate.foodId)).toContain('ifct:A015')
+    if (result.outcome.kind === 'auto_accept') {
+      expect(result.outcome.match.foodId).toBe('userfood:018f7fc7-7c00-7000-8000-000000000099')
+    }
   })
 })
