@@ -13,7 +13,9 @@ and instantly. No subscription, no paywall, no account, no server.
 >
 > The web app runs the same Expo Router code and the same deterministic engine; the web QA round
 > that closed every P0 blocker (WEB-001 … WEB-011) is documented in
-> [docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md) and [VERIFICATION.md](VERIFICATION.md).
+> [docs/qa/p0-web-fixes.md](docs/qa/p0-web-fixes.md) and [VERIFICATION.md](VERIFICATION.md). The
+> three product-QA rounds that followed — Section-B P0, Section-C P1, Section-D P2, 36 findings
+> total — are each closed and documented in [docs/qa/](docs/qa/).
 
 ## What works today
 
@@ -25,7 +27,11 @@ and instantly. No subscription, no paywall, no account, no server.
   serving weight), and **receipt** (reads the line items, then fetches each item's published
   nutrition with the merchant as the brand).
 - **India-first nutrition lookup** with the authorized IFCT 2017 Table 1 corpus bundled locally:
-  528 Indian food rows, stable IFCT source codes, attribution, and USDA fallback.
+  542 Indian food rows, stable IFCT source codes, attribution, and USDA fallback.
+- **A 362-dish Indian Dish Knowledge Base** — curated identities (idli, roti, poha, rajma…) with
+  honest portion sizes, household variants you compose from named ingredients and save to your own
+  database, and combo suggestions that are never auto-built — every component must resolve and you
+  tap to confirm.
 - **Household recipes** with immutable versions, raw-to-cooked yield, oil/ghee accounting, and
   per-serving logging.
 - **Web lookup for branded and restaurant food**: when the local database misses — or a logo in
@@ -33,8 +39,6 @@ and instantly. No subscription, no paywall, no account, no server.
   nutrition facts, source URL attached. Menu ambiguity comes back as options that each carry their
   own macros, so answering "which sandwich?" is instant and free.
 - **Fix Result**: describe what's wrong in a sentence; only what you mention changes.
-- **A health score with a published formula** — fixed arithmetic over what you logged, reasons shown
-  on tap, never an "AI" number.
 - **Exercise logging** where Run and Weight lifting use MET × your body weight × minutes (no model),
   Describe is the one AI-estimated path and says so, and Manual is your number verbatim.
 - **Adaptive targets** that re-derive from your weigh-in trend, with hand-set targets always
@@ -92,14 +96,21 @@ apps/mobile/      the Expo app — the ONLY package with React Native imports
 packages/         pure TypeScript, importable under plain Node:
   core-schema     Zod source of truth for every payload shape
   gram-engine     the reconciliation ladder, densities, yields, oil absorption
-  nutrition-sources  USDA, IFCT, user-food, recipe and Open Food Facts adapters
+  nutrition-sources  USDA, IFCT, dish-KB, user-food, recipe and Open Food Facts adapters
   resolver        food name → source-qualified database row
+  indian-dishes   the 362-dish Dish KB: portions, composite meals, household variants
+  recipe-engine   recipe version arithmetic: prep method, oil/water, cooked yield, servings
   totals          recompute, macro reconciliation, rounding
   confidence      measured bands, structural widening, per-meal quadrature
   repair          the question bank and expected-value gating
   goals           BMR/TDEE/macros, EWMA trend, adaptive TDEE
+  training        routines, active-workout state, PRs, plate math
+  analytics       chart data, weekly/monthly reports, aggregation
+  timeline        one ordered day stream: meals, weight, workouts, PRs, check-ins, undo ops
+  search          unified food + exercise candidate ranking
+  pipeline        the deterministic scan pipeline: photo payload → resolved rows → totals
   prompt          system prompt, few-shots, prompt versioning
-  db-adapter      one interface, two impls: expo-sqlite | better-sqlite3
+  db-adapter      one interface, three impls: expo-sqlite | better-sqlite3 | WASM (web)
   clamp           the deterministic sanity clamp
 eval/             accuracy harness — imports the real engine, runs under Node
 ```
@@ -118,7 +129,7 @@ listing taking a cut. One-time setup, ~20 minutes.
 **iPhone** (needs a Mac with [Xcode](https://apps.apple.com/app/xcode/id497799835)):
 
 ```bash
-git clone https://github.com/Blueturboguy07/nut-ai.git
+git clone https://github.com/SobhnathxLuffy/nut-ai.git
 cd nut-ai && npm install
 npm run data:build                      # builds the bundled corpus: USDA + IFCT portions + the 362-dish Indian Dish KB
 cd apps/mobile && npm run prebuild      # generates the native project
@@ -131,7 +142,7 @@ this way re-install every 7 days; a $99/yr developer account removes that limit)
 **Android** (any computer with [Android Studio](https://developer.android.com/studio)'s SDK):
 
 ```bash
-git clone https://github.com/Blueturboguy07/nut-ai.git
+git clone https://github.com/SobhnathxLuffy/nut-ai.git
 cd nut-ai && npm install
 npm run data:build
 cd apps/mobile && npx expo run:android --variant release   # phone plugged in, USB debugging on
@@ -166,6 +177,15 @@ npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT/dish-K
 and file export/import all require a compiled app — build with Xcode or `expo run:android` as shown
 above.
 
+**Web** runs from the same source, offline, with no build-time secrets:
+
+```bash
+cd apps/mobile
+npx expo export --platform web   # bundle into dist/
+python3 serve-coop.py            # serve it with COOP/COEP headers + SPA fallback
+npx playwright test              # 17-journey e2e suite against the exported bundle
+```
+
 ## Planning and Agent Workflow
 
 - [AGENTS.md](AGENTS.md) defines the binding implementation rules for coding agents.
@@ -192,6 +212,3 @@ Nut AI's estimates are AI-generated approximations and may not be accurate. Nut 
 device and does not diagnose, treat, cure, or prevent any medical condition. It is not a substitute for
 professional nutritional or medical guidance — consult a registered dietitian or healthcare provider for
 personalized advice.
-
-
-This is intended to be the deepest single QA audit of Nut AI so far.

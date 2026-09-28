@@ -14,7 +14,10 @@ This section is the current operational snapshot and must be kept honest. It is 
 ### 0.1 What is currently strong
 
 - The monorepo, strict TypeScript, SQLite foundation, migrations, operations/undo foundation, deterministic nutrition engine, IFCT/USDA integration, custom foods, recipes, and core food logging architecture are substantial.
-- The latest verified automated baseline is **583 tests across 71 files**, with lint, typecheck, node-purity, USDA data verification, IFCT verification, and Indian-dish verification passing.
+- The latest verified automated baseline is **649 tests across 80 files**, with lint, strict typecheck, node-purity (18/18), USDA data verification (26/26 golden queries), IFCT verification (542 rows), Indian-dish verification (362 dishes, 50 CURATED), and the Playwright web e2e suite (**15 passed + 2 documented `fixme`**) all passing.
+- The full loop — scan, review, correct, log, track — ships on **Android, iPhone, and the web**. The web build runs the same Expo Router screens and the same deterministic engine: the user DB lives on the OPFS VFS (WASM SQLite) with a guarded one-time migration, provider keys live in `localStorage`, `Alert.alert` has a DOM shim, the camera fallback exposes all four capture modes plus a manual-GTIN path, and the Playwright suite runs against the real exported bundle on every push via `.github/workflows/web-e2e.yml`.
+- The Indian Dish KB pipeline is part of the shipped artifact: `npm run data:build` bundles the 362-dish KB into `nutrition.db`, the verify gate asserts the row count plus a CURATED FTS probe, the resolver ranks the dish KB (priority 75) above generic corpora with a literal-first alias ladder, and the dish browser reaches all 362 identities.
+- Four QA rounds are closed with per-bug evidence: web P0 (WEB-001…011), product Section-B P0 (P0-1…6), Section-C P1 (P1-1…12), Section-D P2 (P2-1…18) — see `docs/qa/` and `VERIFICATION.md`. Do not re-report those findings as open without fresh evidence.
 - The **Reliable Food Logging + Personal Food/Recipe Management** slice has been physically exercised on Android for review-before-save, historical dates, edit/delete/undo, repeats, custom foods, recipe logging/versioning, dirty-form protection, rapid-save protection, keyboard handling, and process-level persistence.
 - Core nutrition writes use immutable snapshots and deterministic arithmetic rather than trusting model-generated calories/macros.
 
@@ -23,11 +26,11 @@ This section is the current operational snapshot and must be kept honest. It is 
 #### Home / Food UX
 - Home is still visually cluttered and lacks good previous-day navigation.
 - Eaten vs remaining nutrition hierarchy is weak.
-- Repeat-meal currently appears to reuse the prior meal timestamp instead of using the repeat time.
-- Undo/redo feedback does not clearly tell the user what action will be undone/redone.
 - Search/review/edit surfaces emphasize calories more than macros; protein/carbs/fat visibility needs work.
-- Food search appears to surface only one source family at a time instead of a useful combined candidate set from IFCT, USDA, user foods, recipes, and curated dish data.
+- Search now reaches IFCT, USDA, user foods and the dish KB (header counts included), but a single ranked candidate set that also folds in recipes still needs verification before it is called merged.
 - Recipe ingredient rows do not clearly show the calories/macros contributed by the entered ingredient quantity.
+
+Fixed by recent rounds — do not re-report without fresh evidence: repeat-meal reusing the prior timestamp (BUG-015, regression-locked), anonymous undo/redo labels (now contextual, see §8.5), the `Unconfirmed` pill clipping at 390 px, the report `$kg` template leak, duplicate same-day PR rows, unrounded kcal targets, fabricated composite-meal suggestions (now tap-gated), and the dish browser capping at 100 rows.
 
 #### Indian Dish / Unknown Dish
 - There are **362 canonical dish records: 50 CURATED and 312 DRAFT_CURATED**.
@@ -35,25 +38,29 @@ This section is the current operational snapshot and must be kept honest. It is 
 - The current unknown-dish builder is a **manual deterministic fallback**, not semantic dish decomposition.
 - Unrelated unknown dishes can receive the same generic base-ingredient/fat/method choices. Do not call that dish-specific understanding.
 - A real dish editor/decomposition flow still needs dish-specific ingredients, editable quantities, yield, fat, portions, provenance, and uncertainty.
+- Shipped by recent rounds: the KB builds into the bundled corpus behind an integrity gate, the resolver puts CURATED identities above generic corpora, the browser reaches all 362 dishes, and household variants persist to the writable user DB (OPFS on web). Free-form "a + b + c" combo queries are tap-gated suggestions — nothing is composed until every component auto-accepts and the user confirms.
 
 #### Training
 - Training is **not complete** despite older planning documents claiming otherwise.
-- The Exercise Library has a confirmed serious device bug: it can show 0 exercises for 10–15 seconds, later load ~225, then fail selection; Done and Android Back can fail, trapping the user.
-- Active workout, rest timer, abandoned-workout recovery, history, unit handling, and the complete training journey still need a focused verification/fix pass.
+- The Exercise Library had a confirmed serious device bug (owner physical QA, 2026-09-14): 0 exercises shown for 10–15 seconds, then ~225 rows that could not be selected, with Done/Android Back failing and trapping the user. No commit since has targeted that path — re-verify against current main on device before planning fixes.
+- Active workout, abandoned-workout recovery, history, unit handling, and the complete training journey still need a focused device verification pass. Rest-timer controls landed in the Section-D round (see §7.2).
 
 #### Progress / Reports / Check-ins
 - Analytics code exists, but user-facing verification is incomplete.
 - Charts may still have poor axes, misleading scale, weak touch interaction, and unclear sparse-data behavior.
 - Weekly/monthly reports and check-in discovery/consistency still require physical and arithmetic verification.
+- The Section-D round fixed the report-side QA findings (`$kg` template leak, duplicate same-day PR rows, unrounded kcal targets); chart/report device QA remains open.
 
 #### Settings / Onboarding / Backup
 - Settings/profile management and onboarding remain partial.
 - Do not assume every onboarding promise is wired to production behavior.
 - Destructive restore/reset flows must not be tested casually against the owner's active data.
+- The Apple Health row is hidden on web (iOS-only); do not reintroduce platform-dead controls.
 
 #### AI / Photo
 - The user has not yet configured AI provider credentials for current QA.
 - Cloud AI behavior, assistant writes, semantic text decomposition, and photo recognition must therefore be treated as **NOT TESTED**, not failed and not complete.
+- Structural persistence for assistant routine proposals is now real and test-locked (`saveRoutine` throws on failure), so a fake "SAVED" can no longer occur on web; end-to-end cloud behavior still awaits credentials.
 - AI features must route through the same reviewed deterministic logging path as manual food entry.
 
 #### Deferred physical checks
@@ -64,13 +71,13 @@ This section is the current operational snapshot and must be kept honest. It is 
 
 Unless the owner explicitly changes priority, prefer this order:
 
-1. **Training core reliability** — Exercise Library selection/navigation/loading, then active workout.
-2. **Food product-quality gaps** — merged source results, repeat timestamp, macro visibility, Home/day navigation, clearer undo/redo, recipe ingredient contributions.
-3. **Real Indian-dish workflow** — browseable dish library + dish-specific ingredient/quantity editor; do not fake semantic decomposition.
-4. **Workout UX/recovery/rest timer/units/history**.
-5. **Progress, analytics, reports, check-ins** with real data verification.
-6. **Settings, onboarding, backup/restore UX, global navigation, cross-app visual hierarchy**.
-7. **AI assistant/text interpretation/photo integration** after provider credentials are configured and the deterministic review pipeline is ready.
+1. **Training core reliability** — re-verify the Exercise Library device findings against current main first (last reproduced 2026-09-14), then active-workout polish.
+2. **Food product-quality gaps** — macro visibility, recipe ingredient contributions, Home/day navigation and visual hierarchy.
+3. **Progress, analytics, reports, check-ins** with real data verification (report arithmetic/copy fixed in the P2 round; chart axes/touch still need device QA).
+4. **Real Indian-dish workflow** — dish-specific ingredient/quantity editor with yield, fat, portions, provenance; the KB browse/compose path is shipped, semantic decomposition is not. Do not fake it.
+5. **Settings, onboarding, backup/restore UX, global navigation, cross-app visual hierarchy**.
+6. **AI assistant/text interpretation/photo integration** after provider credentials are configured and the deterministic review pipeline is ready.
+7. **Release-gate physical tests** — hardware network isolation, reboot persistence, golden-set accuracy, store submission (see VERIFICATION.md "What is NOT built").
 
 Do not work from stale phase labels alone. Current user-visible evidence outranks an old “COMPLETE” row.
 
@@ -279,6 +286,8 @@ Ranking may prioritize, but it must not silently erase useful alternate sources.
 
 Current reality: 50 CURATED, 312 DRAFT_CURATED.
 
+The KB ships inside `apps/mobile/assets/nutrition.db` via `npm run data:build`; `npm run indian-dishes:verify` fails if the bundled rows or the CURATED FTS probe are missing. Household variants saved from the dish composer go to the writable user DB (OPFS on web), never the read-only corpus, and the per-100 g snapshot contract (`apps/mobile/src/data/dish-snapshot.ts`) must be preserved by any new write path.
+
 ### 6.4 Unknown-dish fallback
 
 The current fallback is manual deterministic estimation.
@@ -349,6 +358,8 @@ Verify the actual user flow:
 
 Editing a completed set must not silently make it incomplete unless the user intentionally changes completion state.
 
+Rest timer current state: the workout rest card exposes −15 s / +15 s / Skip, the chosen duration is remembered in `training.rest_seconds` (15–600 s) and passed per set for auto-rest, and 0 completed sets no longer auto-starts a rest. This is locked by `packages/training/src/rest-invariants.test.ts`; physical device verification of the full training journey is still pending.
+
 ### 7.3 Units
 
 Canonical persisted load may remain kg, but display/input must respect the user's unit preference consistently across:
@@ -411,6 +422,8 @@ Never show “saved successfully” before the write actually succeeds.
 
 Contextual undo must target a known operation ID/scope.
 The UI should tell the user what will be undone/redone, not just display anonymous “Undo” / “Redo”.
+
+Current implementation: the Home day timeline fetches the live undo/redo targets and labels them (“Undo: delete meal”, “Redo: update day status”). Preserve this when touching undo surfaces.
 
 ### 8.6 Charts
 
@@ -476,6 +489,7 @@ Expected high-level pipeline:
 - Expo/native adapters belong under `apps/mobile`.
 - New shared packages must be included in `scripts/check-node-purity.mjs`.
 - Preserve explicit `.js` package import specifiers where required by the current Node/Metro compatibility setup.
+- The web build consumes the same packages through WASM SQLite (`apps/mobile/src/db/expo-adapter.web.ts`: OPFS VFS user DB, read-only deserialized corpora) and shared shims (`src/ui/alert-web.ts`, `credentials.web.ts`). Keep platform differences inside guarded adapters; never let a web-only branch change deterministic numbers.
 
 ---
 
@@ -507,14 +521,21 @@ npm run check
 ```
 
 Current reference baseline at the time of this document:
-- 71 Vitest files
-- 583 tests
+- 80 Vitest files, 649 tests
 - 18/18 node-pure shared packages
-- USDA golden-query gate passing
-- 528-row IFCT Table 1 corpus verification passing
-- 362 Indian dishes: 50 CURATED, 312 DRAFT_CURATED
+- USDA golden-query gate passing (26/26)
+- 542-row IFCT Table 1 corpus verification passing
+- 362 Indian dishes: 50 CURATED, 312 DRAFT_CURATED (bundled + integrity-gated)
+- Playwright web e2e: 15 passed + 2 documented `fixme`, run on every push by GitHub Actions
 
 If counts change, update PLAN.md and VERIFICATION.md after the full gate.
+
+Web e2e (from `apps/mobile`):
+
+```bash
+npx expo export --platform web   # the suite serves apps/mobile/dist itself
+npx playwright test
+```
 
 ### Required test style by change
 
@@ -675,6 +696,12 @@ git diff --check
 cd apps/mobile
 npm run typecheck
 npx expo run:android --variant release
+
+# Web + e2e (from apps/mobile)
+cd apps/mobile
+npx expo export --platform web      # production web bundle into dist/
+python3 serve-coop.py               # serve dist/ with COOP/COEP headers + SPA fallback
+npx playwright test                 # e2e suite (serves dist/ via serve-3000.py)
 
 # Existing native release build path may also use Gradle directly
 cd apps/mobile/android

@@ -1,14 +1,21 @@
 # PLAN.md — Current Nut AI Implementation Status
 
-> **Last updated:** 2026-09-14
-> **Evidence baseline:** 583 tests / 71 test files, 18/18 node-pure packages, USDA + IFCT + Indian-dish verification passing, Android food-flow device verification completed, owner manual QA in progress.
-> **Worktree:** Dirty by design; substantial uncommitted implementation exists. Do not reset or clean it.
+> **Last updated:** 2026-09-28
+> **Evidence baseline:** 649 tests / 80 test files, Playwright web e2e 15 passed + 2 fixme, 18/18 node-pure packages, USDA (26/26) + IFCT (542 rows) + Indian-dish (362) verification passing, Android food-flow device verification completed, four QA rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D).
+> **Worktree:** Currently clean — all fix rounds are pushed. Preserve unrelated future edits; do not reset or clean them.
 
 ## 1. Executive Status
 
 Nut AI has a strong technical foundation and a substantially improved food-logging stack, but the **whole application is not product-complete**.
 
 The previous phase labels overstated completion in several places. Current status must follow actual user/device behavior, not historical milestone names.
+
+### Closed since the last plan revision (2026-09-14)
+
+- **The web app is built and gated** — same Expo Router screens + deterministic engine, offline, with the user DB on OPFS, a DOM `Alert` shim, all four camera modes plus manual-GTIN entry, and a Playwright e2e suite run by GitHub Actions on every push.
+- **Four QA rounds closed** (36 findings total): web P0 (WEB-001…011), product Section-B P0, Section-C P1, Section-D P2 — per-bug evidence in `docs/qa/`.
+- **Indian Dish KB pipeline shipped** — 362 dishes bundled by `data:build` behind an integrity gate, resolver ranks CURATED identities above generic corpora, full dish browsing, household variants persisting to the writable user DB, tap-gated combo suggestions.
+- **Food/Home fixes landed** — repeat-meal timestamp (BUG-015), contextual undo/redo labels, recoverable review dates, friendly workout validation errors, day-status wrap, report PR hygiene.
 
 ### Overall
 
@@ -18,19 +25,20 @@ The previous phase labels overstated completion in several places. Current statu
 | Food logging core | **Strong / physically verified** | Search → Review → dated save → edit/delete/undo → persistence |
 | Custom foods | **Strong / physically verified** | CRUD, validation, g/oz, Save & Log, dirty-state protection |
 | Recipes | **Strong / physically verified** | Ingredient search, yield, servings, versioning, log via Food Review, delete/undo |
-| Indian Dish KB | **Partial** | 50 CURATED, 312 DRAFT_CURATED; drafts are not nutrition-ready |
+| Indian Dish KB | **Partial / pipeline shipped** | 362 dishes bundled + integrity-gated; browser reaches all; household variants persist to user DB; drafts still not nutrition-ready; no semantic decomposition editor yet |
 | Unknown dish fallback | **Partial / generic** | Manual deterministic estimate exists; real semantic dish decomposition does not |
-| Home / Food UX | **Partial** | Clutter, weak hierarchy, repeat timestamp bug, source federation/macros visibility gaps |
-| Training | **Broken in critical path** | Exercise Library currently traps/blocks workout selection on device |
+| Home / Food UX | **Partial** | Clutter, weak hierarchy, macro visibility, recipe-contribution gaps remain; repeat timestamp, named undo, day-status wrap, dish browsing are fixed |
+| Training | **Broken in critical path (reported, unverified since)** | Exercise Library trap last reproduced on device 2026-09-14; no commit has targeted it since — re-verify on current main |
+| Web app | **Built / automated-verified** | Offline Expo web build; OPFS user DB, DOM alert shim, camera modes + manual GTIN; Playwright e2e in CI; not yet device/browser-matrix QA'd |
 | Progress / analytics | **Partial / incompletely verified** | Engines/screens exist; visual correctness and real-data QA still required |
-| Weekly / monthly reports | **Implemented but partial** | Existing screens/aggregation need user/device verification and UX cleanup |
+| Weekly / monthly reports | **Implemented, report math hardened** | `$kg` template leak, duplicate same-day PR rows, unrounded targets fixed in the P2 round; screens still need user/device verification |
 | Check-ins | **Implemented but partial** | Discoverability and consistency with reports require verification |
 | Profile / Settings | **Partial** | Important profile/preferences workflows remain incomplete or unverified |
 | Onboarding | **Partial** | Routes exist; persistence/promises/UX need dedicated pass |
 | Backup/export | **Foundation exists** | Non-destructive export should be reverified; destructive restore deferred |
 | AI assistant / semantic text | **Not currently verified** | No provider key configured in current QA; older fake-write behavior must not be assumed fixed |
 | Photo AI | **Architecture exists, current cloud path not verified** | No provider key configured; local photo/privacy pipeline requires later acceptance pass |
-| Cloud sync / web / health integrations / local AI | **Not built / deferred** | Not current priority |
+| Cloud sync / health integrations / local AI | **Not built / deferred** | Not current priority (web is built — see its row above) |
 
 ---
 
@@ -40,12 +48,13 @@ Latest verified gate:
 
 - ESLint: clean, 0 errors/warnings
 - TypeScript: strict, packages + mobile clean
-- Vitest: **583 passed across 71 files**
+- Vitest: **649 passed across 80 files**
 - Node purity: **18/18** packages
-- USDA `data:verify`: passing
-- IFCT verification: **528-row Table 1 corpus** accepted
-- Indian dishes: **362 total**, **50 CURATED**, **312 DRAFT_CURATED**
-- `git diff --check`: clean for latest food slice
+- USDA `data:verify`: **26/26** golden queries passing
+- IFCT verification: **542-row Table 1 corpus** accepted
+- Indian dishes: **362 total**, **50 CURATED**, **312 DRAFT_CURATED**, bundled + integrity-gated
+- Playwright web e2e: **15 passed + 2 fixme** (exported bundle, CI on every push)
+- `git diff --check`: clean
 
 Run `npm run check` after every substantive implementation slice.
 
@@ -69,15 +78,17 @@ Run `npm run check` after every substantive implementation slice.
 
 ### Known remaining Food/Home issues from owner QA
 
-1. Home visual hierarchy is cluttered.
-2. Eaten nutrition is not as clear as remaining nutrition.
-3. Home lacks practical previous-day navigation while Food has it.
-4. Repeat Meal appears to preserve the original meal timestamp instead of using the repeat time.
-5. Day status text such as `Unconfirmed` wraps poorly.
-6. Search/review/edit show calories more clearly than protein/carbs/fat.
-7. Search appears to expose only one source family at a time; desired UX is a merged/ranked candidate set from IFCT, USDA, custom foods, recipes, and curated dishes.
-8. Undo/Redo UI should identify the action being undone/redone.
-9. Recipe ingredient rows should show nutrient contribution for the entered amount.
+Status after the 2026-09 QA rounds:
+
+1. Home visual hierarchy is cluttered. — **OPEN**
+2. Eaten nutrition is not as clear as remaining nutrition. — **OPEN**
+3. Home lacks practical previous-day navigation while Food has it. — **OPEN**
+4. Repeat Meal preserves the original meal timestamp. — **FIXED** (BUG-015; repeat time used; regression-locked in `repeat-logging.test.ts`)
+5. Day status text such as `Unconfirmed` wraps poorly. — **FIXED** (2×2 wrapping grid at narrow widths)
+6. Search/review/edit show calories more clearly than protein/carbs/fat. — **OPEN**
+7. Search should offer a merged/ranked candidate set across sources. — **PARTIALLY ADDRESSED** (IFCT + USDA + user foods + dish KB all reachable, header counts shown; recipes in one ranked list still unverified)
+8. Undo/Redo UI should identify the action being undone/redone. — **FIXED** (live contextual labels, AGENTS §8.5)
+9. Recipe ingredient rows should show nutrient contribution for the entered amount. — **OPEN**
 
 These are real product gaps. Do not mark the entire Food area complete until resolved or intentionally deferred.
 
@@ -134,6 +145,8 @@ Owner physical QA found the Exercise Library critically broken:
 
 **Training is not complete.**
 
+Evidence note: this report is from the 2026-09-14 owner device QA (pre-Section-B build). No commit since has touched the Exercise Library loading/selection path, so treat it as *reported, unverified on current main* until re-run on device — do not mark it fixed without that re-run, and do not plan around it as definitely still broken either.
+
 ### Next engineering slice
 
 **Training Core Reliability: Exercise Library → Active Workout**
@@ -157,7 +170,7 @@ Still requires focused physical verification/fixes:
 - previous values
 - RPE/RIR / notes
 - supersets/circuits
-- rest timer duration/adjustment/background expiry
+- rest timer background expiry (±15 s controls, remembered duration via `training.rest_seconds`, and no auto-start on an empty set list are implemented and unit-locked by `rest-invariants.test.ts`; background expiry still needs device QA)
 - abandoned-workout recovery and duration correction
 - finish summary
 - PR/e1RM correctness
@@ -240,34 +253,32 @@ AI must never become the source of authoritative nutrition numbers.
 
 ## 10. Prioritized Implementation Roadmap
 
+Closed while this roadmap has been in force (do not re-plan): web app + e2e CI, QA rounds web-P0 / B / C / D, rest-timer controls, contextual undo labels, dish-KB pipeline + browsing, tap-gated combos, recoverable dates, friendly workout errors.
+
 ### Slice 1 — Training Core Reliability **NEXT**
 
-Fix Exercise Library loading/selection/navigation and restore a complete add-exercise path.
+Re-verify the Exercise Library on device against current main, then fix whatever reproduces. Restore a complete add-exercise path.
 
 Then verify active workout basics.
 
 ### Slice 2 — Food Product Quality
 
-- merged/ranked multi-source search results
+- merged/ranked multi-source search results (recipes folded in; corpora + user foods + dish KB already reachable)
 - macro visibility in search/review/edit
-- repeat timestamp
 - Home previous-day navigation
 - Home/Food visual hierarchy
-- named undo/redo feedback
 - recipe ingredient nutrient contributions
 
 ### Slice 3 — Indian Dish Workflow
 
-- browseable dish library
-- 50 curated vs 312 draft transparency
+- 50 curated vs 312 draft transparency (browse + compose paths shipped)
 - real editable dish ingredients/quantities/yield/portion
-- household variant path
 - replace generic “decompose” illusion with honest generic fallback until dish-specific data exists
 
 ### Slice 4 — Training Completion
 
 - active workout UX
-- rest timer
+- rest timer background expiry (controls + remembered duration shipped)
 - abandoned-session recovery
 - history
 - units
