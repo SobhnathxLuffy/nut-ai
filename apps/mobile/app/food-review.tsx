@@ -38,6 +38,10 @@ export default function FoodReview() {
   const base = decoded.value?.selection
   const [name, setName] = useState(base?.displayName ?? '')
   const [quantity, setQuantity] = useState('1')
+  // Piece-weight model: total grams = quantity x grams-per-1-quantity. Every
+  // field is editable and the others follow — rotis become "2 x 40 g", not a
+  // bare gram count.
+  const [unitGrams, setUnitGrams] = useState(base ? String(Math.round(base.grams * 10) / 10) : '100')
   const [grams, setGrams] = useState(base ? String(Math.round(base.grams * 10) / 10) : '')
   const [date, setDate] = useState(decoded.value?.date || localDate(Date.now()))
   const [slot, setSlot] = useState<(typeof SLOTS)[number]>(slotFor(Date.now()) as (typeof SLOTS)[number])
@@ -45,20 +49,32 @@ export default function FoodReview() {
   const isSavingRef = useRef(false)
   const [error, setError] = useState<string | null>(decoded.error)
 
+  const round1 = (value: number) => String(Math.round(value * 10) / 10)
+
   const updateQuantity = (value: string) => {
     setQuantity(value)
     const count = Number(value)
-    if (base && Number.isFinite(count) && count > 0) {
-      setGrams(String(Math.round(base.grams * count * 10) / 10))
+    const unit = Number(unitGrams)
+    if (Number.isFinite(count) && count > 0 && Number.isFinite(unit) && unit > 0) {
+      setGrams(round1(count * unit))
+    }
+  }
+
+  const updateUnitGrams = (value: string) => {
+    setUnitGrams(value)
+    const unit = Number(value)
+    const count = Number(quantity)
+    if (Number.isFinite(unit) && unit > 0 && Number.isFinite(count) && count > 0) {
+      setGrams(round1(count * unit))
     }
   }
 
   const updateGrams = (value: string) => {
     setGrams(value)
     const weight = Number(value)
-    if (base && base.grams > 0 && Number.isFinite(weight) && weight > 0) {
-      const calculatedServings = Math.round((weight / base.grams) * 100) / 100
-      setQuantity(String(calculatedServings))
+    const count = Number(quantity)
+    if (base && base.grams > 0 && Number.isFinite(weight) && weight > 0 && Number.isFinite(count) && count > 0) {
+      setUnitGrams(round1(weight / count))
     }
   }
 
@@ -116,13 +132,40 @@ export default function FoodReview() {
         <Text style={[type.caption,{color:theme.textMuted}]}>{SOURCE_NAMES[base.matchedFoodSource] ?? 'Food database'}{base.matchedFoodSource === 'ingredient_decomposition' ? ' · cooking amounts are estimates' : ''}</Text>
         {decoded.value?.selections && decoded.value.selections.length > 1 ? <Text style={[type.caption,{color:theme.textMuted}]}>{decoded.value.selections.map(item=>item.displayName).join(' · ')}</Text> : null}
         <View style={styles.row}>
-          <Field label="Servings" value={quantity} onChange={updateQuantity} numeric/>
-          <Field label="Total grams" value={grams} onChange={updateGrams} numeric/>
+          <Field label="Quantity (how many)" value={quantity} onChange={updateQuantity} numeric/>
+          <Field label="Grams in 1 quantity" value={unitGrams} onChange={updateUnitGrams} numeric/>
         </View>
+        <Field label="Total grams" value={grams} onChange={updateGrams} numeric/>
         {base.grams > 0 ? (
           <Text style={[type.micro, { color: theme.textMuted, marginTop: -space.xs }]}>
-            Reference serving: 1 serving = {Math.round(base.grams * 10) / 10} g
+            Standard serving: 1 × {Math.round(base.grams * 10) / 10} g — change how many you had and the weight of one piece or bowl
           </Text>
+        ) : null}
+        {decoded.value?.ingredients && decoded.value.ingredients.length > 0 ? (
+          <View style={styles.ingredientsCard}>
+            <Text style={[type.label, { color: theme.textMuted, fontWeight: '700' }]}>
+              What's inside — per {Math.round(base.grams * 10) / 10} g serving
+            </Text>
+            {decoded.value.ingredients.map((item) => (
+              <View key={item.label} style={styles.ingredientRow}>
+                <Text style={[type.caption, { color: theme.text, flex: 1 }]} numberOfLines={2}>{item.label}</Text>
+                <Text style={[type.caption, { color: theme.textMuted }]}>{item.grams > 0 ? `${item.grams} g` : '—'}</Text>
+              </View>
+            ))}
+            {decoded.value.dishId ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Edit this dish's ingredients in the recipe composer"
+                onPress={() => router.push({
+                  pathname: '/dish-composer',
+                  params: { dishId: decoded.value!.dishId!, date },
+                } as never)}
+                style={[styles.editIngredientsBtn, { borderColor: theme.protein }]}
+              >
+                <Text style={[type.label, { color: theme.protein, fontWeight: '700' }]}>Edit ingredients to your version</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
         <Field label="Date (YYYY-MM-DD)" value={date} onChange={setDate}/>
         {!dateValid ? <Text style={[type.caption,{color:theme.safety}]}>Enter a real calendar date in YYYY-MM-DD format, like {localDate(Date.now())}.</Text> : null}
@@ -148,4 +191,4 @@ export default function FoodReview() {
 }
 
 function Field({label,value,onChange,numeric=false}:{label:string;value:string;onChange:(v:string)=>void;numeric?:boolean}) { const theme=useTheme(); return <View style={{flex:1}}><Text style={[type.caption,{color:theme.textMuted,marginBottom:space.xs}]}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChange} keyboardType={numeric?'decimal-pad':'default'} style={[styles.input,{color:theme.text,borderColor:theme.border,backgroundColor:theme.bgElevated}]}/></View> }
-const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:17},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},primary:{minHeight:54,borderRadius:radius.pill,alignItems:'center',justifyContent:'center',marginTop:space.md}})
+const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:17},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},primary:{minHeight:54,borderRadius:radius.pill,alignItems:'center',justifyContent:'center',marginTop:space.md},ingredientsCard:{borderWidth:StyleSheet.hairlineWidth,borderColor:'rgba(128,128,128,0.35)',borderRadius:radius.md,padding:space.md,gap:space.xs},ingredientRow:{flexDirection:'row',alignItems:'center',gap:space.sm},editIngredientsBtn:{marginTop:space.xs,minHeight:MIN_TAP_TARGET,borderWidth:1,borderRadius:radius.md,alignItems:'center',justifyContent:'center',paddingHorizontal:space.md}})

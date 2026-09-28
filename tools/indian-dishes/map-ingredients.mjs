@@ -229,6 +229,43 @@ async function main() {
         })
       }
 
+      // The reviewed curation is the source of truth: slots it mandates but
+      // the seed template lacks (Aloo Paratha's potato_filling) must be
+      // APPENDED, not silently dropped. Dropping them under-counts the dish's
+      // defining ingredient and inflates every other fraction's share.
+      const seededLabels = new Set((dish.recipeTemplate?.ingredientSlots ?? []).map((s) => s.label))
+      for (const [label, slotCur] of Object.entries(curation.slots ?? {})) {
+        if (seededLabels.has(label)) continue
+        const mid = (slotCur.range[0] + slotCur.range[1]) / 2
+        const role = /fat|ghee|oil|cream|butter/.test(label) ? 'fat_variable'
+          : label === 'water' ? 'process'
+          : label === 'salt' ? 'minor'
+          : mid >= 0.25 ? 'dominant' : 'secondary'
+        dish.recipeTemplate.ingredientSlots.push({
+          label,
+          role,
+          required: !(role === 'fat_variable' || role === 'process' || label.endsWith('_optional')),
+          amountPrior: { kind: 'CURATED_PRIOR', range: slotCur.range, verified: true },
+          nutritionMapping: {
+            preferredSources: ['IFCT', 'USDA_FDC'],
+            canonicalFoodId: slotCur.foodId,
+            mappingStatus: 'MANUAL_OVERRIDE',
+            mappingMethod: 'reviewed_priority_curation',
+            reviewNote: 'Verified ingredient mapping from primary nutrition database (slot added from reviewed curation; absent in seed template).',
+          },
+        })
+        queue.MANUAL_OVERRIDE.push({
+          dishId: dish.id,
+          dishName: dish.canonicalName,
+          slotLabel: label,
+          required: true,
+          status: 'MANUAL_OVERRIDE',
+          foodId: slotCur.foodId,
+          method: 'reviewed_priority_curation',
+          note: 'Slot added from reviewed curation (absent in seed template)',
+        })
+      }
+
       deepValidation.push({
         dishId: dish.id,
         dishName: dish.canonicalName,

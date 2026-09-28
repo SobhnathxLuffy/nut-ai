@@ -12,7 +12,7 @@ Reproduce with `npm run check`.
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted (7,930 foods incl. 2 supplemental) |
 | IFCT corpus verification | `npm run ifct:verify` | **542-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
-| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, 1,443 slots, 0 ambiguous, 0 unresolved |
+| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, 1,444 slots, 0 ambiguous, 0 unresolved |
 | Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
 | Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
 | Android runtime & cold launch | `adb shell am start -n .../MainActivity` | **Clean launch**, 0 crashes in logcat |
@@ -494,12 +494,31 @@ being searched from the USDA database".
    prior, missing yield/portion verification, stale template status) and on
    any DRAFT record with zero verified mappings — the graduation cannot
    silently regress. `validate.mjs` cross-checks the re-stated mapping report
-   (1,443 slots, 362 CURATED, 0 ambiguous, 0 unresolved).
+   (1,444 slots, 362 CURATED, 0 ambiguous, 0 unresolved).
 
-Gate results for this round: `npm run check` exit 0 — **667/667 tests (82
+**Yield-coherence round (current).** The graduation's family yields for
+water-cooked families (dal 2.8, rice 2.3, khichdi 3.4, idli 1.25) encoded
+"dry dominant → cooked" multipliers while the engine applies yield to the
+whole raw batch — water was counted twice and dal/rice/khichdi/idli servings
+under-counted ~2.5×. A reviewed correction re-based the 93 dishes whose slots
+carry water to evaporation-only yields (dal 0.92, rice 0.95, poha/upma 0.90,
+biryani/pulao/pongal 0.90); the 10 raised-yield dishes without a water slot
+(biryani hidden water, nihari/haleem soup, misal/chole-kulche gravy, gulab
+jamun syrup, sooji halwa) keep their yields coherently. Aloo Paratha's
+reviewed potato_filling slot (absent from the seed template) is now appended
+by `map-ingredients.mjs` instead of silently dropped (1,443 → 1,444 slots).
+App side: the composer derives per-serving ingredient grams from the verified
+fractions (the flat 50 g fallback is gone), folds selector-representable fat
+slots into the Cooking Fat / Oil chips, pre-fills the standard portion and
+verified yield; food-review shows the per-serving ingredient breakdown, an
+"Edit ingredients" jump into the composer, and Quantity × grams-per-piece
+entry; Profile explains the whole data pipeline (`app/data-methods.tsx`).
+`scripts/verify-composer-equivalence.mjs` proves engine and composer agree
+within 0.5 kcal for all 362 dishes; `scripts/audit-slot-grams.mjs` prints
+per-serving slot grams for review.
+
+Gate results for this round: `npm run check` exit 0 — **680/680 tests (83
 files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
 26/26 (7,930 foods), IFCT golden queries (542 rows), indian-dishes verify
-(362 dishes, 1,443 slots, all CURATED), mapping verification **1,443/1,443
-(1,061 IFCT + 382 USDA), 0 errors**; Playwright e2e on the freshly exported
-web bundle **20 passed + 2 skipped** (2 new journeys: synonym ingredient
-search, graduated dish deterministic kcal).
+(362 dishes, 1,444 slots, all CURATED), mapping verification **1,444/1,444
+(1,062 IFCT + 382 USDA), 0 errors**; engine-vs-composer equivalence 362/362.

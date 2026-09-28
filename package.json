@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "check:node-purity": "node scripts/check-node-purity.mjs",
     "check": "npm run lint && npm run typecheck && npm run test && npm run check:node-purity && npm run data:verify && npm run ifct:verify && npm run indian-dishes:verify && npm run indian-dishes:verify-mappings",
-    "data:build": "node tools/nutrition-data/src/build.mjs && node tools/indian-dishes/curate-drafts.mjs && node tools/indian-dishes/build-sqlite.mjs",
+    "data:build": "node tools/nutrition-data/src/build.mjs && node tools/indian-dishes/build-sqlite.mjs && node tools/indian-dishes/curate-drafts.mjs && node tools/indian-dishes/build-sqlite.mjs",
     "build:tools-pkgs": "npm --workspace @nutai/core-schema run build && npm --workspace @nutai/db-adapter run build && npm --workspace @nutai/indian-dishes run build",
     "data:verify": "node tools/nutrition-data/src/golden-queries.mjs",
     "ifct:build": "npm --workspace @nutai/ifct-import run build",

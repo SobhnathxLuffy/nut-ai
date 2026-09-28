@@ -139,7 +139,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 1.25,
+    "yieldMultiplier": 0.95,
     "standardPortionGrams": 50
   },
   "dish:in:rava-idli": {
@@ -173,7 +173,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 1.3,
+    "yieldMultiplier": 0.95,
     "standardPortionGrams": 60
   },
   "dish:in:plain-dosa": {
@@ -309,7 +309,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 1.35,
+    "yieldMultiplier": 0.9,
     "standardPortionGrams": 150
   },
   "dish:in:upma": {
@@ -343,7 +343,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.1,
+    "yieldMultiplier": 0.9,
     "standardPortionGrams": 160
   },
   "dish:in:sambar": {
@@ -377,7 +377,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.6,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 180
   },
   "dish:in:rasam": {
@@ -411,7 +411,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.4,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 150
   },
   "dish:in:dal-tadka": {
@@ -445,7 +445,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.8,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 150
   },
   "dish:in:dal-fry": {
@@ -479,7 +479,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.75,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 150
   },
   "dish:in:arhar-dal": {
@@ -513,7 +513,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.9,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 150
   },
   "dish:in:toor-dal": {
@@ -547,7 +547,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.9,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 150
   },
   "dish:in:rajma": {
@@ -581,7 +581,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.4,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 200
   },
   "dish:in:chole": {
@@ -615,7 +615,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.3,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 200
   },
   "dish:in:chana-masala": {
@@ -649,7 +649,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.3,
+    "yieldMultiplier": 0.92,
     "standardPortionGrams": 200
   },
   "dish:in:khichdi": {
@@ -683,7 +683,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 3.4,
+    "yieldMultiplier": 0.95,
     "standardPortionGrams": 250
   },
   "dish:in:litti": {
@@ -1098,7 +1098,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 1.85,
+    "yieldMultiplier": 0.9,
     "standardPortionGrams": 300
   },
   "dish:in:mutton-biryani": {
@@ -1568,7 +1568,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 1.3,
+    "yieldMultiplier": 0.95,
     "standardPortionGrams": 100
   },
   "dish:in:medu-vada": {
@@ -1636,7 +1636,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 3.2,
+    "yieldMultiplier": 0.9,
     "standardPortionGrams": 200
   },
   "dish:in:curd-rice": {
@@ -1670,7 +1670,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.2,
+    "yieldMultiplier": 0.95,
     "standardPortionGrams": 200
   },
   "dish:in:lemon-rice": {
@@ -1704,7 +1704,7 @@ export const CURATED_DISHES = {
         ]
       }
     },
-    "yieldMultiplier": 2.3,
+    "yieldMultiplier": 0.95,
     "standardPortionGrams": 180
   },
   "dish:in:gulab-jamun": {

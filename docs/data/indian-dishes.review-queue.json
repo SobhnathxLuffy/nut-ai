@@ -663,6 +663,16 @@
       "note": "Verified ingredient mapping"
     },
     {
+      "dishId": "dish:in:aloo-paratha",
+      "dishName": "Aloo Paratha",
+      "slotLabel": "potato_filling",
+      "required": true,
+      "status": "MANUAL_OVERRIDE",
+      "foodId": "ifct:F006",
+      "method": "reviewed_priority_curation",
+      "note": "Slot added from reviewed curation (absent in seed template)"
+    },
+    {
       "dishId": "dish:in:gobi-paratha",
       "dishName": "Gobi Paratha",
       "slotLabel": "water",

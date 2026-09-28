@@ -276,6 +276,11 @@ export default function Profile() {
             ) : null}
           </View>
         ) : null}
+        <Row label="How food & dish data works" value="" onPress={() => router.push('/data-methods' as never)} />
+        <Text style={[type.caption, { color: theme.textFaint, padding: space.lg, paddingTop: space.xs, lineHeight: 18 }]}>
+          Where the ingredient data comes from, how dish recipes are counted, how the compose page builds your
+          version, and why a dish opens at 150 g.
+        </Text>
       </Section>
 
       <Section title="Start over">

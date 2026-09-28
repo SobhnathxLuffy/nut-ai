@@ -21,6 +21,7 @@ import { createCustomFood } from '../src/data/custom-foods'
 import { searchIngredientOptions, createIngredientFood, type IngredientOption } from '../src/data/ingredient-options'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
+import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -49,6 +50,23 @@ async function selectFoodForReview(
     throw new Error('Selected food is no longer available')
   }
   return resolveSelection(nutritionDb, candidate, resolved)
+}
+
+/**
+ * Ingredient breakdown for a dish-KB row — shown on the review screen so the
+ * user sees WHAT makes up the dish (and can tap through to edit it).
+ */
+async function loadDishIngredients(nutritionDb: DbAdapter, dishId: string) {
+  try {
+    const row = await nutritionDb.get<any>(
+      'SELECT recipe_template_json, yield_model_json, portion_model_json FROM dish_definitions WHERE id = ?',
+      [dishId],
+    )
+    if (!row) return null
+    return dishIngredientBreakdown(row, false)
+  } catch {
+    return null
+  }
 }
 
 export default function FoodSearch() {
@@ -389,9 +407,21 @@ export default function FoodSearch() {
       }
       const selection = await selectFoodForReview(db, candidate, sourceContext)
       setSelectingId(null)
+      // Dish-KB rows carry their verified ingredient breakdown into review:
+      // the user sees what composes the dish and can tap "Edit ingredients".
+      let dishExtras: { dishId: string; ingredients: Array<{ label: string; grams: number }> } | undefined
+      if (candidate.source === 'indian_dish_kb') {
+        const breakdown = await loadDishIngredients(db, candidate.foodId)
+        if (breakdown && breakdown.lines.length > 0) {
+          dishExtras = {
+            dishId: candidate.foodId,
+            ingredients: breakdown.lines.map((line) => ({ label: line.display, grams: line.grams })),
+          }
+        }
+      }
       router.push({
         pathname: '/food-review',
-        params: { payload: encodeFoodReview({ selection, date: intendedDate }) },
+        params: { payload: encodeFoodReview({ selection, date: intendedDate, ...dishExtras }) },
       } as never)
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : 'Could not log that food — try again.'

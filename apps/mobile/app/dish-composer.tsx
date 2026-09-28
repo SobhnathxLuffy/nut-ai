@@ -16,6 +16,7 @@ import {
 
 import { encodeFoodReview } from '../src/data/food-review'
 import { per100Snapshot } from '../src/data/dish-snapshot'
+import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 
 type DishDef = any
 interface Component { id: string, name: string, foodId: string | null, resolvedName: string | null, source: string, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null }
@@ -86,6 +87,12 @@ export default function DishComposerScreen() {
   const [fatGrams, setFatGrams] = useState<string>(String(COOKING_FAT_OPTIONS[0].defaultGrams))
   const [cookingMethod, setCookingMethod] = useState('curried')
   const [fatNutrients, setFatNutrients] = useState<NutrientFetch | null>(null)
+  // VERIFIED-YIELD RULE: a curated dish carries a verified cooked yield
+  // (e.g. roti 0.88). Using it keeps the composer arithmetic IDENTICAL to the
+  // curated per-100 g numbers shown in search — generic method multipliers
+  // are only a fallback for dishes without one.
+  const [recipeYield, setRecipeYield] = useState<number | null>(null)
+  const [useRecipeYield, setUseRecipeYield] = useState(true)
 
   // Ingredient search across user foods + IFCT + USDA, plus the create-new
   // flow for ingredients no database knows.
@@ -150,9 +157,24 @@ export default function DishComposerScreen() {
            family: row.family,
            canonicalName: row.canonical_name,
            recordStatus: row.record_status,
-           recipeTemplate: JSON.parse(row.recipe_template_json || '{}')
+           recipeTemplate: JSON.parse(row.recipe_template_json || '{}'),
+           yieldModel: JSON.parse(row.yield_model_json || '{}'),
+           portionModel: JSON.parse(row.portion_model_json || '{}')
         }
         if (alive) setDish(parsed)
+
+        // Portion + yield come from the reviewed record, not flat defaults:
+        // a roti opens at its verified 40 g standard portion with the verified
+        // 0.88 cooked yield, not 150 g / 'curried'.
+        const verifiedYield = typeof parsed.yieldModel?.verifiedNumericYield === 'number' && parsed.yieldModel.verifiedNumericYield > 0
+          ? parsed.yieldModel.verifiedNumericYield
+          : null
+        if (alive && verifiedYield != null) {
+          setRecipeYield(verifiedYield)
+          setUseRecipeYield(true)
+        } else if (alive) {
+          setRecipeYield(null)
+        }
 
         // Build components from the saved template. The template's own slots
         // win; if every slot is an unmapped generic label, fall back to the
@@ -163,6 +185,13 @@ export default function DishComposerScreen() {
           ? parsed.recipeTemplate.ingredientSuggestions
           : []
         const useSuggestions = !anyMapped && suggestions.length > 0
+
+        // FRACTION -> GRAMS: verified slot ranges are mass fractions of the
+        // raw batch. dishIngredientBreakdown converts them to the SAME
+        // per-serving grams the deterministic engine uses — mid(range)/SUM(mids)
+        // x (standardPortionGrams / verifiedNumericYield). A roti opens with
+        // 1.1 g ghee, never the old flat 50 g fallback.
+        const breakdown = dishIngredientBreakdown(row, true)
 
         const comps: Component[] = []
         if (useSuggestions) {
@@ -181,8 +210,25 @@ export default function DishComposerScreen() {
         } else {
           for (const slot of slots) {
             const foodId = slot.nutritionMapping?.canonicalFoodId || null
-            const grams = typeof slot.amountPrior?.grams === 'number' && slot.amountPrior.grams > 0 ? slot.amountPrior.grams : 50
-            const comp = newComponent(slot.label, foodId, foodId ? foodId.split(':')[0] : '', grams)
+            const line = breakdown.lines.find((candidate) => candidate.label === slot.label)
+            // FOLDING RULE: a fat_variable slot whose mapped food the Cooking
+            // Fat / Oil selector already represents (ghee, mustard, sunflower)
+            // is NOT rendered twice. It becomes the selector's preselected
+            // option with the fraction-derived grams.
+            if (line?.foldedIntoFat && breakdown.fatFold) {
+              const option = COOKING_FAT_OPTIONS.find((f) => f.optionId === breakdown.fatFold!.optionId)
+              if (option) {
+                if (alive) {
+                  setFatOptionId(option.optionId)
+                  setFatGrams(String(Math.round(breakdown.fatFold.grams * 10) / 10))
+                }
+                continue
+              }
+            }
+            const grams = line && line.grams > 0
+              ? line.grams
+              : (typeof slot.amountPrior?.grams === 'number' && slot.amountPrior.grams > 0 ? slot.amountPrior.grams : 30)
+            const comp = newComponent(line?.display ?? slot.label, foodId, foodId ? foodId.split(':')[0] : '', grams)
             if (foodId) {
               const nutrients = await fetchFoodNutrients(db, ifctDb, userDb, foodId)
               if (nutrients) {
@@ -197,6 +243,7 @@ export default function DishComposerScreen() {
           }
         }
         if (alive) {
+          if (breakdown.standardPortionGrams != null) setPortion(String(breakdown.standardPortionGrams))
           setComponents(comps)
           setLoading(false)
         }
@@ -209,7 +256,7 @@ export default function DishComposerScreen() {
   }, [db, ifctDb, userDb, params.dishId])
 
   const addIngredient = () => {
-    setComponents([...components, newComponent('New Ingredient', null, '', 50)])
+    setComponents([...components, newComponent('New Ingredient', null, '', 100)])
   }
 
   const removeComponent = (id: string) => {
@@ -323,9 +370,14 @@ export default function DishComposerScreen() {
 
   const totalRawMass = components.reduce((s, c) => s + c.grams, 0) + fatG
   // Same yield model the decomposer uses — water-adding methods scale the pot
-  // up, moisture-loss methods shrink it, deep frying absorbs extra oil.
+  // up, moisture-loss methods shrink it, deep frying absorbs extra oil. When
+  // the dish carries a verified recipe yield (curated records do), it governs
+  // instead so the composer reproduces the curated numbers exactly.
+  const effectiveYieldMultiplier = useRecipeYield && recipeYield != null ? recipeYield : null
   const cookedYield = totalRawMass > 0
-    ? resolveCookedYieldGrams(totalRawMass, fatG, cookingMethod as any).cookedYieldGrams
+    ? (effectiveYieldMultiplier != null
+        ? totalRawMass * effectiveYieldMultiplier
+        : resolveCookedYieldGrams(totalRawMass, fatG, cookingMethod as any).cookedYieldGrams)
     : 0
 
   const portionG = parseFloat(portion) || 150
@@ -539,19 +591,34 @@ export default function DishComposerScreen() {
       ) : null}
 
       <Text style={[type.caption, { color: t.text, fontWeight: '600', marginHorizontal: space.md }]}>Cooking Method & Yield</Text>
+      {recipeYield != null ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Use verified recipe yield ${recipeYield}`}
+          onPress={() => setUseRecipeYield(true)}
+          style={[s.chip, { backgroundColor: useRecipeYield ? t.protein : t.bg, borderColor: t.border, alignSelf: 'flex-start', marginHorizontal: space.md, marginTop: space.xs }]}
+        >
+          <Text style={[type.micro, { color: useRecipeYield ? '#fff' : t.text, fontWeight: '700' }]}>
+            ✓ Verified recipe yield ×{recipeYield} (matches curated numbers)
+          </Text>
+        </Pressable>
+      ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
         <View style={{ flexDirection: 'row', gap: space.xs, marginHorizontal: space.md }}>
-          {COOKING_METHOD_OPTIONS.map((item) => (
-            <Pressable
-              key={item.method}
-              accessibilityRole="button"
-              accessibilityLabel={`Select ${item.label}`}
-              onPress={() => setCookingMethod(item.method)}
-              style={[s.chip, { backgroundColor: cookingMethod === item.method ? t.protein : t.bg, borderColor: t.border }]}
-            >
-              <Text style={[type.micro, { color: cookingMethod === item.method ? '#fff' : t.text }]}>{item.label}</Text>
-            </Pressable>
-          ))}
+          {COOKING_METHOD_OPTIONS.map((item) => {
+            const active = useRecipeYield === false && cookingMethod === item.method
+            return (
+              <Pressable
+                key={item.method}
+                accessibilityRole="button"
+                accessibilityLabel={`Select ${item.label}`}
+                onPress={() => { setCookingMethod(item.method); setUseRecipeYield(false) }}
+                style={[s.chip, { backgroundColor: active ? t.protein : t.bg, borderColor: t.border }]}
+              >
+                <Text style={[type.micro, { color: active ? '#fff' : t.text }]}>{item.label}</Text>
+              </Pressable>
+            )
+          })}
         </View>
       </ScrollView>
 

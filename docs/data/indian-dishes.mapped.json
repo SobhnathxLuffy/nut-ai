@@ -4314,8 +4314,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.45,
-       0.55
+       0.3,
+       0.4
       ],
       "verified": true
      },
@@ -4337,8 +4337,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.25,
-       0.35
+       0.15,
+       0.25
       ],
       "verified": true
      },
@@ -4397,6 +4397,29 @@
       "mappingStatus": "MANUAL_OVERRIDE",
       "mappingMethod": "reviewed_priority_curation",
       "reviewNote": "Verified ingredient mapping from primary nutrition database."
+     }
+    },
+    {
+     "label": "potato_filling",
+     "role": "dominant",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.25,
+       0.35
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:F006",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_priority_curation",
+      "reviewNote": "Verified ingredient mapping from primary nutrition database (slot added from reviewed curation; absent in seed template)."
      }
     }
    ],
@@ -7497,7 +7520,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -7710,7 +7733,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -7923,7 +7946,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -8136,7 +8159,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -8343,7 +8366,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -8556,7 +8579,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -8772,7 +8795,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -8974,7 +8997,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -9187,7 +9210,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -9400,7 +9423,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -9614,7 +9637,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -9828,7 +9851,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -10041,7 +10064,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 3.4,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -10243,7 +10266,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 3.4,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -10456,7 +10479,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 3.4,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -10669,7 +10692,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -10883,7 +10906,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 3,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -11097,7 +11120,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -11763,7 +11786,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -11976,7 +11999,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -12189,7 +12212,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.85,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -12391,7 +12414,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -12605,7 +12628,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -12819,7 +12842,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -13033,7 +13056,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -13247,7 +13270,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -13461,7 +13484,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -13674,7 +13697,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -13887,7 +13910,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -14100,7 +14123,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -14527,7 +14550,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -14742,7 +14765,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -14959,7 +14982,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -15161,7 +15184,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -15375,7 +15398,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -15578,7 +15601,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -15793,7 +15816,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -18552,7 +18575,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.35,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -18754,7 +18777,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.5,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -18968,7 +18991,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.5,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -19181,7 +19204,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.6,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -19394,7 +19417,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.1,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -19596,7 +19619,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.8,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -19809,7 +19832,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.8,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -20023,7 +20046,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 3.2,
+    "verifiedNumericYield": 0.9,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -20226,7 +20249,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -20440,7 +20463,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -20654,7 +20677,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -20868,7 +20891,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.25,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -22354,7 +22377,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.3,
+    "verifiedNumericYield": 0.95,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -23412,7 +23435,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -23614,7 +23637,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.75,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -23816,7 +23839,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.9,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -24018,7 +24041,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.9,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -24220,7 +24243,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -24433,7 +24456,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -24646,7 +24669,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -24859,7 +24882,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -25072,7 +25095,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -25285,7 +25308,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -25498,7 +25521,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -25712,7 +25735,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -25925,7 +25948,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -26138,7 +26161,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -26351,7 +26374,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.6,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -26553,7 +26576,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.4,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -26755,7 +26778,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -26970,7 +26993,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -27185,7 +27208,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -27400,7 +27423,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -27616,7 +27639,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.4,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -27818,7 +27841,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -28036,7 +28059,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -28238,7 +28261,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.3,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -28440,7 +28463,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -28653,7 +28676,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -29720,7 +29743,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.1,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -29933,7 +29956,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 1.1,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -30360,7 +30383,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -30574,7 +30597,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -30788,7 +30811,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -31001,7 +31024,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -31215,7 +31238,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -31428,7 +31451,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
@@ -31641,7 +31664,7 @@
      "trusted_recipe_yield",
      "family_prior"
     ],
-    "verifiedNumericYield": 2.8,
+    "verifiedNumericYield": 0.92,
     "status": "verified",
     "assumptionClass": "CURATED_PRIOR"
    }
