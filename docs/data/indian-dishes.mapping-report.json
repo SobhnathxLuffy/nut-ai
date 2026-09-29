@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-09-28T16:03:33.594Z",
+  "generatedAt": "2026-09-29T07:16:39.637Z",
   "thresholdsLowered": false,
   "totalDishes": 362,
-  "totalIngredientSlots": 1444,
-  "mappedToIFCT": 1062,
-  "mappedToUSDA": 382,
-  "autoMapped": 1238,
-  "manualOverrides": 206,
+  "totalIngredientSlots": 1451,
+  "mappedToIFCT": 1070,
+  "mappedToUSDA": 381,
+  "autoMapped": 1206,
+  "manualOverrides": 245,
   "ambiguous": 0,
   "unresolved": 0,
   "dishesFullyResolvable": 50,
@@ -920,5 +920,6 @@
   "priorityRecordsNotFound": [
     "Litti + Chokha (composite record is absent; separate Litti and Chokha records were reviewed)"
   ],
-  "curationNote": "Stats re-stated by curate-drafts.mjs after the draft-graduation pass; reviewed thresholds and deep-validation set unchanged."
+  "curationNote": "Stats re-stated by curate-drafts.mjs after the draft-graduation pass; reviewed thresholds and deep-validation set unchanged.",
+  "notes": "Slot counts re-stated by scripts/add-missing-fillings.mjs (restored fillings: Gobi/Paneer/Mooli/Methi/Sattu Paratha, Mysore Masala Dosa, Onion Rava Dosa, Onion Uttapam).Slot counts re-stated by scripts/add-missing-fillings.mjs (restored fillings: Gobi/Paneer/Mooli/Methi/Sattu Paratha, Mysore Masala Dosa, Onion Rava Dosa, Onion Uttapam)."
 }

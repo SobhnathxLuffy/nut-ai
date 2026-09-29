@@ -97,9 +97,11 @@ async function main() {
   if (data.length !== 362) errors.push(`expected 362 dishes, found ${data.length}`)
   // 1441 pre-curation + 2 extra regional slots (Eromba's bespoke recipe and
   // the Singju/Dhuska restructuring) + 1 slot added from reviewed curation
-  // (Aloo Paratha's potato_filling, absent in the seed template) = 1444 after
-  // the draft-graduation pass.
-  if (slots !== 1_444) errors.push(`expected 1444 ingredient slots, found ${slots}`)
+  // (Aloo Paratha's potato_filling, absent in the seed template) + 7 slots
+  // restored by scripts/add-missing-fillings.mjs (the missing fillings:
+  // Gobi/Paneer/Mooli/Methi/Sattu Paratha, Onion Rava Dosa, Onion Uttapam)
+  // = 1451.
+  if (slots !== 1_451) errors.push(`expected 1451 ingredient slots, found ${slots}`)
 
   // P0-6: the BUNDLED artifact must actually contain the dish KB this file
   // validates. Until the KB compile was chained into `npm run data:build`, a

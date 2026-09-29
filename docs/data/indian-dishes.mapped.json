@@ -4540,22 +4540,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.6,
-       0.7
+       0.38,
+       0.48
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A019",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Wheat flour, atta (Triticum aestivum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Atta casing."
+     },
+     "reviewNote": "Atta casing."
     },
     {
      "label": "water",
@@ -4564,22 +4564,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.3,
-       0.4
+       0.08,
+       0.14
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dough hydration."
+     },
+     "reviewNote": "Dough hydration."
     },
     {
      "label": "salt",
@@ -4596,13 +4596,11 @@
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:173468",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Salt, table",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction"
      }
     },
     {
@@ -4612,22 +4610,46 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.06,
-       0.12
+       0.04,
+       0.08
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T013",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Ghee",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Tawa ghee for roasting."
+     },
+     "reviewNote": "Tawa ghee for roasting."
+    },
+    {
+     "label": "cauliflower_filling",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.25,
+       0.35
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:D036",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Grated spiced cauliflower stuffing — restored; it was missing entirely."
+     },
+     "reviewNote": "Grated spiced cauliflower stuffing — restored; it was missing entirely."
     }
    ],
    "numericRatiosVerified": true,
@@ -4681,19 +4703,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -4754,22 +4769,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.6,
-       0.7
+       0.38,
+       0.48
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A019",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Wheat flour, atta (Triticum aestivum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Atta casing."
+     },
+     "reviewNote": "Atta casing."
     },
     {
      "label": "water",
@@ -4778,22 +4793,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.3,
-       0.4
+       0.08,
+       0.14
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dough hydration."
+     },
+     "reviewNote": "Dough hydration."
     },
     {
      "label": "salt",
@@ -4810,13 +4825,11 @@
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:173468",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Salt, table",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction"
      }
     },
     {
@@ -4826,22 +4839,46 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.06,
-       0.12
+       0.04,
+       0.08
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T013",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Ghee",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Tawa ghee for roasting."
+     },
+     "reviewNote": "Tawa ghee for roasting."
+    },
+    {
+     "label": "paneer_filling",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.25,
+       0.35
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:L003",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Spiced mashed-paneer stuffing — restored; it was missing entirely."
+     },
+     "reviewNote": "Spiced mashed-paneer stuffing — restored; it was missing entirely."
     }
    ],
    "numericRatiosVerified": true,
@@ -4895,19 +4932,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -4968,22 +4998,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.6,
-       0.7
+       0.38,
+       0.48
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A019",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Wheat flour, atta (Triticum aestivum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Atta casing."
+     },
+     "reviewNote": "Atta casing."
     },
     {
      "label": "water",
@@ -4992,22 +5022,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.3,
-       0.4
+       0.08,
+       0.14
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dough hydration (radish adds its own juice)."
+     },
+     "reviewNote": "Dough hydration (radish adds its own juice)."
     },
     {
      "label": "salt",
@@ -5024,13 +5054,11 @@
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:173468",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Salt, table",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction"
      }
     },
     {
@@ -5040,22 +5068,46 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.06,
-       0.12
+       0.04,
+       0.08
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T013",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Ghee",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Tawa ghee for roasting."
+     },
+     "reviewNote": "Tawa ghee for roasting."
+    },
+    {
+     "label": "radish_filling",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.22,
+       0.32
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:F010",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Grated squeezed radish stuffing — restored; it was missing entirely."
+     },
+     "reviewNote": "Grated squeezed radish stuffing — restored; it was missing entirely."
     }
    ],
    "numericRatiosVerified": true,
@@ -5109,19 +5161,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -5182,22 +5227,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.6,
-       0.7
+       0.5,
+       0.6
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A019",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Wheat flour, atta (Triticum aestivum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Atta base."
+     },
+     "reviewNote": "Atta base."
     },
     {
      "label": "water",
@@ -5206,22 +5251,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.3,
-       0.4
+       0.2,
+       0.3
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dough hydration."
+     },
+     "reviewNote": "Dough hydration."
     },
     {
      "label": "salt",
@@ -5238,13 +5283,11 @@
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:173468",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Salt, table",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction"
      }
     },
     {
@@ -5254,22 +5297,46 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.06,
-       0.12
+       0.04,
+       0.08
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T013",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Ghee",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Tawa ghee for roasting."
+     },
+     "reviewNote": "Tawa ghee for roasting."
+    },
+    {
+     "label": "methi_leaves",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.1,
+       0.16
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:C020",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Chopped fenugreek leaves worked into the dough — restored; they were missing entirely."
+     },
+     "reviewNote": "Chopped fenugreek leaves worked into the dough — restored; they were missing entirely."
     }
    ],
    "numericRatiosVerified": true,
@@ -5323,19 +5390,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -5398,22 +5458,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.6,
-       0.7
+       0.38,
+       0.48
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:B001",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Bengal gram, dal (Cicer arietinum)",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Sattu is roasted Bengal-gram flour; canonical gram dal row used. Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "canonicalFoodId": "ifct:A019",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Atta casing — the dough was wrongly mapped to sattu flour before."
+     },
+     "reviewNote": "Atta casing — the dough was wrongly mapped to sattu flour before."
     },
     {
      "label": "water",
@@ -5422,22 +5482,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.3,
-       0.4
+       0.08,
+       0.14
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dough hydration."
+     },
+     "reviewNote": "Dough hydration."
     },
     {
      "label": "salt",
@@ -5454,13 +5514,11 @@
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:173468",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Salt, table",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Roti, Phulka, Aloo Paratha); id verified against the shipped corpus."
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction"
      }
     },
     {
@@ -5470,22 +5528,46 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.06,
-       0.12
+       0.03,
+       0.06
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T013",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Ghee",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Tawa ghee for roasting."
+     },
+     "reviewNote": "Tawa ghee for roasting."
+    },
+    {
+     "label": "sattu_filling",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.22,
+       0.32
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:B001",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Roasted Bengal-gram flour (sattu) stuffing with onion/spice — restored."
+     },
+     "reviewNote": "Roasted Bengal-gram flour (sattu) stuffing with onion/spice — restored."
     }
    ],
    "numericRatiosVerified": true,
@@ -5539,19 +5621,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -16456,100 +16531,100 @@
    "templateStatus": "CURATED",
    "ingredientSlots": [
     {
-     "label": "grain_or_semolina",
+     "label": "dosa_batter",
      "role": "dominant",
      "required": true,
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.45,
-       0.55
+       0.4,
+       0.5
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A015",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Rice, raw, milled (Oryza sativa)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Fermented rice batter (same simplification as curated Masala Dosa)."
+     },
+     "reviewNote": "Fermented rice batter (same simplification as curated Masala Dosa)."
     },
     {
-     "label": "pulse_optional",
+     "label": "potato_filling",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.28,
+       0.38
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:F006",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Potato masala filling — restored; it was missing entirely."
+     },
+     "reviewNote": "Potato masala filling — restored; it was missing entirely."
+    },
+    {
+     "label": "chutney_optional",
      "role": "secondary",
      "required": false,
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.15,
-       0.2
+       0.05,
+       0.1
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:B003",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Black gram, dal (Phaseolus mungo)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
-    },
-    {
-     "label": "water",
-     "role": "process",
-     "required": false,
-     "amountPrior": {
-      "kind": "CURATED_PRIOR",
-      "range": [
-       0.4,
-       0.6
-      ],
-      "verified": true
+      "canonicalFoodId": "ifct:H007",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Red chutney smear (coconut-base calibrated row)."
      },
-     "nutritionMapping": {
-      "preferredSources": [
-       "USDA_FDC",
-       "ifct"
-      ],
-      "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+     "reviewNote": "Red chutney smear (coconut-base calibrated row)."
     },
     {
-     "label": "added_fat_optional",
+     "label": "cooking_oil",
      "role": "fat_variable",
      "required": false,
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.08,
-       0.14
+       0.07,
+       0.12
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:T012",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Sunflower oil",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "canonicalFoodId": "ifct:T005",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dosa-tawa oil."
+     },
+     "reviewNote": "Dosa-tawa oil."
     }
    ],
    "numericRatiosVerified": true,
@@ -16603,19 +16678,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -16879,22 +16947,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.45,
-       0.55
+       0.4,
+       0.5
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A022",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Wheat, semolina (Triticum aestivum)",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Rava (semolina) base."
+     },
+     "reviewNote": "Rava (semolina) base."
     },
     {
      "label": "pulse_optional",
@@ -16903,22 +16971,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.15,
-       0.2
+       0.1,
+       0.15
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:B003",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Black gram, dal (Phaseolus mungo)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Urad dal in the batter."
+     },
+     "reviewNote": "Urad dal in the batter."
     },
     {
      "label": "water",
@@ -16927,27 +16995,27 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.4,
-       0.6
+       0.35,
+       0.5
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Thin pourable batter."
+     },
+     "reviewNote": "Thin pourable batter."
     },
     {
-     "label": "added_fat_optional",
-     "role": "fat_variable",
-     "required": false,
+     "label": "onion",
+     "role": "secondary",
+     "required": true,
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
@@ -16958,15 +17026,39 @@
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:G017",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Chopped onions mixed into the batter — restored; they were missing entirely."
+     },
+     "reviewNote": "Chopped onions mixed into the batter — restored; they were missing entirely."
+    },
+    {
+     "label": "added_fat_optional",
+     "role": "fat_variable",
+     "required": false,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.07,
+       0.12
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T012",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Sunflower oil",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Dosa-tawa oil."
+     },
+     "reviewNote": "Dosa-tawa oil."
     }
    ],
    "numericRatiosVerified": true,
@@ -17020,19 +17112,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {
@@ -18170,15 +18255,15 @@
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:A015",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Rice, raw, milled (Oryza sativa)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Rice-based uttapam batter."
+     },
+     "reviewNote": "Rice-based uttapam batter."
     },
     {
      "label": "pulse_optional",
@@ -18194,15 +18279,15 @@
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:B003",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Black gram, dal (Phaseolus mungo)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Urad dal in the batter."
+     },
+     "reviewNote": "Urad dal in the batter."
     },
     {
      "label": "water",
@@ -18211,22 +18296,46 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.4,
-       0.6
+       0.3,
+       0.45
       ],
       "verified": true
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
-       "ifct"
+       "IFCT"
       ],
       "canonicalFoodId": "usda:174158",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Water, bottled, generic",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Thick pourable batter."
+     },
+     "reviewNote": "Thick pourable batter."
+    },
+    {
+     "label": "onion",
+     "role": "secondary",
+     "required": true,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.08,
+       0.14
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "IFCT",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:G017",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Chopped onion topping — restored; it was missing entirely."
+     },
+     "reviewNote": "Chopped onion topping — restored; it was missing entirely."
     },
     {
      "label": "added_fat_optional",
@@ -18242,15 +18351,15 @@
      },
      "nutritionMapping": {
       "preferredSources": [
-       "ifct",
+       "IFCT",
        "USDA_FDC"
       ],
       "canonicalFoodId": "ifct:T013",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Ghee",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Idli, Rava Idli, Plain Dosa); id verified against the shipped corpus."
-     }
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappingMethod": "reviewed_curation_correction",
+      "reviewNote": "Tawa ghee."
+     },
+     "reviewNote": "Tawa ghee."
     }
    ],
    "numericRatiosVerified": true,
@@ -18304,19 +18413,12 @@
    "sourceVerificationRequired": true,
    "notes": "Seed ontology/template record; verify sources, exact ingredient IDs, recipe/yield, portion, and licensing before VERIFIED.",
    "validation": {
-    "ingredientMappingsComplete": false,
+    "ingredientMappingsComplete": true,
     "recipeStructureReviewed": true,
     "portionYieldChecked": true,
     "uncertaintyModelChecked": true,
-    "nutritionSanityChecked": false,
-    "blockers": [
-     "required ingredient mappings remain ambiguous or unresolved",
-     "recipe structure still contains generic category or combined-food slots",
-     "numeric ingredient ratios are not verified",
-     "cooked yield is not verified",
-     "standard portion is not verified",
-     "nutrition sanity check blocked until deterministic inputs are available"
-    ]
+    "nutritionSanityChecked": true,
+    "blockers": []
    }
   },
   "verification": {

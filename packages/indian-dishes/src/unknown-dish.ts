@@ -52,6 +52,11 @@ export const COOKING_FAT_OPTIONS: FatOption[] = [
   { optionId: 'ghee-14g', label: 'Ghee (1 tbsp / 14g)', foodId: 'ifct:T013', defaultGrams: 14 },
   { optionId: 'sunflower-oil-14g', label: 'Sunflower Oil (1 tbsp / 14g)', foodId: 'ifct:T012', defaultGrams: 14 },
   { optionId: 'sunflower-oil-5g', label: 'Light Oil / Tadka (1 tsp / 5g)', foodId: 'ifct:T012', defaultGrams: 5 },
+  // Groundnut oil and butter cover the remaining curated fat slots (frying
+  // oil for snacks, butter for naan/dal makhani) so every recipe fat can be
+  // REPRESENTED by the selector instead of silently duplicated next to it.
+  { optionId: 'groundnut-oil-14g', label: 'Groundnut Oil (1 tbsp / 14g)', foodId: 'ifct:T005', defaultGrams: 14 },
+  { optionId: 'butter-14g', label: 'Butter (1 tbsp / 14g)', foodId: 'usda:173430', defaultGrams: 14 },
   { optionId: 'no-added-oil', label: 'No Added Oil / Dry Roasted', foodId: null, defaultGrams: 0 },
 ]
 

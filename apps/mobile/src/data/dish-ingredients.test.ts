@@ -52,9 +52,17 @@ describe('fatOptionIdForSlot', () => {
     expect(fatOptionIdForSlot(slot('added_fat', [0.05, 0.1], { nutritionMapping: { canonicalFoodId: 'ifct:T012', mappingStatus: 'MANUAL_OVERRIDE' } }))).toBe('sunflower-oil-14g')
   })
 
-  it('keeps cream, cashew and butter rows out of the selector', () => {
+  it('maps groundnut oil and butter so every recipe fat can fold', () => {
+    // Samosa / Chole Bhature frying oil and Butter Naan / Dal Makhani butter
+    // used to be unrepresentable — the selector then added a second silent
+    // 14 g on top of them.
+    expect(fatOptionIdForSlot(slot('added_fat_or_frying_oil', [0.1, 0.16], { nutritionMapping: { canonicalFoodId: 'ifct:T005', mappingStatus: 'MANUAL_OVERRIDE' } }))).toBe('groundnut-oil-14g')
+    expect(fatOptionIdForSlot(slot('added_fat_optional', [0.04, 0.08], { nutritionMapping: { canonicalFoodId: 'usda:173430', mappingStatus: 'MANUAL_OVERRIDE' } }))).toBe('butter-14g')
+    expect(fatOptionIdForSlot(slot('butter_or_ghee', [0.06, 0.12], { nutritionMapping: { canonicalFoodId: 'usda:173410', mappingStatus: 'MANUAL_OVERRIDE' } }))).toBe('butter-14g')
+  })
+
+  it('keeps cream and cashew rows out of the selector', () => {
     expect(fatOptionIdForSlot(slot('cream_optional', [0.03, 0.06], { nutritionMapping: { canonicalFoodId: 'usda:170859', mappingStatus: 'AUTO_MAPPED' } }))).toBeNull()
-    expect(fatOptionIdForSlot(slot('butter_or_ghee', [0.05, 0.1], { nutritionMapping: { canonicalFoodId: 'usda:173410', mappingStatus: 'AUTO_MAPPED' } }))).toBeNull()
   })
 })
 
@@ -102,6 +110,14 @@ describe('dishIngredientBreakdown', () => {
     const { fatFold, lines } = dishIngredientBreakdown(rotiRow, false)
     expect(fatFold).toBeNull()
     expect(lines.find((l) => l.label === 'added_fat_optional')!.foldedIntoFat).toBe(false)
+  })
+
+  it('humanizes the restored filling labels', () => {
+    expect(humanizeSlotLabel('paneer_filling')).toBe('Paneer (stuffing)')
+    expect(humanizeSlotLabel('cauliflower_filling')).toBe('Cauliflower (stuffing)')
+    expect(humanizeSlotLabel('radish_filling')).toBe('Radish (stuffing)')
+    expect(humanizeSlotLabel('methi_leaves')).toBe('Fenugreek leaves (methi)')
+    expect(humanizeSlotLabel('sattu_filling')).toBe('Roasted gram flour (sattu stuffing)')
   })
 
   it('prefers household-measured grams over fraction derivation', () => {

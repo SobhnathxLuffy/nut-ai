@@ -328,7 +328,7 @@ M012,"Egg, duck, whole, raw",Egg and egg products,181.64,14.6,13.83,0,0
 M013,"Egg, duck, whole, omlet",Egg and egg products,192.16,15.1,14.8,0,0
 M014,"Egg, quial, whole, raw",Egg and egg products,151.77,12.39,11.46,0,0
 M015,"Egg, quial, whole, boiled",Egg and egg products,154.64,13.03,11.5,0,0
-N001,"Chicken, poultry, leg, skinless",Poultry,383.6,19.44,12.64,0,0
+N001,"Chicken, poultry, leg, skinless",Poultry,191.52,19.44,12.64,0,0
 N002,"Chicken, poultry, thigh, skinless",Poultry,199.81,18.18,14.23,0,0
 N003,"Chicken, poultry, breast, skinless",Poultry,168.26,21.81,9,0,0
 N004,"Chicken, poultry, wing, skinless",Poultry,192.88,17.42,13.81,0,0
@@ -536,7 +536,7 @@ T006,Mustard oil,Edible oils and fats,900,0,100,0,0
 T007,Palm oil,Edible oils and fats,900,0,100,0,0
 T008,Rice bran oil,Edible oils and fats,900,0,100,0,0
 T009,Safflower oil,Edible oils and fats,900,0,100,0,0
-T010,"Safflower oil (blended)",Edible oils and fats,900,0,100,0,0
+T010,Safflower oil (blended),Edible oils and fats,900,0,100,0,0
 T011,Soyabean oil,Edible oils and fats,900,0,100,0,0
 T012,Sunflower oil,Edible oils and fats,900,0,100,0,0
 T013,Ghee,Edible oils and fats,900,0,100,0,0

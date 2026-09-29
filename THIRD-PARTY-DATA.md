@@ -33,14 +33,14 @@ Nut AI, its license, provenance, and obligations.
 | **Permission status** | **Project owner explicitly states permission to use and publicly upload IFCT data for this project** |
 | **Adapter** | `IFCTSource` behind `NutritionSource` interface |
 | **Import pipeline** | `tools/ifct-import/` |
-| **Bundled scope** | 528 food items from IFCT 2017 Table 1: energy, protein, fat, carbohydrate, fibre, category, source code, provenance |
+| **Bundled scope** | 542 food items from IFCT 2017 Table 1 (528 core rows + 14 fats & oils + regional footnotes): energy, protein, fat, carbohydrate, fibre, category, source code, provenance |
 | **Source hash** | `e87629581a58faca286f4886504bc75f33d6d3771a50fb4e40e2afee2b2b32dd` |
 | **Redistribution** | Authorized per owner's stated permission |
 | **Attribution** | "T. Longvah, R. Ananthan, K. Bhaskarachary, K. Venkaiah. Indian Food Composition Tables. ICMR-NIN, 2017." |
 | **Obligations** | Preserve attribution; record permission evidence; review before commercial redistribution |
 
 The currently bundled `ifct.db` is generated from the official IFCT PDF and
-contains all 528 food items from Table 1. IFCT micronutrient tables are deferred
+contains all 542 food items from Table 1 (including the fats & oils section, energy by 100 %-fat definition, and the footnote Cat-fish row). IFCT micronutrient tables are deferred
 to the Phase 8 micronutrient schema and reports work.
 
 > **Permission evidence:** The project owner has explicitly authorized the use

@@ -43,6 +43,9 @@ export const FAT_OPTION_BY_FOOD: Record<string, string> = {
   'ifct:T013': 'ghee-14g',
   'ifct:T006': 'mustard-oil-14g',
   'ifct:T012': 'sunflower-oil-14g',
+  'ifct:T005': 'groundnut-oil-14g',
+  'usda:173430': 'butter-14g',
+  'usda:173410': 'butter-14g',
 }
 
 const HUMAN_LABELS: Record<string, string> = {
@@ -57,6 +60,7 @@ const HUMAN_LABELS: Record<string, string> = {
   butter_or_ghee: 'Butter / ghee',
   cashew_optional: 'Cashew (optional)',
   chutney_optional: 'Chutney (optional)',
+  cauliflower_filling: 'Cauliflower (stuffing)',
   chicken: 'Chicken',
   chilli: 'Chilli',
   condiments_optional: 'Condiments (optional)',
@@ -79,6 +83,7 @@ const HUMAN_LABELS: Record<string, string> = {
   gravy_base_optional: 'Gravy base (optional)',
   gravy_or_vegetable_base: 'Gravy / vegetable base',
   herbs: 'Herbs',
+  methi_leaves: 'Fenugreek leaves (methi)',
   mix_ins_optional: 'Mix-ins (optional)',
   mutton: 'Mutton',
   mustard_oil_optional: 'Mustard oil (optional)',
@@ -86,6 +91,7 @@ const HUMAN_LABELS: Record<string, string> = {
   onion_chilli_herbs: 'Onion, chilli, herbs',
   oil_or_ghee: 'Oil / ghee',
   paneer: 'Paneer',
+  paneer_filling: 'Paneer (stuffing)',
   paratha_or_flatbread: 'Flatbread',
   potato_eggplant_tomato_mix: 'Potato + eggplant + tomato',
   potato_filling: 'Potato filling',
@@ -93,11 +99,13 @@ const HUMAN_LABELS: Record<string, string> = {
   primary_vegetable: 'Main vegetable',
   pulse_optional: 'Dal (optional)',
   pulse_or_legume: 'Dal (pulse)',
+  radish_filling: 'Radish (stuffing)',
   rice: 'Rice',
   rice_or_grain: 'Rice / grain',
   rice_or_idli_rava: 'Idli rava (rice)',
   roasted_bengal_gram_sattu: 'Roasted gram (sattu)',
   salt: 'Salt',
+  sattu_filling: 'Roasted gram flour (sattu stuffing)',
   sauce_or_chutney_optional: 'Sauce / chutney (optional)',
   secondary_components: 'Side components',
   starch_or_wrapper: 'Dough / outer layer',
@@ -122,7 +130,11 @@ export function humanizeSlotLabel(label: string): string {
 
 const mid = (range: [number, number]) => (range[0] + range[1]) / 2
 
-/** Fat slots whose mapped food the Cooking Fat / Oil selector can represent. */
+/**
+ * Fat slots whose mapped food the Cooking Fat / Oil selector can represent.
+ * A slot maps to an optionId by its FOOD ID — two butter rows share one
+ * option because they are nutritionally identical (717 kcal, 81 g fat).
+ */
 export function fatOptionIdForSlot(slot: SlotLike): string | null {
   const foodId = slot.nutritionMapping?.canonicalFoodId
   if (!foodId) return null

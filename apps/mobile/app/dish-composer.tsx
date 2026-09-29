@@ -83,8 +83,15 @@ export default function DishComposerScreen() {
   const [error, setError] = useState<string | null>(null)
 
   const [portion, setPortion] = useState('150')
-  const [fatOptionId, setFatOptionId] = useState<string>(COOKING_FAT_OPTIONS[0].optionId)
-  const [fatGrams, setFatGrams] = useState<string>(String(COOKING_FAT_OPTIONS[0].defaultGrams))
+  // FAT SELECTOR IS THE RECIPE'S FAT — never a second silent serving of it.
+  // Initial state is overwritten by the dish load effect: a dish with its own
+  // fat ingredient preselects that oil with the recipe's grams; a dish
+  // without one opens at "No Added Oil / Dry Roasted" (0 g). The old
+  // hardcoded mustard-14g default double-counted every dish whose template
+  // already carried frying oil / tadka fat (Samosa, Sambar, Poha, Chole
+  // Bhature, …) — ~100-130 kcal of invisible fat per serving.
+  const [fatOptionId, setFatOptionId] = useState<string>('no-added-oil')
+  const [fatGrams, setFatGrams] = useState<string>('0')
   const [cookingMethod, setCookingMethod] = useState('curried')
   const [fatNutrients, setFatNutrients] = useState<NutrientFetch | null>(null)
   // VERIFIED-YIELD RULE: a curated dish carries a verified cooked yield
@@ -194,6 +201,16 @@ export default function DishComposerScreen() {
         const breakdown = dishIngredientBreakdown(row, true)
 
         const comps: Component[] = []
+        // REFLECTIVE FAT DEFAULT. Priority order:
+        //   1. A fat_variable slot whose mapped food the selector represents
+        //      (ghee, mustard, sunflower, groundnut, butter) FOLDS into the
+        //      selector — the slot becomes the preselected option with the
+        //      fraction-derived grams and is NOT rendered twice.
+        //   2. Otherwise a household variant's explicitly saved fat
+        //      (template.addedFat) is restored exactly as saved.
+        //   3. Otherwise the selector opens at No Added Oil (0 g) — the
+        //      recipe's own named fat rows are the single source of truth.
+        let fatDefaultApplied = false
         if (useSuggestions) {
           for (const s of suggestions) {
             const comp = newComponent(s.label, s.foodId, s.foodId.split(':')[0], s.defaultGrams ?? 100)
@@ -212,9 +229,9 @@ export default function DishComposerScreen() {
             const foodId = slot.nutritionMapping?.canonicalFoodId || null
             const line = breakdown.lines.find((candidate) => candidate.label === slot.label)
             // FOLDING RULE: a fat_variable slot whose mapped food the Cooking
-            // Fat / Oil selector already represents (ghee, mustard, sunflower)
-            // is NOT rendered twice. It becomes the selector's preselected
-            // option with the fraction-derived grams.
+            // Fat / Oil selector represents (ghee, mustard, sunflower,
+            // groundnut, butter) is NOT rendered twice. It becomes the
+            // selector's preselected option with the fraction-derived grams.
             if (line?.foldedIntoFat && breakdown.fatFold) {
               const option = COOKING_FAT_OPTIONS.find((f) => f.optionId === breakdown.fatFold!.optionId)
               if (option) {
@@ -222,6 +239,7 @@ export default function DishComposerScreen() {
                   setFatOptionId(option.optionId)
                   setFatGrams(String(Math.round(breakdown.fatFold.grams * 10) / 10))
                 }
+                fatDefaultApplied = true
                 continue
               }
             }
@@ -244,6 +262,21 @@ export default function DishComposerScreen() {
         }
         if (alive) {
           if (breakdown.standardPortionGrams != null) setPortion(String(breakdown.standardPortionGrams))
+          if (!fatDefaultApplied) {
+            // Reflect the recipe: restore an explicitly saved household fat,
+            // else open with no added fat. Never a silent 14 g.
+            const savedFat = parsed.recipeTemplate?.addedFat
+            const savedOption = savedFat?.foodId
+              ? COOKING_FAT_OPTIONS.find((f) => f.foodId === savedFat.foodId)
+              : null
+            if (savedOption) {
+              setFatOptionId(savedOption.optionId)
+              setFatGrams(String(Math.round((savedFat.grams ?? savedOption.defaultGrams) * 10) / 10))
+            } else {
+              setFatOptionId('no-added-oil')
+              setFatGrams('0')
+            }
+          }
           setComponents(comps)
           setLoading(false)
         }

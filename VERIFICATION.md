@@ -522,3 +522,54 @@ files)**, ESLint 0 warnings, strict typecheck, node purity 18/18, data:verify
 26/26 (7,930 foods), IFCT golden queries (542 rows), indian-dishes verify
 (362 dishes, 1,444 slots, all CURATED), mapping verification **1,444/1,444
 (1,062 IFCT + 382 USDA), 0 errors**; engine-vs-composer equivalence 362/362.
+
+## Round: three-bug-pattern audit (fat double-count, missing fillings, density)
+
+New automated checks (all wired into `npm run check`, all run against the FULL
+362-dish database — not a sample):
+
+1. **Reconciliation** (`scripts/verify-composer-equivalence.mjs`, rewritten):
+   simulates the composer's FAITHFUL initial UI state — per-serving grams from
+   the fraction priors, fat-variable slots folded into the Cooking Fat / Oil
+   selector, reflective "No Added Oil" default — and compares kcal AND P/C/F
+   against the deterministic engine within 0.5. `--old-ui` reproduces the
+   historical hardcoded 14 g mustard default and flags exactly 40 dishes
+   (+126 kcal each), including all seven user-confirmed cases.
+2. **Filling slots** (`scripts/audit-filling-slots.mjs`): every stuffed/filled
+   dish must carry its defining filling as a resolved, non-zero slot;
+   plain-family dishes are exempted only via an explicit reviewed list.
+3. **Ingredient density** (`scripts/audit-ingredient-density.mjs`): every
+   referenced food is checked for Atwater internal consistency (catches
+   impossible rows like a 2x energy typo) and against calibrated family
+   ranges calibrated to IFCT's available-carbohydrate convention.
+
+Findings and fixes:
+
+- **Bug 1 (fat double-counting, 40 dishes):** the composer's Cooking Fat / Oil
+  selector opened at a hardcoded Mustard Oil 14 g even when the recipe already
+  carried its own fat slot (frying oil / tadka fat / cooking oil / butter) or
+  had none at all (beverages). Fixed at the root: groundnut oil and butter
+  joined the selector options so EVERY recipe fat slot is representable, and
+  the selector now opens REFLECTIVELY — folded recipe fat with its own grams,
+  an explicitly saved household fat, or No Added Oil. Never a second silent
+  amount. All 40 dishes drop exactly 126 kcal / 14 g fat in the composer.
+- **Bug 2 (missing fillings, 8 dishes):** Paneer/Gobi/Mooli Paratha had no
+  filling at all; Sattu Paratha's dough was mapped to sattu flour instead of
+  atta; Mysore Masala Dosa lacked potato masala + red chutney; Onion Rava Dosa
+  and Onion Uttapam lacked their onions. Restored via
+  `scripts/add-missing-fillings.mjs` with standard-recipe fractions
+  (slot total 1444 -> 1451; mapping report re-stated).
+- **Bug 3 (IFCT N001 chicken):** the official IFCT 2017 PDF prints 1605 kJ
+  (383.6 kcal) for Chicken, poultry, leg, skinless — exactly 2x the Atwater
+  sum of its own published macros and of every sibling poultry row. Corrected
+  to 191.52 kcal (Atwater on the published macros) in the CSV, with the
+  correction recorded in the import manifest. A full CSV-vs-PDF cross-check
+  (`tools/ifct-import/crosscheck-csv-vs-pdf.mjs`, run against the official
+  PDF, sha256-verified) confirms every other row is a faithful extraction.
+  B002 whole chana (287.05), L004 khoa (315.97) and I001 jaggery (353.73) are
+  the genuine IFCT 2017 published values (available-carbohydrate convention;
+  their fibre is measured high and carries no energy) — NOT data bugs.
+
+Gates: lint 0 · typecheck clean · 682/682 tests · node purity · golden
+queries · IFCT verify · 362/362 dishes CURATED · 1451/1451 slots mapped ·
+density audit PASS · filling audit PASS · reconciliation PASS.

@@ -4,9 +4,18 @@
   "sourceFile": "nutai-ifct-2017.pdf",
   "sourcePdfSha256": "e87629581a58faca286f4886504bc75f33d6d3771a50fb4e40e2afee2b2b32dd",
   "sourcePdfPages": "41-68",
-  "normalizedCsvSha256": "894006e2aa34ffcb510debff88705e78c40df88e2e7dcee65bbd944f9fcc4785",
+  "normalizedCsvSha256": "ba46122561bd30e39e0c004fe8bb0edf82bb8fabba7f2ed44bab28c6a40264cc",
   "recordCount": 528,
   "energyConversion": "ENERC kilojoules divided by 4.184",
   "permission": "project-owner-authorized",
-  "extractorVersion": 1
+  "extractorVersion": 1,
+  "corrections": [
+    {
+      "foodCode": "N001",
+      "field": "energy_kcal",
+      "from": 383.6,
+      "to": 191.52,
+      "reason": "The official IFCT 2017 PDF prints 1605 kJ (383.6 kcal) for Chicken, poultry, leg, skinless \u2014 exactly 2x the Atwater sum of its own published macros (P19.44 C0 F12.64 = 191.5 kcal) and ~2x every sibling poultry row (N002 836 kJ, N003 704 kJ, N004 807 kJ, all of which satisfy kcal == Atwater within 0.5%). Corrected to the Atwater value of the published macros: 191.52 kcal."
+    }
+  ]
 }
