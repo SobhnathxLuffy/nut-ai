@@ -115,6 +115,12 @@ export interface IngredientRow {
    * See §6.2 regime 2.
    */
   macrosUserEdited?: boolean
+  /**
+   * Timestamp of the last direct user edit to this row's grams (P2-4). A
+   * background web-lookup auto-apply must never overwrite a row the user has
+   * touched — the late response loses to the hand that typed.
+   */
+  userEditedAt?: number
 }
 
 export interface LoggedMeal {

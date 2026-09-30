@@ -6,6 +6,7 @@ import { PROVIDER_MODELS, providersByPrice, type ProviderId } from '@nutai/promp
 import { CredentialForm, PROVIDER_NAME } from '../src/components/CredentialForm'
 import { Icon } from '../src/components/Icon'
 import { putSetting, setting } from '../src/data/repo'
+import { baseUrlWarning } from '../src/inference/base-url'
 import { clearCredential, loadCredential, maskCredential } from '../src/inference/credentials'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
@@ -28,6 +29,11 @@ export default function ProviderSettings() {
   const [assistantModelId, setAssistantModelId] = useState<string>('')
   const [baseUrlDraft, setBaseUrlDraft] = useState<string>('')
   const [customModelDraft, setCustomModelDraft] = useState<string>('')
+  // P2-8: cross-provider chat fallback is opt-in. Off (default): a failed chat
+  // answer retries only this provider's other models. On: the user's OTHER
+  // saved provider keys may be billed, with an 'answered via' disclosure on
+  // every answer that used them.
+  const [crossFallback, setCrossFallback] = useState(false)
 
   // Persist the scan-model override. MUST be wired to onBlur as well as
   // onEndEditing: react-native-web does not implement onEndEditing at all, so
@@ -65,6 +71,7 @@ export default function ProviderSettings() {
       setAssistantModelId(await setting('assistant_model'))
       setBaseUrlDraft(await setting('provider_base_url'))
       setCustomModelDraft(scanModel)
+      setCrossFallback((await setting('cross_provider_fallback')) === 'on')
       const cred = await loadCredential(active)
       setMasked(cred ? maskCredential(cred.value) : null)
       setShowForm(!cred)
@@ -230,6 +237,13 @@ export default function ProviderSettings() {
                   placeholderTextColor={theme.textFaint}
                   style={[styles.input, { borderColor: theme.border, color: theme.text }]}
                 />
+                {/* P2-11: the missing-/v1 paste is the most common wrong hunt
+                    (it 404s as 'model not available'). Flag it at paste time. */}
+                {baseUrlWarning(baseUrlDraft) ? (
+                  <Text style={[type.caption, { color: theme.uncertain, marginTop: space.sm, lineHeight: 18 }]}>
+                    {baseUrlWarning(baseUrlDraft)}
+                  </Text>
+                ) : null}
                 <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 18 }]}>
                   Model ID override — type the exact model name your reseller uses (e.g. gpt-4o-mini,
                   deepseek-chat). Replaces the picker above.
@@ -303,6 +317,46 @@ export default function ProviderSettings() {
               photo. A cheap model here barely changes answer quality and makes credits last far
               longer — photo scans remain on the scan model above.
             </Text>
+
+            {/* P2-8: cross-provider fallback opt-in. The default (off) keeps
+                every chat call on the provider whose key the screen shows. */}
+            <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Fallback when the chat model fails</Text>
+            <View style={{ marginTop: space.sm, gap: space.sm }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Fallback on this provider only"
+                onPress={() => {
+                  setCrossFallback(false)
+                  void putSetting('cross_provider_fallback', 'off')
+                }}
+                style={[styles.modelRow, { borderColor: !crossFallback ? theme.text : theme.border, borderWidth: !crossFallback ? 2 : StyleSheet.hairlineWidth }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[type.bodyStrong, { color: theme.text }]}>This provider only</Text>
+                  <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
+                    If a chat answer fails, retry this provider's other models — never another account
+                  </Text>
+                </View>
+                {!crossFallback ? <Icon name="check" size={18} color={theme.text} weight={2.4} /> : null}
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Allow fallback on other saved providers"
+                onPress={() => {
+                  setCrossFallback(true)
+                  void putSetting('cross_provider_fallback', 'on')
+                }}
+                style={[styles.modelRow, { borderColor: crossFallback ? theme.text : theme.border, borderWidth: crossFallback ? 2 : StyleSheet.hairlineWidth }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[type.bodyStrong, { color: theme.text }]}>My other saved providers too</Text>
+                  <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
+                    May bill your OTHER keys — every such answer is labeled “answered via”
+                  </Text>
+                </View>
+                {crossFallback ? <Icon name="check" size={18} color={theme.text} weight={2.4} /> : null}
+              </Pressable>
+            </View>
           </>
         ) : null}
       </ScrollView>

@@ -25,7 +25,7 @@ import { loadFoodDb } from '../db/portions'
 import { db, customProviderBaseUrl, setting } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup } from '../inference/pathA/client'
-import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
+import { applyWebOption, beginScan, currentScanEpoch, getPhase, setPhase, setWebLookup } from './store'
 import { stripJpegMetadataBase64 } from './jpeg-privacy'
 
 /**
@@ -80,12 +80,16 @@ export async function preprocess(photoUri: string): Promise<string> {
 }
 
 export async function startScan(photoUri: string): Promise<void> {
+  // P2-7: this run's epoch. A back-out-and-rescan supersedes it; every phase
+  // write below is checked against the store's active epoch first.
+  const epoch = beginScan()
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
   try {
     base64 = await preprocess(photoUri)
   } catch {
+    if (currentScanEpoch() !== epoch) return
     setPhase({
       kind: 'failed',
       photoUri,
@@ -96,143 +100,203 @@ export async function startScan(photoUri: string): Promise<void> {
   }
 
   lastCapture = { photoUri, base64 }
-  await analyze(photoUri, base64)
+  await analyze(photoUri, base64, { epoch })
 }
 
 export async function retryScan(): Promise<void> {
   if (!lastCapture) return
   const { photoUri, base64 } = lastCapture
+  const epoch = beginScan()
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  await analyze(photoUri, base64)
+  await analyze(photoUri, base64, { epoch })
 }
 
 interface AnalyzeOpts {
   /** Prepended context for a Fix Result pass. */
   fixBlock?: string
   /** Prior scan's meta, so the ledger bills one meal for both calls. */
-  priorMeta?: { inputTokens: number; outputTokens: number; costUsd: number } | null
+  priorMeta?: { inputTokens: number; outputTokens: number; costUsd: number | null } | null
   /** Portion fraction to carry across a fix — user answers survive re-analysis. */
   keepFraction?: number
+  /** P2-7: the epoch this analyze loop belongs to; checked before every write. */
+  epoch?: number
 }
 
 async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {}): Promise<void> {
-  const provider = (await setting('provider')) as ProviderId | 'none' | ''
-  if (!provider || provider === 'none') {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message:
-        'Photo scans need an API key. Add one in Profile — barcode, search and manual logging work without one.',
-      canRetry: false,
-      failureKind: 'no-key',
-    })
-    return
-  }
-
-  const credential = await loadCredential(provider)
-  if (!credential) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message: 'Your saved key is missing. Re-enter it in Profile.',
-      canRetry: false,
-      failureKind: 'key-invalid',
-    })
-    return
-  }
-
-  const model = (await setting('provider_model')) || cheapestModel(provider).id
-  const baseUrl = await customProviderBaseUrl()
-
-  setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  const outcome = await runScanWithFallback({
-    provider,
-    model,
-    credential,
-    imagesBase64: [base64],
-    localSignalsBlock: opts.fixBlock ?? '',
-    jsonSchema: wireSchemaFor(provider),
-    baseUrl,
-  })
-
-  if (!outcome.ok) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message: outcome.error.message,
-      canRetry: outcome.error.retryable,
-      failureKind: outcome.error.kind,
-    })
-    return
-  }
-
-  setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
-
-  let result: ScanResult | null = null
+  // P2-7: the whole body is epoch-guarded and wrapped in a catch that always
+  // lands a named failed phase — an exception from setting()/loadCredential()
+  // used to escape the void-fired startScan as an unhandled rejection and
+  // leave the result screen spinning on 'Preparing…' forever.
+  const epoch = opts.epoch ?? beginScan()
+  const stale = () => epoch !== currentScanEpoch()
   try {
-    const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
-    const foodDb = await loadFoodDb(nutritionDb)
-    result = await runPipeline(
-      outcome.value.raw,
-      {
-        db: nutritionDb,
-        sourceContext: { ifctDb, userDb },
-        priors: EMPTY_PRIORS,
-        baselines: SEEDED_BASELINES,
-        path: 'cloud',
-        now: Date.now(),
-      },
-      foodDb,
-    )
-  } catch {
-    result = null
-  }
+    const provider = (await setting('provider')) as ProviderId | 'none' | ''
+    if (stale()) return
+    if (!provider || provider === 'none') {
+      setPhase({
+        kind: 'failed',
+        photoUri,
+        message:
+          'Photo scans need an API key. Add one in Profile — barcode, search and manual logging work without one.',
+        canRetry: false,
+        failureKind: 'no-key',
+      })
+      return
+    }
 
-  if (!result) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message: 'The model answered in a shape we could not use. This one is on us — try once more.',
-      canRetry: true,
-      failureKind: 'schema-violation',
-    })
-    return
-  }
+    const credential = await loadCredential(provider)
+    if (stale()) return
+    if (!credential) {
+      setPhase({
+        kind: 'failed',
+        photoUri,
+        message: 'Your saved key is missing. Re-enter it in Profile.',
+        canRetry: false,
+        failureKind: 'key-invalid',
+      })
+      return
+    }
 
-  if (!result.isFood) {
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message: result.refusalReason || 'That photo does not look like food.',
-      canRetry: false,
-    })
-    return
-  }
+    const model = (await setting('provider_model')) || cheapestModel(provider).id
+    const baseUrl = await customProviderBaseUrl()
+    if (stale()) return
 
-  if (opts.keepFraction != null && opts.keepFraction !== 1) {
-    result.meal.portionEatenFraction = opts.keepFraction
-    const re = recomputeAfterEdit(result.meal, result.items.map((i) => i.band))
-    result = { ...result, totals: re.totals, mealBand: re.mealBand }
-  }
-
-  setPhase({
-    kind: 'ready',
-    photoUri,
-    result,
-    bands: result.items.map((i) => i.band),
-    meta: {
+    setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
+    const outcome = await runScanWithFallback({
       provider,
       model,
-      inputTokens: outcome.value.inputTokens + (opts.priorMeta?.inputTokens ?? 0),
-      outputTokens: outcome.value.outputTokens + (opts.priorMeta?.outputTokens ?? 0),
-      costUsd: outcome.value.costUsd + (opts.priorMeta?.costUsd ?? 0),
-      promptVersion: outcome.value.promptVersion,
-    },
-    webLookups: {},
-  })
+      credential,
+      imagesBase64: [base64],
+      localSignalsBlock: opts.fixBlock ?? '',
+      jsonSchema: wireSchemaFor(provider),
+      baseUrl,
+    })
+    if (stale()) return
 
-  // Fire-and-forget: refinement upgrades rows underneath the review screen.
-  void refineMisses(result, outcome.value.raw, provider, model, credential)
+    if (!outcome.ok) {
+      setPhase({
+        kind: 'failed',
+        photoUri,
+        message: outcome.error.message,
+        canRetry: outcome.error.retryable,
+        failureKind: outcome.error.kind,
+      })
+      return
+    }
+
+    setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
+
+    // P2-2: storage open and pipeline run are DIFFERENT failure classes and
+    // used to share one catch — a corrupt or not-yet-open SQLite database was
+    // diagnosed as 'the model answered in a shape we could not use' with a
+    // retry suggestion that deterministically failed. Storage gets its own
+    // honest message with no retry suggestion, and the real cause is logged.
+    let dbs: {
+      nutritionDb: Awaited<ReturnType<typeof openNutritionDb>>
+      ifctDb: Awaited<ReturnType<typeof openIfctDb>>
+      userDb: Awaited<ReturnType<typeof db>>
+      foodDb: Awaited<ReturnType<typeof loadFoodDb>>
+    } | null = null
+    try {
+      const [nutritionDb, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), db()])
+      const foodDb = await loadFoodDb(nutritionDb)
+      dbs = { nutritionDb, ifctDb, userDb, foodDb }
+    } catch (err) {
+      console.error('scan storage open failed', err)
+      if (stale()) return
+      setPhase({
+        kind: 'failed',
+        photoUri,
+        message:
+          'The nutrition database could not be opened. Check free storage or restart the app, then try again — your photo is saved.',
+        canRetry: false,
+        failureKind: 'internal-error',
+      })
+      return
+    }
+
+    let result: ScanResult | null = null
+    try {
+      result = await runPipeline(
+        outcome.value.raw,
+        {
+          db: dbs.nutritionDb,
+          sourceContext: { ifctDb: dbs.ifctDb, userDb: dbs.userDb },
+          priors: EMPTY_PRIORS,
+          baselines: SEEDED_BASELINES,
+          path: 'cloud',
+          now: Date.now(),
+        },
+        dbs.foodDb,
+      )
+    } catch (err) {
+      console.error('scan pipeline failed', err)
+      result = null
+    }
+
+    if (stale()) return
+    if (!result) {
+      setPhase({
+        kind: 'failed',
+        photoUri,
+        message: 'The model answered in a shape we could not use. This one is on us — try once more.',
+        canRetry: true,
+        failureKind: 'schema-violation',
+      })
+      return
+    }
+
+    if (!result.isFood) {
+      setPhase({
+        kind: 'failed',
+        photoUri,
+        message: result.refusalReason || 'That photo does not look like food.',
+        canRetry: false,
+      })
+      return
+    }
+
+    if (opts.keepFraction != null && opts.keepFraction !== 1) {
+      result.meal.portionEatenFraction = opts.keepFraction
+      const re = recomputeAfterEdit(result.meal, result.items.map((i) => i.band))
+      result = { ...result, totals: re.totals, mealBand: re.mealBand }
+    }
+
+    if (stale()) return
+    setPhase({
+      kind: 'ready',
+      photoUri,
+      result,
+      bands: result.items.map((i) => i.band),
+      meta: {
+        provider,
+        model,
+        inputTokens: outcome.value.inputTokens + (opts.priorMeta?.inputTokens ?? 0),
+        outputTokens: outcome.value.outputTokens + (opts.priorMeta?.outputTokens ?? 0),
+        // P2-9: one unknown-cost call makes the meal's total cost unknown —
+        // null propagates rather than quietly reading as free.
+        costUsd:
+          outcome.value.costUsd == null && opts.priorMeta?.costUsd == null
+            ? null
+            : (outcome.value.costUsd ?? 0) + (opts.priorMeta?.costUsd ?? 0),
+        promptVersion: outcome.value.promptVersion,
+      },
+      webLookups: {},
+    })
+
+    // Fire-and-forget: refinement upgrades rows underneath the review screen.
+    void refineMisses(result, outcome.value.raw, provider, model, credential, epoch)
+  } catch (err) {
+    console.error('scan analyze failed', err)
+    if (stale()) return
+    setPhase({
+      kind: 'failed',
+      photoUri,
+      message: 'Something went wrong inside the app while preparing this scan. This one is on us — try again.',
+      canRetry: false,
+      failureKind: 'internal-error',
+    })
+  }
 }
 
 /** How many corpus misses we will pay to look up per scan. */
@@ -249,7 +313,9 @@ async function refineMisses(
   provider: ProviderId,
   model: string,
   credential: StoredCredential,
+  epoch: number,
 ): Promise<void> {
+  const stale = () => epoch !== currentScanEpoch()
   const payload = validatePayload(rawPayload)
   // Two triggers: the corpus missed entirely, or the model saw a BRAND (a logo
   // counts — golden arches on the wrapper). A branded item that matched some
@@ -265,9 +331,12 @@ async function refineMisses(
   await Promise.all(
     misses.map(async ({ item, index }) => {
       const rowId = item.row.id
+      if (stale()) return
       setWebLookup(rowId, { status: 'running' })
 
       const source = payload?.items[index]
+      const baseUrl = await customProviderBaseUrl()
+      if (stale()) return
       const lookup = await runWebLookup(
         provider,
         {
@@ -279,8 +348,12 @@ async function refineMisses(
         credential,
         fetch,
         30_000,
-        await customProviderBaseUrl(),
+        baseUrl,
       )
+      // P2-7: this scan may have been superseded (back-out-and-rescan) while
+      // the lookup was in flight — its results never write into the newer
+      // scan's phase.
+      if (stale()) return
 
       if (!lookup.ok) {
         setWebLookup(rowId, { status: 'failed' })
@@ -295,8 +368,18 @@ async function refineMisses(
       setWebLookup(rowId, { status: 'done', result: parsed.data })
       // Unambiguous single match: apply it. The row visibly upgrades from
       // amber AI-estimate to a cited source — that is the payoff moment.
+      // P2-4: NEVER when the user hand-edited (or removed) the row while the
+      // lookup was in flight — the late response must not silently overwrite
+      // their typed grams. The lookup state stays 'done', so the user's edit
+      // simply stands.
       if (parsed.data.options.length === 1 && !parsed.data.question) {
-        applyWebOption(rowId, parsed.data.options[0]!, parsed.data.source_url)
+        const cur = getPhase()
+        if (cur.kind === 'ready') {
+          const row = cur.result.meal.ingredients.find((r) => r.id === rowId)
+          if (row && row.userEditedAt == null) {
+            applyWebOption(rowId, parsed.data.options[0]!, parsed.data.source_url)
+          }
+        }
       }
     }),
   )
@@ -331,8 +414,11 @@ export async function fixScan(note: string): Promise<void> {
   const priorMeta = phase.meta
   const photoUri = phase.photoUri ?? lastCapture.photoUri
 
+  // P2-7: a fix supersedes the scan that produced it — including its in-flight
+  // background lookups.
+  const epoch = beginScan()
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  await analyze(photoUri, lastCapture.base64, { fixBlock, priorMeta, keepFraction })
+  await analyze(photoUri, lastCapture.base64, { fixBlock, priorMeta, keepFraction, epoch })
 }
 
 // ---------------------------------------------------------------------------
@@ -398,6 +484,8 @@ function readyFromRows(
  * label scanner when it does not.
  */
 export async function startBarcodeScan(gtin: string): Promise<void> {
+  const epoch = beginScan()
+  const stale = () => epoch !== currentScanEpoch()
   setPhase({ kind: 'analyzing', photoUri: '', stage: 'matching' })
 
   let food: Awaited<ReturnType<typeof resolveByBarcode>> = null
@@ -407,6 +495,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   } catch {
     food = null
   }
+  if (stale()) return
 
   if (food && food.energyKcal != null) {
     const grams = food.servingSizeG ?? 100
@@ -444,7 +533,9 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
 
   // Not in the corpus. One web search, if we have the means.
   const provider = (await setting('provider')) as ProviderId | 'none' | ''
+  if (stale()) return
   const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+  if (stale()) return
   if (!credential || !provider || provider === 'none') {
     setPhase({
       kind: 'failed',
@@ -456,14 +547,17 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   }
 
   const model = (await setting('provider_model')) || cheapestModel(provider).id
+  const baseUrl = await customProviderBaseUrl()
+  if (stale()) return
   const lookup = await runWebLookup(
     provider,
     { model, itemName: `the packaged food product with barcode (GTIN/UPC/EAN) ${gtin}`, brand: null },
     credential,
     fetch,
     30_000,
-    await customProviderBaseUrl(),
+    baseUrl,
   )
+  if (stale()) return
   const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
   const opt = parsed?.success && parsed.data.found ? parsed.data.options[0] : undefined
   if (!opt) {
@@ -515,19 +609,24 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
  * the one place the app promises exactness.
  */
 export async function startLabelScan(photoUri: string): Promise<void> {
+  const epoch = beginScan()
+  const stale = () => epoch !== currentScanEpoch()
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
   try {
     base64 = await preprocess(photoUri)
   } catch {
+    if (stale()) return
     setPhase({ kind: 'failed', photoUri, message: 'Could not read the photo. Try taking it again.', canRetry: false })
     return
   }
   lastCapture = { photoUri, base64 }
 
   const provider = (await setting('provider')) as ProviderId | 'none' | ''
+  if (stale()) return
   const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+  if (stale()) return
   if (!credential || !provider || provider === 'none') {
     setPhase({
       kind: 'failed',
@@ -542,7 +641,10 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   const model = (await setting('provider_model')) || cheapestModel(provider).id
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
 
-  const outcome = await runLabelScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, await customProviderBaseUrl())
+  const baseUrl = await customProviderBaseUrl()
+  if (stale()) return
+  const outcome = await runLabelScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, baseUrl)
+  if (stale()) return
   if (!outcome.ok) {
     setPhase({
       kind: 'failed',
@@ -575,6 +677,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   }
 
   const label = parsed.data
+  if (stale()) return
   const grams = label.serving_g!
   const per100 = 100 / grams
   const p = label.per_serving
@@ -618,19 +721,24 @@ export async function startLabelScan(photoUri: string): Promise<void> {
 const MAX_RECEIPT_ITEMS = 8
 
 export async function startReceiptScan(photoUri: string): Promise<void> {
+  const epoch = beginScan()
+  const stale = () => epoch !== currentScanEpoch()
   setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
   try {
     base64 = await preprocess(photoUri)
   } catch {
+    if (stale()) return
     setPhase({ kind: 'failed', photoUri, message: 'Could not read the photo. Try taking it again.', canRetry: false })
     return
   }
   lastCapture = { photoUri, base64 }
 
   const provider = (await setting('provider')) as ProviderId | 'none' | ''
+  if (stale()) return
   const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+  if (stale()) return
   if (!credential || !provider || provider === 'none') {
     setPhase({
       kind: 'failed',
@@ -644,7 +752,10 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   const model = (await setting('provider_model')) || cheapestModel(provider).id
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  const outcome = await runReceiptScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, await customProviderBaseUrl())
+  const baseUrl = await customProviderBaseUrl()
+  if (stale()) return
+  const outcome = await runReceiptScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, baseUrl)
+  if (stale()) return
   if (!outcome.ok) {
     setPhase({
       kind: 'failed',
@@ -680,10 +791,11 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
         credential,
         fetch,
         30_000,
-        await customProviderBaseUrl(),
+        baseUrl,
       ),
     })),
   )
+  if (stale()) return
 
   const rows: IngredientRow[] = []
   const webLookups: Record<string, import('./store').WebLookupState> = {}

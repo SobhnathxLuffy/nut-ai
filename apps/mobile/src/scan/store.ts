@@ -28,7 +28,8 @@ export interface ScanMeta {
   model: string
   inputTokens: number
   outputTokens: number
-  costUsd: number
+  /** P2-9: null = a custom model whose price the catalogue does not know. */
+  costUsd: number | null
   promptVersion: string
 }
 
@@ -84,6 +85,28 @@ export function setPhase(next: ScanPhase) {
   emit()
 }
 
+// --- Scan epochs (P2-7) -----------------------------------------------------
+//
+// Scans are fired as `void startScan(...)` from the shutter and CANNOT be
+// cancelled from the camera side, so back-out-and-rescan lets two analyze
+// loops race setPhase — last finisher wins and the UI flickers between
+// results. Every scan run begins with beginScan(): a monotonically increasing
+// epoch the orchestrator checks before each phase write and each background
+// lookup callback. Stale loops bail instead of writing.
+
+let scanEpoch = 0
+
+/** Start a new scan run and return its epoch. Supersedes every older run. */
+export function beginScan(): number {
+  scanEpoch += 1
+  return scanEpoch
+}
+
+/** The epoch of the currently-active scan run. */
+export function currentScanEpoch(): number {
+  return scanEpoch
+}
+
 /** Non-hook read for the orchestrator (Fix Result needs the current rows). */
 export function getPhase(): ScanPhase {
   return phase
@@ -103,9 +126,14 @@ function mutateMeal(fn: (meal: LoggedMeal) => LoggedMeal) {
 
 export function editGrams(rowId: string, grams: number) {
   if (!Number.isFinite(grams) || grams < 0) return
+  // P2-4: a direct user edit is timestamped on the row. Background web-lookup
+  // auto-apply checks this and NEVER overwrites a row the hand has touched —
+  // the late network response loses to the user's typed value.
   mutateMeal((meal) => ({
     ...meal,
-    ingredients: meal.ingredients.map((r) => (r.id === rowId ? { ...r, grams } : r)),
+    ingredients: meal.ingredients.map((r) =>
+      r.id === rowId ? { ...r, grams, userEditedAt: Date.now() } : r,
+    ),
   }))
 }
 

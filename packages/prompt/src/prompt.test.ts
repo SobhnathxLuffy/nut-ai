@@ -144,7 +144,18 @@ describe('cost', () => {
     expect(c).toBeCloseTo((1500 / 1e6) * 1 + (800 / 1e6) * 5, 9)
   })
 
-  it('returns zero for an unknown model rather than inventing a price', () => {
-    expect(computeScanCost('openai', 'not-a-model', 1000, 1000)).toBe(0)
+  // P2-9 + P3-7: an unknown model (every custom reseller id) has NO price the
+  // catalogue can justify — null, never a silent 0 that reads as free. And a
+  // catalogue id typed in the wrong case still finds its row.
+  it('returns null for an unknown model rather than inventing a price', () => {
+    expect(computeScanCost('openai', 'not-a-model', 1000, 1000)).toBeNull()
+    expect(computeScanCost('openai', 'deepseek-chat', 1000, 1000)).toBeNull()
+  })
+
+  it('matches catalogue ids case-insensitively (P3-7)', () => {
+    const exact = computeScanCost('openai', 'gpt-4o-mini', 1000, 1000)
+    expect(computeScanCost('openai', 'GPT-4O-MINI', 1000, 1000)).toBe(exact)
+    expect(computeScanCost('openai', '  GPT-4O-MINI  ', 1000, 1000)).toBe(exact)
+    expect(exact).toBeGreaterThan(0)
   })
 })

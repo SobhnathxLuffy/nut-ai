@@ -11,6 +11,7 @@ import {
   computeScanCost,
   cheapestModel,
   EXERCISE_ESTIMATE_PROMPT_VERSION,
+  PROVIDER_MODELS,
   WEB_LOOKUP_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
@@ -77,6 +78,13 @@ export type ScanFailureKind =
    * double-bills the user for one photo.
    */
   | 'timeout-ambiguous'
+  /**
+   * P2-1: the failure happened INSIDE the app, not on the network — a request
+   * the JS engine could not even prepare (oversized base64 payload), or an
+   * unexpected local error. Retryable:false: retrying a request that can never
+   * succeed burned time and credits on every attempt.
+   */
+  | 'internal-error'
 
 export interface ScanFailure {
   kind: ScanFailureKind
@@ -89,7 +97,11 @@ export interface ScanSuccess {
   raw: unknown
   inputTokens: number
   outputTokens: number
-  costUsd: number
+  /**
+   * P2-9: null when the model id is not in the catalogue (every custom
+   * reseller id) — the honest "cost unknown", never a silent 0.
+   */
+  costUsd: number | null
   latencyMs: number
   promptVersion: string
 }
@@ -143,6 +155,81 @@ function classify(status: number, body: string): ScanFailure {
   return { kind: 'error-retryable', message: `Unexpected response (${status}).`, retryable: true, httpStatus: status }
 }
 
+/**
+ * Transport-error taxonomy (P2-1, P3-1). A fetch rejection IS the offline shape
+ * on every engine React Native runs — `TypeError: Network request failed` on
+ * Hermes, `TypeError: Failed to fetch` on web — so 'offline' stays reserved for
+ * exactly that: a fetch rejection without a response. An abort is the
+ * may-have-been-billed timeout. A RangeError is the JS engine giving up on the
+ * payload itself — our bug, never the network's, and never retryable.
+ * Classification is by error TYPE, never by sniffing message text.
+ */
+export function classifyTransportError(err: unknown): ScanFailure {
+  const name = (err as Error)?.name ?? ''
+  if (name === 'AbortError') {
+    return {
+      kind: 'timeout-ambiguous',
+      message: 'The request timed out. It may still have been charged, so we will not retry automatically.',
+      retryable: false,
+    }
+  }
+  if (name === 'RangeError') {
+    return {
+      kind: 'internal-error',
+      message: 'Something failed inside the app while preparing this request — not the network. This one is on us.',
+      retryable: false,
+    }
+  }
+  return { kind: 'offline', message: 'No connection to the provider.', retryable: true }
+}
+
+/**
+ * Serialize a request body OUTSIDE any transport try/catch (P2-1): a payload
+ * the JS engine cannot even stringify (an oversized base64 image) used to be
+ * caught by the transport catch and misfiled as 'offline — retry forever'. It
+ * is an internal error: nothing was sent, nothing was charged, and retrying
+ * cannot help.
+ */
+export function serializeBody(body: unknown): { ok: true; text: string } | { ok: false; error: ScanFailure } {
+  try {
+    return { ok: true, text: JSON.stringify(body) }
+  } catch (err) {
+    console.error('request serialization failed', err)
+    return {
+      ok: false,
+      error: {
+        kind: 'internal-error',
+        message: 'We could not prepare this request — the photo may be too large. Nothing was sent and nothing was charged.',
+        retryable: false,
+      },
+    }
+  }
+}
+
+/**
+ * The ONE fenced-JSON extractor (P2-10, P2-3): parses clean JSON directly,
+ * and on failure strips markdown fences and isolates the outermost braces.
+ * Scan, label, receipt, web-lookup and correction paths all share it, so a
+ * degraded gateway that wraps its answer in ``` fences costs the same on
+ * every path — one fenced reply no longer loses a billed scan.
+ */
+export function extractJsonObject(text: string): unknown | null {
+  try {
+    return JSON.parse(text)
+  } catch {
+    // fall through to fence stripping
+  }
+  const fenced = text.replace(/```(?:json)?/g, '').trim()
+  const start = fenced.indexOf('{')
+  const end = fenced.lastIndexOf('}')
+  if (start < 0 || end <= start) return null
+  try {
+    return JSON.parse(fenced.slice(start, end + 1))
+  } catch {
+    return null
+  }
+}
+
 /** Pull the JSON payload out of each provider's differently-shaped envelope. */
 function extractPayload(provider: ProviderId, json: unknown): { raw: unknown; inputTokens: number; outputTokens: number } | null {
   // The content string is whatever the model wrote. With structured-output
@@ -152,11 +239,10 @@ function extractPayload(provider: ProviderId, json: unknown): { raw: unknown; in
   // by runScan's catch-all.
   const safeParse = (text: unknown): unknown => {
     if (typeof text !== 'string') return text
-    try {
-      return JSON.parse(text)
-    } catch {
-      return undefined
-    }
+    // P2-10: the scan path now shares the fenced extractor with the label,
+    // receipt and web paths — a fenced reply parses instead of dying.
+    const parsed = extractJsonObject(text)
+    return parsed === null ? undefined : parsed
   }
   const j = json as Record<string, any>
   try {
@@ -213,12 +299,16 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
   const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   const started = Date.now()
   const url = withBaseUrl(built.url, req.baseUrl)
+  // P2-1: serialization lives OUTSIDE the transport try — an un-stringifiable
+  // body is an internal error, not a network outage.
+  const serialized = serializeBody(built.body)
+  if (!serialized.ok) return { ok: false, error: serialized.error }
 
   try {
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: built.headers,
-      body: JSON.stringify(built.body),
+      body: serialized.text,
       signal: controller.signal,
     })
 
@@ -251,21 +341,9 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
       },
     }
   } catch (err) {
-    const aborted = (err as Error)?.name === 'AbortError'
-    if (aborted) {
-      // The request MAY have been billed. Never auto-retry — no provider offers
-      // an idempotency key here, so a retry can double-charge for one photo. The
-      // user is told, and chooses.
-      return {
-        ok: false,
-        error: {
-          kind: 'timeout-ambiguous',
-          message: 'The request timed out. It may still have been charged, so we will not retry automatically.',
-          retryable: false,
-        },
-      }
-    }
-    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
+    // P2-1: the try block contains ONLY fetch and response reads, so anything
+    // caught here is transport-shaped. By type, not by message (P3-1).
+    return { ok: false, error: classifyTransportError(err) }
   } finally {
     clearTimeout(timer)
   }
@@ -357,11 +435,13 @@ async function postVisionJson(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   const url = withBaseUrl(built.url, baseUrl)
+  const serialized = serializeBody(built.body)
+  if (!serialized.ok) return { ok: false, error: serialized.error }
   try {
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: built.headers,
-      body: JSON.stringify(built.body),
+      body: serialized.text,
       signal: controller.signal,
     })
     const text = await res.text()
@@ -387,22 +467,13 @@ async function postVisionJson(
       return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned no text.', retryable: false } }
     }
 
-    const fenced = out.replace(/```(?:json)?/g, '').trim()
-    const start = fenced.indexOf('{')
-    const end = fenced.lastIndexOf('}')
-    if (start < 0 || end <= start) {
+    const parsed = extractJsonObject(out)
+    if (parsed == null || typeof parsed !== 'object') {
       return { ok: false, error: { kind: 'schema-violation', message: 'No JSON in the response.', retryable: false } }
     }
-    try {
-      return { ok: true, raw: JSON.parse(fenced.slice(start, end + 1)) }
-    } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The response JSON did not parse.', retryable: false } }
-    }
+    return { ok: true, raw: parsed }
   } catch (err) {
-    if ((err as Error)?.name === 'AbortError') {
-      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'The scan timed out.', retryable: false } }
-    }
-    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
+    return { ok: false, error: classifyTransportError(err) }
   } finally {
     clearTimeout(timer)
   }
@@ -465,11 +536,13 @@ export async function runWebLookup(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   const url = withBaseUrl(built.url, baseUrl)
+  const serialized = serializeBody(built.body)
+  if (!serialized.ok) return { ok: false, error: serialized.error }
   try {
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: built.headers,
-      body: JSON.stringify(built.body),
+      body: serialized.text,
       signal: controller.signal,
     })
     const text = await res.text()
@@ -503,22 +576,13 @@ export async function runWebLookup(
       return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned no text.', retryable: false } }
     }
 
-    const fenced = out.replace(/```(?:json)?/g, '').trim()
-    const start = fenced.indexOf('{')
-    const end = fenced.lastIndexOf('}')
-    if (start < 0 || end <= start) {
+    const parsed = extractJsonObject(out)
+    if (parsed == null || typeof parsed !== 'object') {
       return { ok: false, error: { kind: 'schema-violation', message: 'No JSON in the response.', retryable: false } }
     }
-    try {
-      return { ok: true, raw: JSON.parse(fenced.slice(start, end + 1)) }
-    } catch {
-      return { ok: false, error: { kind: 'schema-violation', message: 'The response JSON did not parse.', retryable: false } }
-    }
+    return { ok: true, raw: parsed }
   } catch (err) {
-    if ((err as Error)?.name === 'AbortError') {
-      return { ok: false, error: { kind: 'timeout-ambiguous', message: 'The lookup timed out.', retryable: false } }
-    }
-    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
+    return { ok: false, error: classifyTransportError(err) }
   } finally {
     clearTimeout(timer)
   }
@@ -529,9 +593,12 @@ import type { CorrectionIntent } from '@nutai/core-schema'
 import { loadCredential } from '../credentials'
 
 export async function runCorrectionIntent(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; baseUrl?: string | null },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; baseUrl?: string | null; timeoutMs?: number },
   fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: true; intent: CorrectionIntent } | { ok: false; error: ScanFailure }> {
+  // P2-3: this call used to have no timeout and no abort — a hung gateway
+  // froze the Fix-Result flow forever while the caller awaited it.
+  const timeoutMs = req.timeoutMs ?? 30_000
   try {
     const credObj = await loadCredential(req.provider)
     if (!credObj || !credObj.value) {
@@ -539,7 +606,7 @@ export async function runCorrectionIntent(
     }
     const cred = credObj.value
 
-    const payload = {
+    const payload: Record<string, any> = {
       model: req.model,
       messages: [
         { role: 'system', content: req.systemPrompt },
@@ -550,12 +617,16 @@ export async function runCorrectionIntent(
 
     let url = ''
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    
+
     if (req.provider === 'openai') {
       url = withBaseUrl('https://api.openai.com/v1/chat/completions', req.baseUrl)
       headers['Authorization'] = `Bearer ${cred}`
     } else if (req.provider === 'google') {
-      url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${cred}`
+      // P2-12: the key travels in the x-goog-api-key header — the same shape
+      // the scan path already uses — never in the URL query string, where it
+      // would land in network-inspector logs, proxies and crash breadcrumbs.
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent`
+      headers['x-goog-api-key'] = cred
       // Google uses a different schema for messages
       payload.messages = undefined as any
       ;(payload as any).contents = [
@@ -568,22 +639,45 @@ export async function runCorrectionIntent(
       headers['anthropic-version'] = '2023-06-01'
       payload.messages = [{ role: 'user', content: req.userPrompt }]
       ;(payload as any).system = req.systemPrompt
+    } else {
+      return { ok: false, error: { kind: 'error-retryable', message: 'Unsupported provider', retryable: false } }
     }
 
-    const res = await fetchImpl(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    })
+    const serialized = serializeBody(payload)
+    if (!serialized.ok) return { ok: false, error: serialized.error }
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) return { ok: false, error: { kind: 'key-invalid', message: 'Invalid API key', retryable: false } }
-      return { ok: false, error: { kind: 'error-retryable', message: `Server error: ${res.status}`, retryable: true } }
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let res: Response
+    try {
+      res = await fetchImpl(url, {
+        method: 'POST',
+        headers,
+        body: serialized.text,
+        signal: controller.signal,
+      })
+    } catch (err) {
+      // P3-1: classification by error TYPE — an abort is the may-have-been-
+      // billed timeout, a RangeError is internal, and a fetch rejection is
+      // offline. The old err.message?.includes('fetch') sniffing mislabeled
+      // parse failures as network hiccups and invited pointless retries.
+      return { ok: false, error: classifyTransportError(err) }
+    } finally {
+      clearTimeout(timer)
     }
 
-    const json = await res.json()
+    const text = await res.text()
+    if (!res.ok) return { ok: false, error: classify(res.status, text) }
+
+    let json: Record<string, any>
+    try {
+      json = JSON.parse(text) as Record<string, any>
+    } catch {
+      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned malformed JSON.', retryable: false } }
+    }
+
     let rawResult = ''
-    
+
     if (req.provider === 'openai') {
       rawResult = json.choices?.[0]?.message?.content
     } else if (req.provider === 'google') {
@@ -593,21 +687,24 @@ export async function runCorrectionIntent(
     }
 
     if (!rawResult) {
-      return { ok: false, error: { kind: 'error-retryable', message: 'No content in response', retryable: true } }
+      return { ok: false, error: { kind: 'schema-violation', message: 'The provider returned no correction content.', retryable: false } }
     }
 
-    const parsed = JSON.parse(rawResult)
+    // P2-3: fenced extraction shared with every other path, and a parse miss
+    // reads as schema-violation (retryable:false) — the UI offers the billed
+    // full re-analysis as an EXPLICIT choice instead of silently re-running it.
+    const parsed = extractJsonObject(rawResult)
+    if (parsed == null || typeof parsed !== 'object') {
+      return { ok: false, error: { kind: 'schema-violation', message: 'The correction answer was not valid JSON.', retryable: false } }
+    }
     return { ok: true, intent: parsed as CorrectionIntent }
   } catch (err: any) {
-    if (err.name === 'AbortError' || err.message?.includes('fetch')) {
-      return { ok: false, error: { kind: 'offline', message: err.message, retryable: true } }
-    }
-    return { ok: false, error: { kind: 'error-retryable', message: err.message, retryable: true } }
+    return { ok: false, error: classifyTransportError(err) }
   }
 }
 
 export async function runAssistantChatApi(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[]; baseUrl?: string | null },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[]; baseUrl?: string | null; /** P2-8: cross-provider fallbacks join the chain ONLY when this is explicitly set. */ allowCrossProvider?: boolean },
   fetchImpl: typeof fetch = fetch
 ) {
   // WEB-007 fix: fallback models used to be hardcoded (`gpt-4o`,
@@ -616,18 +713,38 @@ export async function runAssistantChatApi(
   // the provider retired the snapshot. Fallbacks are now derived from the live
   // catalogue via cheapestModel(), so a model change lands in exactly one
   // place: PROVIDER_MODELS in @nutai/prompt.
-  const fallbacks: { provider: ProviderId, model: string }[] = [
+  //
+  // P2-8: the chain used to hand the request to OTHER providers' cheapest
+  // models unconditionally — spending the user's OTHER saved keys on a 429/5xx
+  // while the header still showed the configured model. The chain now tries
+  // the same provider's cheaper alternates first; cross-provider entries join
+  // ONLY when req.allowCrossProvider is explicitly true (the settings opt-in),
+  // and any answer that came from a fallback is tagged `answeredVia` so the
+  // UI can disclose exactly who answered.
+  const sameProvider = [...PROVIDER_MODELS[req.provider]]
+    .sort((a, b) => a.approxScanCostUsd - b.approxScanCostUsd)
+    .filter((m) => m.id !== req.model)
+    .slice(0, 2)
+    .map((m) => ({ provider: req.provider as ProviderId, model: m.id }))
+  const crossProvider: { provider: ProviderId; model: string }[] = req.allowCrossProvider
+    ? (['openai', 'anthropic', 'google'] as ProviderId[])
+        .filter((p) => p !== req.provider)
+        .map((p) => ({ provider: p, model: cheapestModel(p).id }))
+    : []
+  const fallbacks: { provider: ProviderId; model: string }[] = [
     { provider: req.provider, model: req.model },
-    ...(['openai', 'anthropic', 'google'] as ProviderId[])
-      .filter((p) => p !== req.provider)
-      .map((p) => ({ provider: p, model: cheapestModel(p).id })),
-  ];
+    ...sameProvider,
+    ...crossProvider,
+  ]
   let primaryError: Awaited<ReturnType<typeof runAssistantChatApiSingle>> | null = null;
   let lastError: Awaited<ReturnType<typeof runAssistantChatApiSingle>> | null = null;
   for (let i = 0; i < fallbacks.length; i++) {
-    const res = await runAssistantChatApiSingle({ ...req, provider: fallbacks[i].provider, model: fallbacks[i].model }, fetchImpl);
+    const res = await runAssistantChatApiSingle({ ...req, provider: fallbacks[i]!.provider, model: fallbacks[i]!.model }, fetchImpl);
     if (res.ok) {
-      return res;
+      if (i === 0) return res;
+      // A fallback answered: carry the disclosure so the UI can say who
+      // actually produced this answer.
+      return { ...res, answeredVia: { provider: fallbacks[i]!.provider, model: fallbacks[i]!.model } };
     }
     // A definitive rejection on the PRIMARY (rejected key, unknown model) is
     // the answer — silently retrying on another provider would hide the real
@@ -654,7 +771,7 @@ export async function runAssistantChatApi(
 export async function runAssistantChatApiSingle(
   req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[]; baseUrl?: string | null },
   fetchImpl: typeof fetch = fetch
-): Promise<{ ok: true; text: string } | { ok: false; error: ScanFailure }> {
+): Promise<{ ok: true; text: string; answeredVia?: { provider: ProviderId; model: string } } | { ok: false; error: ScanFailure }> {
   try {
     const credObj = await loadCredential(req.provider)
     if (!credObj || !credObj.value) {
@@ -708,9 +825,12 @@ export async function runAssistantChatApiSingle(
         max_tokens: 2048,
       })
     } else if (req.provider === 'google') {
-      url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${cred}`
+      // P2-12: key in the x-goog-api-key header, matching the scan and stream
+      // paths — never in the URL query string, which leaks into logs.
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent`
       headers = {
         'Content-Type': 'application/json',
+        'x-goog-api-key': cred,
       }
       bodyStr = JSON.stringify({
         contents: [
@@ -737,7 +857,6 @@ export async function runAssistantChatApiSingle(
       const isAuth = resp.status === 401 || resp.status === 403;
       return { ok: false, error: { kind: isAuth ? 'key-invalid' : 'error-retryable', message: json?.error?.message || 'API Error', retryable: !isAuth, httpStatus: resp.status } }
     }
-
     let text = ''
     if (req.provider === 'openai') {
       text = json.choices?.[0]?.message?.content || ''
@@ -749,7 +868,16 @@ export async function runAssistantChatApiSingle(
 
     return { ok: true, text }
   } catch (e: any) {
-    return { ok: false, error: { kind: 'error-retryable', message: e.message, retryable: true } }
+    // Classified by error TYPE, not message sniffing (P3-1). A chat timeout
+    // is retryable — unlike a vision scan it is cheap, and the fallback chain
+    // exists precisely to absorb it. A RangeError is ours, never the network's.
+    if (e?.name === 'AbortError') {
+      return { ok: false, error: { kind: 'error-retryable', message: 'The model took too long to answer.', retryable: true } }
+    }
+    if (e?.name === 'RangeError') {
+      return { ok: false, error: { kind: 'internal-error', message: 'Something failed inside the app while preparing this request.', retryable: false } }
+    }
+    return { ok: false, error: { kind: 'offline', message: 'No connection to the provider.', retryable: true } }
   }
 }
 
@@ -896,6 +1024,13 @@ export interface AssistantStreamOutcome {
   error?: ScanFailure
   /** True when at least one visible text delta arrived before the failure. */
   partial?: boolean
+  /**
+   * P2-6: the caller (or the screen going away) aborted this stream before it
+   * produced an answer. The caller must NOT fire the legacy fallback call —
+   * that would re-request exactly what the user just cancelled, and bill for
+   * an answer nobody will read.
+   */
+  cancelled?: boolean
 }
 
 const STREAM_MAX_BYTES = 256_000
@@ -1179,12 +1314,15 @@ export async function runAssistantChatApiStream(
         return
       }
       // Caller-invoked abort (screen closed / stop pressed): surface as a
-      // cancelled stream, keeping whatever already streamed in.
+      // cancelled stream, keeping whatever already streamed in. The cancelled
+      // flag (P2-6) is what stops the caller from re-requesting the identical
+      // answer through the legacy non-streaming call.
       finish({
         ok: false,
         text,
         reasoning,
         partial: text.length > 0,
+        cancelled: true,
         error: { kind: 'error-retryable', message: 'cancelled', retryable: true },
       })
     }

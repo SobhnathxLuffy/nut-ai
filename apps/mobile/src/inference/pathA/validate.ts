@@ -82,6 +82,17 @@ const RESELLER_HINT =
   'reseller section below, then verify again. Your key was sent to api.openai.com, ' +
   'which rejected it.'
 
+// P2-11: with a base URL SET, a 404 used to diagnose 'that model is not
+// available on your account' — the wrong hunt. On a reseller, a 404 on both the
+// retrieve AND the chat-completions probe almost always means the base URL is
+// missing its /v1 suffix (the app appends /chat/completions onto exactly what
+// you pasted). Say so instead of blaming the model.
+const RESELLER_404_HINT =
+  'The endpoint was not found (HTTP 404) on your custom base URL. Check that ' +
+  'your base URL ends in /v1 — for aicredits.in that is https://aicredits.in/v1 — ' +
+  'then verify again. If it already does, confirm the exact path your reseller ' +
+  "prints for the OpenAI-compatible API."
+
 function classify(status: number, _body: string): ScanFailure {
   if (status === 401 || status === 403) {
     return { kind: 'key-invalid', message: 'The provider rejected this credential.', retryable: false, httpStatus: status }
@@ -250,6 +261,9 @@ export async function validateCredential(
           ok: false,
           error: classify(c.status, c.body),
           detail: `GET ${retrieveUrl} → HTTP ${r.status} — ${r.body}\nPOST chat/completions → HTTP ${c.status} — ${c.body}`,
+          // Both reseller routes 404ed: the paste is almost certainly missing
+          // its /v1 suffix (P2-11).
+          ...(c.status === 404 ? { hint: RESELLER_404_HINT } : {}),
         }
       }
       // The fallback probe could not reach the network; report the retrieve
@@ -259,7 +273,9 @@ export async function validateCredential(
     const hint =
       !baseUrl && r.status === 401 && !looksLikeOfficialOpenAiKey(credential.value)
         ? RESELLER_HINT
-        : undefined
+        : baseUrl && r.status === 404
+          ? RESELLER_404_HINT
+          : undefined
     return {
       ok: false,
       error: classify(r.status, r.body),

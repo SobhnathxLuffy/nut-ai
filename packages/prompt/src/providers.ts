@@ -251,14 +251,25 @@ export function buildGeminiRequest(input: BuildRequestInput, apiKey: string): Pr
   }
 }
 
-/** Cost of one scan from real token counts. Never an estimate once the call returns. */
+/**
+ * Cost of one scan from real token counts. Never an estimate once the call
+ * returns.
+ *
+ * P2-9 + P3-7: a model id outside the catalogue (every custom reseller id) has
+ * NO honest price — returning 0 silently under-reported exactly the scans
+ * reseller users run, and case-sensitive matching dropped even catalogue ids
+ * typed in the wrong case. Unknown models return null: the ledger and the UI
+ * render "cost unknown" instead of a lie, and catalogue matching is
+ * case-insensitive.
+ */
 export function computeScanCost(
   provider: ProviderId,
   modelId: string,
   inputTokens: number,
   outputTokens: number,
-): number {
-  const model = PROVIDER_MODELS[provider].find((m) => m.id === modelId)
-  if (!model) return 0
+): number | null {
+  const needle = modelId.trim().toLowerCase()
+  const model = PROVIDER_MODELS[provider].find((m) => m.id.toLowerCase() === needle)
+  if (!model) return null
   return (inputTokens / 1_000_000) * model.inputPerMTok + (outputTokens / 1_000_000) * model.outputPerMTok
 }

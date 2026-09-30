@@ -111,9 +111,23 @@ export default function Result() {
   const [pendingIntent, setPendingIntent] = useState<CorrectionIntent | null>(null)
   const [fixNotice, setFixNotice] = useState('')
   const [addOpen, setAddOpen] = useState(false)
+  // P2-5: the grams inputs are CONTROLLED on row state through a per-row draft.
+  // A defaultValue input snapshots once — it went stale when applyWebOption
+  // changed grams underneath, and clearing the field committed Number('') === 0 g.
+  const [gramDrafts, setGramDrafts] = useState<Record<string, string>>({})
   // null = honor the camera's persisted choice; a tap overrides for this scan.
   const [viewOverride, setViewOverride] = useState<ScanReviewMode | null>(null)
   const initialReviewMode = getScanReviewMode()
+
+  /** P2-5: drop the draft so the display snaps back to the stored, validated grams. */
+  const snapGramDraft = (rowId: string) => {
+    setGramDrafts((d) => {
+      if (!(rowId in d)) return d
+      const next = { ...d }
+      delete next[rowId]
+      return next
+    })
+  }
 
   if (phase.kind === 'analyzing' || phase.kind === 'captured') {
     const stage = phase.kind === 'analyzing' ? phase.stage : 'preparing'
@@ -249,6 +263,14 @@ export default function Result() {
 
           <MacroStats totals={result.totals} />
 
+          {/* P2-9: a custom (reseller) model has no catalogue price — say so
+              instead of the ledger quietly reading as free. */}
+          {phase.meta && phase.meta.costUsd == null ? (
+            <Text style={[type.micro, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
+              Custom model — this scan's exact cost is unknown to the ledger.
+            </Text>
+          ) : null}
+
           <Pressable
             accessibilityRole="button"
             onPress={() => setViewOverride('advanced')}
@@ -324,6 +346,14 @@ export default function Result() {
 
         <MacroStats totals={result.totals} />
 
+        {/* P2-9: a custom (reseller) model has no catalogue price — say so
+            instead of the ledger quietly reading as free. */}
+        {phase.meta && phase.meta.costUsd == null ? (
+          <Text style={[type.micro, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
+            Custom model — this scan's exact cost is unknown to the ledger.
+          </Text>
+        ) : null}
+
         {/* Highlighted questions: at most two, ever. */}
         {highlighted.map((q) => (
           <View key={q.question.id} style={[styles.qCard, { borderColor: theme.uncertain, backgroundColor: theme.uncertainBg }]}>
@@ -383,8 +413,15 @@ export default function Result() {
                 <TextInput
                   accessibilityLabel={`Grams of ${row.displayName}`}
                   keyboardType="numeric"
-                  defaultValue={String(Math.round(row.grams))}
-                  onChangeText={(t) => editGrams(row.id, Number(t))}
+                  value={gramDrafts[row.id] ?? String(Math.round(row.grams))}
+                  onChangeText={(t) => {
+                    setGramDrafts((d) => ({ ...d, [row.id]: t }))
+                    // P2-5: blank text edits nothing — Number('') is 0, and
+                    // clearing the field used to momentarily log zero grams.
+                    if (t.trim() !== '') editGrams(row.id, Number(t))
+                  }}
+                  onEndEditing={() => snapGramDraft(row.id)}
+                  onBlur={() => snapGramDraft(row.id)}
                   style={[styles.gramInput, { color: theme.text, borderColor: theme.border }]}
                 />
 
@@ -469,25 +506,62 @@ export default function Result() {
                 </Text>
               ) : null}
               <View style={{ flex: 1 }} />
-              <Pressable
-                accessibilityRole="button"
-                disabled={!fixText.trim() || fixBusy}
-                onPress={() => void submitFix()}
-                style={[
-                  styles.primary,
-                  { backgroundColor: theme.text, marginBottom: Math.max(insets.bottom, space.lg) },
-                  (!fixText.trim() || fixBusy) && { opacity: 0.4 },
-                ]}
-              >
-                <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Checking…' : 'Update'}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => { setFixOpen(false); setFixStage('input'); setFixMessage('') }}
-                hitSlop={space.md}
-                style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
-              >
-                <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
-              </Pressable>
+              {fixMessage ? (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!fixText.trim() || fixBusy}
+                    onPress={() => void submitFix()}
+                    style={[
+                      styles.primary,
+                      { backgroundColor: theme.text, marginBottom: space.md },
+                      (!fixText.trim() || fixBusy) && { opacity: 0.4 },
+                    ]}
+                  >
+                    <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Checking…' : 'Update'}</Text>
+                  </Pressable>
+                  {/* P2-3: the billed re-analysis is an explicit choice, shown
+                      exactly when the parser path failed. */}
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={fixBusy}
+                    onPress={() => {
+                      const note = fixText.trim()
+                      if (!note) return
+                      setFixOpen(false)
+                      setFixStage('input')
+                      setFixText('')
+                      setFixMessage('')
+                      void fixScan(note)
+                    }}
+                    style={[styles.primary, { backgroundColor: theme.bgSunken, marginBottom: Math.max(insets.bottom, space.lg) }]}
+                  >
+                    <Text style={[type.bodyStrong, { color: theme.text }]}>Re-analyze the photo instead</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!fixText.trim() || fixBusy}
+                    onPress={() => void submitFix()}
+                    style={[
+                      styles.primary,
+                      { backgroundColor: theme.text, marginBottom: Math.max(insets.bottom, space.lg) },
+                      (!fixText.trim() || fixBusy) && { opacity: 0.4 },
+                    ]}
+                  >
+                    <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Checking…' : 'Update'}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { setFixOpen(false); setFixStage('input'); setFixMessage('') }}
+                    hitSlop={space.md}
+                    style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
+                  >
+                    <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+                  </Pressable>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -555,14 +629,19 @@ export default function Result() {
     </View>
   )
 
-  /** AIP-004 fast path: parse the note into structured ops; fall back to full re-analysis when it cannot. */
+  /**
+   * AIP-004 fast path: parse the note into structured ops against the current
+   * rows. P2-3: on ANY parser failure the billed full re-analysis is offered
+   * as an EXPLICIT button — the old silent fallthrough fired a fully-billed
+   * vision scan the user never asked for.
+   */
   async function submitFix() {
     const note = fixText.trim()
     if (!note || fixBusy || phase.kind !== 'ready') return
     setFixBusy(true)
-    try {
-      const provider = (await setting('provider')) as ProviderId | 'none' | ''
-      if (provider && provider !== 'none') {
+    const provider = (await setting('provider')) as ProviderId | 'none' | ''
+    if (provider && provider !== 'none') {
+      try {
         const model = (await setting('provider_model')) || cheapestModel(provider).id
         const built = buildCorrectionPrompt(note, phase.result.meal.ingredients)
         const res = await runCorrectionIntent({ provider, model, systemPrompt: built.system, userPrompt: built.user, baseUrl: await customProviderBaseUrl() })
@@ -581,11 +660,27 @@ export default function Result() {
             return
           }
         }
+        // P2-3: the parser failed, returned garbage, or answered empty. Keep
+        // the typed note and let the user CHOOSE the billed re-analysis.
+        setFixMessage(
+          res.ok
+            ? 'The correction came back empty. You can re-analyze the photo instead — that re-runs the full scan and may cost more.'
+            : res.error.kind === 'schema-violation'
+              ? 'The correction answer was not in a shape we could read. You can re-analyze the photo instead — that re-runs the full scan and may cost more.'
+              : `The correction could not run: ${res.error.message}`,
+        )
+        setFixBusy(false)
+        return
+      } catch {
+        // CorrectionIntentZ.parse threw on a shape mismatch — same honest
+        // treatment: never a silent billed re-analysis.
+        setFixMessage('The correction answer was not in a shape we could read. You can re-analyze the photo instead — that re-runs the full scan and may cost more.')
+        setFixBusy(false)
+        return
       }
-    } catch {
-      // Parser unavailable (no key, malformed response) — the classic path below
-      // is exactly the behavior every earlier version shipped.
     }
+    // No provider configured: the parser cannot run. The re-analysis lands on
+    // the honest no-key failure phase.
     setFixBusy(false)
     setFixOpen(false)
     setFixStage('input')

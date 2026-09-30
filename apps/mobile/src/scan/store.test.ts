@@ -5,6 +5,8 @@ import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { ScanResult } from '@nutai/pipeline'
 import {
   applyWebOption,
+  beginScan,
+  currentScanEpoch,
   editGrams,
   getPhase,
   removeRow,
@@ -94,6 +96,24 @@ describe('editGrams', () => {
     editGrams('r1', Number.NaN)
     editGrams('r1', -50)
     expect(readyPhase().result.totals.kcal).toBe(before)
+  })
+
+  // P2-4: a hand edit is timestamped on the row, and a background web-lookup
+  // auto-apply must never overwrite what the user typed while the lookup was
+  // in flight.
+  it('tags the row with userEditedAt so auto-apply loses to the hand', () => {
+    const before = Date.now() - 1000
+    vi.spyOn(Date, 'now').mockReturnValue(before + 5000)
+    try {
+      readyWith([row()])
+      expect(readyPhase().result.meal.ingredients[0]!.userEditedAt).toBeUndefined()
+      editGrams('r1', 200)
+      const tagged = readyPhase().result.meal.ingredients[0]!
+      expect(tagged.grams).toBe(200)
+      expect(tagged.userEditedAt).toBe(before + 5000)
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 })
 
@@ -207,5 +227,30 @@ describe('reset cleanup', () => {
     
     await new Promise(r => setTimeout(r, 0))
     expect(fs.deleteAsync).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P2-7 — scan epochs
+// ---------------------------------------------------------------------------
+
+describe('scan epochs (P2-7)', () => {
+  it('beginScan hands out strictly increasing epochs', () => {
+    const a = beginScan()
+    const b = beginScan()
+    const c = beginScan()
+    expect(b).toBe(a + 1)
+    expect(c).toBe(b + 1)
+    expect(currentScanEpoch()).toBe(c)
+  })
+
+  it('a system web-lookup upgrade does NOT tag the row as user-edited', () => {
+    readyWith([row()])
+    applyWebOption(
+      'r1',
+      { label: 'Chargrilled Chicken Sandwich', serving_g: 100, serving_desc: null, calories_kcal: 250, protein_g: 30, carbs_g: 20, fat_g: 8, fiber_g: null, sodium_mg: null },
+      'https://example.com/nutrition',
+    )
+    expect(readyPhase().result.meal.ingredients[0]!.userEditedAt).toBeUndefined()
   })
 })

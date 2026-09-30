@@ -282,7 +282,8 @@ export async function logMeal(
     model: string
     inputTokens: number
     outputTokens: number
-    costUsd: number
+    /** P2-9: null = a custom model whose catalogue price is unknown. */
+    costUsd: number | null
   } | null,
   photoUri: string | null,
   now: number,
@@ -376,7 +377,12 @@ export async function logMeal(
         `INSERT INTO scan_cost_ledger (meal_id, provider, model, input_tokens, output_tokens,
                                        cost_usd, local_month, created_at)
          VALUES (?,?,?,?,?,?,?,?)`,
-        [mealId, meta.provider, meta.model, meta.inputTokens, meta.outputTokens, meta.costUsd, date.slice(0, 7), now],
+        // P2-9: the column is NOT NULL, so an unknown catalogue price stores 0 —
+        // but the honest 'cost unknown' flag lives at the app layer (ScanMeta
+        // and computeScanCost return null) and is rendered on the result
+        // screen. The row keeps the exact custom model id and real token
+        // counts, so spend stays reconstructable.
+        [mealId, meta.provider, meta.model, meta.inputTokens, meta.outputTokens, meta.costUsd ?? 0, date.slice(0, 7), now],
       )
     }
 

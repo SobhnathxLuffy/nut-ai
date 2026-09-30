@@ -6,12 +6,13 @@ vi.mock('../credentials', () => ({
 }))
 
 describe('provider fallback', () => {
-  it('Given primary provider timeout, when fallback is configured, then secondary provider is called once.', async () => {
+  it('Given primary provider timeout, when fallback runs, the SAME provider\u2019s alternate answers (P2-8 default: no cross-provider spend).', async () => {
     let callCount = 0
     const mockFetch = vi.fn(async () => {
       callCount++
       if (callCount === 1) throw new Error('AbortError') // Primary fails
-      return { ok: true, json: async () => ({ content: [{ text: 'fallback answer' }] }) } as any
+      // OpenAI chat-completions shape — the fallback now stays on the SAME provider (P2-8).
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'fallback answer' } }] }) } as any
     })
 
     const res = await runAssistantChatApi({

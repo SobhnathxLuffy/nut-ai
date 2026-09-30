@@ -274,6 +274,14 @@ export default function AssistantScreen() {
 
       const { system, user } = await buildAssistantTurn(text)
       const replay = historyRef.current.slice(-HISTORY_MAX_REPLAY)
+      // P2-8: cross-provider fallbacks run ONLY on the explicit settings
+      // opt-in (provider settings → 'Fallback when the chat model fails').
+      let allowCrossProvider = false
+      try {
+        allowCrossProvider = (await setting('cross_provider_fallback')) === 'on'
+      } catch {
+        allowCrossProvider = false
+      }
 
       let res = await parseAssistantReply('')
       let streamError: string | null = null
@@ -292,6 +300,14 @@ export default function AssistantScreen() {
         },
         { onDelta: patchStream, abortRef: abortRef.current },
       )
+      // P2-6: the user aborted before any bytes arrived (screen closed, stop
+      // pressed). Re-firing the request through the legacy non-streaming call
+      // would bill for an answer nobody will read — drop the placeholder and
+      // stop. The user's message stays; the empty AI bubble goes.
+      if (stream.cancelled && !stream.text.trim()) {
+        setMessages(prev => prev.filter(m => m.id !== aiMsgId))
+        return
+      }
       if (stream.ok) {
         res = await parseAssistantReply(stream.text)
       } else if (stream.text.trim()) {
@@ -302,6 +318,9 @@ export default function AssistantScreen() {
       } else {
         // Nothing streamed (no SSE support, dead gateway, empty stream) — the
         // legacy non-streaming chain still answers, with its provider fallbacks.
+        // P2-8: when a FALLBACK answered, the reply carries an 'answered via'
+        // disclosure so the header's configured model is never a false claim.
+        const answeredViaRef: { current: { provider: ProviderId; model: string } | null } = { current: null }
         const legacy = await runAssistantChat(text, async (sys, usr, history) => {
           const r = await runAssistantChatApi({
             provider: configuredProvider,
@@ -310,11 +329,16 @@ export default function AssistantScreen() {
             userPrompt: usr,
             history: (history ?? []).slice(-HISTORY_MAX_REPLAY),
             baseUrl,
+            allowCrossProvider,
           })
           if (!r?.ok) throw new Error(r.error?.message || 'API failed')
+          if (r.answeredVia) answeredViaRef.current = r.answeredVia
           return r.text
         }, historyRef.current)
         res = legacy
+        if (answeredViaRef.current) {
+          streamError = `Answered via ${answeredViaRef.current.model} (${answeredViaRef.current.provider}) — your configured model could not be reached.`
+        }
       }
 
       if (res.toolCard?.tool_name?.startsWith('propose_') || res.toolCard?.tool_name === 'correct_logged_meal') {
