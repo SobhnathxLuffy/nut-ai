@@ -68,6 +68,26 @@ describe('openAiWireSchema (strict mode)', () => {
   it('carries no bounds — those are enforced by the client-side Zod validator', () => {
     for (const n of nodes) for (const b of BOUNDS) expect(n).not.toHaveProperty(b)
   })
+
+  it('keepPatterns: official-endpoint strict mode keeps `pattern` (the qualitative_size FORMAT) but still strips every bound', () => {
+    const kept = collectNodes(openAiWireSchema(VISION_WIRE_SCHEMA, true))
+    for (const n of kept) for (const b of BOUNDS) {
+      if (b === 'pattern') continue
+      expect(n).not.toHaveProperty(b)
+    }
+    const sizeNodes = kept.filter((n) => isObj(n['properties']) && isObj((n['properties'] as Node)['qualitative_size']))
+    expect(sizeNodes.length).toBeGreaterThan(0)
+    for (const n of sizeNodes) {
+      expect(((n['properties'] as Node)['qualitative_size'] as Node)['pattern']).toBe(
+        '^(small|medium|large|count:\\d+(\\.\\d+)?)$',
+      )
+    }
+  })
+
+  it('default (reseller-safe) still strips pattern — acceptance there is unknown', () => {
+    const nodesNoPattern = collectNodes(openAiWireSchema(VISION_WIRE_SCHEMA))
+    for (const n of nodesNoPattern) expect(n).not.toHaveProperty('pattern')
+  })
 })
 
 describe('anthropicWireSchema', () => {

@@ -96,6 +96,42 @@ export function describePreprocessFailure(err: unknown): PreprocessFailure {
 }
 
 // ---------------------------------------------------------------------------
+// One-shot instruction-schema retry (degraded-answer rescue)
+// ---------------------------------------------------------------------------
+
+/** The minimal outcome view the retry decision needs (ScanOutcome | failure). */
+export type ScanAttemptView =
+  | { ok: true; payloadUsable: boolean }
+  | { ok: false; failureKind: string; retryable: boolean }
+
+/** Was the first attempt sent WITH a json_schema (vs the instruction fallback)? */
+export type ScanSchemaMode = 'json-schema' | 'instruction'
+
+/**
+ * Should the scan re-run ONCE with the schema shipped as prompt text?
+ *
+ * Historically only a structural HTTP 400 re-ran the scan without structured
+ * output. But gateways can also fail SOFTLY: a 200 whose content is empty or
+ * prose (response_format silently dropped), or a payload too broken for even
+ * the repair layer to normalize. Those all surfaced as "the model answered in
+ * a shape we could not use" with nothing but a manual retry — which repeated
+ * the identical request and failed identically. This decision turns that dead
+ * end into one automatic re-ask that FORCES the field contract as text.
+ *
+ * Never retries when the first attempt already ran without a json_schema (the
+ * retry would be a third identical billing), and never retries a transport
+ * failure the user can actually fix (401, offline, timeout).
+ */
+export function shouldRetryWithInstructionSchema(
+  attempt: ScanAttemptView,
+  mode: ScanSchemaMode,
+): boolean {
+  if (mode !== 'json-schema') return false
+  if (attempt.ok) return !attempt.payloadUsable
+  return attempt.failureKind === 'schema-violation'
+}
+
+// ---------------------------------------------------------------------------
 // Scan meta merging (fix-scan re-analysis)
 // ---------------------------------------------------------------------------
 
@@ -116,19 +152,25 @@ export interface ScanMeta {
  * contradicted its own comment by summing a known fix cost over an unknown
  * original — the contract tests caught it and the documented principle won.)
  * A null PRIOR means "no prior call" — the new cost simply stands.
+ *
+ * THE BUG THE TESTS MISSED (reproduced live, web :3000): the wave-4 rewrite
+ * evaluated `prior!.costUsd` even when prior WAS null — every FIRST scan with
+ * a catalogue-priced model threw TypeError at the ready step, because the
+ * only null-prior test also used an unknown cost (which short-circuits to
+ * null before the addition). The prior==null + known-cost case is the single
+ * most common merge in the app, and it is pinned first below now.
  */
 export function mergeScanMeta(
   prior: Pick<ScanMeta, 'inputTokens' | 'outputTokens' | 'costUsd'> | null,
   next: ScanMeta,
 ): ScanMeta {
-  const priorKnown = prior == null || prior.costUsd != null
-  const nextKnown = next.costUsd != null
+  const costKnown = next.costUsd != null && (prior == null || prior.costUsd != null)
   return {
     provider: next.provider,
     model: next.model,
     inputTokens: next.inputTokens + (prior?.inputTokens ?? 0),
     outputTokens: next.outputTokens + (prior?.outputTokens ?? 0),
-    costUsd: !priorKnown || !nextKnown ? null : next.costUsd! + prior!.costUsd!,
+    costUsd: !costKnown ? null : (prior?.costUsd ?? 0) + (next.costUsd ?? 0),
     promptVersion: next.promptVersion,
   }
 }

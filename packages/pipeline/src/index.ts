@@ -1,6 +1,5 @@
 import { clamp, type ClampFlag } from '@nutai/clamp'
 import {
-  VisionPayloadZ,
   type IngredientRow,
   type Item,
   type LoggedMeal,
@@ -30,6 +29,9 @@ import {
   type ResolvedFood,
 } from '@nutai/resolver'
 import { recomputeTotals, toDisplayTotals, type DisplayTotals } from '@nutai/totals'
+import { validateWithRepair } from './repair.js'
+
+export { payloadValidationIssues } from './repair.js'
 
 /**
  * The pipeline — stages 4 through 9, wired.
@@ -144,10 +146,18 @@ function snapshotFromFallback(item: Item, grams: number): NutrientRow100g {
   }
 }
 
-/** Stage 4: Zod validation. Returns null when the payload is unusable. */
+/**
+ * Stage 4: Zod validation. Returns null when the payload is unusable.
+ *
+ * One deterministic repair pass runs between the first validation attempt and
+ * failure — see repair.ts for the drift classes it normalizes and the
+ * never-invent principle it operates under. A payload that was always valid
+ * is untouched; a drifted payload is normalized and re-validated against the
+ * SAME full contract; anything beyond repair fails exactly as it did before
+ * this layer existed.
+ */
 export function validatePayload(raw: unknown): VisionPayload | null {
-  const parsed = VisionPayloadZ.safeParse(raw)
-  return parsed.success ? parsed.data : null
+  return validateWithRepair(raw)
 }
 
 export async function runPipeline(

@@ -62,15 +62,24 @@ export function anthropicWireSchema(base: Record<string, unknown>): Record<strin
 /**
  * OpenAI strict mode: every object must carry `additionalProperties: false` and
  * list EVERY property in `required` — optionality is expressed as a null type
- * union, never by omission. Bounds and pattern are stripped for the same reason
- * as Anthropic: acceptance varies by model generation, and the Zod validator
+ * union, never by omission. Bounds are stripped for the same reason as
+ * Anthropic: acceptance varies by model generation, and the Zod validator
  * enforces them anyway.
+ *
+ * `pattern` is DIFFERENT and is kept on request (`keepPatterns`, used by the
+ * official-endpoint scan where strict mode supports it): the pattern for
+ * `qualitative_size` is not a bound but the VALUE FORMAT itself. Stripping it
+ * lets the model answer "two slices on a plate" against a schema it believes
+ * it satisfied — and the client-side regex then rejects the whole scan. When a
+ * pattern can ride the wire, the model cannot drift; when it cannot (reseller
+ * gateways whose dialect support is unknown), the payload repair layer in
+ * @nutai/pipeline normalizes the known drift instead.
  */
-export function openAiWireSchema(base: Record<string, unknown>): Record<string, unknown> {
+export function openAiWireSchema(base: Record<string, unknown>, keepPatterns = false): Record<string, unknown> {
   const out = clone(base)
   delete out['$schema']
   walk(out, (n) => {
-    stripKeys(n, BOUND_KEYS)
+    stripKeys(n, keepPatterns ? BOUND_KEYS.filter((k) => k !== 'pattern') : BOUND_KEYS)
     if (n['type'] === 'object' && isObj(n['properties'])) {
       n['additionalProperties'] = false
       n['required'] = Object.keys(n['properties'])

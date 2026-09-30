@@ -8,6 +8,7 @@ import {
   mergeScanMeta,
   planBarcodeScan,
   selectRefinementTargets,
+  shouldRetryWithInstructionSchema,
   webOptionToIngredientRow,
 } from './decisions'
 
@@ -46,6 +47,23 @@ describe('contract: provider gate (photo scan entry)', () => {
 })
 
 describe('contract: scan meta merge (fix re-analysis)', () => {
+  it('FIRST SCAN (null prior) with a catalogue-priced model keeps the cost — regression for the live TypeError', () => {
+    // The wave-4 rewrite dereferenced prior.costUsd on this path and threw
+    // 'Cannot read properties of null (reading costUsd)' on every first scan
+    // whose model had a catalogue price. prior==null + known cost is the most
+    // common merge in the app.
+    const merged = mergeScanMeta(null, {
+      provider: 'openai',
+      model: 'gpt-4o',
+      inputTokens: 2100,
+      outputTokens: 700,
+      costUsd: 0.012,
+      promptVersion: 'p1',
+    })
+    expect(merged.costUsd).toBeCloseTo(0.012)
+    expect(merged.inputTokens).toBe(2100)
+  })
+
   it('tokens add across the original call and the fix call', () => {
     const merged = mergeScanMeta(
       { inputTokens: 4500, outputTokens: 700, costUsd: 0.0007 },
@@ -225,5 +243,36 @@ describe('contract: preprocess failure diagnosis (P1-4)', () => {
     })
     // Non-Error throws (strings from native bridges) must not crash the diagnosis.
     expect(describePreprocessFailure('mystery')).toMatchObject({ canRetry: true })
+  })
+})
+
+describe('contract: one-shot instruction-schema retry (degraded-answer rescue)', () => {
+  it('retries when the structured-output answer is too broken for the repair layer', () => {
+    expect(shouldRetryWithInstructionSchema({ ok: true, payloadUsable: false }, 'json-schema')).toBe(true)
+  })
+
+  it('retries a soft schema-violation (200 with empty/prose content — response_format dropped)', () => {
+    expect(
+      shouldRetryWithInstructionSchema({ ok: false, failureKind: 'schema-violation', retryable: false }, 'json-schema'),
+    ).toBe(true)
+  })
+
+  it('never retries an answer the repair layer already made usable', () => {
+    expect(shouldRetryWithInstructionSchema({ ok: true, payloadUsable: true }, 'json-schema')).toBe(false)
+  })
+
+  it('never retries a second instruction-mode attempt (no third identical billing)', () => {
+    expect(shouldRetryWithInstructionSchema({ ok: true, payloadUsable: false }, 'instruction')).toBe(false)
+    expect(
+      shouldRetryWithInstructionSchema({ ok: false, failureKind: 'schema-violation', retryable: false }, 'instruction'),
+    ).toBe(false)
+  })
+
+  it('never retries transport failures the user can actually fix', () => {
+    for (const kind of ['key-invalid', 'offline', 'timeout-ambiguous', 'quota-exhausted', 'model-unavailable']) {
+      expect(
+        shouldRetryWithInstructionSchema({ ok: false, failureKind: kind, retryable: kind === 'offline' }, 'json-schema'),
+      ).toBe(false)
+    }
   })
 })

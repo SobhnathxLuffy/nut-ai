@@ -732,3 +732,34 @@ a correctness one; the worst tap-target and radius offenders are done).
 The report's waves are complete. The verification gate for every future
 change remains `npm run check`, with `npm run check:e2e` now available
 locally for the end-to-end layer.
+
+## Scan reliability round (post-completion-pass, live-reproduced)
+
+User report: image scans on the reseller base URL (aicredits.in) end on
+"Could not read this meal" identically for thali and pizza across gpt-4o,
+gpt-4o-mini and gemma-3-12b. Both root causes are fixed, live-reproduced in the
+exported bundle, and documented in
+[docs/qa/scan-reliability-round.md](docs/qa/scan-reliability-round.md):
+
+1. **Wire/validator contract gap** — `qualitative_size`'s client regex could
+   never be satisfied reliably because the constraint cannot ride the wire;
+   models were invited to answer in prose and the whole payload was rejected.
+   Fixed with the `keepPatterns` official-endpoint wire mode, the pure
+   `repairVisionPayload` normalization layer inside `validatePayload`
+   (never invents data; deterministic mappings only), and a one-shot
+   instruction-schema auto-retry for soft gateway failures (empty/prose 200s),
+   with field-level Zod issues logged on every dead end.
+2. **`mergeScanMeta` null-prior TypeError** — every FIRST scan with a
+   catalogue-priced model crashed at the ready step (the wave-4 rewrite
+   dereferenced `prior.costUsd` on the null-prior path; the test matrix only
+   covered null-prior + unknown-cost). Fixed and pinned by a regression test on
+   the exact live shape.
+
+New regression harness coverage (recorded in the round doc): healthy payload,
+gemma-style drift (missing schema_version + string numbers + percent
+confidences + descriptive size), fenced JSON, invalid enums, and empty-content
+200 with one automatic retry — all against the real app UI on :3000 with the
+reseller base URL, for thali and pizza fixtures.
+
+Gate status after the round: `npm run check` EXIT 0 (869/869 tests),
+`npx playwright test` 24 passed / 2 ticketed skips.

@@ -18,7 +18,7 @@ import {
   RECEIPT_SCAN_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
-import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } from '@nutai/pipeline'
+import { recomputeAfterEdit, runPipeline, validatePayload, payloadValidationIssues, type ScanResult } from '@nutai/pipeline'
 import { resolveByBarcode } from '@nutai/resolver'
 import { openIfctDb, openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
@@ -36,6 +36,7 @@ import {
   mergeScanMeta,
   planBarcodeScan,
   selectRefinementTargets,
+  shouldRetryWithInstructionSchema,
   webOptionToIngredientRow,
 } from './decisions'
 import { stripJpegMetadataBase64 } from './jpeg-privacy'
@@ -64,9 +65,13 @@ const EMPTY_PRIORS: PersonalPriors = { get: () => null, containers: new Map() }
 /** Kept for retry, so a network blip does not re-run image preprocessing. */
 let lastCapture: { photoUri: string; base64: string } | null = null
 
-function wireSchemaFor(provider: ProviderId): Record<string, unknown> {
+function wireSchemaFor(provider: ProviderId, keepPatterns: boolean): Record<string, unknown> {
   if (provider === 'anthropic') return anthropicWireSchema(VISION_WIRE_SCHEMA)
-  if (provider === 'openai') return openAiWireSchema(VISION_WIRE_SCHEMA)
+  // The official OpenAI endpoint enforces `pattern` in strict mode; unknown
+  // reseller dialects may not, so patterns ride the wire only when the scan is
+  // NOT pointed at a custom base URL. Reseller drift is handled by the payload
+  // repair layer + the instruction-schema retry (see analyze).
+  if (provider === 'openai') return openAiWireSchema(VISION_WIRE_SCHEMA, keepPatterns)
   return geminiWireSchema(VISION_WIRE_SCHEMA)
 }
 
@@ -201,16 +206,59 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     if (stale()) return
 
     setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-    const outcome = await runScanWithFallback({
+    const jsonSchema = wireSchemaFor(provider, !baseUrl)
+    let outcome = await runScanWithFallback({
       provider,
       model,
       credential: scanCredential,
       imagesBase64: [base64],
       localSignalsBlock: opts.fixBlock ?? '',
-      jsonSchema: wireSchemaFor(provider),
+      jsonSchema,
       baseUrl,
     })
     if (stale()) return
+
+    // Degraded-answer rescue (validate BEFORE opening storage — validation is
+    // pure and the DB is irrelevant to the retry decision). A gateway can fail
+    // softly: a 200 with empty/prose content (response_format silently
+    // dropped), or a payload too broken for the repair layer. Those used to
+    // surface as "the model answered in a shape we could not use" whose manual
+    // retry repeated the IDENTICAL request. One automatic re-ask with the
+    // schema shipped as instruction text forces the field contract instead.
+    let payloadUsable = outcome.ok && validatePayload(outcome.value.raw) != null
+    if (
+      shouldRetryWithInstructionSchema(
+        outcome.ok
+          ? { ok: true, payloadUsable }
+          : { ok: false, failureKind: outcome.error.kind, retryable: outcome.error.retryable },
+        outcome.usedSchemaFallback ? 'instruction' : 'json-schema',
+      )
+    ) {
+      console.error(
+        '[scan] first answer unusable — one retry with the schema as instruction',
+        outcome.ok ? payloadValidationIssues(outcome.value.raw).slice(0, 8) : outcome.error.kind,
+      )
+      const retried = await runScanWithFallback({
+        provider,
+        model,
+        credential: scanCredential,
+        imagesBase64: [base64],
+        localSignalsBlock: opts.fixBlock ?? '',
+        jsonSchema: null,
+        instructionSchema: jsonSchema,
+        baseUrl,
+      })
+      if (stale()) return
+      if (retried.ok && validatePayload(retried.value.raw) != null) {
+        outcome = retried
+        payloadUsable = true
+      }
+    }
+    if (outcome.ok && !payloadUsable) {
+      // The raw issues are the ONLY way this failure is diagnosable after the
+      // fact — the user-facing copy stays friendly and never changes.
+      console.error('[scan] payload failed validation after repair', payloadValidationIssues(outcome.value.raw).slice(0, 12))
+    }
 
     if (!outcome.ok) {
       setPhase({
