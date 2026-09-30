@@ -18,6 +18,7 @@
   "dependencies": {
     "@nutai/core-schema": "*",
     "@nutai/db-adapter": "*",
-    "@nutai/nutrition-sources": "*"
+    "@nutai/nutrition-sources": "*",
+    "@nutai/portion-priors": "*"
   }
 }

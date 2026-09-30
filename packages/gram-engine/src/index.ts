@@ -4,7 +4,7 @@ import { lookupDensity } from './density.js'
 import { applyPrior, canonicalConceptKey, isTrusted } from './priors.js'
 import { clampGrams, reconcile } from './reconcile.js'
 import { scaleFromReferences } from './reference-objects.js'
-import type { FoodDb, GramCandidate, GramEstimate, PersonalPriors, ResolvedRow, ScaleEstimate } from './types.js'
+import type { FoodDb, GramCandidate, GramEstimate, PersonalPriors, PopulationPriorInput, ResolvedRow, ScaleEstimate } from './types.js'
 import { volumeForForm } from './volume.js'
 import { isWideYieldClass, lookupYield, methodFromCues, oilAbsorptionFor } from './yields.js'
 
@@ -38,6 +38,14 @@ export interface EstimateGramsInput {
   priors: PersonalPriors
   db: FoodDb
   resolved: ResolvedRow | null
+  /**
+   * Task 2-c: a population portion prior looked up by the caller (or spread
+   * from @nutai/portion-priors directly). Optional alternative to
+   * `resolved.portionHints`; the resolved row's dish-specific hint wins when
+   * both are present, because curated dish data is more specific than the
+   * generic population dataset.
+   */
+  populationPrior?: PopulationPriorInput
   /** Set when a barcode was decoded on-frame, short-circuiting to tier 0. */
   barcodeMatch?: boolean
   /** Servings the user confirmed, for the packaged path. */
@@ -71,6 +79,75 @@ function exactServingArithmetic(resolved: ResolvedRow, servings: number): GramEs
   return { grams: perServing * servings, pathway: 'packaged_exact', spread: 0.02 }
 }
 
+/**
+ * Build the Tier 1.5 population-prior candidate, or null when no hint applies.
+ *
+ * Task 2-c. Household units — "1 roti", "1 katori dal" — used to have no home
+ * on the gram ladder: FNDDS has no per-unit row for them, so they fell through
+ * to the model guess (weight 0.25) or the generic 150 g fallback. The resolver
+ * now attaches RANGE-CARRYING, SOURCED portion hints (Dish KB curated portion
+ * models, or the @nutai/portion-priors population dataset), and this tier turns
+ * the first hint into a candidate.
+ *
+ * WEIGHT 0.7 — the deliberate position in the trust hierarchy:
+ *   - BELOW a trusted personal prior (0.9): the user's own correction history
+ *     for this food beats any population table.
+ *   - BELOW geometry with an exact reference object (0.85): a measurement beats
+ *     a prior.
+ *   - ABOVE soft geometry (0.6) and the FNDDS standard portion (0.55): those
+ *     are generic-corpus tables; a hint keyed to the resolved dish — or at
+ *     least to the resolved food's household unit — carries more evidence for
+ *     Indian dishes, which FNDDS largely does not cover at all.
+ *   - ABOVE the model guess (0.25), obviously.
+ *
+ * SPREAD comes from the width of the source range, (max-min)/(2*typical),
+ * clamped to [0.15, 0.35]: a tight curated range may not be stretched thinner
+ * than 15% (no population table justifies ±10%), and a wide honest range is
+ * not allowed to silently widen past 35% — the band caps there instead.
+ *
+ * PATHWAY NOTE: this tier reports pathway 'personal_prior' — borrowed, not
+ * literal. The GramPathway union lives in packages/core-schema/src/domain.ts,
+ * which Task 2-c must not edit; the honest basis is disclosed by the
+ * `populationPriorApplied` marker instead (unit, range, source string). When
+ * core-schema gains a 'population_prior' pathway, this is the one string to
+ * change and the band table gets its own anchor line.
+ */
+function populationPriorCandidate(
+  item: EstimateGramsInput['item'],
+  resolved: ResolvedRow | null,
+  injected: PopulationPriorInput | undefined,
+): GramCandidate | null {
+  // Dish-specific curated hint first; generic population dataset second.
+  const hint = resolved?.portionHints?.[0]
+  const prior = hint ?? injected
+  if (!prior) return null
+
+  const { typical, min, max } = prior
+  if (!Number.isFinite(typical) || typical <= 0) return null
+
+  // The model's count is an observation of repetitions of the same food
+  // ("2 roti", "2 katori dal"); each repetition is roughly one household
+  // unit, so the prior scales by count the same way tier 1 scales FNDDS
+  // per-unit grams. Without a count, one unit is the estimate.
+  const count = parseCount(item.qualitative_size)
+  const grams = typical * (count ?? 1)
+
+  const rawSpread = Number.isFinite(min) && Number.isFinite(max) && max > min && min > 0
+    ? (max - min) / (2 * typical)
+    : NaN
+  const spread = Number.isFinite(rawSpread)
+    ? Math.min(0.35, Math.max(0.15, rawSpread))
+    : 0.25
+
+  return {
+    grams,
+    // Borrowed pathway string — see the PATHWAY NOTE above.
+    pathway: 'personal_prior',
+    weight: 0.7,
+    spread,
+  }
+}
+
 export function estimateGrams(input: EstimateGramsInput): GramResult {
   const { item, priors, db, resolved } = input
 
@@ -95,6 +172,14 @@ export function estimateGrams(input: EstimateGramsInput): GramResult {
   }
 
   const candidates: GramCandidate[] = []
+
+  // ---- Tier 1.5: population portion prior (Task 2-c). -----------------------
+  // Between discrete-count and personal-prior, exactly: stronger than generic
+  // corpus tables and the model guess, weaker than the user's own history and
+  // a real measurement. See populationPriorCandidate for the full rationale.
+  const populationCandidate = populationPriorCandidate(item, resolved, input.populationPrior)
+  if (populationCandidate) candidates.push(populationCandidate)
+
   const conceptKey = canonicalConceptKey(item.canonical_food_key, resolved?.foodId)
   const prior = priors.get(conceptKey)
 
@@ -180,8 +265,20 @@ export function estimateGrams(input: EstimateGramsInput): GramResult {
   //
   // A user who has corrected "150 g" to "200 g" five times should see 200, not
   // 189. So when the prior is driving, the raw guess does not also get a vote.
+  //
+  // Task 2-c extends the same suppression to the population portion prior when
+  // IT is the heaviest candidate: the model's gram guess and the sourced
+  // household-unit mass both answer "how many grams is one unit of this food"
+  // — the guess is the unsourced version of exactly what the prior table
+  // measures. Blending "2 katori dal" (sourced 300 g) with the model's raw
+  // 200 g would hand a quarter of the vote back to the number we replaced.
+  // When something HEAVIER than the population prior is in the race (a trusted
+  // personal prior, exact-ref geometry), the population candidate is not
+  // driving and the guess competes as before.
   const priorIsDriving = isTrusted(prior) && item.model_gram_estimate != null
-  if (item.model_gram_estimate != null && !priorIsDriving) {
+  const populationPriorIsDriving =
+    populationCandidate != null && !candidates.some((c) => c.weight > populationCandidate.weight)
+  if (item.model_gram_estimate != null && !priorIsDriving && !populationPriorIsDriving) {
     candidates.push({
       grams: item.model_gram_estimate,
       pathway: 'model_guess',
@@ -196,6 +293,27 @@ export function estimateGrams(input: EstimateGramsInput): GramResult {
     out = {
       ...out,
       personalPriorApplied: { medianGrams: prior.medianGrams, sampleCount: prior.sampleCount },
+    }
+  }
+
+  // Task 2-c: disclose the population basis when the population candidate LED
+  // the reconcile (borrowed 'personal_prior' pathway, no trusted personal
+  // prior in the race) — otherwise the marker would lie about which signal
+  // produced the number.
+  const personalCandidateEntered = isTrusted(prior) && item.model_gram_estimate != null
+  if (populationCandidate && !personalCandidateEntered && out.pathway === 'personal_prior') {
+    const applied = resolved?.portionHints?.[0] ?? input.populationPrior
+    if (applied) {
+      out = {
+        ...out,
+        populationPriorApplied: {
+          unit: applied.unit,
+          source: applied.source,
+          typicalGrams: applied.typical,
+          minGrams: applied.min,
+          maxGrams: applied.max,
+        },
+      }
     }
   }
 

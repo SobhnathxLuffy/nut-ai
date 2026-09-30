@@ -1,3 +1,12 @@
+import type { PortionHint } from '@nutai/portion-priors'
+
+// (Task 2-c) PortionHint is the canonical wire shape for household portion
+// hints. Type-only import — erased at runtime, no dependency added beyond the
+// declarative package.json entry. Sources that carry a curated portion model
+// (the Dish KB) attach these to their resolved foods; everything downstream
+// (resolver ResolvedFood, pipeline ResolvedRow spread, gram-engine tier 1.5)
+// consumes them structurally.
+
 export interface SourceLicenseInfo {
   readonly name: string
   readonly version: string | null
@@ -45,6 +54,13 @@ export interface SourceResolvedFood {
   readonly sodiumMg: number | null
   readonly servingSizeG: number | null
   readonly servingDesc: string | null
+  /**
+   * Task 2-c: household portion hints (unit, typical/min/max grams, source)
+   * when the source carries a curated portion model. Optional — sources that
+   * have none (USDA, OFF) simply leave it unset, and the resolver may then
+   * consult the @nutai/portion-priors population dataset instead.
+   */
+  readonly portionHints?: PortionHint[]
   readonly license: string
   readonly source: string
 }

@@ -28,7 +28,17 @@ import { z } from 'zod'
  *    invites a developer to display it; this one does not.
  */
 
-export const SCHEMA_VERSION = '1.0.0' as const
+/**
+ * 1.1.0 (scene-aware scan contract): adds the optional scene block, per-item
+ * `visibility` and per-item `model_gram_range`. The bump is SAFE for stored data:
+ * the only migration version that ever gates stored-data imports is
+ * USER_SCHEMA_VERSION in @nutai/db-adapter (a number, unrelated). A payload's
+ * schema_version string is inert scan-time metadata on LoggedMeal for eval
+ * attribution — nothing branches on its value — and @nutai/pipeline's repair
+ * layer re-stamps old '1.0.0' answers before validation, which keeps accepting
+ * them because every field this version adds is OPTIONAL.
+ */
+export const SCHEMA_VERSION = '1.1.0' as const
 
 /** Physical form. Selects which volume heuristic the gram engine applies. */
 export const FoodFormZ = z.enum(['discrete', 'flat', 'piled', 'liquid', 'wrapped', 'spread'])
@@ -124,6 +134,41 @@ export const BeverageCategoryZ = z.enum([
 export type BeverageCategory = z.infer<typeof BeverageCategoryZ>
 
 /**
+ * The SCENE-level visibility of one item — how the model actually came to
+ * include it. Three honest levels, because "I see rice" and "every thali
+ * structurally has rice, though no bowl here is labelled" are different claims
+ * that deserve different numbers downstream.
+ *
+ *   visible  — clearly seen in the photo.
+ *   likely   — strongly implied by what is seen (sauce under toppings, a
+ *              chutney's stain beside its bowl).
+ *   inferred — structurally certain but hidden (oil in the gravy, butter on
+ *              toast under the eggs).
+ *
+ * Optional so older payloads still validate; downstream code treats absence as
+ * 'visible' — the historical default before this field existed.
+ */
+export const VisibilityZ = z.enum(['visible', 'likely', 'inferred'])
+export type Visibility = z.infer<typeof VisibilityZ>
+
+/**
+ * The model's honest mass RANGE for an item, when the photo supports one, and
+ * null when it cannot responsibly bound it. Sits ALONGSIDE
+ * model_gram_estimate — never instead of it: the estimate stays the single
+ * best point estimate the reconciliation ladder consumes, while the range is
+ * honesty made structural. A whole unscaled pizza shot from above is exactly
+ * the case this exists for; a fake-precise "500 g" with no range is the
+ * failure mode this field makes impossible to hide.
+ */
+export const GramRangeZ = z
+  .object({
+    min_g: z.number().positive(),
+    max_g: z.number().positive(),
+  })
+  .nullable()
+export type GramRange = z.infer<typeof GramRangeZ>
+
+/**
  * `small` | `medium` | `large` | `count:N`.
  *
  * Size words are relative to a normal single serving OF THIS SPECIFIC FOOD — a
@@ -198,6 +243,20 @@ export const ItemZ = z.object({
    * Structural violations still fail the payload. Value-range violations do not.
    */
   model_gram_estimate: z.number().finite().nullable(),
+  /**
+   * The model's honest min→max mass when the photo supports a range; null when
+   * it cannot responsibly bound one. See GramRangeZ. The estimate above stays
+   * the number the ladder consumes — this field is the HONESTY AROUND it, and
+   * a model that cannot bound the mass should say so here instead of
+   * pretending portion_confidence is high.
+   */
+  model_gram_range: GramRangeZ.optional(),
+  /**
+   * How the item earned its place in the output — seen, implied, or structurally
+   * certain but hidden. Absent means 'visible' (the pre-1.1 default). Hidden
+   * fat must be 'inferred' AND carry its own stated_assumptions entry.
+   */
+  visibility: VisibilityZ.optional(),
   identification_confidence: z.number().min(0).max(1),
   /**
    * Probability the mass estimate is within ~20% of truth. Reported SEPARATELY
@@ -245,6 +304,46 @@ export const MealOverallZ = z.object({
 })
 export type MealOverall = z.infer<typeof MealOverallZ>
 
+/**
+ * The whole-frame meal identity — what a person would answer if asked "what is
+ * this?" while looking at the photo, not at one bowl of it.
+ *
+ * WHY THIS EXISTS: before 1.1, the only meal-level identity a result screen
+ * could render was `items[0].name`, which titled an eight-bowl Indian thali
+ * "Chapati" and a Supreme pizza "Pizza dough". The scene is a DIFFERENT claim
+ * from any item, so it gets its own field, its own confidence, and one
+ * non-negotiable rule: for a multi-component scene the display_name names the
+ * SCENE ('Indian mixed thali'), never one component.
+ *
+ * Optional in Zod so pre-1.1 payloads keep validating; the OpenAI strict wire
+ * dialect marks every property required, which is fine because the 1.2 prompt
+ * makes the model always emit it.
+ */
+export const SceneZ = z.object({
+  /** The whole-frame class. Drives downstream question selection, not just UI. */
+  meal_type: z.enum([
+    'single_food',
+    'single_dish',
+    'composite_dish',
+    'mixed_plate',
+    'indian_thali',
+    'buffet',
+    'packaged_food',
+    'nutrition_label',
+    'barcode',
+    'receipt',
+    'unknown',
+  ]),
+  /**
+   * The SCENE-level meal identity, e.g. 'Indian mixed thali' or 'Supreme
+   * pizza'. NEVER one component's name for a multi-component scene.
+   */
+  display_name: z.string().min(1),
+  /** Probability the scene call itself is right. Separate from item confidences. */
+  confidence: z.number().min(0).max(1),
+})
+export type Scene = z.infer<typeof SceneZ>
+
 export const VisionPayloadZ = z.object({
   schema_version: z.literal(SCHEMA_VERSION),
   is_food: z.boolean(),
@@ -252,9 +351,13 @@ export const VisionPayloadZ = z.object({
   refusal_reason: z.string().nullable(),
   /**
    * One entry per distinct food or drink component across ALL photos. The same
-   * physical item seen from two angles is one entry, not two.
+   * physical item seen from two angles is one entry, not two. For multi-bowl
+   * scenes: one entry per distinct bowl, katori, dish or pile — a thali with
+   * eight bowls has at least eight entries.
    */
   items: z.array(ItemZ),
+  /** Whole-frame meal identity. Optional so pre-1.1 payloads still validate. */
+  scene: SceneZ.optional(),
   meal_overall: MealOverallZ,
 })
 export type VisionPayload = z.infer<typeof VisionPayloadZ>

@@ -9,6 +9,10 @@ import { CORRECTION_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * The Fix-Result correction call (QA Wave 4 god-file split).
+ *
+ * GATEWAY ROUTING: a custom base URL speaks the OpenAI-compatible dialect for
+ * EVERY provider (same rule as the scan path) — request built and response
+ * parsed with the openai transport. Native dialects only on official endpoints.
  */
 
 export async function runCorrectionIntent(
@@ -18,21 +22,23 @@ export async function runCorrectionIntent(
   // P2-3: this call used to have no timeout and no abort — a hung gateway
   // froze the Fix-Result flow forever while the caller awaited it.
   const timeoutMs = req.timeoutMs ?? CORRECTION_TIMEOUT_MS
+  // The wire dialect follows the base URL, not the provider label.
+  const dialect: ProviderId = req.baseUrl ? 'openai' : req.provider
   try {
     const credObj = await loadCredential(req.provider)
     if (!credObj || !credObj.value) {
       return { ok: false, error: { kind: 'key-invalid', message: `No credentials for ${req.provider}`, retryable: false } }
     }
 
-    const built = correctionRequestFor(req.provider, {
+    const built = correctionRequestFor(dialect, {
       baseUrl: req.baseUrl,
       credentialValue: credObj.value,
       model: req.model,
       systemPrompt: req.systemPrompt,
       userPrompt: req.userPrompt,
     })
-    // withBaseUrl rewrites ONLY OpenAI-prefixed URLs onto the reseller base;
-    // Anthropic/Gemini pass through untouched.
+    // On a gateway the built URL is already OpenAI-rooted, so withBaseUrl
+    // re-hosts it; native URLs (no base URL) pass through untouched.
     const url = withBaseUrl(built.url, req.baseUrl)
     const headers = built.headers
 
@@ -60,7 +66,7 @@ export async function runCorrectionIntent(
     }
 
     const text = await res.text()
-    if (!res.ok) return { ok: false, error: classify(res.status, text) }
+    if (!res.ok) return { ok: false, error: classify(res.status, text, { secret: credObj.value, model: req.model }) }
 
     let json: Record<string, any>
     try {
@@ -70,11 +76,11 @@ export async function runCorrectionIntent(
     }
 
     let rawResult = ''
-    if (req.provider === 'openai') {
+    if (dialect === 'openai') {
       rawResult = json.choices?.[0]?.message?.content
-    } else if (req.provider === 'google') {
+    } else if (dialect === 'google') {
       rawResult = json.candidates?.[0]?.content?.parts?.[0]?.text
-    } else if (req.provider === 'anthropic') {
+    } else if (dialect === 'anthropic') {
       rawResult = json.content?.[0]?.text
     }
 

@@ -18,7 +18,16 @@ import { ESTIMATE_TIMEOUT_MS, LOOKUP_TIMEOUT_MS } from '@nutai/prompt'
  * receipt transcription and the free-text exercise estimate. One request, one
  * JSON object fished out of the provider envelope defensively; validated by
  * the caller.
+ *
+ * GATEWAY ROUTING: with a custom base URL the request is BUILT and PARSED in
+ * the OpenAI dialect no matter which provider is named — the same rule as the
+ * scan path. Native builders/envelopes are used only on official endpoints.
  */
+
+/** The provider id whose WIRE SHAPE a call should use. A base URL means OpenAI dialect, always. */
+function wireDialect(provider: ProviderId, baseUrl?: string | null): ProviderId {
+  return baseUrl ? 'openai' : provider
+}
 
 async function postVisionJson(
   provider: ProviderId,
@@ -26,6 +35,7 @@ async function postVisionJson(
   fetchImpl: typeof fetch,
   timeoutMs: number,
   baseUrl?: string | null,
+  secret?: string,
 ): Promise<WebLookupOutcome> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -40,7 +50,7 @@ async function postVisionJson(
       signal: controller.signal,
     })
     const text = await res.text()
-    if (!res.ok) return { ok: false, error: classify(res.status, text) }
+    if (!res.ok) return { ok: false, error: classify(res.status, text, { secret }) }
 
     let j: Record<string, any>
     try {
@@ -78,7 +88,15 @@ export async function runLabelScan(
   timeoutMs = LOOKUP_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
-  return postVisionJson(provider, buildLabelScanRequest(provider, input, credential), fetchImpl, timeoutMs, baseUrl)
+  const dialect = wireDialect(provider, baseUrl)
+  return postVisionJson(
+    dialect,
+    buildLabelScanRequest(dialect, input, credential),
+    fetchImpl,
+    timeoutMs,
+    baseUrl,
+    credential.value,
+  )
 }
 
 /**
@@ -92,13 +110,14 @@ export async function runExerciseEstimate(
   fetchImpl: typeof fetch = fetch,
   timeoutMs = ESTIMATE_TIMEOUT_MS,
 ): Promise<WebLookupOutcome> {
+  const dialect = wireDialect(provider, input.baseUrl)
   const built = buildTextJsonRequest(
-    provider,
+    dialect,
     { model: input.model, instruction: buildExerciseEstimateInstruction(input.description, input.weightKg) },
     credential,
     EXERCISE_ESTIMATE_PROMPT_VERSION,
   )
-  return postVisionJson(provider, built, fetchImpl, timeoutMs, input.baseUrl)
+  return postVisionJson(dialect, built, fetchImpl, timeoutMs, input.baseUrl, credential.value)
 }
 
 /** Receipt transcription: same transport, different instruction and validator. */
@@ -110,7 +129,15 @@ export async function runReceiptScan(
   timeoutMs = LOOKUP_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
-  return postVisionJson(provider, buildReceiptScanRequest(provider, input, credential), fetchImpl, timeoutMs, baseUrl)
+  const dialect = wireDialect(provider, baseUrl)
+  return postVisionJson(
+    dialect,
+    buildReceiptScanRequest(dialect, input, credential),
+    fetchImpl,
+    timeoutMs,
+    baseUrl,
+    credential.value,
+  )
 }
 
 export { postVisionJson }

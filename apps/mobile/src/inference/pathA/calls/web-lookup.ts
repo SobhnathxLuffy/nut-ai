@@ -16,6 +16,14 @@ import { LOOKUP_TIMEOUT_MS } from '@nutai/prompt'
  * provider), so the JSON is fished out of prose defensively: last text block,
  * markdown fences stripped, outermost braces isolated. The caller validates
  * with WebLookupResultZ — this function only transports.
+ *
+ * GATEWAY ROUTING: the Responses API used here on the official OpenAI
+ * endpoint is proxied by virtually no reseller (aicredits, OpenRouter: 404),
+ * and the native Anthropic/Gemini lookup endpoints do not exist on a gateway
+ * at all. On a custom base URL the same instruction goes through PLAIN chat
+ * completions in the OpenAI dialect for EVERY provider — the model answers
+ * from what it reliably knows and is told to say found:false when unsure,
+ * which rescues major branded products without ever hallucinating a source.
  */
 export async function runWebLookup(
   provider: ProviderId,
@@ -25,13 +33,9 @@ export async function runWebLookup(
   timeoutMs = LOOKUP_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
-  // The OpenAI lookup rides the Responses API, which virtually no reseller
-  // proxies (aicredits, OpenRouter: 404). On a custom base URL the same
-  // instruction is sent through PLAIN chat completions instead (the reseller
-  // transport's fallback builder).
-  if (provider === 'openai' && !!baseUrl) {
+  if (baseUrl) {
     const built = openAiResellerLookupRequest({ ...input, credentialValue: credential.value })
-    return postVisionJson(provider, built, fetchImpl, timeoutMs, baseUrl)
+    return postVisionJson('openai', built, fetchImpl, timeoutMs, baseUrl, credential.value)
   }
 
   const built = buildWebLookupRequest(provider, input, credential)
@@ -48,7 +52,7 @@ export async function runWebLookup(
       signal: controller.signal,
     })
     const text = await res.text()
-    if (!res.ok) return { ok: false, error: classify(res.status, text) }
+    if (!res.ok) return { ok: false, error: classify(res.status, text, { secret: credential.value }) }
 
     let j: Record<string, any>
     try {

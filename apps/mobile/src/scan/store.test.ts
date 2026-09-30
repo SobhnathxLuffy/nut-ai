@@ -5,6 +5,7 @@ import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { ScanResult } from '@nutai/pipeline'
 import {
   applyWebOption,
+  answerQuestion,
   beginScan,
   currentScanEpoch,
   addRow,
@@ -16,6 +17,7 @@ import {
   setPortionEaten,
   setWebLookup,
 } from './store'
+import { QUESTION_BANK, type SelectedQuestion } from '@nutai/repair'
 
 vi.mock('expo-file-system', () => ({
   deleteAsync: vi.fn(() => Promise.resolve()),
@@ -139,6 +141,32 @@ describe('setPortionEaten', () => {
 
     setPortionEaten(7)
     expect(readyPhase().result.meal.portionEatenFraction).toBe(1)
+  })
+})
+
+describe('answerQuestion — thali_scope (scene-aware meal portion)', () => {
+  function chipFor(id: string): SelectedQuestion {
+    const question = QUESTION_BANK.find((b) => b.id === id)!
+    return {
+      question,
+      text: question.text,
+      expectedValue: 0,
+      state: 'highlighted',
+      appliedDefault: null,
+      disclosure: question.defaultDisclosure,
+    }
+  }
+
+  it('maps the fraction options onto the meal-level portion, like portion_eaten', () => {
+    readyWith([row()])
+    answerQuestion(chipFor('thali_scope'), '0.25')
+    expect(readyPhase().result.meal.portionEatenFraction).toBe(0.25)
+  })
+
+  it('maps "I\'ll select items" to half the platter — edits follow, never a fast', () => {
+    readyWith([row()])
+    answerQuestion(chipFor('thali_scope'), 'select_items')
+    expect(readyPhase().result.meal.portionEatenFraction).toBe(0.5)
   })
 })
 

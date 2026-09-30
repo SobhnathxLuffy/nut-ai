@@ -82,6 +82,11 @@ export class DishKBSource implements NutritionSource {
       // the search row — the same computation resolveById performs. Draft
       // rows stay energyless and low-confidence on purpose.
       const resolved = deterministic ? await this.resolveById(r.foodId).catch(() => null) : null
+      // Task 2-c: deterministic rows now also expose the curated portion range
+      // to the scorer — portionPlausibility is one of the six signals, and a
+      // CURATED dish row that knows "one piece is 60-100 g" must not compete
+      // with a generic USDA row at equal plausibility blindness.
+      const hint = resolved?.portionHints?.[0]
       return {
         foodId: r.foodId,
         source: this.id,
@@ -95,6 +100,8 @@ export class DishKBSource implements NutritionSource {
         energyKcal: resolved?.energyKcal ?? null, // Draft rows: computed downstream or never.
         popularityRank: 100,
         completenessScore: deterministic ? 1.0 : 0,
+        typicalGramsMin: hint?.min ?? null,
+        typicalGramsMax: hint?.max ?? null,
         rawBm25: r.rawBm25,
       }
     }))
@@ -152,6 +159,23 @@ export class DishKBSource implements NutritionSource {
     // Normalizing to per-100g because standard resolved foods are per 100g.
     const multiplier = 100 / (calculated.servingSizeG || 100)
 
+    // Task 2-c: carry the dish's curated portion model onto the resolved food.
+    // This is the FIRST-WIRE point of the portionHints seam — the resolver
+    // exposes it as ResolvedFood.portionHints, the pipeline spreads it into the
+    // gram engine's ResolvedRow, and tier 1.5 (population prior) consumes it.
+    // The dynamic import keeps @nutai/indian-dishes lazy, matching the
+    // computeDishNutrition import above.
+    let portionHints: SourceResolvedFood['portionHints'] = undefined
+    try {
+      const { portionHintsForDish } = await import('@nutai/indian-dishes')
+      portionHints = portionHintsForDish({
+        canonicalName: row.canonical_name,
+        portionModel: dish.portionModel,
+      })
+    } catch {
+      portionHints = undefined // The KB number stands on its own; hints are additive.
+    }
+
     return {
       foodId: row.id,
       sourceId: row.id,
@@ -168,6 +192,7 @@ export class DishKBSource implements NutritionSource {
       sodiumMg: calculated.sodiumMg === null ? null : calculated.sodiumMg * multiplier,
       servingSizeG: calculated.servingSizeG || 100,
       servingDesc: `${calculated.servingSizeG || 100}g standard portion`,
+      ...(portionHints?.length ? { portionHints } : {}),
       license: 'proprietary',
       source: this.id
     }

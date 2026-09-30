@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Item } from '@nutai/core-schema'
 import {
+  countAnswerMultiplier,
   inferStructuralUncertainty,
+  isCountAmbiguous,
+  isWholeDishItem,
   MAX_QUESTIONS,
   QUESTION_BANK,
   recordAnswer,
@@ -9,6 +12,7 @@ import {
   selectMealQuestions,
   selectQuestions,
   shouldApplySilently,
+  wholeDishSizeMultiplier,
 } from './index.js'
 
 function item(over: Partial<Item> = {}): Item {
@@ -241,5 +245,140 @@ describe('the gram-disagreement question', () => {
   it('does not appear when the signals agreed', () => {
     const qs = selectQuestions({ item: stirFry })
     expect(qs.some((q) => q.question.id === 'gram_disagreement')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scene-aware triggers (schema 1.1 / prompt v1.2)
+// ---------------------------------------------------------------------------
+
+const pizza = item({
+  name: 'Pizza Margherita',
+  canonical_food_key: 'pizza, cheese, baked',
+  food_form: 'flat',
+  qualitative_size: 'medium',
+  model_gram_estimate: 450,
+  portion_confidence: 0.3,
+})
+
+describe('whole_dish_size — a whole unscaled pizza is not automatically 500 g', () => {
+  it('fires for a flat whole dish with no label to override the guess', () => {
+    const qs = selectQuestions({ item: pizza })
+    const size = qs.find((q) => q.question.id === 'whole_dish_size')
+    expect(size).toBeDefined()
+    expect(size?.state).toBe('highlighted')
+  })
+
+  it('renders the dish name so the copy reads naturally', () => {
+    const qs = selectQuestions({ item: pizza })
+    const size = qs.find((q) => q.question.id === 'whole_dish_size')
+    expect(size?.text).toBe('How large was the pizza margherita?')
+    expect(size?.text).not.toContain('{')
+  })
+
+  it('does not fire when a legible label already owns the number', () => {
+    const labeled = isWholeDishItem(item({ ...pizza, legible_label_text: 'Per serving 300 g' }))
+    expect(labeled).toBe(false)
+  })
+
+  it('does not fire for foods whose size is not diameter-bound', () => {
+    expect(isWholeDishItem(item())).toBe(false)
+  })
+
+  it('maps diameter answers through AREA scaling, never linear scaling', () => {
+    // πr²: a 12" pizza holds (12/10)² = 1.44× a 10" pizza, not 1.2×.
+    expect(wholeDishSizeMultiplier('10in')).toBe(1.0)
+    expect(wholeDishSizeMultiplier('12in')).toBeCloseTo(1.44, 5)
+    expect(wholeDishSizeMultiplier('14in')).toBeCloseTo(1.96, 5)
+    expect(wholeDishSizeMultiplier('16in')).toBeCloseTo(2.56, 5)
+  })
+
+  it('refuses to invent a multiplier for "I know the weight" — the user will type grams', () => {
+    expect(wholeDishSizeMultiplier('know_weight')).toBeNull()
+  })
+})
+
+describe('thali_scope — the meal-portion question in a thali eater\u2019s own vocabulary', () => {
+  const dal = item({
+    name: 'Dal',
+    canonical_food_key: 'dal, cooked',
+    food_form: 'liquid',
+    qualitative_size: 'medium',
+  })
+
+  it('replaces portion_eaten when the scene is a thali', () => {
+    const qs = selectQuestions({ item: dal, scene: { mealType: 'indian_thali' } })
+    expect(qs.some((q) => q.question.id === 'portion_eaten')).toBe(false)
+    const scope = qs.find((q) => q.question.id === 'thali_scope')
+    expect(scope).toBeDefined()
+    expect(scope?.state).toBe('highlighted')
+    expect(scope?.question.options.map((o) => o.label)).toEqual([
+      'Whole', 'About ¾', 'About ½', 'About ¼', "I'll select items",
+    ])
+  })
+
+  it('triggers for mixed_plate and buffet too', () => {
+    for (const mealType of ['mixed_plate', 'buffet']) {
+      const qs = selectQuestions({ item: dal, scene: { mealType } })
+      expect(qs.some((q) => q.question.id === 'thali_scope')).toBe(true)
+      expect(qs.some((q) => q.question.id === 'portion_eaten')).toBe(false)
+    }
+  })
+
+  it('keeps the ordinary portion question for composite dishes — one hand-held portion', () => {
+    const qs = selectQuestions({ item: dal, scene: { mealType: 'composite_dish' } })
+    expect(qs.some((q) => q.question.id === 'thali_scope')).toBe(false)
+    expect(qs.some((q) => q.question.id === 'portion_eaten')).toBe(true)
+  })
+
+  it('asks nothing scene-specific when there is no scene', () => {
+    const qs = selectQuestions({ item: dal })
+    expect(qs.some((q) => q.question.id === 'thali_scope')).toBe(false)
+    expect(qs.some((q) => q.question.id === 'portion_eaten')).toBe(true)
+  })
+
+  it('fires ONCE per meal no matter how many bowls carry the scene', () => {
+    const qs = selectMealQuestions([
+      { item: dal, scene: { mealType: 'indian_thali' } },
+      { item: { ...dal, name: 'Rice', canonical_food_key: 'rice, white, cooked' }, scene: { mealType: 'indian_thali' } },
+      { item: { ...dal, name: 'Paneer', canonical_food_key: 'paneer, curry' }, scene: { mealType: 'indian_thali' } },
+    ])
+    expect(qs.filter((q) => q.question.id === 'thali_scope')).toHaveLength(1)
+    // And the meal-level cap still holds with the scene question in play.
+    expect(qs.filter((q) => q.state === 'highlighted').length).toBeLessThanOrEqual(MAX_QUESTIONS)
+  })
+})
+
+describe('count_question — when the model\u2019s own count is not trustworthy', () => {
+  const samosas = item({
+    name: 'Samosas',
+    canonical_food_key: 'samosa, fried',
+    food_form: 'discrete',
+    qualitative_size: 'count:3',
+    portion_confidence: 0.4,
+  })
+
+  it('fires for a shaky count and renders the item name', () => {
+    const qs = selectQuestions({ item: samosas })
+    const count = qs.find((q) => q.question.id === 'count_question')
+    expect(count).toBeDefined()
+    expect(count?.state).toBe('highlighted')
+    expect(count?.text).toBe('How many Samosas did you eat?')
+  })
+
+  it('stays silent when the model trusts its count', () => {
+    expect(isCountAmbiguous(item({ ...samosas, portion_confidence: 0.9 }))).toBe(false)
+    expect(selectQuestions({ item: { ...samosas, portion_confidence: 0.9 } }).some((q) => q.question.id === 'count_question')).toBe(false)
+  })
+
+  it('maps answers to M/N grams multipliers against the counted baseline', () => {
+    // The estimate assumed 3; the user ate 2 -> 2/3 of the grams.
+    expect(countAnswerMultiplier('count:3', 2)).toBeCloseTo(2 / 3, 5)
+    // The estimate assumed 2; the user ate 4 -> double.
+    expect(countAnswerMultiplier('count:2', 4)).toBe(2)
+    // 4+ maps to 4 — the minimum the user asserted, never an invented midpoint.
+    expect(countAnswerMultiplier('count:4', 4)).toBe(1)
+    // A non-count item has no baseline to scale against.
+    expect(countAnswerMultiplier('medium', 2)).toBeNull()
   })
 })

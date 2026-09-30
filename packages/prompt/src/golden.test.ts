@@ -40,8 +40,10 @@ const ANTHROPIC_CRED = { kind: 'api_key' as const, value: 'test-key' }
 describe('golden: system prompt', () => {
   it('PROMPT_VERSION stays the pinned contract string', () => {
     // Intentional prompt version bumps MUST update this golden in the same
-    // commit — the version rides the scan ledger.
-    expect(PROMPT_VERSION).toBe('food-scan-v1.1.0')
+    // commit — the version rides the scan ledger. v1.2.0 = scene-aware scan
+    // contract: scene classification, per-item visibility, model_gram_range,
+    // strengthened Indian hidden-fat guidance.
+    expect(PROMPT_VERSION).toBe('food-scan-v1.2.0')
   })
 
   it('SYSTEM_PROMPT bytes are pinned (update the golden deliberately)', () => {
@@ -138,7 +140,7 @@ describe('golden: gemini scan request', () => {
  * reason in the commit message. Copy the digest from the failing assertion
  * message ("Received" line) into SYSTEM_PROMPT_GOLDEN_SHA256.
  */
-const SYSTEM_PROMPT_GOLDEN_SHA256 = '11c7ac4a27962a8d2ea3c28bac81b15d793b52c247a4dcfcb617bbbe32defc46'
+const SYSTEM_PROMPT_GOLDEN_SHA256 = '8daf62fa7f6f7f3fb8323a02c3d69f2227d2ef30b30c975fe33c5a2e0e560585'
 
 // P3-D3: computed from the current ASSISTANT_SYSTEM_PROMPT. Update in the
 // same commit as an intentional prompt edit and say why in the message.

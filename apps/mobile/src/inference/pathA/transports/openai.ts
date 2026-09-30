@@ -12,14 +12,31 @@ import { OPENAI_CHAT_URL } from '@nutai/prompt'
  * The extractors below accept both, always preferring chat-completions.
  */
 
+/**
+ * Chat message content arrives as a STRING on official OpenAI, but several
+ * OpenAI-compatible gateways return it as an ARRAY of typed parts — and some
+ * models emit multi-part answers. Join the text parts so every extractor
+ * downstream works on the same string.
+ */
+function messageText(content: unknown): string | null {
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((p) => (typeof p?.text === 'string' ? p.text : typeof p === 'string' ? p : ''))
+      .join('')
+    return joined || null
+  }
+  return null
+}
+
 /** Scan envelope: chat-completions message content. Usage is shared code. */
 export function openAiScanPayload(j: Record<string, any>): { text: unknown } | null {
-  return { text: j.choices?.[0]?.message?.content }
+  return { text: messageText(j.choices?.[0]?.message?.content) }
 }
 
 /** Vision/JSON one-shot envelope (label, receipt, web lookup, correction). */
 export function openAiVisionText(j: Record<string, any>): string | null {
-  return j.choices?.[0]?.message?.content ?? null
+  return messageText(j.choices?.[0]?.message?.content)
 }
 
 /**
@@ -28,7 +45,7 @@ export function openAiVisionText(j: Record<string, any>): string | null {
  */
 export function openAiLookupText(j: Record<string, any>): string | null {
   return (
-    j.choices?.[0]?.message?.content ??
+    messageText(j.choices?.[0]?.message?.content) ??
     (() => {
       const msg = (j.output ?? []).find((o: any) => o?.type === 'message')
       return msg?.content?.map((c: any) => c?.text ?? '').join('') ?? j.output_text ?? null

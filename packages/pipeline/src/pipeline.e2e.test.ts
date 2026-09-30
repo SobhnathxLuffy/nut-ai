@@ -305,3 +305,95 @@ describe('multi-item meals', () => {
     expect(r!.questions.filter((q) => q.state === 'highlighted').length).toBeLessThanOrEqual(2)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Scene-aware scan contract (schema 1.1)
+// ---------------------------------------------------------------------------
+
+describe('the scene-aware scan contract', () => {
+  const thaliScene = {
+    meal_type: 'indian_thali' as const,
+    display_name: 'Indian mixed thali',
+    confidence: 0.9,
+  }
+
+  it('exposes the whole-frame scene so the meal is titled by the SCENE, not items[0]', async () => {
+    const r = await runPipeline(
+      {
+        ...payload([
+          item({ name: 'Chapati', canonical_food_key: 'chapati, whole wheat' }),
+          item({ name: 'Dal', canonical_food_key: 'rice, white, cooked', food_form: 'piled' }),
+        ]),
+        scene: thaliScene,
+      },
+      deps(), foodDb,
+    )
+    expect(r!.scene).toEqual({ mealType: 'indian_thali', displayName: 'Indian mixed thali', confidence: 0.9 })
+    expect(r!.sceneDisplayName).toBe('Indian mixed thali')
+    // The point of the whole upgrade: the title must NOT be whichever bowl
+    // happened to come first — items[0].displayName is "Chapati".
+    expect(r!.items[0]!.row.displayName).toBe('Chapati')
+    expect(r!.sceneDisplayName).not.toBe(r!.items[0]!.row.displayName)
+  })
+
+  it('maps item visibility and gram ranges onto the rows, defaulting absence to visible', async () => {
+    const r = await runPipeline(
+      {
+        ...payload([
+          item({ visibility: 'inferred', model_gram_range: { min_g: 40, max_g: 80 } }),
+          item({ name: 'Dal', canonical_food_key: 'rice, white, cooked', food_form: 'piled', visibility: 'likely' }),
+          item({ name: 'Rice', canonical_food_key: 'rice, white, cooked', food_form: 'piled' }),
+        ]),
+        scene: { ...thaliScene, meal_type: 'mixed_plate' as const },
+      },
+      deps(), foodDb,
+    )
+    expect(r!.items[0]!.row.visibility).toBe('inferred')
+    expect(r!.items[0]!.row.portionRange).toEqual({ minG: 40, maxG: 80 })
+    expect(r!.items[1]!.row.visibility).toBe('likely')
+    // No range reported -> null on the row, never undefined drift.
+    expect(r!.items[1]!.row.portionRange).toBeNull()
+    // Absent visibility IS 'visible', decided by the pipeline, not the UI.
+    expect(r!.items[2]!.row.visibility).toBe('visible')
+  })
+
+  it('nulls a crossing range rather than surfacing min above max', async () => {
+    const r = await runPipeline(
+      { ...payload([item({ model_gram_range: { min_g: 500, max_g: 100 } })]) },
+      deps(), foodDb,
+    )
+    expect(r!.items[0]!.row.portionRange).toBeNull()
+  })
+
+  it('returns scene null for a payload without one — old fixtures unchanged', async () => {
+    const r = await runPipeline(payload([item()]), deps(), foodDb)
+    expect(r!.scene).toBeNull()
+    expect(r!.sceneDisplayName).toBeNull()
+    expect(r!.isFood).toBe(true)
+    expect(r!.items).toHaveLength(1)
+  })
+
+  it('asks the thali-scope question once, in the scene\u2019s vocabulary, not per bowl', async () => {
+    const thali = {
+      ...payload([
+        item({ name: 'Chapati', canonical_food_key: 'chapati, whole wheat' }),
+        item({ name: 'Dal', canonical_food_key: 'rice, white, cooked', food_form: 'piled' }),
+        item({ name: 'Paneer', canonical_food_key: 'rice, white, cooked', food_form: 'piled' }),
+      ]),
+      scene: thaliScene,
+    }
+    const r = await runPipeline(thali, deps(), foodDb)
+    const scope = r!.questions.filter((q) => q.question.id === 'thali_scope')
+    expect(scope).toHaveLength(1)
+    expect(scope[0]!.text).toBe('Did you eat the whole platter?')
+    // The per-item portion question is replaced, not doubled up — both would
+    // map to the same meal-level fraction.
+    expect(r!.questions.some((q) => q.question.id === 'portion_eaten')).toBe(false)
+  })
+
+  it('still asks the ordinary portion question when there is no scene', async () => {
+    const r = await runPipeline(payload([item()]), deps(), foodDb)
+    expect(r!.questions.some((q) => q.question.id === 'portion_eaten')).toBe(true)
+    expect(r!.questions.some((q) => q.question.id === 'thali_scope')).toBe(false)
+  })
+})

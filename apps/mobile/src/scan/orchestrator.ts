@@ -303,6 +303,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
 
     let result: ScanResult | null = null
+    let pipelineError: unknown = null
     try {
       result = await runPipeline(
         outcome.value.raw,
@@ -317,12 +318,31 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
         dbs.foodDb,
       )
     } catch (err) {
-      console.error('scan pipeline failed', err)
+      pipelineError = err
       result = null
     }
 
     if (stale()) return
     if (!result) {
+      // A thrown pipeline error used to be swallowed SILENTLY and then reported
+      // with the same copy as an unusable payload — the user's live-reported
+      // failure path, with zero diagnosis in either the UI or the logs. Now:
+      // the short reason rides the message (bounded, so a giant stack-string
+      // cannot flood the failure screen), and the full error plus the raw
+      // model answer are warned together exactly once for post-hoc debugging.
+      if (pipelineError != null) {
+        const reason =
+          pipelineError instanceof Error ? pipelineError.message : String(pipelineError)
+        console.warn('[scan] pipeline could not use the model answer', pipelineError, outcome.value.raw)
+        setPhase({
+          kind: 'failed',
+          photoUri,
+          message: `The model's answer could not be used (${reason.trim().slice(0, 120) || 'unexpected shape'}). Retrying may help.`,
+          canRetry: true,
+          failureKind: 'schema-violation',
+        })
+        return
+      }
       setPhase({
         kind: 'failed',
         photoUri,
@@ -556,6 +576,11 @@ function readyFromRows(
     questions: [],
     clampFlags: [],
     zeroHitCount: 0,
+    // Barcode/label/receipt rows have no vision scene — the package in hand IS
+    // the identity. Null (not undefined) so every ScanResult from this module
+    // carries a definitive scene value.
+    scene: null,
+    sceneDisplayName: null,
   }
   setPhase({
     kind: 'ready',

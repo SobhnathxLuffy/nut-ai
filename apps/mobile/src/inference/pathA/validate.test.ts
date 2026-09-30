@@ -120,6 +120,53 @@ describe('other providers', () => {
   })
 })
 
+describe('reseller gateway validation — EVERY provider', () => {
+  const BASE = 'https://aicredits.in/v1'
+
+  it('google + base URL probes the GATEWAY (models/{id} then chat fallback), never generativelanguage', async () => {
+    const { calls, impl } = scripted([
+      { status: 404, body: '404 page not found' },
+      { status: 200, body: '{"choices":[]}' },
+    ])
+    const res = await validateCredential('google', 'gemini-2.5-flash', { kind: 'api_key', value: 'sk-live-x' }, impl, 15_000, BASE)
+
+    expect(res.ok).toBe(true)
+    expect(calls.every((c) => !c.url.includes('generativelanguage.googleapis.com'))).toBe(true)
+    expect(calls[0]!.url).toBe(`${BASE}/models/gemini-2.5-flash`)
+    expect(calls[0]!.headers['authorization']).toBe('Bearer sk-live-x')
+    // The 1-token chat probe is the endpoint scans actually hit.
+    expect(calls[1]!.url).toBe(`${BASE}/chat/completions`)
+    expect((calls[1]!.body as any).model).toBe('gemini-2.5-flash')
+  })
+
+  it('anthropic + base URL probes the gateway with Bearer — no native x-api-key attempt', async () => {
+    const { calls, impl } = scripted([{ status: 200 }])
+    const res = await validateCredential('anthropic', 'claude-haiku-4-5-20251001', { kind: 'api_key', value: 'sk-live-x' }, impl, 15_000, BASE)
+
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.usedShape).toBe('bearer')
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe(`${BASE}/models/claude-haiku-4-5-20251001`)
+    expect(calls.every((c) => !c.url.includes('api.anthropic.com'))).toBe(true)
+  })
+
+  it('a gateway 400 on BOTH routes keeps its detail with status + body, key-free', async () => {
+    const { impl } = scripted([
+      { status: 404, body: '404 page not found' },
+      { status: 400, body: '{"error":{"message":"model not found"}}' },
+    ])
+    const res = await validateCredential('google', 'gemini-2.5-flash', { kind: 'api_key', value: 'sk-live-x' }, impl, 15_000, BASE)
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.kind).toBe('error-retryable')
+      expect(res.detail).toContain('HTTP 400')
+      expect(res.detail).toContain('model not found')
+      expect(res.detail).not.toContain('sk-live-x')
+    }
+  })
+})
+
 describe('openai reseller base URLs', () => {
   const BASE = 'https://aicredits.in/v1'
 

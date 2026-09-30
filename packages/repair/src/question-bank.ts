@@ -12,6 +12,11 @@ import type { Item, UncertaintyReason } from '@nutai/core-schema'
  * because hidden oil is the single most over-determined complaint in the entire
  * research corpus: five independent sources converging near-verbatim.
  *
+ * Ranks 12-14 extend ranks 1-2's multiplicative class with the scene-aware scan
+ * contract (schema 1.1): whole-dish size, thali scope and countable-portion
+ * questions. Their rank numbers are bank documentation only — selection order is
+ * the `multiplicative` flag plus expected value, never this integer.
+ *
  * THE BANK-WIDE RULE: every silent default is disclosed inline on the result card,
  * never hidden. That satisfies "ask when unsure" and "minimize the cost of poor
  * guesses" simultaneously, by making every guess auditable and one-tap correctable
@@ -224,7 +229,169 @@ export const QUESTION_BANK: readonly BankQuestion[] = [
     defaultDisclosure: 'Assumed a water base with no add-ins',
     reasons: ['shake_recipe_unknown'],
   },
+  {
+    // Co-rank-1 with portion_eaten: it IS the meal-portion question for multi-bowl
+    // scenes, with copy that matches how a thali eater actually reasons. The two
+    // never fire for the same scan — a thali-like scene suppresses portion_eaten
+    // (see selectQuestions), so the meal gets one portion chip, not two.
+    rank: 12,
+    id: 'thali_scope',
+    text: 'Did you eat the whole platter?',
+    // A mixed platter runs ~800-1,200 kcal; whole vs half is the same class of
+    // swing as portion_eaten on a large meal, rounded generously.
+    expectedSwingKcal: 400,
+    multiplicative: true,
+    options: [
+      { label: 'Whole', value: '1.0' },
+      { label: 'About ¾', value: '0.75' },
+      { label: 'About ½', value: '0.5' },
+      { label: 'About ¼', value: '0.25' },
+      // Applied as 0.5 with a visible disclosure: the user is heading into
+      // per-item edits, so the assumption is the middle value — never zero,
+      // because "I'll select items" still means SOME of it was eaten.
+      { label: "I'll select items", value: 'select_items' },
+    ],
+    silentDefault: '1.0',
+    defaultDisclosure: 'Assuming you ate the whole platter',
+    reasons: ['none'],
+  },
+  {
+    rank: 13,
+    id: 'whole_dish_size',
+    // {name} is filled with the item's name at render time (same mechanism as
+    // gram_disagreement's {low}/{high}), so a pizza reads "How large was the
+    // pizza?" per the scene contract's worked example.
+    text: 'How large was the {name}?',
+    // A whole unscaled pizza spans ~250 g (10") to ~700 g+ (16"); at ~2.7
+    // kcal/g of cheese-dough-fats, the ends differ by well over 1,000 kcal —
+    // but a CENTRAL misread (12" guessed as 14") lands near this swing.
+    expectedSwingKcal: 300,
+    multiplicative: true,
+    options: [
+      { label: '10"', value: '10in' },
+      { label: '12"', value: '12in' },
+      { label: '14"', value: '14in' },
+      { label: '16"', value: '16in' },
+      { label: 'I know the weight', value: 'know_weight' },
+    ],
+    // The neutral default keeps the model's estimate untouched (multiplier 1.0,
+    // the 10" baseline) — we never silently RESCALE a dish, we only disclose.
+    silentDefault: '10in',
+    defaultDisclosure: 'Assumed the estimate fits a 10" base — tap to rescale',
+    reasons: ['container_size_no_reference'],
+  },
+  {
+    rank: 14,
+    id: 'count_question',
+    // {name} filled at render time. Fires only when the model counted (count:N)
+    // but its own portion_confidence says the count is shaky.
+    text: 'How many {name}s did you eat?',
+    // Typical fried/baked snack unit ~100-150 kcal; being off by one is this
+    // swing. Counting is the model's most reliable skill, so this only fires
+    // when the model itself flagged low portion confidence.
+    expectedSwingKcal: 120,
+    multiplicative: true,
+    options: [
+      { label: '1', value: '1' },
+      { label: '2', value: '2' },
+      { label: '3', value: '3' },
+      { label: '4+', value: '4plus' },
+    ],
+    silentDefault: 'as_counted',
+    defaultDisclosure: 'Used the counted amount',
+    reasons: ['serving_count_ambiguous'],
+  },
 ]
+
+/**
+ * Scene types where the meal is MANY dishes at once. The result screen titles
+ * these from the scene's own display_name ("Indian mixed thali"), never from
+ * items[0], and the repair layer asks the scene-level scope question instead of
+ * the per-item portion question.
+ */
+export const MULTI_COMPONENT_SCENE_TYPES: ReadonlySet<string> = new Set([
+  'mixed_plate',
+  'indian_thali',
+  'buffet',
+  'composite_dish',
+])
+
+/**
+ * The narrower set that triggers thali_scope: communal platters where "did you
+ * eat the whole platter?" is the natural portion question. composite_dish (a
+ * burger, a wrap) is multi-component for the TITLE but keeps the ordinary
+ * portion_eaten question, because a composite is one hand-held portion.
+ */
+export const THALI_LIKE_SCENE_TYPES: ReadonlySet<string> = new Set([
+  'indian_thali',
+  'mixed_plate',
+  'buffet',
+])
+
+export function isThaliLikeScene(mealType: string | null | undefined): boolean {
+  return mealType != null && THALI_LIKE_SCENE_TYPES.has(mealType)
+}
+
+/** Whole dishes whose size the camera cannot see: diameter, not depth. */
+export const WHOLE_DISH_ITEM = /\b(pizza|cake|pie|tart|quiche|watermelon)\b/i
+
+const COUNT_SIZE = /^count:(\d+(?:\.\d+)?)$/
+
+/**
+ * The whole_dish_size trigger: a named whole dish whose mass hinges on an
+ * unseen diameter, with no printed label to override the guess. Flat forms
+ * (pizza, quiche) and counted wholes (one cake) both qualify; a legible label
+ * means Tier-0 arithmetic already owns the number and no question is asked.
+ */
+export function isWholeDishItem(item: Item): boolean {
+  if (item.legible_label_text != null) return false
+  if (!WHOLE_DISH_ITEM.test(item.name)) return false
+  return item.food_form === 'flat' || COUNT_SIZE.test(item.qualitative_size)
+}
+
+/**
+ * The count_question trigger: the model counted (count:N) but its own
+ * portion_confidence says the count is shaky. Counting is reliable; when the
+ * model does not trust its own count, nobody should.
+ */
+export function isCountAmbiguous(item: Item): boolean {
+  return COUNT_SIZE.test(item.qualitative_size) && item.portion_confidence < 0.6
+}
+
+/**
+ * Area scaling for whole_dish_size answers, with the 10" option as the 1.0
+ * baseline the model's estimate is presumed to describe. Pie area is πr², so a
+ * 12" pizza holds (12/10)² = 1.44× a 10" pizza's mass — NOT 1.2×. These are
+ * multipliers on the item's estimated grams; the per-gram nutrition stays
+ * whatever the resolved database row says (deterministic code owns numbers).
+ */
+export const WHOLE_DISH_SIZE_MULTIPLIERS: Readonly<Record<string, number>> = {
+  '10in': 1.0,
+  '12in': 1.44,
+  '14in': 1.96,
+  '16in': 2.56,
+}
+
+/**
+ * The grams multiplier for a whole_dish_size answer. 'know_weight' (the user
+ * will type grams) and any unknown value map to null — never to a guessed 1.0,
+ * because "unknown how to apply" and "keep the estimate" are different answers.
+ */
+export function wholeDishSizeMultiplier(optionValue: string): number | null {
+  return WHOLE_DISH_SIZE_MULTIPLIERS[optionValue] ?? null
+}
+
+/**
+ * The grams multiplier for a count_question answer: the user ate M of the N
+ * units the estimate assumed, so grams scale by M/N. '4plus' is passed as 4 —
+ * the minimum the user asserted, never an invented midpoint. Returns null when
+ * the item's size is not a count (nothing to scale against).
+ */
+export function countAnswerMultiplier(qualitativeSize: string, answerCount: number): number | null {
+  const n = COUNT_SIZE.exec(qualitativeSize)
+  if (n == null || answerCount <= 0) return null
+  return answerCount / Number(n[1])
+}
 
 export function questionByReason(reason: UncertaintyReason): BankQuestion | null {
   return QUESTION_BANK.find((q) => q.reasons.includes(reason)) ?? null

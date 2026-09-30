@@ -1,5 +1,5 @@
 import { router } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult, MacroTotals, IngredientRow, CorrectionIntent } from '@nutai/core-schema'
 import { CorrectionIntentZ } from '@nutai/core-schema'
+import type { Band } from '@nutai/confidence'
 import type { ScoredCandidate } from '@nutai/resolver'
 import { loadFood, resolveByText } from '@nutai/resolver'
 import { buildCorrectionPrompt, cheapestModel, type ProviderId } from '@nutai/prompt'
@@ -24,6 +25,17 @@ import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
 import { describeCorrectionOperation, rowsNameOf } from '../src/data/correction-describe'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
+import {
+  estimateProvenanceLabel,
+  formatInt,
+  isWideTier,
+  likelyRangeLabel,
+  mealTitleFor,
+  portionRangeFor,
+  quickSetGramsFor,
+  roundForUncertainty,
+  sceneCaptionFor,
+} from '../src/scan/review'
 import { describeActiveModel } from '../src/inference/active-model'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { isQuickEligible } from '../src/scan/quick-mode'
@@ -101,6 +113,18 @@ export default function Result() {
   const insets = useSafeAreaInsets()
   const phase = useScan()
   const [expandedBand, setExpandedBand] = useState(false)
+  // Task 2-d: the per-ingredient range chips. The meal-level chip above keeps
+  // its own `expandedBand`; each ROW tracks expansion independently here so a
+  // row's chip can finally be tapped (it used to render with onPress undefined
+  // and a permanent "tap for range" label — a dead control on the product's
+  // most important screen). A Set, not a single id: two rows' ranges can be
+  // open at once for comparing, and toggling one never touches the others.
+  const [expandedRows, setExpandedRows] = useState<ReadonlySet<string>>(() => new Set())
+  // Anchors the DERIVED gram range (grams × (1 ± halfPct)) at first expansion.
+  // Without this, tapping [min] would re-center the range on min and every
+  // further tap would ratchet the estimate downward. Rows with the model's own
+  // portionRange never consult this. Screen-lifetime only, like the phase.
+  const bandAnchorRef = useRef<Map<string, number>>(new Map())
   const [logging, setLogging] = useState(false)
   // P1-8: a failed DB write must say so — a silent catch here let the app's
   // most important write no-op without a word (or double-log on re-scan).
@@ -127,6 +151,20 @@ export default function Result() {
       if (!(rowId in d)) return d
       const next = { ...d }
       delete next[rowId]
+      return next
+    })
+  }
+
+  /** Task 2-d: expand/collapse one row's range panel; freeze its anchor on first open. */
+  const toggleRowBand = (rowId: string, currentGrams: number) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(rowId)) {
+        next.delete(rowId)
+      } else {
+        next.add(rowId)
+        if (!bandAnchorRef.current.has(rowId)) bandAnchorRef.current.set(rowId, currentGrams)
+      }
       return next
     })
   }
@@ -200,6 +238,16 @@ export default function Result() {
   const quickEligible = isQuickEligible(result)
   const highlighted = result.questions.filter((q) => q.state === 'highlighted')
   const preAnswered = result.questions.filter((q) => q.state === 'pre_answered')
+  // Task 2-d: scene-aware title + caption, uncertainty-honest hero, and the
+  // ONE meal-level lookup-failure notice (the old per-row failure banners
+  // repeated the same sentence under every unmatched ingredient).
+  const mealTitle = mealTitleFor(result)
+  const sceneCaption = sceneCaptionFor(result)
+  const heroKcal = roundForUncertainty(result.totals.kcal, result.mealBand.tier)
+  const showLikelyRange = isWideTier(result.mealBand.tier)
+  const failedLookupRowIds = Object.entries(phase.webLookups)
+    .filter(([, s]) => s.status === 'failed')
+    .map(([id]) => id)
 
   function logNow() {
     if (logging) return
@@ -253,8 +301,13 @@ export default function Result() {
             <Text style={[type.body, { color: theme.textMuted }]}>Discard</Text>
           </Pressable>
           <Text style={[type.title, { color: theme.text }]}>
-            {result.items[0]?.row.displayName ?? 'Your meal'}
+            {mealTitle}
           </Text>
+          {sceneCaption ? (
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+              {sceneCaption}
+            </Text>
+          ) : null}
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
             Quick result — every ingredient matched the database with high confidence, nothing needs a check.
           </Text>
@@ -265,8 +318,15 @@ export default function Result() {
           ) : null}
 
           <View style={{ marginTop: space.lg }}>
-            <Text style={[type.hero, { color: theme.text }]}>{result.totals.kcal}</Text>
+            <Text style={[type.hero, { color: theme.text }]}>{heroKcal}</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
+            {showLikelyRange ? (
+              // Task 2-d: a wide band may not claim a precise integer — the
+              // measured range travels with the ≈ anchor, in the same view.
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+                {likelyRangeLabel(result.totals.kcal, result.mealBand)}
+              </Text>
+            ) : null}
 
             <View style={{ marginTop: space.md }}>
               <ConfidenceChip
@@ -339,8 +399,13 @@ export default function Result() {
           <Text style={[type.body, { color: theme.textMuted }]}>Discard</Text>
         </Pressable>
         <Text style={[type.title, { color: theme.text }]}>
-          {result.items[0]?.row.displayName ?? 'Your meal'}
+          {mealTitle}
         </Text>
+        {sceneCaption ? (
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+            {sceneCaption}
+          </Text>
+        ) : null}
 
         {reviewMode === 'quick' && !quickEligible && (
           <View style={[styles.quickNotice, { backgroundColor: theme.uncertainBg }]}>
@@ -364,10 +429,18 @@ export default function Result() {
           </Text>
         ) : null}
 
-        {/* The point estimate leads. The band qualifies it — it never replaces it. */}
+        {/* The point estimate leads. The band qualifies it — it never replaces it.
+            Task 2-d: on a wide band the hero reads "≈ 1,400" and carries the
+            measured range right under it — a precise-looking integer would be
+            the exact fake certainty this screen exists to prevent. */}
         <View style={{ marginTop: space.lg }}>
-          <Text style={[type.hero, { color: theme.text }]}>{result.totals.kcal}</Text>
+          <Text style={[type.hero, { color: theme.text }]}>{heroKcal}</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
+          {showLikelyRange ? (
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+              {likelyRangeLabel(result.totals.kcal, result.mealBand)}
+            </Text>
+          ) : null}
 
           <View style={{ marginTop: space.md }}>
             <ConfidenceChip
@@ -433,6 +506,12 @@ export default function Result() {
         {result.meal.ingredients.map((row) => {
           const item = result.items.find((i) => i.row.id === row.id)
           const lookup = phase.webLookups[row.id]
+          const lookupFailed = lookup?.status === 'failed'
+          // Task 2-d: "Confirmed" once the user owns the quantity (typed or
+          // quick-set grams, or a confirmed assumption); "AI ESTIMATE" only
+          // while the number is still the model's own. Web-sourced rows keep
+          // their citation — the per-100 g data it cites did not change.
+          const provenance = estimateProvenanceLabel(row)
           return (
             <View key={row.id}>
               <View style={[styles.row, { borderColor: theme.border }]}>
@@ -446,10 +525,41 @@ export default function Result() {
                     <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
                       {row.sourceAttribution}
                     </Text>
-                  ) : row.isEstimate ? (
-                    <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>AI ESTIMATE</Text>
+                  ) : provenance ? (
+                    <Text
+                      style={[
+                        type.micro,
+                        { color: provenance.tone === 'positive' ? theme.affirm : theme.uncertain, marginTop: 2 },
+                      ]}
+                    >
+                      {provenance.label}
+                    </Text>
+                  ) : lookupFailed ? (
+                    // Task 2-d: the lookup failed on a row that is NOT a bare AI
+                    // estimate (e.g. a branded item that matched the corpus), so
+                    // nothing above already says the number is unverified. Rows
+                    // showing AI ESTIMATE deliberately do NOT get this suffix —
+                    // the amber badge already carries the whole message.
+                    <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>
+                      ⚠ Estimated
+                    </Text>
                   ) : null}
-                  {item && <ConfidenceChip value={(row.nutrientSnapshot.kcal * row.grams) / 100} band={item.band} />}
+                  {item && (
+                    <ConfidenceChip
+                      value={(row.nutrientSnapshot.kcal * row.grams) / 100}
+                      band={item.band}
+                      expanded={expandedRows.has(row.id)}
+                      onPress={() => toggleRowBand(row.id, row.grams)}
+                    />
+                  )}
+                  {item && expandedRows.has(row.id) ? (
+                    <RowBandControls
+                      row={row}
+                      band={item.band}
+                      anchorGrams={bandAnchorRef.current.get(row.id) ?? row.grams}
+                      onSetGrams={(g) => editGrams(row.id, g)}
+                    />
+                  ) : null}
                 </View>
 
                 <TextInput
@@ -482,6 +592,23 @@ export default function Result() {
             </View>
           )
         })}
+
+        {/* Task 2-d: ONE meal-level notice for any failed web lookups. The old
+            per-row failure banner repeated the same two sentences under every
+            unmatched ingredient — N identical alarms, zero added information.
+            The per-row residue is the provenance line above. */}
+        {failedLookupRowIds.length > 0 ? (
+          <View
+            accessibilityRole="alert"
+            accessibilityLabel="Some ingredients could not be matched to an online source. Their nutrition stays estimated."
+            style={[styles.lookupQuiet, { backgroundColor: theme.uncertainBg, marginTop: space.md }]}
+          >
+            <Icon name="close" size={14} color={theme.uncertain} />
+            <Text style={[type.caption, { color: theme.text, flex: 1, lineHeight: 19 }]}>
+              Some ingredients couldn't be matched to an online source — their nutrition stays estimated.
+            </Text>
+          </View>
+        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -1024,25 +1151,14 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
     )
   }
   if (state.status === 'failed') {
-    // P2-14 lookup-failure row: a failed lookup used to vanish silently —
-    // say what happened and what still holds, instead of nothing.
-    return (
-      <View
-        accessibilityRole="alert"
-        accessibilityLabel="Web lookup failed. The estimate above stays unchanged."
-        style={[styles.lookupQuiet, { backgroundColor: theme.uncertainBg, marginTop: space.sm }]}
-      >
-        <Icon name="close" size={14} color={theme.uncertain} />
-        <View style={{ flex: 1 }}>
-          <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>
-            Web lookup failed — the estimate above stays unchanged.
-          </Text>
-          <Text style={[type.micro, { color: theme.textMuted, marginTop: 1 }]}>
-            Use Fix result to re-run the scan, or edit the grams directly.
-          </Text>
-        </View>
-      </View>
-    )
+    // P2-14 + Task 2-d: a failed lookup used to vanish silently; the fix first
+    // rendered this banner per row — which repeated the same two sentences
+    // under EVERY unmatched ingredient. The failure is now stated ONCE, in a
+    // meal-level notice above (see result's failedLookupRowIds block), and
+    // each failed row keeps only its provenance residue: the amber "AI
+    // ESTIMATE" badge, or a tiny "⚠ Estimated" when the row is not a bare
+    // estimate. Nothing is hidden — it is just not repeated N times.
+    return null
   }
 
   const result: WebLookupResult = state.result
@@ -1123,6 +1239,56 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
   )
 }
 
+/**
+ * Task 2-d: the expanded panel under a row's range chip.
+ *
+ * Shows the honest gram range (the model's own portionRange when the scan
+ * carried one, else the band-derived range around the anchored estimate), the
+ * band's reasons, and the three quick controls. Every control routes through
+ * editGrams — the same primitive as the grams field — so the edit recomputes
+ * locally, tags the row user-edited, and flips its provenance to "Confirmed".
+ * `typical` is the anchored estimate, so it doubles as "put it back".
+ */
+function RowBandControls({
+  row,
+  band,
+  anchorGrams,
+  onSetGrams,
+}: {
+  row: IngredientRow
+  band: Band
+  anchorGrams: number
+  onSetGrams: (grams: number) => void
+}) {
+  const theme = useTheme()
+  const range = portionRangeFor(row, band, anchorGrams)
+  const quick = quickSetGramsFor(row, band, anchorGrams)
+  return (
+    <View style={{ marginTop: space.sm, gap: space.xs }}>
+      <Text style={[type.caption, { color: theme.textMuted }]}>
+        Likely {formatInt(range.minG)}–{formatInt(range.maxG)} g
+      </Text>
+      <ConfidenceReasons band={band} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs }}>
+        {(['min', 'typical', 'max'] as const).map((k) => (
+          <Pressable
+            key={k}
+            accessibilityRole="button"
+            accessibilityLabel={`Set ${row.displayName} to ${Math.round(quick[k])} grams`}
+            onPress={() => onSetGrams(quick[k])}
+            hitSlop={space.xs}
+            style={[styles.quickSet, { borderColor: theme.border }]}
+          >
+            <Text style={[type.label, { color: theme.text }]}>
+              {k} · {formatInt(quick[k])} g
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  )
+}
+
 function Macro({
   label,
   value,
@@ -1195,6 +1361,17 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     minHeight: 44,
+    justifyContent: 'center',
+  },
+  // Task 2-d: the [min] [typical] [max] quick controls. Full tap target — a
+  // control that sets 300 g on a child's dinner earns the same 44 pt the
+  // primary buttons get.
+  quickSet: {
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    minHeight: MIN_TAP_TARGET,
     justifyContent: 'center',
   },
   row: {

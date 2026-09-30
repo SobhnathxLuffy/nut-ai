@@ -27,6 +27,10 @@ export default defineConfig({
       '@nutai/nutrition-sources': pkg('nutrition-sources'),
       '@nutai/recipe-engine': pkg('recipe-engine'),
       '@nutai/indian-dishes': pkg('indian-dishes'),
+      // Task 2-c: new portion-priors package (population household portions).
+      // Needed so resolver/gram-engine/nutrition-sources resolve it from SOURCE
+      // in tests without a build step or a node_modules link.
+      '@nutai/portion-priors': pkg('portion-priors'),
       '@nutai/db-adapter/node': fileURLToPath(new URL('./packages/db-adapter/src/node.ts', import.meta.url)),
       '@nutai/db-adapter': pkg('db-adapter'),
       '@nutai/clamp': pkg('clamp'),

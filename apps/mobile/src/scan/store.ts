@@ -4,6 +4,8 @@ import type { ProviderId } from '@nutai/prompt'
 import type { ScanResult } from '@nutai/pipeline'
 import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { SelectedQuestion } from '@nutai/repair'
+import { wholeDishSizeMultiplier } from '@nutai/repair'
+import { countAnswerValue, countMultiplierFor, rowIdForNamedQuestion } from './review'
 import { useSyncExternalStore } from 'react'
 import type { ScanFailureKind } from '../inference/pathA/client'
 
@@ -69,6 +71,13 @@ export type ScanPhase =
 let phase: ScanPhase = { kind: 'idle' }
 const listeners = new Set<() => void>()
 
+/**
+ * Grams per row id as the last scan result landed (see setPhase). Kept next to
+ * the phase because the multiplier questions need the model's ORIGINAL
+ * estimate, which live row grams stop knowing the moment the user edits them.
+ */
+const scanGramsByRowId = new Map<string, number>()
+
 function emit() {
   for (const l of listeners) l()
 }
@@ -84,6 +93,17 @@ export function useScan(): ScanPhase {
 
 export function setPhase(next: ScanPhase) {
   phase = next
+  // Task 2-d: capture each row's gram estimate as THE SCAN PRODUCED IT. The
+  // question bank defines its whole_dish_size / count multipliers on "the
+  // item's estimated grams" (question-bank.ts), so a size/count answer
+  // rescales from this baseline — which also makes repeated answers IDEMPOTENT
+  // (12" then 14" lands at 1.96×, not 1.44 × 1.96×). Rebuilt on every scan
+  // landing: fixScan/re-scan rows arrive fresh through this same door. Rows
+  // added later (addRow) have no baseline and fall back to their live grams.
+  if (next.kind === 'ready') {
+    scanGramsByRowId.clear()
+    for (const r of next.result.meal.ingredients) scanGramsByRowId.set(r.id, r.grams)
+  }
   emit()
 }
 
@@ -185,12 +205,64 @@ export function answerQuestion(q: SelectedQuestion, value: string) {
     if (Number.isFinite(f)) setPortionEaten(f)
     return
   }
+  if (q.question.id === 'thali_scope') {
+    // Scene-aware meal-portion question (schema 1.1). Same destination as
+    // portion_eaten — the MEAL-level fraction — plus one special mapping:
+    // "I'll select items" lands at half the platter with the chip's own
+    // disclosure, because the user is heading into per-item edits and some of
+    // the platter was definitionally eaten. Zero would quietly claim a fast.
+    const f = value === 'select_items' ? 0.5 : Number(value)
+    if (Number.isFinite(f)) setPortionEaten(f)
+    return
+  }
   if (q.question.id === 'cooking_oil') {
     if (value === 'none') {
       if (phase.kind !== 'ready') return
       const oil = phase.result.meal.ingredients.find((r) => r.origin === 'assumption_filler')
       if (oil) removeRow(oil.id)
     }
+    return
+  }
+  // --- Schema 1.2 per-item questions -----------------------------------------
+  // These are the first question types whose answer targets ONE row. The
+  // SelectedQuestion carries no item id, so the row is recovered from the
+  // question's rendered text (see rowIdForNamedQuestion for the matching rule).
+  // Both routes funnel through editGrams on purpose: it recomputes totals
+  // locally, stamps userEditedAt (the late-lookup guard), and — because the
+  // answer IS the user speaking — flips the row's provenance to "Confirmed".
+  if (q.question.id === 'whole_dish_size') {
+    if (phase.kind !== 'ready') return
+    const rowId = rowIdForNamedQuestion(q.text, phase.result.meal.ingredients)
+    if (!rowId) return
+    const multiplier = wholeDishSizeMultiplier(value)
+    // 'know_weight' → null: the user will type the grams themselves, and a
+    // guessed 1.0 would silently masquerade as knowledge. The baseline 10"
+    // answer (multiplier 1.0) is also a no-op — applying it would edit the row
+    // without changing anything and falsely claim user confirmation.
+    if (multiplier == null || multiplier === 1) return
+    const row = phase.result.meal.ingredients.find((r) => r.id === rowId)
+    if (row) {
+      // Rescale the ESTIMATE the scan produced (the presumed 10" base), not
+      // the live grams — a prior answer or a typed gram must not compound.
+      const baseline = scanGramsByRowId.get(rowId) ?? row.grams
+      editGrams(rowId, baseline * multiplier)
+    }
+    return
+  }
+  if (q.question.id === 'count_question') {
+    if (phase.kind !== 'ready') return
+    const rowId = rowIdForNamedQuestion(q.text, phase.result.meal.ingredients)
+    if (!rowId) return
+    const row = phase.result.meal.ingredients.find((r) => r.id === rowId)
+    if (!row) return
+    const answerCount = countAnswerValue(value)
+    if (answerCount == null) return
+    const multiplier = countMultiplierFor(row, answerCount)
+    if (multiplier == null || multiplier === 1) return
+    // Mission formula: model grams × M/N — from the scan baseline, so the
+    // answer REPLACES the previous count instead of compounding onto it.
+    const baseline = scanGramsByRowId.get(rowId) ?? row.grams
+    editGrams(rowId, baseline * multiplier)
     return
   }
   // Remaining answers swap a row's snapshot against a bundled filler food. That

@@ -40,6 +40,46 @@ describe('the system prompt', () => {
     expect(SYSTEM_PROMPT).toMatch(/COMPANION DRINKS/)
   })
 
+  it('classifies the whole frame into a scene before any item is named (v1.2)', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Scene classification — the whole frame first/)
+    expect(SYSTEM_PROMPT).toMatch(/scene\.meal_type/)
+    expect(SYSTEM_PROMPT).toMatch(/indian_thali/)
+  })
+
+  it('names the SCENE for the whole meal — an eight-bowl thali is never titled by one bowl', () => {
+    // The user-reported failure this section exists for: a whole thali photo
+    // titled "Chapati" because the UI fell back to items[0].
+    expect(SYSTEM_PROMPT).toMatch(/Indian mixed thali" — not "Chapati"/)
+    expect(SYSTEM_PROMPT).toMatch(/A thali with eight bowls\s+has at least eight item entries/)
+  })
+
+  it('tells the model to mark uncertain scene components rather than hallucinating them', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Do not hallucinate components you cannot see/)
+    expect(SYSTEM_PROMPT).toMatch(/visibility:"likely" and say why in stated_assumptions/)
+  })
+
+  it('defines the three visibility levels and ties hidden fat to assumptions', () => {
+    expect(SYSTEM_PROMPT).toMatch(/"visible"\s+= clearly seen/)
+    expect(SYSTEM_PROMPT).toMatch(/"likely"\s+= strongly implied/)
+    expect(SYSTEM_PROMPT).toMatch(/"inferred"\s+= structurally certain but hidden/)
+    expect(SYSTEM_PROMPT).toMatch(/hidden oil\/ghee is ALWAYS "inferred" plus an\s+assumption/)
+  })
+
+  it('demands an honest gram range instead of fake-precise mass on unscaled dishes', () => {
+    expect(SYSTEM_PROMPT).toMatch(/model_gram_range/)
+    expect(SYSTEM_PROMPT).toMatch(/is NOT automatically\s+~500 g/)
+    expect(SYSTEM_PROMPT).toMatch(/WIDEN the range and\s+drop portion_confidence/)
+    expect(SYSTEM_PROMPT).toMatch(/null when you cannot responsibly bound it/)
+  })
+
+  it('strengthens hidden-fat guidance for Indian cooking specifically', () => {
+    expect(SYSTEM_PROMPT).toMatch(/ghee\/oil across the cooked dishes|~1\.5 tbsp ghee\/oil/)
+    expect(SYSTEM_PROMPT).toMatch(/tadka/)
+    expect(SYSTEM_PROMPT).toMatch(/Malai\/cream in paneer/)
+    expect(SYSTEM_PROMPT).toMatch(/papad, samosa, pakora, puri/)
+    expect(SYSTEM_PROMPT).toMatch(/oil_or_fat_not_visually_determinable/)
+  })
+
   it('specifies USDA-style keys, which is an IR lever rather than a style preference', () => {
     expect(SYSTEM_PROMPT).toMatch(/chicken breast, grilled/)
   })

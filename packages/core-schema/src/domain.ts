@@ -110,6 +110,22 @@ export interface IngredientRow {
   isEstimate: boolean
   assumptions: AssumptionTag[]
   /**
+   * How this row earned its place in the meal — seen in the photo, strongly
+   * implied, or structurally certain but hidden. Defaults to 'visible' when
+   * absent: every pathway that predates the scene-aware contract (barcode,
+   * label, receipt, web lookup) is by definition something we directly
+   * observed. Drives honest presentation of AI-inferred rows.
+   */
+  visibility?: 'visible' | 'likely' | 'inferred'
+  /**
+   * The vision model's honest min→max mass for this item, when it could bound
+   * one and null when it deliberately could not. Carried at scan time so the
+   * result screen can show an honest AROUND the number, never a fake-precise
+   * point alone. A row whose pathway outranks the model guess (packaged_exact,
+   * discrete_count, user_edited) has no reason to carry one.
+   */
+  portionRange?: { minG: number; maxG: number } | null
+  /**
    * True once the user has directly edited a macro on this row. Forces calories to
    * be recomputed via Atwater and the "recalculated from macros" note to show.
    * See §6.2 regime 2.

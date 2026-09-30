@@ -1,4 +1,9 @@
 import type { GramPathway } from '@nutai/core-schema'
+// Type-only import: the canonical Task 2-c wire shape lives in the
+// portion-priors package (the dataset + lookup home). `import type` is erased
+// at runtime, so this adds no runtime dependency — the gram engine consumes
+// `resolved.portionHints` as plain data spread in by the pipeline.
+import type { PortionHint } from '@nutai/portion-priors'
 
 /**
  * Shared types for the gram engine.
@@ -58,6 +63,20 @@ export interface GramEstimate {
   forceLowConfidence?: boolean
   /** Set when a personal prior adjusted the number, so the UI can disclose it. */
   personalPriorApplied?: { medianGrams: number | null; sampleCount: number }
+  /**
+   * Set when the population portion prior (Task 2-c) drove the estimate, so
+   * the UI can disclose the REAL basis — the pathway string below is borrowed
+   * ('personal_prior'), because GramPathway itself lives in core-schema, which
+   * this task must not edit. This marker is the honest disclosure: which unit,
+   * which range, which source string the number came from.
+   */
+  populationPriorApplied?: {
+    unit: string
+    source: string
+    typicalGrams: number
+    minGrams: number
+    maxGrams: number
+  }
   /** Oil mass added by the frying correction, as a synthetic ingredient row. */
   addedOilGrams?: number
 }
@@ -98,4 +117,26 @@ export interface ResolvedRow {
   description: string
   /** Grams per printed serving, when this row came from a label or barcode. */
   servingSizeG?: number | null
+  /**
+   * Task 2-c: household portion hints carried from the resolver — the Dish KB's
+   * curated portion model, or a population prior from @nutai/portion-priors.
+   * The pipeline spreads `food.portionHints` here; the population-prior tier
+   * (between discrete-count and personal-prior) consumes the first hint.
+   */
+  portionHints?: PortionHint[]
+}
+
+/**
+ * Direct-injection form of a population prior, for callers that did their own
+ * @nutai/portion-priors lookup (or hold a better population figure) and want
+ * to hand it to the gram engine without touching the resolved row. Structurally
+ * identical to a PortionHint, which is exactly the point: either path feeds
+ * the same tier.
+ */
+export interface PopulationPriorInput {
+  typical: number
+  min: number
+  max: number
+  unit: string
+  source: string
 }

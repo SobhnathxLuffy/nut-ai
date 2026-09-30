@@ -411,6 +411,312 @@ describe('runWebLookup on a reseller base URL', () => {
   })
 })
 
+describe('model-agnostic gateway routing — ANY provider × custom base URL', () => {
+  const BASE = 'https://aicredits.in/v1'
+  // Concatenated fixture: never a real key shape a scanner would flag.
+  const KEY = 'sk-live-' + 'testonly-notarealkey-0000000000000000000000'
+
+  function capture(responses: Array<{ status: number; body: string }>) {
+    const calls: Array<{ url: string; headers: Record<string, string>; body: any }> = []
+    const impl = (async (url: any, init: any) => {
+      calls.push({
+        url: String(url),
+        headers: Object.fromEntries(Object.entries(init?.headers ?? {}).map(([k, v]) => [String(k).toLowerCase(), String(v)])),
+        body: init?.body ? JSON.parse(init.body) : undefined,
+      })
+      const r = responses[Math.min(calls.length - 1, responses.length - 1)]!
+      return { ok: r.status >= 200 && r.status < 300, status: r.status, text: async () => r.body } as Response
+    }) as unknown as typeof fetch
+    return { calls, impl }
+  }
+
+  it('(a) google + base URL → {base}/chat/completions, Bearer auth, model id VERBATIM, OpenAI envelope parsed', async () => {
+    const { calls, impl } = capture([
+      {
+        status: 200,
+        body: JSON.stringify({
+          choices: [{ message: { content: '{"is_food":true,"items":[]}' } }],
+          usage: { prompt_tokens: 500, completion_tokens: 120 },
+        }),
+      },
+    ])
+    const r = await runScan(
+      {
+        provider: 'google',
+        model: 'gemini-2.5-flash',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    expect(calls).toHaveLength(1)
+    // The native Gemini endpoint must NOT be touched — the gateway hosts it.
+    expect(calls[0]!.url).toBe(`${BASE}/chat/completions`)
+    expect(calls[0]!.headers['authorization']).toBe(`Bearer ${KEY}`)
+    expect(calls[0]!.headers['x-goog-api-key']).toBeUndefined()
+    // The id is passed through EXACTLY as typed — no catalogue gating, no rewrite.
+    expect(calls[0]!.body.model).toBe('gemini-2.5-flash')
+    // The request is chat-completions shaped (messages), not generateContent shaped.
+    expect(Array.isArray(calls[0]!.body.messages)).toBe(true)
+    expect(calls[0]!.body.contents).toBeUndefined()
+    if (r.ok) {
+      expect(r.value.raw).toEqual({ is_food: true, items: [] })
+      expect(r.value.inputTokens).toBe(500)
+      expect(r.value.outputTokens).toBe(120)
+    }
+  })
+
+  it('(a2) vendor-prefixed ids survive verbatim too: "google/gemini-2.5-flash"', async () => {
+    const { calls, impl } = capture([
+      { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"schema_version":"1.0.0","items":[]}' } }], usage: {} }) },
+    ])
+    const r = await runScan(
+      {
+        provider: 'google',
+        model: 'google/gemini-2.5-flash',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    expect(calls[0]!.body.model).toBe('google/gemini-2.5-flash')
+  })
+
+  it('(a3) anthropic + base URL rides the same chat/completions endpoint with Bearer', async () => {
+    const { calls, impl } = capture([
+      { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"is_food":false,"items":[]}' } }], usage: {} }) },
+    ])
+    const r = await runScan(
+      {
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5-20251001',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    expect(calls[0]!.url).toBe(`${BASE}/chat/completions`)
+    expect(calls[0]!.headers['authorization']).toBe(`Bearer ${KEY}`)
+    expect(calls[0]!.headers['x-api-key']).toBeUndefined()
+  })
+
+  it('(b) an unknown model id scans fine — cost is honestly unknown (never NaN), tokens recorded', async () => {
+    const { impl } = capture([
+      {
+        status: 200,
+        body: JSON.stringify({
+          choices: [{ message: { content: '{"is_food":true,"items":[]}' } }],
+          usage: { prompt_tokens: 700, completion_tokens: 90 },
+        }),
+      },
+    ])
+    const r = await runScan(
+      {
+        provider: 'openai',
+        model: 'mystery-model-9',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.value.costUsd).toBeNull()
+      expect(Number.isNaN(r.value.costUsd as unknown as number)).toBe(false)
+      expect(r.value.inputTokens).toBe(700)
+      expect(r.value.outputTokens).toBe(90)
+    }
+  })
+
+  it('(c) a 400 names the model, the status and the gateway snippet — and never the key', async () => {
+    const { impl } = capture([{ status: 400, body: JSON.stringify({ error: { message: 'model not found: gemini-2.5-flash' } }) }])
+    const r = await runScan(
+      {
+        provider: 'google',
+        model: 'gemini-2.5-flash',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error.kind).toBe('error-retryable')
+      expect(r.error.message).toContain('gemini-2.5-flash')
+      expect(r.error.message).toContain('HTTP 400')
+      expect(r.error.message).toContain('model not found')
+      expect(r.error.message).not.toContain(KEY)
+      expect(r.error.message).not.toContain('sk-live')
+    }
+  })
+
+  it('(c2) auth failures stay generic — no body snippet, no key material', async () => {
+    const { impl } = capture([{ status: 401, body: `bad key ${KEY} rejected` }])
+    const r = await runScan(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error.kind).toBe('key-invalid')
+      expect(r.error.message).not.toContain(KEY)
+      expect(r.error.message).not.toContain('sk-live')
+    }
+  })
+
+  it('(d1) prose-JSON fishing: empty message.content but the answer hides in another envelope slot', async () => {
+    const { impl } = capture([
+      {
+        status: 200,
+        // A gateway answered in a Gemini-ish envelope even though the request
+        // was chat/completions — the extractor misses, the fisher recovers.
+        body: JSON.stringify({
+          choices: [{ message: { content: '' } }],
+          candidates: [{ content: { parts: [{ text: 'Sure! ```json\n{"is_food":true,"items":[]}\n```' }] } }],
+          usage: { prompt_tokens: 11, completion_tokens: 4 },
+        }),
+      },
+    ])
+    const r = await runScan(
+      {
+        provider: 'google',
+        model: 'gemini-2.5-flash',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.raw).toEqual({ is_food: true, items: [] })
+  })
+
+  it('(d2) content as an ARRAY of typed parts parses like a string', async () => {
+    const { impl } = capture([
+      {
+        status: 200,
+        body: JSON.stringify({
+          choices: [{ message: { content: [{ type: 'text', text: '{"is_food":false,' }, { type: 'text', text: '"refusal_reason":null,"items":[]}' }] } }],
+          usage: {},
+        }),
+      },
+    ])
+    const r = await runScan(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.raw).toEqual({ is_food: false, refusal_reason: null, items: [] })
+  })
+
+  it('(d3) when the schema-free retry ALSO 400s, prose JSON in the error body is fished before giving up', async () => {
+    const { calls, impl } = capture([
+      { status: 400, body: '{"error":{"message":"response_format unsupported"}}' },
+      {
+        status: 400,
+        body: 'Bad request: {"is_food":true,"items":[]} is not valid here',
+      },
+    ])
+    const r = await runScanWithFallback(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: { type: 'object' },
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    // Exactly two requests — the fish works on responses already received.
+    expect(calls).toHaveLength(2)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.raw).toEqual({ is_food: true, items: [] })
+  })
+
+  it('(d4) double-400 with ERROR envelopes stays a failure — never converted into a fake payload', async () => {
+    const { calls, impl } = capture([
+      { status: 400, body: '{"error":{"message":"first"}}' },
+      { status: 400, body: '{"error":{"message":"second"}}' },
+    ])
+    const r = await runScanWithFallback(
+      {
+        provider: 'google',
+        model: 'gemini-2.5-flash',
+        credential: { kind: 'api_key', value: KEY },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: { type: 'object' },
+        baseUrl: BASE,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(false)
+    expect(calls).toHaveLength(2)
+    if (!r.ok) {
+      expect(r.error.message).toContain('gemini-2.5-flash')
+      expect(r.error.message).toContain('HTTP 400')
+    }
+  })
+
+  it('without a base URL the native Google endpoint is untouched', async () => {
+    const { calls, impl } = capture([
+      { status: 200, body: JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"is_food":true,"items":[]}' }] } }], usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2 } }) },
+    ])
+    const r = await runScan(
+      {
+        provider: 'google',
+        model: 'gemini-2.0-flash-lite',
+        credential: { kind: 'api_key', value: 'gkey' },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+      },
+      impl,
+    )
+    expect(r.ok).toBe(true)
+    expect(calls[0]!.url).toContain('generativelanguage.googleapis.com')
+    expect(calls[0]!.headers['x-goog-api-key']).toBe('gkey')
+  })
+})
+
 describe('createSseDeltaParser', () => {
   it('openai: content and reasoning_content deltas survive arbitrary chunk splits', () => {
     const parse = createSseDeltaParser('openai')

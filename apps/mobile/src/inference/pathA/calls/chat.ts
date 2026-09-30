@@ -29,6 +29,16 @@ export function normalizeHistory(turns: ChatTurn[]): ChatTurn[] {
   return out
 }
 
+/**
+ * GATEWAY ROUTING: a custom base URL (reseller) speaks the OpenAI-compatible
+ * chat/completions dialect for EVERY provider — same rule as the scan path.
+ * The request is built with the openai transport, the model id passes through
+ * verbatim, and the response is read from choices[0].message.content.
+ */
+function wireDialect(provider: ProviderId, baseUrl?: string | null): ProviderId {
+  return baseUrl ? 'openai' : provider
+}
+
 export async function runAssistantChatApi(
   req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[]; baseUrl?: string | null; /** P2-8: cross-provider fallbacks join the chain ONLY when this is explicitly set. */ allowCrossProvider?: boolean },
   fetchImpl: typeof fetch = fetch
@@ -111,7 +121,7 @@ export async function runAssistantChatApiSingle(
     // single-turn payloads byte-for-byte.
     const history = normalizeHistory(req.history ?? [])
 
-    const built = chatRequestFor(req.provider, {
+    const built = chatRequestFor(wireDialect(req.provider, req.baseUrl), {
       baseUrl: req.baseUrl,
       credentialValue: credObj.value,
       model: req.model,
@@ -119,6 +129,8 @@ export async function runAssistantChatApiSingle(
       history,
       userPrompt: req.userPrompt,
     })
+    // On a gateway the built URL is already OpenAI-rooted, so withBaseUrl
+    // re-hosts it; native URLs (no base URL) pass through untouched.
     const url = withBaseUrl(built.url, req.baseUrl)
 
     const controller = new AbortController()
@@ -133,14 +145,22 @@ export async function runAssistantChatApiSingle(
 
     if (!resp.ok) {
       const isAuth = resp.status === 401 || resp.status === 403;
-      return { ok: false, error: { kind: isAuth ? 'key-invalid' : 'error-retryable', message: json?.error?.message || 'API Error', retryable: !isAuth, httpStatus: resp.status } }
+      // Honest errors: keep the gateway's own text, capped, with the status —
+      // never the credential (resp bodies do not echo it, but cap anyway).
+      const apiMsg = typeof json?.error?.message === 'string' && json.error.message.trim()
+        ? json.error.message.trim().slice(0, 160)
+        : 'API Error'
+      return { ok: false, error: { kind: isAuth ? 'key-invalid' : 'error-retryable', message: `${apiMsg} (HTTP ${resp.status})`, retryable: !isAuth, httpStatus: resp.status } }
     }
+    const dialect = wireDialect(req.provider, req.baseUrl)
     let text = ''
-    if (req.provider === 'openai') {
-      text = json.choices?.[0]?.message?.content || ''
-    } else if (req.provider === 'anthropic') {
+    if (dialect === 'openai') {
+      // Gateway content can arrive as an array of typed parts — join it.
+      const content = json.choices?.[0]?.message?.content
+      text = (typeof content === 'string' ? content : Array.isArray(content) ? content.map((p: any) => p?.text ?? '').join('') : '') || ''
+    } else if (dialect === 'anthropic') {
       text = json.content?.[0]?.text || ''
-    } else if (req.provider === 'google') {
+    } else if (dialect === 'google') {
       text = json.candidates?.[0]?.content?.parts?.[0]?.text || ''
     }
 

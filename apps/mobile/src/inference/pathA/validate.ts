@@ -1,5 +1,6 @@
 import { ANTHROPIC_OAUTH_BETA, type ProviderId } from '@nutai/prompt'
 import { withBaseUrl } from '../base-url'
+import { redactSecrets } from './wire/errors'
 import type { Credential, ScanFailure } from './client'
 import { ANTHROPIC_MESSAGES_URL, ANTHROPIC_MODELS_URL, GOOGLE_BASE_URL, OPENAI_CHAT_URL, OPENAI_MODELS_URL } from '@nutai/prompt'
 import { VALIDATION_TIMEOUT_MS } from '@nutai/prompt'
@@ -145,6 +146,85 @@ async function attempt(
   }
 }
 
+/** Never surface credential material that a gateway echoed back in a body. */
+function safeDetail(credential: Credential, text: string): string {
+  return redactSecrets(text, credential.value)
+}
+
+/**
+ * Gateway validation — ANY provider with a custom base URL.
+ *
+ * A custom base URL means every call, validation AND scans, will speak the
+ * OpenAI-compatible dialect on the user's host (the scan path routes all
+ * providers through chat/completions there), so the probe must exercise
+ * exactly that: GET {base}/models/{id} first (free, non-billing), and on a
+ * 404 the 1-token POST chat/completions that gateways which skip per-model
+ * retrieve still serve — the endpoint scans actually hit. The model id is
+ * sent VERBATIM: 'gemini-2.5-flash' and 'google/gemini-2.5-flash' are tried
+ * exactly as typed.
+ */
+async function validateThroughGateway(
+  _provider: ProviderId,
+  model: string,
+  credential: Credential,
+  fetchImpl: typeof fetch,
+  timeoutMs: number,
+  baseUrl: string | null | undefined,
+): Promise<ValidationResult> {
+  const retrieveUrl = withBaseUrl(`${OPENAI_MODELS_URL}/${encodeURIComponent(model)}`, baseUrl)
+  const r = await attempt(retrieveUrl, { authorization: `Bearer ${credential.value}` }, fetchImpl, timeoutMs)
+  if ('offline' in r) {
+    return {
+      ok: false,
+      error: { kind: 'offline', message: 'No connection to the provider.', retryable: true },
+      detail: 'Network request failed before reaching the provider.',
+    }
+  }
+  if ('aborted' in r) {
+    return {
+      ok: false,
+      error: { kind: 'timeout-ambiguous', message: 'The check timed out.', retryable: false },
+      detail: `No response within ${timeoutMs / 1000}s.`,
+    }
+  }
+  if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'bearer', modelId: model }
+
+  // The per-model retrieve endpoint is the one OpenAI-compatible route
+  // gateways most often skip, while chat completions — the endpoint scans
+  // actually hit — works. Before declaring failure, ask the endpoint that
+  // matters. Cost is one output token on whatever model was typed.
+  if (r.status === 404) {
+    const c = await attempt(
+      withBaseUrl(OPENAI_CHAT_URL, baseUrl),
+      { authorization: `Bearer ${credential.value}`, 'content-type': 'application/json' },
+      fetchImpl,
+      timeoutMs,
+      { model, max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] },
+    )
+    if (!('offline' in c) && !('aborted' in c)) {
+      if (c.status >= 200 && c.status < 300) {
+        return { ok: true, usedShape: 'bearer', modelId: model }
+      }
+      return {
+        ok: false,
+        error: classify(c.status, c.body),
+        detail: safeDetail(credential, `GET ${retrieveUrl} → HTTP ${r.status} — ${r.body}\nPOST chat/completions → HTTP ${c.status} — ${c.body}`),
+        // Both reseller routes 404ed: the paste is almost certainly missing
+        // its /v1 suffix (P2-11).
+        ...(c.status === 404 ? { hint: RESELLER_404_HINT } : {}),
+      }
+    }
+    // The fallback probe could not reach the network; report the retrieve
+    // result below rather than inventing a verdict.
+  }
+
+  return {
+    ok: false,
+    error: classify(r.status, r.body),
+    detail: safeDetail(credential, `HTTP ${r.status} — ${r.body}`),
+  }
+}
+
 export async function validateCredential(
   provider: ProviderId,
   model: string,
@@ -153,6 +233,15 @@ export async function validateCredential(
   timeoutMs = VALIDATION_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<ValidationResult> {
+  // ---- ANY provider through a reseller gateway ----------------------------
+  // Scans will ride the OpenAI-compatible dialect on the user's base URL no
+  // matter which provider is named (gemini/claude models behind aicredits.in
+  // and friends), so the credential is validated against THAT endpoint. The
+  // native probes below are reached only when no base URL is configured.
+  if (baseUrl) {
+    return validateThroughGateway(provider, model, credential, fetchImpl, timeoutMs, baseUrl)
+  }
+
   // ---- Anthropic: two shapes, each probing the endpoint it would really use --
   if (provider === 'anthropic') {
     // Each shape probes differently. x-api-key: free GET on the model-retrieve
@@ -204,7 +293,7 @@ export async function validateCredential(
         }
       }
       if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: shape, modelId: model }
-      details.push(`${shape}: HTTP ${r.status} — ${r.body}`)
+      details.push(`${shape}: HTTP ${r.status} — ${safeDetail(credential, r.body)}`)
       // A 404 means auth worked but the model is wrong; trying the other header
       // shape cannot help, so stop and say so.
       if (r.status === 404) {
@@ -214,12 +303,9 @@ export async function validateCredential(
     return { ok: false, error: classify(401, details.join('\n')), detail: details.join('\n') }
   }
 
-  // ---- OpenAI --------------------------------------------------------------
+  // ---- OpenAI (official endpoint) -----------------------------------------
   if (provider === 'openai') {
-    const retrieveUrl = withBaseUrl(
-      `${OPENAI_MODELS_URL}/${encodeURIComponent(model)}`,
-      baseUrl,
-    )
+    const retrieveUrl = `${OPENAI_MODELS_URL}/${encodeURIComponent(model)}`
     const r = await attempt(
       retrieveUrl,
       { authorization: `Bearer ${credential.value}` },
@@ -242,46 +328,14 @@ export async function validateCredential(
     }
     if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'bearer', modelId: model }
 
-    // On a reseller base the per-model retrieve endpoint is the one OpenAI-
-    // compatible route gateways most often skip, while chat completions — the
-    // endpoint scans actually hit — works. Same philosophy as the Anthropic
-    // bearer probe: before declaring failure, ask the endpoint that matters.
-    // Cost is one output token on whatever model was typed.
-    if (baseUrl && r.status === 404) {
-      const c = await attempt(
-        withBaseUrl(OPENAI_CHAT_URL, baseUrl),
-        { authorization: `Bearer ${credential.value}`, 'content-type': 'application/json' },
-        fetchImpl,
-        timeoutMs,
-        { model, max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] },
-      )
-      if (!('offline' in c) && !('aborted' in c)) {
-        if (c.status >= 200 && c.status < 300) {
-          return { ok: true, usedShape: 'bearer', modelId: model }
-        }
-        return {
-          ok: false,
-          error: classify(c.status, c.body),
-          detail: `GET ${retrieveUrl} → HTTP ${r.status} — ${r.body}\nPOST chat/completions → HTTP ${c.status} — ${c.body}`,
-          // Both reseller routes 404ed: the paste is almost certainly missing
-          // its /v1 suffix (P2-11).
-          ...(c.status === 404 ? { hint: RESELLER_404_HINT } : {}),
-        }
-      }
-      // The fallback probe could not reach the network; report the retrieve
-      // result below rather than inventing a verdict.
-    }
-
-    const hint =
-      !baseUrl && r.status === 401 && !looksLikeOfficialOpenAiKey(credential.value)
-        ? RESELLER_HINT
-        : baseUrl && r.status === 404
-          ? RESELLER_404_HINT
-          : undefined
+    // Official endpoint, no base URL: a 401 with a key shape OpenAI never
+    // mints almost always means the key belongs to a reseller — say so
+    // instead of letting the user re-paste the same dead end.
+    const hint = r.status === 401 && !looksLikeOfficialOpenAiKey(credential.value) ? RESELLER_HINT : undefined
     return {
       ok: false,
       error: classify(r.status, r.body),
-      detail: `HTTP ${r.status} — ${r.body}`,
+      detail: safeDetail(credential, `HTTP ${r.status} — ${r.body}`),
       ...(hint ? { hint } : {}),
     }
   }
@@ -310,5 +364,5 @@ export async function validateCredential(
   // P2-12 companion: the key travels in the x-goog-api-key HEADER (as on the
   // scan path) — the shape label must say so, not the retired query-param form.
   if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'header', modelId: model }
-  return { ok: false, error: classify(r.status, r.body), detail: `HTTP ${r.status} — ${r.body}` }
+  return { ok: false, error: classify(r.status, r.body), detail: safeDetail(credential, `HTTP ${r.status} — ${r.body}`) }
 }

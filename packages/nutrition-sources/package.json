@@ -18,6 +18,7 @@
   "dependencies": {
     "@nutai/db-adapter": "*",
     "@nutai/indian-dishes": "*",
+    "@nutai/portion-priors": "*",
     "@nutai/recipe-engine": "*"
   }
 }

@@ -3,6 +3,7 @@ export const normalizeDishSearch=(v:string)=>v.normalize("NFKD").toLowerCase().r
 export * from './inheritance.js'
 export * from './totals.js'
 export * from './portions.js'
+export * from './dish-portions.js'
 export * from './clarification.js'
 export * from './household.js'
 export * from './composite-meals.js'

@@ -58,6 +58,9 @@
       "@nutai/indian-dishes": [
         "packages/indian-dishes/src/index.ts"
       ],
+      "@nutai/portion-priors": [
+        "packages/portion-priors/src/index.ts"
+      ],
       "@nutai/pipeline": [
         "packages/pipeline/src/index.ts"
       ],

@@ -85,6 +85,12 @@ export interface ResolvedItem {
   gramDisagreement?: { low: number; high: number }
 }
 
+export interface SceneSummary {
+  mealType: string
+  displayName: string
+  confidence: number
+}
+
 export interface ScanResult {
   isFood: boolean
   refusalReason: string | null
@@ -96,6 +102,20 @@ export interface ScanResult {
   clampFlags: ClampFlag[]
   /** Items whose canonical key returned nothing — feeds the 5% upgrade trigger. */
   zeroHitCount: number
+  /**
+   * The whole-frame meal identity from the payload's `scene` block (schema
+   * 1.1) — "Indian mixed thali", never one bowl of it. The result screen
+   * titles multi-component scenes from THIS, not from items[0].displayName,
+   * which is how a thali photo used to end up titled "Chapati".
+   *
+   * Optional in the TYPE because ScanResult is also constructed on paths that
+   * have no vision scene at all (barcode/label/receipt rows, eval fixtures);
+   * runPipeline itself ALWAYS sets it — null when the payload carried none —
+   * so anything that came through the pipeline has a definitive value.
+   */
+  scene?: SceneSummary | null
+  /** Convenience: the title string, already resolved. Same lifecycle as `scene`. */
+  sceneDisplayName?: string | null
 }
 
 /** Adapts the nutrition corpus to the gram engine's narrow FoodDb interface. */
@@ -171,6 +191,17 @@ export async function runPipeline(
 
   const { payload, flags } = clamp(validated)
 
+  // ---- Scene (schema 1.1) --------------------------------------------------
+  // Derived ONCE, before any branching: a scene is a claim about the frame,
+  // not about food, so it is exposed on the refusal result too.
+  const scene: SceneSummary | null = payload.scene
+    ? {
+        mealType: payload.scene.meal_type,
+        displayName: payload.scene.display_name,
+        confidence: payload.scene.confidence,
+      }
+    : null
+
   if (!payload.is_food) {
     return {
       isFood: false,
@@ -182,6 +213,8 @@ export async function runPipeline(
       questions: [],
       clampFlags: flags,
       zeroHitCount: 0,
+      scene,
+      sceneDisplayName: scene?.displayName ?? null,
     }
   }
 
@@ -204,7 +237,15 @@ export async function runPipeline(
     // scoring signals — the resolver wants to know we are looking at 150 g before
     // it decides whether "bouillon cube" is a plausible match.
     const resolvedRow: ResolvedRow | null = food
-      ? { foodId: food.foodId, description: food.name, servingSizeG: food.servingSizeG }
+      ? {
+          foodId: food.foodId,
+          description: food.name,
+          servingSizeG: food.servingSizeG,
+          // Household portion hints (Dish KB curated model / population priors)
+          // feed the gram engine's population-prior tier — semantic units like
+          // "1 katori" become inspectable gram ranges instead of model guesses.
+          ...(food.portionHints?.length ? { portionHints: food.portionHints } : {}),
+        }
       : null
 
     const gram = estimateGrams({
@@ -267,6 +308,17 @@ export async function runPipeline(
           ? [{ type: 'energy_unreported', userConfirmed: false }]
           : []),
       ],
+      // Scene contract (schema 1.1): the model's honesty about HOW this item
+      // earned its place, materialized with the deterministic default — absent
+      // visibility IS 'visible', decided here once so the UI never re-derives it.
+      visibility: item.visibility ?? 'visible',
+      // The model's honest mass range, passed through as the row's band-around-
+      // the-point. A CROSSING range (min > max) is not a range — null it rather
+      // than surface nonsense. Zod has already guaranteed both ends are positive.
+      portionRange:
+        item.model_gram_range && item.model_gram_range.min_g <= item.model_gram_range.max_g
+          ? { minG: item.model_gram_range.min_g, maxG: item.model_gram_range.max_g }
+          : null,
     }
 
     // ---- [8] CONFIDENCE ------------------------------------------------------
@@ -311,6 +363,9 @@ export async function runPipeline(
           bandHalfPct: 0.5,
           isEstimate: true,
           assumptions: [{ type: 'oil_added', gramsEquiv: gram.addedOilGrams, userConfirmed: false }],
+          // A synthetic row for fat nobody can see is the DEFINITION of
+          // 'inferred' — structurally certain, never visually confirmed.
+          visibility: 'inferred',
         },
         band: { halfPct: 0.5, tier: 'very_wide', reasons: ['Absorbed frying oil is not visible.'] },
         resolution: 'miss',
@@ -338,9 +393,14 @@ export async function runPipeline(
   }))
 
   // ---- [9] RESULT + REPAIR --------------------------------------------------
+  // The scene rides into question selection so a thali-like scene asks "Did you
+  // eat the whole platter?" (thali_scope) instead of the per-item portion
+  // question — one meal-level chip, in the scene's own vocabulary.
+  const sceneInput = payload.scene ? { mealType: payload.scene.meal_type } : undefined
   const questions = selectMealQuestions(
     payload.items.map((item, i) => ({
       item,
+      ...(sceneInput ? { scene: sceneInput } : {}),
       ...(items[i]?.gramDisagreement ? { gramDisagreement: items[i]!.gramDisagreement } : {}),
       ...(deps.severityWeight != null ? { severityWeight: deps.severityWeight } : {}),
     })),
@@ -356,6 +416,8 @@ export async function runPipeline(
     questions,
     clampFlags: flags,
     zeroHitCount,
+    scene,
+    sceneDisplayName: scene?.displayName ?? null,
   }
 }
 

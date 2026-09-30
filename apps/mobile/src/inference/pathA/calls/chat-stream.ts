@@ -41,7 +41,11 @@ export async function runAssistantChatApiStream(
   }
 
   const history = normalizeHistoryLocal(req.history ?? [])
-  const built = streamRequestFor(req.provider, {
+  // GATEWAY ROUTING: a custom base URL speaks the OpenAI-compatible dialect
+  // for EVERY provider (same rule as the scan path) — request built, SSE
+  // deltas and full-body extraction all read the openai shapes.
+  const dialect: ProviderId = req.baseUrl ? 'openai' : req.provider
+  const built = streamRequestFor(dialect, {
     baseUrl: req.baseUrl,
     credentialValue: credObj.value,
     model: req.model,
@@ -51,13 +55,13 @@ export async function runAssistantChatApiStream(
   })
 
   return runXhrStream({
-    provider: req.provider,
+    provider: dialect,
     request: {
       url: withBaseUrl(built.url, req.baseUrl),
       headers: built.headers,
       body: JSON.stringify(built.body),
     },
-    extractFullCompletion: (j) => extractFullCompletion(req.provider, j),
+    extractFullCompletion: (j) => extractFullCompletion(dialect, j),
     handlers,
     xhrFactory,
     stallTimeoutMs: req.stallTimeoutMs,

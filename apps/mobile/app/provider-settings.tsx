@@ -217,51 +217,54 @@ export default function ProviderSettings() {
               better at portion size, which is where nearly all the error lives.
             </Text>
 
-            {provider === 'openai' ? (
-              <View style={[styles.card, { backgroundColor: theme.bgSunken, marginTop: space.xl }]}>
-                <Text style={[type.bodyStrong, { color: theme.text }]}>Custom API endpoint (resellers)</Text>
-                <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
-                  Works with any OpenAI-compatible API reseller (aicredits.in, OpenRouter, a proxy).
-                  Paste the base URL their dashboard shows — it must end in /v1. Leave empty to use
-                  api.openai.com directly. These are the same fields offered on the key form when
-                  you tap Replace key.
+            {/* Gateway routing is provider-agnostic now: a custom base URL
+                re-hosts scans, chat AND validation for EVERY provider, so a
+                Google/Anthropic user pointed at a reseller needs these fields
+                exactly as much as an OpenAI user does. */}
+            <View style={[styles.card, { backgroundColor: theme.bgSunken, marginTop: space.xl }]}>
+              <Text style={[type.bodyStrong, { color: theme.text }]}>Custom API endpoint (resellers)</Text>
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
+                Works with any OpenAI-compatible API reseller (aicredits.in, OpenRouter, a proxy) for
+                every provider — Gemini and Claude models behind the same gateway. Paste the base
+                URL their dashboard shows — it must end in /v1. Leave empty to use the official
+                endpoint. These are the same fields offered on the key form when you tap Replace key.
+              </Text>
+              <TextInput
+                value={baseUrlDraft}
+                onChangeText={setBaseUrlDraft}
+                onEndEditing={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
+                onBlur={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                placeholder={RESELLER_BASE_URL_PLACEHOLDER}
+                placeholderTextColor={theme.textFaint}
+                style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+              />
+              {/* P2-11: the missing-/v1 paste is the most common wrong hunt
+                  (it 404s as 'model not available'). Flag it at paste time. */}
+              {baseUrlWarning(baseUrlDraft) ? (
+                <Text style={[type.caption, { color: theme.uncertain, marginTop: space.sm, lineHeight: 18 }]}>
+                  {baseUrlWarning(baseUrlDraft)}
                 </Text>
-                <TextInput
-                  value={baseUrlDraft}
-                  onChangeText={setBaseUrlDraft}
-                  onEndEditing={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
-                  onBlur={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                  placeholder={RESELLER_BASE_URL_PLACEHOLDER}
-                  placeholderTextColor={theme.textFaint}
-                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
-                />
-                {/* P2-11: the missing-/v1 paste is the most common wrong hunt
-                    (it 404s as 'model not available'). Flag it at paste time. */}
-                {baseUrlWarning(baseUrlDraft) ? (
-                  <Text style={[type.caption, { color: theme.uncertain, marginTop: space.sm, lineHeight: 18 }]}>
-                    {baseUrlWarning(baseUrlDraft)}
-                  </Text>
-                ) : null}
-                <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 18 }]}>
-                  Model ID override — type the exact model name your reseller uses (e.g. gpt-4o-mini,
-                  deepseek-chat). Replaces the picker above.
-                </Text>
-                <TextInput
-                  value={customModelDraft}
-                  onChangeText={setCustomModelDraft}
-                  onBlur={saveScanModel}
-                  onEndEditing={saveScanModel}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  placeholder="gpt-4o-mini"
-                  placeholderTextColor={theme.textFaint}
-                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
-                />
-              </View>
-            ) : null}
+              ) : null}
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 18 }]}>
+                Model ID override — type the exact model name your reseller uses (e.g. gemini-2.5-flash,
+                google/gemini-2.5-flash, deepseek-chat). Replaces the picker above and is sent exactly
+                as typed.
+              </Text>
+              <TextInput
+                value={customModelDraft}
+                onChangeText={setCustomModelDraft}
+                onBlur={saveScanModel}
+                onEndEditing={saveScanModel}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder="gemini-2.5-flash"
+                placeholderTextColor={theme.textFaint}
+                style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+              />
+            </View>
 
             <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Chatbot model</Text>
             <View style={{ marginTop: space.sm, gap: space.sm }}>

@@ -1,16 +1,34 @@
+import { existsSync } from 'node:fs'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
 import type { DbAdapter } from '@nutai/db-adapter'
 import { openNodeDb } from '@nutai/db-adapter/node'
 import { loadFood, resolveByText } from '@nutai/resolver'
 
-describe('bundled IFCT corpus', () => {
+const NUTRITION_DB_PATH = fileURLToPath(new URL('../../../apps/mobile/assets/nutrition.db', import.meta.url))
+const IFCT_DB_PATH = fileURLToPath(new URL('../../../apps/mobile/assets/ifct.db', import.meta.url))
+
+// Task 2-c: skip with a warning when the bundled corpus artifact is absent,
+// the same contract resolver.golden.test.ts already follows. The corpus is a
+// BUILD product (`npm run data:build`, which fetches USDA FDC releases); a
+// fresh clone without it used to crash this file in beforeAll and fail the
+// whole package — an environment failure masquerading as a regression. Every
+// assertion below still runs, unchanged, whenever the corpus exists.
+const hasCorpus = existsSync(NUTRITION_DB_PATH) && existsSync(IFCT_DB_PATH)
+if (!hasCorpus) {
+  console.warn(
+    `\n[nutrition-sources] bundled corpus not found (${NUTRITION_DB_PATH}) — run \`npm run data:build\` first; skipping IFCT corpus tests.\n`,
+  )
+}
+const maybeCorpus = hasCorpus ? describe : describe.skip
+
+maybeCorpus('bundled IFCT corpus', () => {
   let nutritionDb: DbAdapter
   let ifctDb: DbAdapter
 
   beforeAll(() => {
-    nutritionDb = openNodeDb(fileURLToPath(new URL('../../../apps/mobile/assets/nutrition.db', import.meta.url)), { readonly: true })
-    ifctDb = openNodeDb(fileURLToPath(new URL('../../../apps/mobile/assets/ifct.db', import.meta.url)), { readonly: true })
+    nutritionDb = openNodeDb(NUTRITION_DB_PATH, { readonly: true })
+    ifctDb = openNodeDb(IFCT_DB_PATH, { readonly: true })
   })
 
   afterAll(async () => {

@@ -1,5 +1,6 @@
 import type { DbAdapter } from '@nutai/db-adapter'
 import { USDASource, OpenFoodFactsSource, IFCTSource, UserFoodSource, RecipeSource, RouterSource, DishKBSource, HouseholdDishSource } from '@nutai/nutrition-sources'
+import { lookupPrior, priorToHint, type PortionHint } from '@nutai/portion-priors'
 import { normalizeGtin } from './gtin.js'
 import { matchLadder } from './query.js'
 import { normalizeIndianAliases } from './aliases.js'
@@ -16,6 +17,11 @@ export * from './gtin.js'
 export * from './query.js'
 export * from './scoring.js'
 export * from './aliases.js'
+
+// Task 2-c: re-export the canonical hint shape so the pipeline (and any other
+// consumer) can type ResolvedFood.portionHints without reaching into the
+// portion-priors package directly.
+export type { PortionHint } from '@nutai/portion-priors'
 
 export interface NutritionSourceContext {
   readonly ifctDb?: DbAdapter
@@ -67,6 +73,18 @@ export interface ResolvedFood {
   sodiumMg: number | null
   servingSizeG: number | null
   servingDesc: string | null
+  /**
+   * Task 2-c — the portionHints seam. Household portion hints for this food,
+   * each { unit, typical, min, max, source }, range-carrying and sourced:
+   *   - set by DishKBSource.resolveById from the dish's curated portion model;
+   *   - otherwise, when the corpus row carries NO grams of its own
+   *     (servingSizeG null), populated here from the @nutai/portion-priors
+   *     population dataset via the resolved display name.
+   * The pipeline spreads this into the gram engine's ResolvedRow, whose
+   * population-prior tier (between discrete-count and personal-prior) consumes
+   * it — replacing hardcoded screen numbers with inspectable data.
+   */
+  portionHints?: PortionHint[]
   license: string
   source: string
 }
@@ -84,13 +102,39 @@ export async function resolveByBarcode(
   return (await source.resolveByBarcode(gtin)) as ResolvedFood | null
 }
 
+/**
+ * Attach household portion hints to a resolved food (Task 2-c).
+ *
+ * Two sources, in order of specificity:
+ *   1. Hints the source itself attached — the Dish KB's curated portion model
+ *      ("one Plain Dosa = 80 g, range 60-100"). Passed through untouched.
+ *   2. The @nutai/portion-priors population dataset, consulted ONLY when the
+ *      corpus row lacks grams of its own (servingSizeG null). A row that
+ *      already knows its serving size does not need a second opinion, and a
+ *      barcode/label row must never have one bolted on. The lookup keys off
+ *      the resolved display name via substring/stem matching ('Pigeon pea
+ *      (red gram), dal, cooked' -> dal katori), so generic-corpus Indian rows
+ *      reach the gram ladder as inspectable data instead of falling to the
+ *      150 g generic fallback.
+ */
+function attachPortionHints(resolved: ResolvedFood | null): ResolvedFood | null {
+  if (!resolved) return null
+  if (resolved.portionHints?.length) return resolved
+  if (resolved.servingSizeG != null) return resolved
+
+  const prior = lookupPrior(resolved.name)
+  if (!prior) return resolved
+  return { ...resolved, portionHints: [priorToHint(prior)] }
+}
+
 export async function loadFood(
   db: DbAdapter,
   foodId: string,
   context?: NutritionSourceContext,
 ): Promise<ResolvedFood | null> {
   const source = sourceRouter(db, context)
-  return (await source.resolveById(foodId)) as ResolvedFood | null
+  const resolved = (await source.resolveById(foodId)) as ResolvedFood | null
+  return attachPortionHints(resolved)
 }
 
 export interface ResolveResult {
@@ -121,13 +165,17 @@ export async function resolveByText(
   const normalizedLadder = matchLadder(normalizeIndianAliases(ctx.canonicalFoodKey))
   const ladder = Array.from(
     { length: Math.max(literalLadder.length, normalizedLadder.length) },
-    // P0-2: the LITERAL term goes first at every depth. Broad alias expansions
-    // (biryani -> 'mixed rice', poha -> 'cape gooseberry', upma -> 'savory
-    // porridge') matched acceptable-scoring junk from low-priority sources and
-    // ended the cascade before the literal dish name ever reached the CURATED
-    // dish KB (source priority 60/70). Specific aliases (toor -> red gram,
-    // idly -> idli) still catch everything the literal term misses — one rung
-    // later, only when the literal term had no acceptable hit.
+    // P0-2 (re-verified as Task 2-c): the LITERAL term goes first at every
+    // depth. WHY: the literal Indian dish identity is MORE SPECIFIC than the
+    // generic English alias — 'dosa' names the dish, 'crepe' merely describes
+    // it — so aliases must BROADEN the ladder, never REPLACE the identity. The
+    // old normalized-first interleave let broad expansions (biryani -> 'mixed
+    // rice', poha -> 'cape gooseberry', upma -> 'savory porridge') match
+    // acceptable-scoring junk from low-priority sources and end the cascade
+    // before the literal dish name ever reached the CURATED dish KB. Specific
+    // aliases (toor -> red gram, idly -> idli) still catch everything the
+    // literal term misses — one rung later, only when the literal term had no
+    // acceptable hit.
     (_, index) => [literalLadder[index], normalizedLadder[index]],
   ).flat().filter((expression, index, all): expression is string => Boolean(expression) && all.indexOf(expression) === index)
   const source = sourceRouter(db, context)

@@ -2,6 +2,9 @@ import type { Item } from '@nutai/core-schema'
 import {
   QUESTION_BANK,
   inferStructuralUncertainty,
+  isCountAmbiguous,
+  isThaliLikeScene,
+  isWholeDishItem,
   type BankQuestion,
 } from './question-bank.js'
 
@@ -47,6 +50,15 @@ export interface SelectionInput {
   gramDisagreement?: { low: number; high: number } | undefined
   /** Set when the matched row has servings_per_container > 1.3. */
   multiServingPackage?: boolean | undefined
+  /**
+   * The scan's scene, as `scene.meal_type` from the vision payload (schema
+   * 1.1). A thali-like scene (indian_thali | mixed_plate | buffet) redirects
+   * the meal-portion question to its scene-aware variant, `thali_scope`, so
+   * the user is asked "Did you eat the whole platter?" instead of the
+   * per-item "Did you eat all of this, or some of it?" — both map to the same
+   * meal-level fraction, and asking both would be two chips doing one job.
+   */
+  scene?: { mealType: string } | undefined
 }
 
 export interface SelectedQuestion {
@@ -102,6 +114,7 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
   const severity = input.severityWeight ?? 1
   const structural = inferStructuralUncertainty(item)
   const structuralIds = new Set(structural.questionIds)
+  const thaliLike = isThaliLikeScene(input.scene?.mealType)
 
   const applicable: Array<{ q: BankQuestion; ev: number; structural: boolean }> = []
 
@@ -113,10 +126,15 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
 
     let isApplicable = false
 
-    // Rank 1 applies to every plated scan. Ranks 2 and 9 have explicit triggers.
-    if (q.id === 'portion_eaten') isApplicable = item.legible_label_text == null
+    // Rank 1 applies to every plated scan — EXCEPT thali-like scenes, where
+    // thali_scope is the meal-portion question in the user's own vocabulary.
+    // Ranks 2 and 9 have explicit triggers; 12-14 are scene/shape-triggered.
+    if (q.id === 'portion_eaten') isApplicable = !thaliLike && item.legible_label_text == null
+    else if (q.id === 'thali_scope') isApplicable = thaliLike && item.legible_label_text == null
     else if (q.id === 'servings_consumed') isApplicable = input.multiServingPackage === true
     else if (q.id === 'gram_disagreement') isApplicable = input.gramDisagreement != null
+    else if (q.id === 'whole_dish_size') isApplicable = isWholeDishItem(item)
+    else if (q.id === 'count_question') isApplicable = isCountAmbiguous(item)
     else {
       isApplicable =
         structuralIds.has(q.id) ||
@@ -150,6 +168,16 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
       text = text
         .replace('{low}', String(Math.round(input.gramDisagreement.low)))
         .replace('{high}', String(Math.round(input.gramDisagreement.high)))
+    } else if (q.id === 'whole_dish_size') {
+      // "How large was the Pizza?" reads wrong; diameters are conversationally
+      // lowercase. count_question keeps the item's own case ("Samosas").
+      text = text.replace('{name}', item.name.toLowerCase())
+    } else if (q.id === 'count_question') {
+      // Model names arrive both singular ("Samosa") and already plural
+      // ("Samosas"); a blind "…{name}s" rendered "Samosass". Add the plural
+      // only when the name does not already end in one.
+      const n = item.name
+      text = text.replace('{name}s', /s$/i.test(n) ? n : `${n}s`)
     }
 
     return {
@@ -163,12 +191,45 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
   })
 }
 
-/** Highlighted questions across a whole meal, respecting the global cap. */
+/**
+ * Highlighted questions across a whole meal, respecting the global cap.
+ *
+ * SCENE-LEVEL QUESTIONS fire once per MEAL, not once per bowl: a thali with
+ * eight items carries the scene on every item's SelectionInput, and answering
+ * "did you eat the whole platter?" eight times is eight lies about eight
+ * separate uncertainties. The highest-expected-value occurrence survives; the
+ * duplicates are REMOVED (not demoted) — no default goes undisclosed, because
+ * the surviving chip IS the question and carries its own disclosure. Every
+ * other question is never dropped: it is demoted to pre-answered so its silent
+ * default still shows.
+ */
+const SCENE_LEVEL_IDS: ReadonlySet<string> = new Set(['thali_scope'])
+
 export function selectMealQuestions(items: readonly SelectionInput[]): SelectedQuestion[] {
   const all = items.flatMap((i) => selectQuestions(i))
-  const highlighted = all.filter((q) => q.state === 'highlighted')
+  const kept: SelectedQuestion[] = []
+  const keptScene = new Map<string, SelectedQuestion>()
 
-  if (highlighted.length <= MAX_QUESTIONS) return all
+  for (const q of all) {
+    if (!SCENE_LEVEL_IDS.has(q.question.id)) {
+      kept.push(q)
+      continue
+    }
+    const existing = keptScene.get(q.question.id)
+    if (existing == null) {
+      keptScene.set(q.question.id, q)
+      kept.push(q)
+    } else if (q.expectedValue > existing.expectedValue) {
+      kept[kept.indexOf(existing)] = q
+      keptScene.set(q.question.id, q)
+    }
+    // else: a strictly-weaker duplicate of a question the user IS being asked
+    // once — removal, not silence.
+  }
+
+  const highlighted = kept.filter((q) => q.state === 'highlighted')
+
+  if (highlighted.length <= MAX_QUESTIONS) return kept
 
   // Never more than MAX_QUESTIONS highlighted regardless of how many cleared the
   // threshold. Demote the lowest-value ones to pre-answered rather than dropping
@@ -176,7 +237,7 @@ export function selectMealQuestions(items: readonly SelectionInput[]): SelectedQ
   const keep = new Set(
     [...highlighted].sort((a, b) => b.expectedValue - a.expectedValue).slice(0, MAX_QUESTIONS),
   )
-  return all.map((q) =>
+  return kept.map((q) =>
     q.state === 'highlighted' && !keep.has(q)
       ? { ...q, state: 'pre_answered' as const, appliedDefault: q.question.silentDefault }
       : q,

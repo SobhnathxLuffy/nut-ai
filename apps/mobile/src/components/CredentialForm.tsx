@@ -70,13 +70,19 @@ export function CredentialForm({
       const savedUrl = await customProviderBaseUrl()
       if (savedUrl) setBaseUrl(savedUrl)
       const savedModel = await setting('provider_model')
-      // Prefill when the saved model belongs to this provider: either a
-      // catalogue id, or a vendor-prefixed reseller id ("openai/gpt-4o-mini") —
-      // official OpenAI model names never contain a slash, so a slash means
-      // the id came from a custom endpoint and must survive a re-verify.
+      // Prefill when the saved model can belong to this provider: a catalogue
+      // id, a vendor-prefixed reseller id ("openai/gpt-4o-mini"), or ANY id
+      // outside every catalogue — a bare custom id like "gemini-2.5-flash" is
+      // exactly what a reseller user types, and it must survive a re-verify
+      // instead of being silently replaced by the cheapest catalogue model.
+      const inAnyCatalogue = savedModel
+        ? Object.values(PROVIDER_MODELS).some((list) => list.some((m) => m.id === savedModel))
+        : false
       if (
         savedModel &&
-        (PROVIDER_MODELS[provider].some((m) => m.id === savedModel) || savedModel.includes('/'))
+        (PROVIDER_MODELS[provider].some((m) => m.id === savedModel) ||
+          savedModel.includes('/') ||
+          !inAnyCatalogue)
       ) {
         setModelOverride(savedModel)
       }
@@ -185,57 +191,59 @@ export function CredentialForm({
 
       {/*
        * Reseller fields live HERE, before Verify — a reseller key verified
-       * without its base URL always lands on api.openai.com and always 401s.
-       * The URL is persisted on blur too, so a failed verify for an unrelated
-       * reason does not lose what was typed.
+       * without its base URL always lands on the official endpoint and always
+       * 401s. Shown for EVERY provider: on a custom base URL the scan, chat
+       * and validation calls all speak the OpenAI-compatible dialect for any
+       * provider, so a Google/Anthropic user pointed at a reseller needs the
+       * same fields an OpenAI user does. The URL is persisted on blur too, so
+       * a failed verify for an unrelated reason does not lose what was typed.
        */}
-      {provider === 'openai' ? (
-        <View style={[styles.reseller, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
-          <Text style={[type.bodyStrong, { color: theme.text }]}>Using a reseller? (optional)</Text>
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
-            Keys from OpenAI-compatible resellers work here — aicredits.in, OpenRouter, a proxy.
-            Paste the base URL their dashboard shows (ends in /v1), and the exact model ID if it
-            differs from the default. Leave empty for official OpenAI.
-          </Text>
-          <TextInput
-            accessibilityLabel="Reseller base URL"
-            placeholder="https://aicredits.in/v1"
-            placeholderTextColor={theme.textFaint}
-            value={baseUrl}
-            onChangeText={(t) => {
-              setBaseUrl(t)
-              setError(null)
-              setDetail(null)
-              setHint(null)
-              setOk(false)
-            }}
-            onEndEditing={() => void putSetting('provider_base_url', normalizeBaseUrl(baseUrl))}
-            onBlur={() => void putSetting('provider_base_url', normalizeBaseUrl(baseUrl))}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            editable={!busy}
-            style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
-          />
-          <TextInput
-            accessibilityLabel="Reseller model ID"
-            placeholder={`Model ID (default ${model.id})`}
-            placeholderTextColor={theme.textFaint}
-            value={modelOverride}
-            onChangeText={(t) => {
-              setModelOverride(t)
-              setError(null)
-              setDetail(null)
-              setHint(null)
-              setOk(false)
-            }}
-            autoCapitalize="none"
-            autoCorrect={false}
-            editable={!busy}
-            style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
-          />
-        </View>
-      ) : null}
+      <View style={[styles.reseller, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
+        <Text style={[type.bodyStrong, { color: theme.text }]}>Using a reseller? (optional)</Text>
+        <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
+          Keys from OpenAI-compatible resellers work here for every provider —
+          aicredits.in, OpenRouter, a proxy. Paste the base URL their dashboard
+          shows (ends in /v1), and the exact model ID if it differs from the
+          default. Leave empty for the official {PROVIDER_NAME[provider]} endpoint.
+        </Text>
+        <TextInput
+          accessibilityLabel="Reseller base URL"
+          placeholder="https://aicredits.in/v1"
+          placeholderTextColor={theme.textFaint}
+          value={baseUrl}
+          onChangeText={(t) => {
+            setBaseUrl(t)
+            setError(null)
+            setDetail(null)
+            setHint(null)
+            setOk(false)
+          }}
+          onEndEditing={() => void putSetting('provider_base_url', normalizeBaseUrl(baseUrl))}
+          onBlur={() => void putSetting('provider_base_url', normalizeBaseUrl(baseUrl))}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          editable={!busy}
+          style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+        />
+        <TextInput
+          accessibilityLabel="Reseller model ID"
+          placeholder={`Model ID (default ${model.id})`}
+          placeholderTextColor={theme.textFaint}
+          value={modelOverride}
+          onChangeText={(t) => {
+            setModelOverride(t)
+            setError(null)
+            setDetail(null)
+            setHint(null)
+            setOk(false)
+          }}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!busy}
+          style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+        />
+      </View>
 
       <TextInput
         accessibilityLabel="API credential"
