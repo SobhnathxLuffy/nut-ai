@@ -1,5 +1,5 @@
 import Storage from 'expo-sqlite/kv-store'
-import { createSyncMetadata, migrate, recordOperation } from '@nutai/db-adapter'
+import { createSyncMetadata, migrate, recordOperation, type DbAdapter } from '@nutai/db-adapter'
 import type { CalorieTarget, MacroTargets } from '@nutai/goals'
 import { openUserDb } from '../db/expo-adapter'
 import { ONBOARDING_DONE_KEY } from './done-key'
@@ -28,8 +28,11 @@ export async function persistOnboarding(
   answers: OnboardingAnswers,
   target: CalorieTarget,
   macros: MacroTargets,
+  // P3-D5: injectable for the unit suite; production callers omit it and get
+  // the app-lifetime singleton.
+  dbOverride?: DbAdapter,
 ): Promise<void> {
-  const db = await openUserDb()
+  const db = dbOverride ?? (await openUserDb())
   const now = Date.now()
 
   await migrate(db, now)

@@ -17,6 +17,8 @@ import {
 import { encodeFoodReview } from '../src/data/food-review'
 import { per100Snapshot } from '../src/data/dish-snapshot'
 import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
+import { ChipRow } from '../src/components/ChipRow'
+import { NewIngredientForm } from '../src/components/NewIngredientForm'
 
 type DishDef = any
 interface Component { id: string, name: string, foodId: string | null, resolvedName: string | null, source: string, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null }
@@ -319,6 +321,7 @@ export default function DishComposerScreen() {
   const cookedYield = totalRawMass > 0
     ? (effectiveYieldMultiplier != null
         ? totalRawMass * effectiveYieldMultiplier
+        // eslint-disable-next-line no-restricted-syntax -- cookingMethod arrives as free text and is funnelled through the yield engine's union
         : resolveCookedYieldGrams(totalRawMass, fatG, cookingMethod as any).cookedYieldGrams)
     : 0
 
@@ -475,21 +478,16 @@ export default function DishComposerScreen() {
       <Pressable accessibilityRole="button" onPress={addIngredient} style={[s.btn, { borderColor: t.border }]}><Text style={{ color: t.text }}>+ Add Ingredient</Text></Pressable>
 
       <Text style={[type.caption, { color: t.text, fontWeight: '600', marginHorizontal: space.md }]}>Cooking Fat / Oil</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
-        <View style={{ flexDirection: 'row', gap: space.xs, marginHorizontal: space.md }}>
-          {COOKING_FAT_OPTIONS.map((item) => (
-            <Pressable
-              key={item.optionId}
-              accessibilityRole="button"
-              accessibilityLabel={`Select ${item.label}`}
-              onPress={() => { setFatOptionId(item.optionId); setFatGrams(String(item.defaultGrams)) }}
-              style={[s.chip, { backgroundColor: fatOptionId === item.optionId ? t.protein : t.bg, borderColor: t.border }]}
-            >
-              <Text style={[type.micro, { color: fatOptionId === item.optionId ? t.bg : t.text }]}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
+      <ChipRow
+        items={COOKING_FAT_OPTIONS}
+        keyOf={(item) => item.optionId}
+        label={(item) => item.label}
+        a11yLabel={(item) => `Select ${item.label}`}
+        isActive={(item) => fatOptionId === item.optionId}
+        onPress={(item) => { setFatOptionId(item.optionId); setFatGrams(String(item.defaultGrams)) }}
+        innerStyle={{ marginHorizontal: space.md }}
+        chipStyle={s.chip}
+      />
       {fatOption.foodId ? (
         <View style={[s.row, { borderColor: t.border }]}>
           <Text style={[type.body, { color: t.text, flex: 1 }]}>Fat used (g)</Text>
@@ -519,6 +517,7 @@ export default function DishComposerScreen() {
                 key={item.method}
                 accessibilityRole="button"
                 accessibilityLabel={`Select ${item.label}`}
+                accessibilityState={{ selected: active }}
                 onPress={() => { setCookingMethod(item.method); setUseRecipeYield(false) }}
                 style={[s.chip, { backgroundColor: active ? t.protein : t.bg, borderColor: t.border }]}
               >
@@ -679,18 +678,15 @@ function IngredientResolver({
         </Pressable>
       )}
       {showCreate && (
-        <View style={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border, marginTop: space.sm }]}>
-          <Text style={[type.caption, { color: t.text, fontWeight: '700' }]}>New ingredient (values per 100 g)</Text>
-          <TextInput value={newIngredient.name} onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, name: text }))} placeholder="Name" placeholderTextColor={t.textMuted} style={[s.searchInput, { color: t.text, borderColor: t.border }]} accessibilityLabel="Ingredient name" />
-          <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xs }}>
-            {([['kcal', 'kcal'], ['protein', 'P g'], ['carbs', 'C g'], ['fat', 'F g']] as const).map(([field, placeholder]) => (
-              <TextInput key={field} value={newIngredient[field]} onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, [field]: text }))} placeholder={placeholder} placeholderTextColor={t.textMuted} keyboardType="numeric" style={[s.input, { flex: 1, width: undefined, color: t.text, borderColor: t.border }]} accessibilityLabel={`${placeholder} per 100 grams`} />
-            ))}
-          </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Save custom ingredient" disabled={creating} onPress={() => void handleCreate()} style={[s.btn, { backgroundColor: t.protein, borderColor: t.protein, paddingVertical: 8 }]}>
-            <Text style={{ color: t.bg, textAlign: 'center', fontWeight: '700' }}>{creating ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
-          </Pressable>
-        </View>
+        <NewIngredientForm
+          value={newIngredient}
+          onChange={setNewIngredient}
+          onSave={() => void handleCreate()}
+          saving={creating}
+          containerStyle={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border, marginTop: space.sm }]}
+          nameInputStyle={s.searchInput}
+          macroInputStyle={s.input}
+        />
       )}
     </View>
   )
@@ -701,8 +697,8 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.md },
   alert: { padding: space.md, fontWeight: 'bold' },
   row: { flexDirection: 'row', padding: space.md, borderBottomWidth: 1, alignItems: 'center' },
-  input: { borderWidth: 1, borderRadius: radius.sm, width: 60, textAlign: 'center', paddingVertical: 4, minHeight: MIN_TAP_TARGET },
-  searchInput: { borderWidth: 1, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8, marginTop: 4, minHeight: MIN_TAP_TARGET },
+  input: { borderWidth: 1, borderRadius: radius.sm, width: 60, textAlign: 'center', paddingVertical: space.xs, minHeight: MIN_TAP_TARGET },
+  searchInput: { borderWidth: 1, borderRadius: radius.sm, paddingVertical: space.xs, paddingHorizontal: 8, marginTop: 4, minHeight: MIN_TAP_TARGET },
   chip: { paddingHorizontal: space.sm, paddingVertical: 6, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, minHeight: MIN_TAP_TARGET, justifyContent: 'center' },
   btn: { margin: space.md, padding: space.md, borderWidth: 1, borderRadius: radius.md, alignItems: 'center' },
   summary: { margin: space.md, padding: space.md, borderWidth: 1, borderRadius: radius.md },

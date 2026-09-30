@@ -1,6 +1,7 @@
 import { buildWebLookupInstruction } from '@nutai/prompt'
 import type { SseDelta } from '../wire/types'
 import { openAiDeltasFrom } from '../wire/sse'
+import { OPENAI_CHAT_URL } from '@nutai/prompt'
 
 /**
  * OpenAI-family transport (QA Wave 4 god-file split).
@@ -65,7 +66,7 @@ export function openAiChatRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.openai.com/v1/chat/completions',
+    url: OPENAI_CHAT_URL,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${opts.credentialValue}`,
@@ -91,7 +92,7 @@ export function openAiStreamRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.openai.com/v1/chat/completions',
+    url: OPENAI_CHAT_URL,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.credentialValue}` },
     body: {
       model: opts.model,
@@ -114,7 +115,7 @@ export function openAiCorrectionRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.openai.com/v1/chat/completions',
+    url: OPENAI_CHAT_URL,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opts.credentialValue}` },
     body: {
       model: opts.model,
@@ -144,7 +145,7 @@ export function openAiResellerLookupRequest(opts: {
   visualContext?: string | null
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.openai.com/v1/chat/completions',
+    url: OPENAI_CHAT_URL,
     headers: {
       authorization: `Bearer ${opts.credentialValue}`,
       'content-type': 'application/json',

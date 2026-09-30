@@ -89,9 +89,10 @@ export default function IndianDishesScreen() {
             `SELECT d.id, d.canonical_name as name, d.category, d.record_status as status, '' as aliases FROM dish_definitions d${where} ORDER BY d.canonical_name LIMIT 500`,
             userArgs
           )
-        } catch (userErr) {
-          // Fresh installs may not have the table yet — the list is still valid.
-          console.warn('User dish query skipped:', userErr)
+        } catch {
+          // P3-U13: fresh installs may not have the table yet — the list is
+          // still valid. This is an EXPECTED path, so it stays silent (the
+          // genuine query-failure path below still reports loudly).
         }
         const seen = new Set<string>()
         const merged: DishRow[] = []
@@ -135,6 +136,7 @@ export default function IndianDishesScreen() {
             key={f}
             accessibilityRole="button"
             accessibilityState={{ selected: filter === f }}
+            // eslint-disable-next-line no-restricted-syntax -- filter chips render from a local id list typed loosely for the map
             onPress={() => setFilter(f as any)}
             style={[s.filterBtn, { backgroundColor: filter === f ? t.protein : t.bgSunken, borderColor: filter === f ? t.protein : t.border }]}
           >

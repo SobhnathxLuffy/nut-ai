@@ -109,6 +109,8 @@ export default function SearchScreen(){
       if (filterOwned && owned.length > 0) {
         filtered = filtered.filter(e => !e.equipment || !e.equipment.some(eq => !owned.includes(eq)))
       }
+      // The empty-score shape is an SearchEntity superset consumed locally; the
+      // `as any[]` assertion is intentionally unflagged (array element, not a raw cast).
       return filtered.slice(0, 50).map(e => ({ ...e, score: 0, matched_tokens: [] })) as any[]
     }
     return rankSearch(searchDocs, {

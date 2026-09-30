@@ -1,17 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import {
-  Alert,
-  BackHandler,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   createCustomFood,
@@ -28,6 +17,7 @@ import { db, localDate } from '../src/data/repo'
 import { encodeFoodReview } from '../src/data/food-review'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { Field } from '../src/components/Field'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 interface FormState {
@@ -249,11 +239,11 @@ export default function CustomFoodScreen() {
           <Text style={[type.body, { color: theme.textMuted }]}>Loading food…</Text>
         ) : (
           <>
-            <Field label="Food name" value={form.name} onChangeText={(value) => update('name', value)} placeholder="e.g. Homemade ladoo" />
-            <Field label="Brand (optional)" value={form.brand} onChangeText={(value) => update('brand', value)} placeholder="e.g. MTR" />
+            <Field label="Food name" value={form.name} onValueChange={(value) => update('name', value)} placeholder="e.g. Homemade ladoo" />
+            <Field label="Brand (optional)" value={form.brand} onValueChange={(value) => update('brand', value)} placeholder="e.g. MTR" />
 
             <View style={styles.row}>
-              <Field label="Serving amount" value={form.servingAmount} onChangeText={(value) => update('servingAmount', value)} numeric />
+              <Field label="Serving amount" value={form.servingAmount} onValueChange={(value) => update('servingAmount', value)} numeric />
               <View style={{ flex: 1 }}>
                 <Text style={[type.caption, { color: theme.textMuted, marginBottom: space.xs }]}>Serving unit</Text>
                 <View style={styles.unitRow}>
@@ -280,16 +270,16 @@ export default function CustomFoodScreen() {
 
             <Text style={[type.caption, { color: theme.textMuted, lineHeight: 18 }]}>Enter nutrients for one serving. This will be saved as your food.</Text>
             <View style={styles.row}>
-              <Field label="Calories" value={form.calories} onChangeText={(value) => update('calories', value)} numeric />
-              <Field label="Protein (g)" value={form.protein} onChangeText={(value) => update('protein', value)} numeric />
+              <Field label="Calories" value={form.calories} onValueChange={(value) => update('calories', value)} numeric />
+              <Field label="Protein (g)" value={form.protein} onValueChange={(value) => update('protein', value)} numeric />
             </View>
             <View style={styles.row}>
-              <Field label="Carbs (g)" value={form.carbs} onChangeText={(value) => update('carbs', value)} numeric />
-              <Field label="Fat (g)" value={form.fat} onChangeText={(value) => update('fat', value)} numeric />
+              <Field label="Carbs (g)" value={form.carbs} onValueChange={(value) => update('carbs', value)} numeric />
+              <Field label="Fat (g)" value={form.fat} onValueChange={(value) => update('fat', value)} numeric />
             </View>
             <View style={styles.row}>
-              <Field label="Fiber (g, optional)" value={form.fiber} onChangeText={(value) => update('fiber', value)} numeric />
-              <Field label="Barcode (optional)" value={form.barcode} onChangeText={(value) => update('barcode', value)} keyboardType="number-pad" />
+              <Field label="Fiber (g, optional)" value={form.fiber} onValueChange={(value) => update('fiber', value)} numeric />
+              <Field label="Barcode (optional)" value={form.barcode} onValueChange={(value) => update('barcode', value)} keyboardType="number-pad" />
             </View>
 
             <Pressable
@@ -313,7 +303,7 @@ export default function CustomFoodScreen() {
             {editId === null && existing.length > 0 ? (
               <View style={{ gap: space.sm, marginTop: space.lg }}>
                 <Text style={[type.heading, { color: theme.text }]}>Your custom foods</Text>
-                <Field label="Search your foods" value={filter} onChangeText={setFilter} placeholder="Search by name or brand" />
+                <Field label="Search your foods" value={filter} onValueChange={setFilter} placeholder="Search by name or brand" />
                 {existing.filter(food => `${food.name} ${food.brand ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase())).map((food) => (
                   <Pressable
                     key={food.id}
@@ -338,38 +328,6 @@ export default function CustomFoodScreen() {
   )
 }
 
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  numeric = false,
-  keyboardType,
-}: {
-  label: string
-  value: string
-  onChangeText: (value: string) => void
-  placeholder?: string
-  numeric?: boolean
-  keyboardType?: 'number-pad'
-}) {
-  const theme = useTheme()
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={[type.caption, { color: theme.textMuted, marginBottom: space.xs }]}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textFaint}
-        keyboardType={keyboardType ?? (numeric ? 'decimal-pad' : 'default')}
-        autoCapitalize={label.includes('Barcode') ? 'none' : 'sentences'}
-        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgElevated }]}
-      />
-    </View>
-  )
-}
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

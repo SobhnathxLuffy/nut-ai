@@ -7,6 +7,7 @@ import {
   applyWebOption,
   beginScan,
   currentScanEpoch,
+  addRow,
   editGrams,
   getPhase,
   removeRow,
@@ -252,5 +253,45 @@ describe('scan epochs (P2-7)', () => {
       'https://example.com/nutrition',
     )
     expect(readyPhase().result.meal.ingredients[0]!.userEditedAt).toBeUndefined()
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// P3-A5: bands must re-align by ROW ID on every mutation. bands[] was parallel
+// to the scanned rows — a mid-list removeRow used to shift every later band
+// one slot and compute the meal band from the wrong rows.
+// ---------------------------------------------------------------------------
+
+describe('band realignment (P3-A5)', () => {
+  it('removeRow keeps each surviving row paired with its own band', () => {
+    const rows = [
+      row({ id: 'a', bandHalfPct: 0.05, displayName: 'A' }),
+      row({ id: 'b', bandHalfPct: 0.5, displayName: 'B' }),
+      row({ id: 'c', bandHalfPct: 0.1, displayName: 'C' }),
+    ]
+    readyWith(rows)
+    removeRow('b') // middle removal is the mispairing case
+    const p = readyPhase()
+    expect(p.bands).toHaveLength(2)
+    expect(p.bands.map((b) => b.halfPct)).toEqual([0.05, 0.1])
+    // The re-alignment is by identity of pairing, not by re-deriving from
+    // bandHalfPct: the original band OBJECTS survive for surviving rows.
+    expect(p.bands[0]!.tier).toBe('moderate')
+  })
+
+  it('addRow after a scan gives the new row a fallback band instead of shifting others', () => {
+    const rows = [
+      row({ id: 'a', bandHalfPct: 0.05 }),
+      row({ id: 'b', bandHalfPct: 0.1 }),
+    ]
+    readyWith(rows)
+    const before = readyPhase().bands.map((b) => b.halfPct)
+    addRow(row({ id: 'c', bandHalfPct: 0.3 }))
+    const p = readyPhase()
+    expect(p.bands).toHaveLength(3)
+    // Old rows keep their scanned bands; the appended row gets its own.
+    expect(p.bands.slice(0, 2).map((b) => b.halfPct)).toEqual(before)
+    expect(p.bands[2]!.halfPct).toBe(0.3)
   })
 })

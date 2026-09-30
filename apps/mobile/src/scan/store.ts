@@ -55,6 +55,8 @@ export type ScanPhase =
       bands: Band[]
       meta: ScanMeta | null
       webLookups: Record<string, WebLookupState>
+      /** P3-A10: receipt line items no lookup could resolve — named, never silently dropped. */
+      unresolvedItems?: string[]
     }
   | {
       kind: 'failed'
@@ -115,11 +117,25 @@ export function getPhase(): ScanPhase {
 /** Every edit path funnels through here, so the invariant holds in exactly one place. */
 function mutateMeal(fn: (meal: LoggedMeal) => LoggedMeal) {
   if (phase.kind !== 'ready') return
-  const meal = fn(phase.result.meal)
-  const { totals, mealBand } = recomputeAfterEdit(meal, phase.bands)
+  const ready = phase
+  // P3-A5: bands are parallel to the rows they were SCANNED with. Any
+  // add/remove re-indexes the rows, so re-align the bands by row id before
+  // recomputing — otherwise a mid-list removal shifts every later band one
+  // slot and the meal-level confidence band is computed from the wrong rows.
+  // Rows added after the scan (AI repair, manual add) fall back to their own
+  // bandHalfPct with the same moderate-tier default the pipeline uses.
+  const bandByRowId = new Map(
+    ready.result.meal.ingredients.map((r, i) => [r.id, ready.bands[i] as Band | undefined]),
+  )
+  const meal = fn(ready.result.meal)
+  const bands: Band[] = meal.ingredients.map(
+    (r) => bandByRowId.get(r.id) ?? { halfPct: r.bandHalfPct, tier: 'moderate' as const, reasons: [] },
+  )
+  const { totals, mealBand } = recomputeAfterEdit(meal, bands)
   phase = {
-    ...phase,
-    result: { ...phase.result, meal, totals, mealBand },
+    ...ready,
+    bands,
+    result: { ...ready.result, meal, totals, mealBand },
   }
   emit()
 }

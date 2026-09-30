@@ -232,7 +232,7 @@ export default function RoutinesScreen() {
 
       {editing && (
         <Card>
-          <Label>{editId ? 'Edit Routine Details' : 'Design Routine'}</Label>
+          <Label>{editId ? 'Edit routine details' : 'Design routine'}</Label>
           <Field label="Routine Name" value={name} onChangeText={setName} placeholder="e.g. Upper Body A" />
 
           <Label>Planned Exercises ({selectedExercises.length})</Label>
@@ -320,7 +320,7 @@ export default function RoutinesScreen() {
           })}
 
           <Button
-            label="+ Add Exercises from Library"
+            label="+ Add exercises from library"
             selected
             onPress={() => {
               router.push({
@@ -335,7 +335,7 @@ export default function RoutinesScreen() {
           />
 
           <Row>
-            <Button label="Save Routine" selected disabled={action.busy} onPress={() => void action.run(handleSave)} />
+            <Button label="Save routine" selected disabled={action.busy} onPress={() => void action.run(handleSave)} />
             <Button label="Cancel" onPress={() => { setEditing(false); initialLoadedRef.current = false }} />
           </Row>
         </Card>
@@ -363,7 +363,7 @@ export default function RoutinesScreen() {
               </View>
             </Row>
             <Row>
-              <Button label="Launch Workout" selected onPress={() => void action.run(() => handleLaunch(r.id))} />
+              <Button label="Launch workout" selected onPress={() => void action.run(() => handleLaunch(r.id))} />
               <Button
                 label="Edit"
                 onPress={() => {

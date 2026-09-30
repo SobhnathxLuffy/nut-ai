@@ -11,6 +11,7 @@ import { classify, classifyTransportError, SCHEMA_MALFORMED_JSON, serializeBody 
 import { extractJsonObject } from '../wire/json'
 import type { Credential, WebLookupOutcome } from '../wire/types'
 import { visionTextFor } from '../transports'
+import { ESTIMATE_TIMEOUT_MS, LOOKUP_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * Vision-JSON one-shots (QA Wave 4 god-file split): label transcription,
@@ -74,7 +75,7 @@ export async function runLabelScan(
   input: { model: string; imageBase64: string },
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 30_000,
+  timeoutMs = LOOKUP_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
   return postVisionJson(provider, buildLabelScanRequest(provider, input, credential), fetchImpl, timeoutMs, baseUrl)
@@ -89,7 +90,7 @@ export async function runExerciseEstimate(
   input: { model: string; description: string; weightKg: number | null; baseUrl?: string | null },
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 20_000,
+  timeoutMs = ESTIMATE_TIMEOUT_MS,
 ): Promise<WebLookupOutcome> {
   const built = buildTextJsonRequest(
     provider,
@@ -106,7 +107,7 @@ export async function runReceiptScan(
   input: { model: string; imageBase64: string },
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 30_000,
+  timeoutMs = LOOKUP_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
   return postVisionJson(provider, buildReceiptScanRequest(provider, input, credential), fetchImpl, timeoutMs, baseUrl)

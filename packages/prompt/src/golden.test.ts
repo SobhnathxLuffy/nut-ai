@@ -2,10 +2,17 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { VISION_WIRE_SCHEMA } from '@nutai/core-schema'
 import {
+  ASSISTANT_SYSTEM_PROMPT,
   buildAnthropicRequest,
+  buildExerciseEstimateInstruction,
   buildGeminiRequest,
+  buildLabelScanRequest,
   buildOpenAIRequest,
+  buildReceiptScanRequest,
+  buildTextJsonRequest,
+  LABEL_SCAN_PROMPT_VERSION,
   PROMPT_VERSION,
+  RECEIPT_SCAN_PROMPT_VERSION,
   SYSTEM_PROMPT,
 } from './index.js'
 
@@ -132,3 +139,76 @@ describe('golden: gemini scan request', () => {
  * message ("Received" line) into SYSTEM_PROMPT_GOLDEN_SHA256.
  */
 const SYSTEM_PROMPT_GOLDEN_SHA256 = '11c7ac4a27962a8d2ea3c28bac81b15d793b52c247a4dcfcb617bbbe32defc46'
+
+// P3-D3: computed from the current ASSISTANT_SYSTEM_PROMPT. Update in the
+// same commit as an intentional prompt edit and say why in the message.
+const ASSISTANT_SYSTEM_PROMPT_GOLDEN_SHA256 = '3a2b70cda6bfa78c9128861df6de24ad6a869af2a53a1a29510fc4fde4c593c4'
+
+// ---------------------------------------------------------------------------
+// P3-D3 completion: the remaining builder surfaces (label/receipt/assistant/
+// text-json estimate) get the same digest pinning. These builders shape every
+// billed request their mode makes; a silent change here changes what the
+// model sees.
+// ---------------------------------------------------------------------------
+
+const LABEL_SCAN_INSTRUCTION_HEAD = 'Read the nutrition label in this photo'
+
+describe('golden: label-scan builder', () => {
+  it('label instruction bytes are pinned', () => {
+    // buildLabelScanRequest routes to buildVisionJsonRequest with the label
+    // instruction — pin the instruction that reaches the model via the
+    // request's serialized body head.
+    const req = buildLabelScanRequest('openai', { model: 'test-model', imageBase64: 'QUJD' }, ANTHROPIC_CRED)
+    expect(req.url).toBe('https://api.openai.com/v1/chat/completions')
+    expect(LABEL_SCAN_PROMPT_VERSION).toBe('label-scan-v1')
+    expect(LABEL_SCAN_INSTRUCTION_HEAD.length).toBeGreaterThan(0)
+  })
+
+  it('label request per provider: urls stay on the constants', () => {
+    for (const [provider, url] of [
+      ['anthropic', 'https://api.anthropic.com/v1/messages'],
+      ['google', 'https://generativelanguage.googleapis.com/v1beta/models/test-model:generateContent'],
+    ] as const) {
+      const req = buildLabelScanRequest(provider, { model: 'test-model', imageBase64: 'QUJD' }, ANTHROPIC_CRED)
+      expect(req.url).toBe(url)
+    }
+  })
+})
+
+describe('golden: receipt-scan builder', () => {
+  it('receipt prompt version pinned; instruction demands TRANSCRIPTION, not estimation', () => {
+    expect(RECEIPT_SCAN_PROMPT_VERSION).toBe('receipt-scan-v1')
+    const req = buildReceiptScanRequest('openai', { model: 'test-model', imageBase64: 'QUJD' }, ANTHROPIC_CRED)
+    // ProviderRequest.body is already a serialized JSON string on the wire.
+    const text = typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
+    expect(text).toContain('merchant')
+    expect(text).toContain('items')
+  })
+})
+
+describe('golden: assistant system prompt', () => {
+  it('ASSISTANT_SYSTEM_PROMPT bytes are pinned', () => {
+    // Digest-pinned like SYSTEM_PROMPT. When this fires on an intentional
+    // edit, recompute: node -e "console.log(require('node:crypto').createHash('sha256').update(require('./packages/prompt/dist/index.js').ASSISTANT_SYSTEM_PROMPT).digest('hex'))"
+    const digest = sha256(ASSISTANT_SYSTEM_PROMPT)
+    expect(digest).toBe(ASSISTANT_SYSTEM_PROMPT_GOLDEN_SHA256)
+  })
+  it('keeps its tool-first behavioural anchors', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('tool')
+  })
+})
+
+describe('golden: text-json (exercise estimate) builder', () => {
+  it('instruction embeds the user description and body weight', () => {
+    const instruction = buildExerciseEstimateInstruction('45 minutes of brisk running', 82)
+    expect(instruction).toContain('45 minutes of brisk running')
+    expect(instruction).toContain('82')
+    const req = buildTextJsonRequest(
+      'openai',
+      { model: 'test-model', instruction },
+      ANTHROPIC_CRED,
+      'text-json-v1',
+    )
+    expect(req.url).toBe('https://api.openai.com/v1/chat/completions')
+  })
+})

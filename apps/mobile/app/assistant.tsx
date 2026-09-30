@@ -22,9 +22,11 @@ import { describeActiveModel, composeModelLine } from '../src/inference/active-m
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { loadFood, resolveByText } from '@nutai/resolver'
 import type { CorrectionIntent } from '@nutai/core-schema'
+import { describeCorrectionOperation } from '../src/data/correction-describe'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
+import { STREAM_STALL_TIMEOUT_MS } from '@nutai/prompt'
 
 const HISTORY_SETTING = 'assistant_history'
 const HISTORY_MAX_TURNS = 40
@@ -164,6 +166,7 @@ export default function AssistantScreen() {
   const closeAssistant = () => {
     abortRef.current.current?.()
     try {
+      // eslint-disable-next-line no-restricted-syntax -- expo-router feature detect (canDismiss is version-gated)
       if (typeof (router as any).canDismiss === 'function' && router.canDismiss()) {
         router.back()
         return
@@ -171,7 +174,9 @@ export default function AssistantScreen() {
     } catch {
       // Fall through to the plain navigate below.
     }
-    router.replace('/')
+    // P3-U2: replace('/') re-creates the Home screen and resets its
+    // tab/scroll state; '/(tabs)' lands on the existing tab root instead.
+    router.replace('/(tabs)')
   }
 
   useEffect(() => {
@@ -210,6 +215,7 @@ export default function AssistantScreen() {
     const nextStatus = { ...proposalStatus }
     for (const [msgId, status] of Object.entries(assistantGlobalStatus)) {
       if (nextStatus[msgId] !== status) {
+// eslint-disable-next-line no-restricted-syntax -- proposal-status union arrives via a dynamic status map
         nextStatus[msgId] = status as any
         changed = true
       }
@@ -233,6 +239,9 @@ export default function AssistantScreen() {
     setInput('')
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }])
     setLoading(true)
+    // P3-A2: the placeholder id is declared outside the try so the catch can
+    // turn the bubble into the error bubble instead of appending a second one.
+    const aiMsgId = (Date.now() + 1).toString()
 
     try {
       const configuredProvider = (await setting('provider')) as ProviderId | 'none' | ''
@@ -257,7 +266,6 @@ export default function AssistantScreen() {
 
       // The streaming bubble exists from the moment the send happens — deltas
       // patch it in place, word by word.
-      const aiMsgId = (Date.now() + 1).toString()
       setMessages(prev => [...prev, { id: aiMsgId, role: 'assistant', text: '', reasoning: '', streaming: true }])
       const patchStream = (d: { text?: string; reasoning?: string }) =>
         setMessages(prev =>
@@ -296,7 +304,7 @@ export default function AssistantScreen() {
           baseUrl,
           // Abort if the gateway sends nothing for 45s — before the first byte
           // or mid-stream — so the chat never hangs on 'Thinking…' forever.
-          stallTimeoutMs: 45_000,
+          stallTimeoutMs: STREAM_STALL_TIMEOUT_MS,
         },
         { onDelta: patchStream, abortRef: abortRef.current },
       )
@@ -312,9 +320,10 @@ export default function AssistantScreen() {
         res = await parseAssistantReply(stream.text)
       } else if (stream.text.trim()) {
         // Mid-stream drop with visible content: keep what arrived rather than
-        // discarding a half-read answer.
+        // discarding a half-read answer. A user stop is not an error — never
+        // paste the raw 'cancelled' marker into the bubble.
         res = await parseAssistantReply(stream.text)
-        streamError = stream.error?.message || 'The connection dropped mid-answer.'
+        streamError = stream.cancelled ? '' : stream.error?.message || 'The connection dropped mid-answer.'
       } else {
         // Nothing streamed (no SSE support, dead gateway, empty stream) — the
         // legacy non-streaming chain still answers, with its provider fallbacks.
@@ -368,7 +377,18 @@ export default function AssistantScreen() {
         ...(finalText.trim() ? [{ role: 'assistant' as const, content: finalText.trim() }] : []),
       ])
     } catch (e: any) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', text: e?.message || 'Sorry, an error occurred.' }])
+      // P3-A2: the streaming placeholder added for this turn must not survive
+      // as an empty bubble when the legacy chain throws before producing text
+      // — turn the placeholder ITSELF into the error bubble instead of
+      // appending a second, duplicate one.
+      const errText = e?.message || 'Sorry, an error occurred.'
+      setMessages(prev => {
+        const placeholder = prev.find(m => m.id === aiMsgId)
+        if (placeholder && placeholder.streaming) {
+          return prev.map(m => (m.id === aiMsgId ? { ...m, streaming: false, text: errText } : m))
+        }
+        return [...prev, { id: Date.now().toString(), role: 'assistant', text: errText }]
+      })
     } finally {
       abortRef.current.current = null
       setLoading(false)
@@ -580,20 +600,6 @@ export default function AssistantScreen() {
   )
 }
 
-function describeCorrectionOp(op: CorrectionIntent['operations'][number], nameOf: (id: string) => string): string {
-  switch (op.type) {
-    case 'update_quantity':
-      return op.grams != null
-        ? `Set “${nameOf(op.id)}” to ${Math.round(op.grams)} g`
-        : `Adjust “${nameOf(op.id)}”`
-    case 'remove_item':
-      return `Remove “${nameOf(op.id)}”`
-    case 'add_item':
-      return `Add “${op.name}”${op.grams != null ? ` (~${Math.round(op.grams)} g)` : ''}`
-    case 'replace_item':
-      return `Swap “${nameOf(op.id)}” for “${op.name}”`
-  }
-}
 
 /**
  * AIP-004 confirmation card. The model proposed; the user decides. Every
@@ -663,7 +669,7 @@ function CorrectionProposalCard({
       <Text style={[type.bodyStrong, { color: t.text }]}>Correct today&apos;s log</Text>
       <View style={{ marginTop: space.sm, gap: space.xs }}>
         {operations.map((op, i) => (
-          <Text key={i} style={[type.body, { color: t.text }]}>• {describeCorrectionOp(op, nameOf)}</Text>
+          <Text key={i} style={[type.body, { color: t.text }]}>• {describeCorrectionOperation(op, nameOf)}</Text>
         ))}
       </View>
       <Text style={[type.micro, { color: t.textMuted, marginTop: space.sm }]}>

@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
+// P2-40: import the COMPILED schema exports instead of regex-scraping the
+// TypeScript source — a renamed or reformatted const in schema.ts used to
+// silently build an empty dish knowledge base.
+import { DISH_KB_SCHEMA, DISH_KB_FTS_SCHEMA } from '../../packages/db-adapter/dist/index.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = join(HERE, '../..')
@@ -72,15 +75,15 @@ function ensureSupplementalFoods(db) {
 }
 
 async function main() {
-  const src = await readFile(join(REPO, 'packages/db-adapter/src/schema.ts'), 'utf8')
-  const grab = (name) => {
-    const m = new RegExp(`export const ${name} = \\\`([\\s\\S]*?)\\\``).exec(src)
-    return m ? m[1] : ''
+  // P2-40 companion: fail LOUDLY if the compiled adapter is stale or missing
+  // (run the workspace build first) instead of db.exec('') no-op'ing into a
+  // confusing "no such table" failure later.
+  if (!DISH_KB_SCHEMA || !DISH_KB_FTS_SCHEMA) {
+    throw new Error(
+      'build-sqlite: DISH_KB_SCHEMA/DISH_KB_FTS_SCHEMA are empty — rebuild packages/db-adapter (npm run build) so the compiled exports are current.',
+    )
   }
-  
-  const DISH_KB_SCHEMA = grab('DISH_KB_SCHEMA')
-  const DISH_KB_FTS_SCHEMA = grab('DISH_KB_FTS_SCHEMA')
-  
+
   const db = new Database(DB_PATH)
   
   db.exec('DROP TABLE IF EXISTS dish_aliases;')

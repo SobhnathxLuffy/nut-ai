@@ -22,7 +22,8 @@
  * no /v1 suffix — for the settings screen to surface at paste time.
  */
 
-const OPENAI_PREFIX = 'https://api.openai.com/v1'
+// P3-D15: the rewriteable prefix lives in the shared provider constants module.
+import { OPENAI_PREFIX } from '@nutai/prompt'
 
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|::1)(:\d+)?$/i
 

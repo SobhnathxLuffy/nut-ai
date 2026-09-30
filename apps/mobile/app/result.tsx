@@ -22,6 +22,7 @@ import { customProviderBaseUrl, logMeal, setting, db as openUserDb } from '../sr
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
+import { describeCorrectionOperation, rowsNameOf } from '../src/data/correction-describe'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
 import { describeActiveModel } from '../src/inference/active-model'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
@@ -31,6 +32,7 @@ import {
   answerQuestion,
   applyWebOption,
   editGrams,
+  getPhase,
   getScanReviewMode,
   removeRow,
   reset,
@@ -256,6 +258,11 @@ export default function Result() {
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
             Quick result — every ingredient matched the database with high confidence, nothing needs a check.
           </Text>
+          {phase.kind === 'ready' && phase.unresolvedItems?.length ? (
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
+              {`${phase.unresolvedItems.length} receipt ${phase.unresolvedItems.length === 1 ? 'item' : 'items'} could not be matched, so ${phase.unresolvedItems.length === 1 ? 'it was' : 'they were'} not logged: ${phase.unresolvedItems.join(', ')}.`}
+            </Text>
+          ) : null}
 
           <View style={{ marginTop: space.lg }}>
             <Text style={[type.hero, { color: theme.text }]}>{result.totals.kcal}</Text>
@@ -346,6 +353,14 @@ export default function Result() {
         {fixNotice ? (
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
             {fixNotice}
+          </Text>
+        ) : null}
+
+        {/* P3-A10: a partial receipt names what it dropped — photographed line
+            items must never vanish without a word. */}
+        {phase.kind === 'ready' && phase.unresolvedItems?.length ? (
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
+            {`${phase.unresolvedItems.length} receipt ${phase.unresolvedItems.length === 1 ? 'item' : 'items'} could not be matched, so ${phase.unresolvedItems.length === 1 ? 'it was' : 'they were'} not logged: ${phase.unresolvedItems.join(', ')}.`}
           </Text>
         ) : null}
 
@@ -599,7 +614,7 @@ export default function Result() {
                 {(pendingIntent?.operations ?? []).map((op, i) => (
                   <View key={`${op.type}-${i}`} style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}>
                     <Text style={[type.body, { color: theme.text, flex: 1 }]}>
-                      {describeOperation(op, result.meal.ingredients)}
+                      {describeCorrectionOperation(op, rowsNameOf(result.meal.ingredients))}
                     </Text>
                   </View>
                 ))}
@@ -720,12 +735,20 @@ export default function Result() {
   async function applyIntent() {
     if (phase.kind !== 'ready' || !pendingIntent || fixBusy) return
     setFixBusy(true)
-    const rows = phase.result.meal.ingredients
+    // P3-A4: rows are re-read from the live store per operation — a
+    // remove_item earlier in the same batch must not leave the later ops
+    // resolving grams against a stale pre-removal snapshot.
+    const findRow = (id: string) => {
+      const current = getPhase()
+      return current.kind === 'ready'
+        ? current.result.meal.ingredients.find((r) => r.id === id)
+        : undefined
+    }
     const skipped: string[] = []
     for (const op of pendingIntent.operations) {
       try {
         if (op.type === 'update_quantity') {
-          const row = rows.find((r) => r.id === op.id)
+          const row = findRow(op.id)
           if (!row) {
             skipped.push('One item to adjust is no longer in the list')
             continue
@@ -745,7 +768,7 @@ export default function Result() {
           }
           addRow(toIngredientRow(sel, op.name))
         } else if (op.type === 'replace_item') {
-          const row = rows.find((r) => r.id === op.id)
+          const row = findRow(op.id)
           const sel = await resolveCorpusSelection(op.canonical_food_key || op.name, row?.grams)
           if (!sel) {
             skipped.push(`“${op.name}” is not in the nutrition database`)
@@ -768,24 +791,6 @@ export default function Result() {
   }
 }
 
-function describeOperation(
-  op: CorrectionIntent['operations'][number],
-  rows: IngredientRow[],
-): string {
-  const nameOf = (id: string) => rows.find((r) => r.id === id)?.displayName ?? 'that item'
-  switch (op.type) {
-    case 'update_quantity':
-      return op.grams != null
-        ? `Set “${nameOf(op.id)}” to ${Math.round(op.grams)} g`
-        : `Adjust “${nameOf(op.id)}” (${op.qualitative_size ?? 'amount'})`
-    case 'remove_item':
-      return `Remove “${nameOf(op.id)}”`
-    case 'add_item':
-      return `Add “${op.name}”${op.grams != null ? ` (~${Math.round(op.grams)} g)` : ''}`
-    case 'replace_item':
-      return `Swap “${nameOf(op.id)}” for “${op.name}”`
-  }
-}
 
 function domainOf(url: string): string {
   const m = url.match(/^https?:\/\/(?:www\.)?([^/]+)/i)

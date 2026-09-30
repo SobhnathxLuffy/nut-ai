@@ -23,6 +23,8 @@ import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
 import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { ChipRow } from '../src/components/ChipRow'
+import { NewIngredientForm } from '../src/components/NewIngredientForm'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 interface CompositeMealMatch {
@@ -703,7 +705,7 @@ export default function FoodSearch() {
             {r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? (
               <View style={{ marginVertical: 4, paddingVertical: 2, paddingHorizontal: 6, borderRadius: radius.sm, backgroundColor: theme.bgSunken, borderWidth: 1, borderColor: theme.safety, alignSelf: 'flex-start' }}>
                 <Text style={[type.micro, { color: theme.safety, fontWeight: '700' }]}>
-                  ⚠️ DRAFT RECIPE · UNVERIFIED NUTRITION · TAP TO CUSTOMIZE
+                  DRAFT RECIPE · UNVERIFIED NUTRITION · TAP TO CUSTOMIZE
                 </Text>
               </View>
             ) : null}
@@ -726,7 +728,7 @@ export default function FoodSearch() {
       {/* Unknown Dish / Zero Matches Fallback Button */}
       {initialization === 'ready' && query.trim().length === 2 && !busy && (
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.lg }]}>
-          Keep typing — search and ingredient decomposition need at least 3 characters.
+          Search results appear from 2 characters — dish decomposition needs 3.
         </Text>
       )}
       {initialization === 'ready' && query.trim().length >= 3 && !busy && results.length === 0 && !showDecompose && (
@@ -751,7 +753,7 @@ export default function FoodSearch() {
         <View style={[styles.decomposeContainer, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={[type.body, { color: theme.text, fontWeight: '700' }]}>
-              🥣 Dish Recipe Decomposition
+              Dish Recipe Decomposition
             </Text>
             <Pressable accessibilityRole="button" onPress={() => setShowDecompose(false)} hitSlop={space.sm}>
               <Text style={[type.caption, { color: theme.textMuted }]}>✕ Close</Text>
@@ -869,7 +871,7 @@ export default function FoodSearch() {
               accessibilityRole="button"
               accessibilityLabel={`Add ingredient ${option.label}`}
               onPress={() => addDecompItem(option.foodId, option.label, option.source, 100)}
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
+              style={{ flexDirection: 'row', alignItems: 'center', minHeight: MIN_TAP_TARGET, paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}
             >
               <View style={{ flex: 1 }}>
                 <Text style={[type.caption, { color: theme.text }]} numberOfLines={2}>{option.label}</Text>
@@ -881,74 +883,34 @@ export default function FoodSearch() {
             </Pressable>
           ))}
 
-          {/* Create-new-ingredient mini form (per-100 g basis) */}
+          {/* P2-30 (a): the shared create-ingredient mini form — this screen and
+              dish-composer used to carry verbatim copies that drifted. */}
           {showCreateIngredient && (
-            <View style={[styles.nutritionBox, { backgroundColor: theme.bg, borderColor: theme.border, marginTop: space.xs }]}>
-              <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>New ingredient (values per 100 g)</Text>
-              <TextInput
-                accessibilityLabel="Ingredient name"
-                value={newIngredient.name}
-                onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, name: text }))}
-                placeholder="Name"
-                placeholderTextColor={theme.textFaint}
-                style={[styles.smallInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
-              />
-              <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xs }}>
-                {([
-                  ['kcal', 'kcal'], ['protein', 'P g'], ['carbs', 'C g'], ['fat', 'F g'],
-                ] as const).map(([field, placeholder]) => (
-                  <TextInput
-                    key={field}
-                    accessibilityLabel={`${placeholder} per 100 grams`}
-                    value={newIngredient[field]}
-                    onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, [field]: text }))}
-                    placeholder={placeholder}
-                    placeholderTextColor={theme.textFaint}
-                    keyboardType="numeric"
-                    style={[styles.smallInput, { flex: 1, textAlign: 'center', color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken, marginTop: 0 }]}
-                  />
-                ))}
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Save custom ingredient"
-                disabled={creatingIngredient}
-                onPress={handleCreateIngredient}
-                style={[styles.actionBtn, { marginTop: space.sm, backgroundColor: theme.protein, borderColor: theme.protein }]}
-              >
-                <Text style={[type.label, { color: theme.bg, fontWeight: '700' }]}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
-              </Pressable>
-            </View>
+            <NewIngredientForm
+              value={newIngredient}
+              onChange={setNewIngredient}
+              onSave={handleCreateIngredient}
+              saving={creatingIngredient}
+              containerStyle={[styles.nutritionBox, { backgroundColor: theme.bg, borderColor: theme.border, marginTop: space.xs }]}
+              nameInputStyle={styles.smallInput}
+              macroInputStyle={[styles.smallInput, { marginTop: 0 }]}
+            />
           )}
 
-          {/* Cooking Fat / Oil Clarification */}
+          {/* Cooking Fat / Oil Clarification — P2-30 (b): shared chip row. */}
           <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Cooking Fat / Oil (and how much)</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
-            <View style={{ flexDirection: 'row', gap: space.xs }}>
-              {COOKING_FAT_OPTIONS.map((item) => (
-                <Pressable
-                  key={item.optionId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select ${item.label}`}
-                  onPress={() => {
-                    setSelectedFatId(item.optionId)
-                    setFatGrams(String(item.defaultGrams))
-                  }}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: selectedFatId === item.optionId ? theme.protein : theme.bg,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <Text style={[type.micro, { color: selectedFatId === item.optionId ? theme.bg : theme.text }]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
+          <ChipRow
+            items={COOKING_FAT_OPTIONS}
+            keyOf={(item) => item.optionId}
+            label={(item) => item.label}
+            a11yLabel={(item) => `Select ${item.label}`}
+            isActive={(item) => selectedFatId === item.optionId}
+            onPress={(item) => {
+              setSelectedFatId(item.optionId)
+              setFatGrams(String(item.defaultGrams))
+            }}
+            chipStyle={styles.chip}
+          />
           {(() => {
             const fatOpt = COOKING_FAT_OPTIONS.find((f) => f.optionId === selectedFatId) ?? COOKING_FAT_OPTIONS[0]
             if (!fatOpt.foodId) return null
@@ -966,32 +928,17 @@ export default function FoodSearch() {
             )
           })()}
 
-          {/* Cooking Method / Yield Clarification */}
+          {/* Cooking Method / Yield Clarification — P2-30 (b): shared chip row. */}
           <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Cooking Method & Yield</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
-            <View style={{ flexDirection: 'row', gap: space.xs }}>
-              {COOKING_METHOD_OPTIONS.map((item) => (
-                <Pressable
-                  key={item.method}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.label} cooking method`}
-                  accessibilityState={{ selected: selectedMethod === item.method }}
-                  onPress={() => setSelectedMethod(item.method)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: selectedMethod === item.method ? theme.protein : theme.bg,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <Text style={[type.micro, { color: selectedMethod === item.method ? theme.bg : theme.text }]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </ScrollView>
+          <ChipRow
+            items={COOKING_METHOD_OPTIONS}
+            keyOf={(item) => item.method}
+            label={(item) => item.label}
+            a11yLabel={(item) => `${item.label} cooking method`}
+            isActive={(item) => selectedMethod === item.method}
+            onPress={(item) => setSelectedMethod(item.method)}
+            chipStyle={styles.chip}
+          />
 
           {/* Portion Size (grams) */}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: space.md, gap: space.md }}>

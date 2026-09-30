@@ -1,17 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Alert,
-  BackHandler,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { loadFood, resolveByText, type ScoredCandidate } from '@nutai/resolver'
@@ -33,6 +22,10 @@ import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { Field } from '../src/components/Field'
+
+// The old local wrapper's container metrics (two-column flexWrap rows).
+const FIELD_CONTAINER = { minWidth: 140, marginTop: space.md }
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 interface IngredientForm {
@@ -359,7 +352,7 @@ export default function Recipes() {
             </Pressable>
           </View>
 
-        <Field label="Recipe name" value={name} onChange={setName} placeholder="Home dal" />
+        <Field containerStyle={FIELD_CONTAINER} label="Recipe name" value={name} onValueChange={setName} placeholder="Home dal" />
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.lg }]}>Preparation</Text>
         <View style={styles.segmented}>
           {PREPARATIONS.map((value) => (
@@ -377,10 +370,10 @@ export default function Recipes() {
         </View>
 
         <View style={styles.twoCol}>
-          <Field label="Oil / ghee (g)" value={oil} onChange={setOil} numeric />
-          <Field label="Added water (g)" value={water} onChange={setWater} numeric />
-          <Field label="Cooked yield (g)" value={yieldGrams} onChange={setYieldGrams} numeric />
-          <Field label="Servings" value={servings} onChange={setServings} numeric />
+          <Field containerStyle={FIELD_CONTAINER} label="Oil / ghee (g)" value={oil} onValueChange={setOil} numeric />
+          <Field containerStyle={FIELD_CONTAINER} label="Added water (g)" value={water} onValueChange={setWater} numeric />
+          <Field containerStyle={FIELD_CONTAINER} label="Cooked yield (g)" value={yieldGrams} onValueChange={setYieldGrams} numeric />
+          <Field containerStyle={FIELD_CONTAINER} label="Servings" value={servings} onValueChange={setServings} numeric />
         </View>
 
         <View style={[styles.header, { marginTop: space.xl }]}>
@@ -409,7 +402,7 @@ export default function Recipes() {
                 </Pressable>
               ) : null}
             </View>
-            <Field label="Food name" value={ingredient.displayName} onChange={(value) => updateIngredient(index, 'displayName', value, setIngredients)} placeholder="Lentil dal" />
+            <Field containerStyle={FIELD_CONTAINER} label="Food name" value={ingredient.displayName} onValueChange={(value) => updateIngredient(index, 'displayName', value, setIngredients)} placeholder="Lentil dal" />
             <Pressable
               accessibilityRole="button"
               onPress={() => void findIngredient(index)}
@@ -431,15 +424,15 @@ export default function Recipes() {
                 <Text style={[type.caption, { color: theme.textMuted }]}>{Math.round(candidate.energyKcal ?? 0)} kcal</Text>
               </Pressable>
             )) : null}
-            <Field label="Amount (g)" value={ingredient.grams} onChange={(value) => updateIngredient(index, 'grams', value, setIngredients)} numeric />
+            <Field containerStyle={FIELD_CONTAINER} label="Amount (g)" value={ingredient.grams} onValueChange={(value) => updateIngredient(index, 'grams', value, setIngredients)} numeric />
             <Pressable onPress={()=>setShowDetails(value=>!value)} style={styles.details}><Text style={[type.caption,{color:theme.textMuted}]}>{showDetails?'Hide nutrition details':'Nutrition details'}</Text></Pressable>
             {showDetails ? <View style={styles.twoCol}>
-              <Field label="Source ID" value={ingredient.foodId} onChange={(value) => updateIngredient(index, 'foodId', value, setIngredients)} placeholder="Selected automatically" />
-              <Field label="kcal / 100 g" value={ingredient.kcal} onChange={(value) => updateIngredient(index, 'kcal', value, setIngredients)} numeric />
-              <Field label="Protein / 100 g" value={ingredient.protein} onChange={(value) => updateIngredient(index, 'protein', value, setIngredients)} numeric />
-              <Field label="Carbs / 100 g" value={ingredient.carbs} onChange={(value) => updateIngredient(index, 'carbs', value, setIngredients)} numeric />
-              <Field label="Fat / 100 g" value={ingredient.fat} onChange={(value) => updateIngredient(index, 'fat', value, setIngredients)} numeric />
-              <Field label="Fiber / 100 g" value={ingredient.fiber} onChange={(value) => updateIngredient(index, 'fiber', value, setIngredients)} numeric />
+              <Field containerStyle={FIELD_CONTAINER} label="Source ID" value={ingredient.foodId} onValueChange={(value) => updateIngredient(index, 'foodId', value, setIngredients)} placeholder="Selected automatically" />
+              <Field containerStyle={FIELD_CONTAINER} label="kcal / 100 g" value={ingredient.kcal} onValueChange={(value) => updateIngredient(index, 'kcal', value, setIngredients)} numeric />
+              <Field containerStyle={FIELD_CONTAINER} label="Protein / 100 g" value={ingredient.protein} onValueChange={(value) => updateIngredient(index, 'protein', value, setIngredients)} numeric />
+              <Field containerStyle={FIELD_CONTAINER} label="Carbs / 100 g" value={ingredient.carbs} onValueChange={(value) => updateIngredient(index, 'carbs', value, setIngredients)} numeric />
+              <Field containerStyle={FIELD_CONTAINER} label="Fat / 100 g" value={ingredient.fat} onValueChange={(value) => updateIngredient(index, 'fat', value, setIngredients)} numeric />
+              <Field containerStyle={FIELD_CONTAINER} label="Fiber / 100 g" value={ingredient.fiber} onValueChange={(value) => updateIngredient(index, 'fiber', value, setIngredients)} numeric />
             </View> : null}
           </View>
         ))}
@@ -526,29 +519,6 @@ function updateIngredient(
   setIngredients((current) => current.map((ingredient, itemIndex) => itemIndex === index ? { ...ingredient, [field]: value } : ingredient))
 }
 
-function Field({ label, value, onChange, placeholder, numeric = false }: {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  placeholder?: string
-  numeric?: boolean
-}) {
-  const theme = useTheme()
-  return (
-    <View style={{ flex: 1, minWidth: 140, marginTop: space.md }}>
-      <Text style={[type.caption, { color: theme.textMuted }]}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        value={value}
-        onChangeText={onChange}
-        placeholder={placeholder}
-        placeholderTextColor={theme.textFaint}
-        keyboardType={numeric ? 'decimal-pad' : 'default'}
-        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
-      />
-    </View>
-  )
-}
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

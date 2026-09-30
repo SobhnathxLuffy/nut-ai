@@ -51,6 +51,9 @@ class ExpoDbAdapter implements DbAdapter {
 export async function openUserDb(): Promise<DbAdapter> {
   const db = await SQLite.openDatabaseAsync('user.db')
   await db.execAsync('PRAGMA foreign_keys = ON;')
+  // P3-D10: align with the node adapter — WAL gives the single-connection
+  // write path the same journal-mode behavior on native as in tests/tools.
+  await db.execAsync('PRAGMA journal_mode = WAL;')
   return new ExpoDbAdapter(db)
 }
 

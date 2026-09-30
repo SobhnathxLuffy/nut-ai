@@ -1,5 +1,8 @@
 import { parseSourceFoodId, type NutritionSource, type SourceCandidate, type SourceResolvedFood, type SourceLicenseInfo } from './types.js'
 
+// P3-D16: named timeouts live in packages/prompt/src/timeouts.ts. This
+// package deliberately does not depend on @nutai/prompt, so the off-device
+// read keeps its own tiny constant — value mirrors OFFSOURCE_REQUEST_TIMEOUT_MS.
 const REQUEST_TIMEOUT_MS = 8_000
 
 function finiteNumber(value: unknown): number | null {

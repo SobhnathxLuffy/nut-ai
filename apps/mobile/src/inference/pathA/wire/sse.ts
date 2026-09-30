@@ -125,6 +125,12 @@ export async function runXhrStream(opts: {
     const parse = createSseDeltaParser(deltasFromFor(provider))
 
     let processed = 0
+    // P3-A3: the stream cap is a BYTE budget, not a UTF-16 code-unit count —
+    // counting responseText.length cut off legitimately long multi-byte
+    // answers early. Bytes are counted incrementally per chunk (one shared
+    // encoder, no per-check re-encode of the whole body).
+    const byteCounter = new TextEncoder()
+    let streamedBytes = 0
     let text = ''
     let reasoning = ''
     let sawSse = false
@@ -191,7 +197,8 @@ export async function runXhrStream(opts: {
       // Re-arm: a fresh stallTimeoutMs window for every received chunk, so
       // mid-stream stalls are covered too, not just the pre-first-byte case.
       armStall()
-      if (full.length > STREAM_MAX_BYTES) {
+      streamedBytes += byteCounter.encode(chunk).length
+      if (streamedBytes > STREAM_MAX_BYTES) {
         tooLarge = true
         xhr.abort()
         return

@@ -5,6 +5,7 @@ import { withBaseUrl } from '../../base-url'
 import { classify, classifyTransportError, SCHEMA_MALFORMED_JSON, serializeBody } from '../wire/errors'
 import { extractJsonObject } from '../wire/json'
 import { correctionRequestFor } from '../transports'
+import { CORRECTION_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * The Fix-Result correction call (QA Wave 4 god-file split).
@@ -16,7 +17,7 @@ export async function runCorrectionIntent(
 ): Promise<{ ok: true; intent: CorrectionIntent } | { ok: false; error: { kind: any; message: string; retryable: boolean; httpStatus?: number } }> {
   // P2-3: this call used to have no timeout and no abort — a hung gateway
   // froze the Fix-Result flow forever while the caller awaited it.
-  const timeoutMs = req.timeoutMs ?? 30_000
+  const timeoutMs = req.timeoutMs ?? CORRECTION_TIMEOUT_MS
   try {
     const credObj = await loadCredential(req.provider)
     if (!credObj || !credObj.value) {

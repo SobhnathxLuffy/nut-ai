@@ -1,5 +1,6 @@
 import type { SseDelta } from '../wire/types'
 import { googleDeltasFrom } from '../wire/sse'
+import { googleModelUrl } from '@nutai/prompt'
 
 /**
  * Google (Gemini) transport (QA Wave 4 god-file split).
@@ -46,7 +47,7 @@ export function googleChatRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent`,
+    url: googleModelUrl(opts.model),
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': opts.credentialValue,
@@ -73,7 +74,7 @@ export function googleStreamRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:streamGenerateContent?alt=sse`,
+    url: googleModelUrl(opts.model, 'streamGenerateContent'),
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': opts.credentialValue },
     body: {
       contents: [
@@ -96,7 +97,7 @@ export function googleCorrectionRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent`,
+    url: googleModelUrl(opts.model),
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': opts.credentialValue },
     body: {
       contents: [{ role: 'user', parts: [{ text: `${opts.systemPrompt}\n\n${opts.userPrompt}` }] }],

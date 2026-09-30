@@ -61,6 +61,7 @@ export class RecipeSource implements NutritionSource {
     )
 
     const serving = computeRecipeServing({
+      // eslint-disable-next-line no-restricted-syntax -- sqlite SqlValue -> optional enum at the read boundary; validated downstream
       preparation: versionRow.preparation as any,
       addedOilG: versionRow.added_oil_g,
       addedWaterG: versionRow.added_water_g,

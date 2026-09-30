@@ -61,6 +61,3 @@ export async function migrate(
   return { from, to: await currentVersion(db), applied }
 }
 
-export function isUpToDate(version: number): boolean {
-  return version >= USER_SCHEMA_VERSION
-}

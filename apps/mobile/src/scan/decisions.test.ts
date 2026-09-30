@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BARCODE_NOT_FOUND_FAILURE,
   BARCODE_NO_KEY_FAILURE,
+  describePreprocessFailure,
   gateScanProvider,
   isUnambiguousLookup,
   mergeScanMeta,
@@ -178,5 +179,51 @@ describe('contract: web option → packaged-exact row', () => {
     )
     expect(row.grams).toBe(100)
     expect(row.nutrientSnapshot.kcal).toBeCloseTo(50)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// P1-4: preprocess failures are DIAGNOSED, not blanket-mislabelled.
+// The blanket catch is the exact mechanism that mislabelled the thali
+// RangeError as "could not read the photo". These pin the branch table.
+// ---------------------------------------------------------------------------
+
+describe('contract: preprocess failure diagnosis (P1-4)', () => {
+  it('RangeError / string-length / allocation failures are size diagnoses, not decode failures', () => {
+    const range = new RangeError('Invalid string length')
+    expect(describePreprocessFailure(range)).toMatchObject({
+      message: expect.stringContaining('too large'),
+      canRetry: false,
+    })
+    expect(describePreprocessFailure(new Error('Array buffer allocation failed'))).toMatchObject({
+      message: expect.stringContaining('too large'),
+      canRetry: false,
+    })
+    // A bare RangeError-shaped object (cross-realm throws lose instanceof).
+    expect(describePreprocessFailure({ name: 'RangeError', message: 'x' })).toMatchObject({
+      message: expect.stringContaining('too large'),
+    })
+  })
+
+  it('decode-shaped errors keep the honest unreadable-photo copy, no retry', () => {
+    const decodeErr = Object.assign(new Error('could not be decoded'), { name: 'InvalidCharacterError' })
+    expect(describePreprocessFailure(decodeErr)).toEqual({
+      message: 'Could not read the photo. Try taking it again.',
+      canRetry: false,
+    })
+    expect(describePreprocessFailure(new Error('malformed image data'))).toMatchObject({
+      message: 'Could not read the photo. Try taking it again.',
+      canRetry: false,
+    })
+  })
+
+  it('anything else is treated as transient — retry is offered', () => {
+    expect(describePreprocessFailure(new Error('native boom'))).toEqual({
+      message: expect.stringContaining('Try again'),
+      canRetry: true,
+    })
+    // Non-Error throws (strings from native bridges) must not crash the diagnosis.
+    expect(describePreprocessFailure('mystery')).toMatchObject({ canRetry: true })
   })
 })

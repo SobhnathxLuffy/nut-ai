@@ -1,3 +1,4 @@
+import { ANTHROPIC_MESSAGES_URL, OPENAI_CHAT_URL, googleModelUrl } from './provider-constants.js'
 import { SYSTEM_PROMPT, PROMPT_VERSION } from './system-prompt.js'
 import { sanitizeJsonSchemaForWire, schemaContractBlock } from './schema-compat.js'
 
@@ -158,7 +159,7 @@ export function buildAnthropicRequest(input: BuildRequestInput, credential: { ki
   content.push({ type: 'text', text })
 
   return {
-    url: 'https://api.anthropic.com/v1/messages',
+    url: ANTHROPIC_MESSAGES_URL,
     headers,
     body: {
       model: input.model,
@@ -206,7 +207,7 @@ export function buildOpenAIRequest(input: BuildRequestInput, apiKey: string): Pr
       : sanitizeJsonSchemaForWire(input.jsonSchema as Record<string, unknown>) ?? input.jsonSchema
 
   return {
-    url: 'https://api.openai.com/v1/chat/completions',
+    url: OPENAI_CHAT_URL,
     headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: {
       model: input.model,
@@ -242,7 +243,7 @@ export function buildGeminiRequest(input: BuildRequestInput, apiKey: string): Pr
   parts.push({ text })
 
   return {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${input.model}:generateContent`,
+    url: googleModelUrl(input.model),
     headers: { 'x-goog-api-key': apiKey, 'content-type': 'application/json' },
     body: {
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },

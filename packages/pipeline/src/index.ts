@@ -235,6 +235,11 @@ export async function runPipeline(
 
     const isMiss = food == null
     const snapshot = food ? snapshotFrom(food) : snapshotFromFallback(item, gram.grams)
+    // P3-D12: a missing energy value used to collapse to a silent 0 — weaker
+    // than the null handling the micros get right below the same expression.
+    // The arithmetic needs a number, so the fallback stays, but the gap is now
+    // DISCLOSED as an assumption tag like every other unverified input.
+    const energyUnreported = food != null && food.energyKcal == null
 
     const row: IngredientRow = {
       id: `item-${index}`,
@@ -246,7 +251,12 @@ export async function runPipeline(
       gramPathway: gram.pathway,
       bandHalfPct: gram.halfPct,
       isEstimate: isMiss,
-      assumptions: item.stated_assumptions.map((a) => ({ type: a, userConfirmed: false })),
+      assumptions: [
+        ...item.stated_assumptions.map((a) => ({ type: a, userConfirmed: false })),
+        ...(energyUnreported
+          ? [{ type: 'energy_unreported', userConfirmed: false }]
+          : []),
+      ],
     }
 
     // ---- [8] CONFIDENCE ------------------------------------------------------

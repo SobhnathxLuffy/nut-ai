@@ -1,5 +1,6 @@
 import type { SseDelta } from '../wire/types'
 import { anthropicDeltasFrom } from '../wire/sse'
+import { ANTHROPIC_MESSAGES_URL } from '@nutai/prompt'
 
 /**
  * Anthropic transport (QA Wave 4 god-file split).
@@ -48,7 +49,7 @@ export function anthropicChatRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.anthropic.com/v1/messages',
+    url: ANTHROPIC_MESSAGES_URL,
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': opts.credentialValue,
@@ -75,7 +76,7 @@ export function anthropicStreamRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.anthropic.com/v1/messages',
+    url: ANTHROPIC_MESSAGES_URL,
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': opts.credentialValue,
@@ -102,7 +103,7 @@ export function anthropicCorrectionRequest(opts: {
   userPrompt: string
 }): { url: string; headers: Record<string, string>; body: unknown } {
   return {
-    url: 'https://api.anthropic.com/v1/messages',
+    url: ANTHROPIC_MESSAGES_URL,
     headers: {
       'Content-Type': 'application/json',
       'x-api-key': opts.credentialValue,

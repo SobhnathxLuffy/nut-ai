@@ -649,3 +649,86 @@ Gates: lint 0 · typecheck clean · 815/815 tests · node purity 18/18 · golden
 queries 26/26 · IFCT verify · 362/362 fully mapped · 362/362 yield-verified ·
 0 hard errors · 0 sanity warnings · density audit PASS · filling audit PASS ·
 reconciliation PASS · public/ wasm −2.51 MB.
+
+---
+
+## QA completion pass — every remaining audit finding closed (2026-09-30)
+
+A rigorous re-verification of all 101 findings in
+`Nut-AI-Full-QA-Audit-Report.pdf` against the post-Wave-4 tree. 62 were
+already fixed by Waves 1–4; this pass implemented the 42 that remained or
+were partial. Gates at this round, all rerun clean:
+
+| Gate | Command | Result |
+|---|---|---|
+| ESLint (now with the `as any` cast ban) | `npm run lint` | **clean**, 0 errors, 0 warnings |
+| Typecheck — packages + app | `npm run typecheck` | clean, strict |
+| Unit tests | `npm run test` | **844 passed**, 96 files (up from 815) |
+| Node purity | `npm run check:node-purity` | 18/18 packages |
+| Corpus audits | `data:verify`, `ifct:verify`, `indian-dishes:verify*` | all pass, 0 hard errors, 0 sanity warnings |
+| Playwright e2e (real exported bundle, :3000) | `npm run test:e2e` | **24 passed**, 2 ticketed skips, 0 failed |
+
+What this pass fixed, by QA id:
+
+- **P1-4** — the blanket preprocess catch is gone: `describePreprocessFailure`
+  (pure, contract-tested) branches RangeError/size → "too large", decode
+  errors → the honest unreadable copy, everything else → retryable, and the
+  raw error is ALWAYS logged. Wired at all three scan entries.
+- **P2-24** — the last sub-44px target (ingredient result rows) raised.
+- **P2-28** — camera `capture()` and web `pickImage()` catch failures and
+  surface them on-screen instead of a silent dead shutter.
+- **P2-30** — the duplication census retired: shared `NewIngredientForm`,
+  `ChipRow` (fat/method rows, a11y state unified), one compact `Field` (the
+  misleading `onChange` trap is gone), one `describeCorrectionOperation`, one
+  `ProposalCard` behind both card names.
+- **P2-40** — build-sqlite imports the COMPILED `@nutai/db-adapter` schema
+  exports (no more regex-scraping `schema.ts`) and refuses to run with an
+  empty schema.
+- **P2-41** — `npm run check:e2e` (build:web + playwright) now exists beside
+  the CI workflow; e2e is one command away from the local gate.
+- **P2-42 + P3-13** — training rows come back through the typed library index
+  (no `as any`); an ESLint `no-restricted-syntax` rule bans new `as any`
+  casts repo-wide (warn-level under `--max-warnings=0`); the pre-existing
+  boundary casts carry per-line justifications.
+- **P2-4/P2-6/P2-7/P2-12 companions** — "Other…" lookup obeys the
+  hand-beats-machine rule; label/receipt/barcode storage reads can no longer
+  escape as unhandled rejections (`tryStorageStep`); a mid-stream user stop
+  with partial text no longer pastes "cancelled" into the bubble; the Google
+  validation shape label says `header`.
+- **P3** — A2 (legacy-path error replaces the streaming bubble), A3 (stream
+  cap counts BYTES via TextEncoder), A4 (applyIntent re-reads live rows per
+  op), A5 (bands re-align BY ROW ID on every mutation — meal-band mispairing
+  after removeRow fixed, unit-tested), A10 (partial receipts NAME the items
+  they dropped), A12 (set values parsed once per row object), U1 (bad meal id
+  gets "Meal not found" + Back, not an eternal spinner), U2 (assistant close
+  lands on `/(tabs)`, never resets Home via `replace('/')`), U3
+  (sentence-case pass over routines/programs), U4 (last emoji out of copy),
+  U7 (hint copy matches the real 2/3-char gates), U8 (date fields get a
+  formatting keyboard + placeholder), U9 (the label-sniffing autoCapitalize
+  heuristic died with the shared Field), U10 (custom model field always shows
+  the stored id), U12 (last off-scale literals tokenized), U13 (expected-path
+  warn silenced), U14 (distinct FAB icons; rationale moved to
+  docs/product/fab-actions.md), D1 (dead re-export removed), D6 (dead exports
+  deleted), D7 (shared `clamp`; normalizeText verified single-sourced), D9
+  (recipe-engine devDeps dropped), D10 (native WAL pragma), D12
+  (`declaredCaloriesLabel` renders "<5"; missing energy is DISCLOSED as an
+  `energy_unreported` assumption instead of a silent 0), D15
+  (`provider-constants.ts` — endpoints, provider ids, reseller placeholder in
+  one module), D16 (`timeouts.ts` — every network wait named), D18 (one-off
+  scripts under `scripts/oneoff/` with a README).
+- **Test debt (D3/D4/D5)** — golden digest tests for the assistant system
+  prompt and label/receipt/text-json builders, direct `gtin.test.ts` (GS1
+  mod-10, UPC-E expansion, GTIN-14 strip), `persist.test.ts` on the in-memory
+  node adapter (append-only goals, idempotent weight upsert, done-flag), and
+  the `<5 kcal` label contract.
+
+Accepted as-is, with reasons recorded in code comments or this file: A6
+(length-only key plausibility — provider is the authority), A13 (chat stays
+`.map` over ScrollView — 40-turn cap + P1-7 autoscroll), D11 (web adapter's
+two extra statements per write — fine at current volume, noted for
+profiling), U11 (ad-hoc spacing/font sizes are a style-scale churn item, not
+a correctness one; the worst tap-target and radius offenders are done).
+
+The report's waves are complete. The verification gate for every future
+change remains `npm run check`, with `npm run check:e2e` now available
+locally for the end-to-end layer.

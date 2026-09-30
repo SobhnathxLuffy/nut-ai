@@ -7,9 +7,5 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
-  },
-  "devDependencies": {
-    "typescript": "^5.3.0",
-    "vitest": "^1.0.0"
   }
 }

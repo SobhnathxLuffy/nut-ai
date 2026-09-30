@@ -1,3 +1,4 @@
+import { ANTHROPIC_MESSAGES_URL, OPENAI_CHAT_URL, googleModelUrl } from './provider-constants.js'
 import { ANTHROPIC_OAUTH_BETA } from './providers.js'
 import type { ProviderId, ProviderRequest } from './providers.js'
 
@@ -47,7 +48,7 @@ export function buildLabelScanRequest(
             'content-type': 'application/json',
           }
     return {
-      url: 'https://api.anthropic.com/v1/messages',
+      url: ANTHROPIC_MESSAGES_URL,
       headers,
       body: {
         model: input.model,
@@ -68,7 +69,7 @@ export function buildLabelScanRequest(
 
   if (provider === 'openai') {
     return {
-      url: 'https://api.openai.com/v1/chat/completions',
+      url: OPENAI_CHAT_URL,
       headers: { authorization: `Bearer ${credential.value}`, 'content-type': 'application/json' },
       body: {
         model: input.model,
@@ -89,7 +90,7 @@ export function buildLabelScanRequest(
   }
 
   return {
-    url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model)}:generateContent`,
+    url: googleModelUrl(encodeURIComponent(input.model)),
     headers: { 'x-goog-api-key': credential.value, 'content-type': 'application/json' },
     body: {
       contents: [

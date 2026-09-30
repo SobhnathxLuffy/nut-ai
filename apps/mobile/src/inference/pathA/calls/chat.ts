@@ -75,6 +75,7 @@ export async function runAssistantChatApi(
     // A definitive rejection on the PRIMARY (rejected key, unknown model) is
     // the answer — silently retrying on another provider would hide the real
     // problem from the user. Preserve the short-circuit.
+    // eslint-disable-next-line no-restricted-syntax -- definitive-failure narrowing across the outcome union (fallback chain)
     if (i === 0 && (res as any).error?.retryable === false) {
       return res;
     }
@@ -85,6 +86,7 @@ export async function runAssistantChatApi(
     // Chain fix: a fallback provider without a saved key is "unavailable",
     // not "the answer" — skip it and keep trying instead of aborting the
     // whole chain with "No credentials for X".
+    // eslint-disable-next-line no-restricted-syntax -- key-invalid narrowing across the outcome union (fallback chain)
     if ((res as any).error?.kind === 'key-invalid') {
       continue;
     }

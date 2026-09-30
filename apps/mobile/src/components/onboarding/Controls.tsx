@@ -14,6 +14,7 @@ import {
 import { Icon, type IconName } from '../Icon'
 import { useTheme } from '../../theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../theme/tokens'
+import { clamp } from '../../utils/clamp'
 
 /**
  * The three input controls the onboarding flow needs, matched to the reference
@@ -193,7 +194,7 @@ export function RulerPicker({
       const x = e.nativeEvent.contentOffset.x
       const raw = min + x / PX_PER_UNIT
       const snapped = Math.round(raw / step) * step
-      const next = Math.min(max, Math.max(min, Number(snapped.toFixed(2))))
+      const next = clamp(Number(snapped.toFixed(2)), min, max) // P3-D7
       if (lastEmitted.current != null && Math.abs(lastEmitted.current - next) < step / 2) return
       lastEmitted.current = next
       onChange(next)
@@ -294,7 +295,7 @@ export function EditableValue({
     if (Number.isFinite(parsed)) {
       // Clamp rather than reject. Someone typing 900 lbs has made a typo, and
       // silently discarding their input teaches them the field is broken.
-      onCommit(Math.min(max, Math.max(min, parsed)))
+      onCommit(clamp(parsed, min, max)) // P3-D7
     }
     setEditing(false)
   }

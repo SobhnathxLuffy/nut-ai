@@ -4,6 +4,9 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 let sqliteWasmPromise: Promise<any> | null = null;
 async function loadSqliteWasm() {
   if (!sqliteWasmPromise) {
+    // wasm-boundary: the init module's emitted d.ts is looser than the
+    // actual runtime options we pass (documented in WEB-005 round).
+    // eslint-disable-next-line no-restricted-syntax -- wasm init boundary
     sqliteWasmPromise = (sqlite3InitModule as any)({
       locateFile: (file: any) => '/' + file,
       print: console.log,
@@ -131,6 +134,7 @@ function opfsAvailable(sq3: any): boolean {
   try {
     return (
       typeof window !== 'undefined' &&
+      // eslint-disable-next-line no-restricted-syntax -- OPFS feature detect; the API is not in this TS lib target yet
       typeof (window as any).FileSystemSyncAccessHandle !== 'undefined' &&
       typeof sq3?.oo1?.OpfsDb === 'function' &&
       typeof sq3?.oo1?.OpfsDb?.importDb === 'function' &&

@@ -29,6 +29,7 @@ import { applyWebOption, beginScan, currentScanEpoch, getPhase, setPhase, setWeb
 import {
   BARCODE_NOT_FOUND_FAILURE,
   BARCODE_NO_KEY_FAILURE,
+  describePreprocessFailure,
   gateScanProvider,
   isUnambiguousLookup,
   MAX_LOOKUPS_PER_SCAN,
@@ -38,6 +39,7 @@ import {
   webOptionToIngredientRow,
 } from './decisions'
 import { stripJpegMetadataBase64 } from './jpeg-privacy'
+import { LOOKUP_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * The scan orchestrator — capture in, ready-to-review meal out.
@@ -90,6 +92,38 @@ export async function preprocess(photoUri: string): Promise<string> {
   return sanitizedBase64
 }
 
+type StorageStepResult<T> = { ok: true; value: T } | { ok: false }
+
+/**
+ * P2-7 companion: a settings/credential read that throws must never escape a
+ * void-fired scan as an unhandled rejection — that left the result screen
+ * spinning on "Preparing…" forever with no diagnosis. Every storage-backed
+ * step between the phases is funneled through here: on failure it logs the
+ * raw error, lands an honest internal-error phase (unless a newer scan has
+ * already superseded this one), and tells the caller to stop.
+ */
+async function tryStorageStep<T>(
+  photoUri: string,
+  stale: () => boolean,
+  step: () => Promise<T>,
+): Promise<StorageStepResult<T>> {
+  try {
+    return { ok: true, value: await step() }
+  } catch (err) {
+    console.error('[scan] saved-settings read failed during scan setup', err)
+    if (stale()) return { ok: false }
+    setPhase({
+      kind: 'failed',
+      photoUri,
+      message:
+        'The scan could not read its saved settings — this one is on us, not your photo. Restart the app and try again.',
+      canRetry: false,
+      failureKind: 'internal-error',
+    })
+    return { ok: false }
+  }
+}
+
 export async function startScan(photoUri: string): Promise<void> {
   // P2-7: this run's epoch. A back-out-and-rescan supersedes it; every phase
   // write below is checked against the store's active epoch first.
@@ -99,14 +133,14 @@ export async function startScan(photoUri: string): Promise<void> {
   let base64: string
   try {
     base64 = await preprocess(photoUri)
-  } catch {
+  } catch (err) {
+    // P1-4: branch on the error shape — a blanket "could not read the photo"
+    // here is the exact mechanism that mislabeled the thali RangeError. The
+    // raw error is ALWAYS logged, stale or not.
+    console.error('[scan] preprocess failed', err)
     if (currentScanEpoch() !== epoch) return
-    setPhase({
-      kind: 'failed',
-      photoUri,
-      message: 'Could not read the photo. Try taking it again.',
-      canRetry: false,
-    })
+    const failure = describePreprocessFailure(err)
+    setPhase({ kind: 'failed', photoUri, message: failure.message, canRetry: failure.canRetry })
     return
   }
 
@@ -346,7 +380,7 @@ async function refineMisses(
         },
         credential,
         fetch,
-        30_000,
+        LOOKUP_TIMEOUT_MS,
         baseUrl,
       )
       // P2-7: this scan may have been superseded (back-out-and-rescan) while
@@ -435,6 +469,7 @@ function readyFromRows(
   engineId: string,
   promptVersion: string | null,
   webLookups: Record<string, import('./store').WebLookupState> = {},
+  unresolvedItems: string[] = [],
 ): void {
   const meal: LoggedMeal = {
     id: `meal_${Date.now()}`,
@@ -474,7 +509,18 @@ function readyFromRows(
     clampFlags: [],
     zeroHitCount: 0,
   }
-  setPhase({ kind: 'ready', photoUri, result, bands, meta: null, webLookups })
+  setPhase({
+    kind: 'ready',
+    photoUri,
+    result,
+    bands,
+    meta: null,
+    webLookups,
+    // P3-A10: receipt items the lookups could not resolve are NAMED on the
+    // ready screen — a partial receipt must not quietly lose line items the
+    // user photographed. Empty for every other mode.
+    unresolvedItems: unresolvedItems.length > 0 ? unresolvedItems : undefined,
+  })
 }
 
 /**
@@ -534,9 +580,16 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   }
 
   // Not in the corpus. One web search, if we have the means.
-  const providerSetting = (await setting('provider')) as ProviderId | 'none' | ''
+  const gotProvider = await tryStorageStep('', stale, () => setting('provider'))
+  if (!gotProvider.ok) return
+  const providerSetting = gotProvider.value as ProviderId | 'none' | ''
   if (stale()) return
-  const credential = providerSetting && providerSetting !== 'none' ? await loadCredential(providerSetting) : null
+  const gotCredential =
+    providerSetting && providerSetting !== 'none'
+      ? await tryStorageStep('', stale, () => loadCredential(providerSetting))
+      : ({ ok: true, value: null } as const)
+  if (!gotCredential.ok) return
+  const credential = gotCredential.value
   if (stale()) return
   const route = planBarcodeScan(food, !!credential?.value)
   if (route.step === 'need-label-mode') {
@@ -546,15 +599,19 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   if (!credential || !providerSetting || providerSetting === 'none') return
   const provider = providerSetting
 
-  const model = (await setting('provider_model')) || cheapestModel(provider).id
-  const baseUrl = await customProviderBaseUrl()
+  const gotModel = await tryStorageStep('', stale, () => setting('provider_model'))
+  if (!gotModel.ok) return
+  const model = gotModel.value || cheapestModel(provider).id
+  const gotBaseUrl = await tryStorageStep('', stale, () => customProviderBaseUrl())
+  if (!gotBaseUrl.ok) return
+  const baseUrl = gotBaseUrl.value
   if (stale()) return
   const lookup = await runWebLookup(
     provider,
     { model, itemName: `the packaged food product with barcode (GTIN/UPC/EAN) ${gtin}`, brand: null },
     credential,
     fetch,
-    30_000,
+    LOOKUP_TIMEOUT_MS,
     baseUrl,
   )
   if (stale()) return
@@ -593,16 +650,26 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   let base64: string
   try {
     base64 = await preprocess(photoUri)
-  } catch {
+  } catch (err) {
+    // P1-4: diagnose by error shape, always log — see startScan.
+    console.error('[scan] preprocess failed', err)
     if (stale()) return
-    setPhase({ kind: 'failed', photoUri, message: 'Could not read the photo. Try taking it again.', canRetry: false })
+    const failure = describePreprocessFailure(err)
+    setPhase({ kind: 'failed', photoUri, message: failure.message, canRetry: failure.canRetry })
     return
   }
   lastCapture = { photoUri, base64 }
 
-  const provider = (await setting('provider')) as ProviderId | 'none' | ''
+  const gotProvider = await tryStorageStep(photoUri, stale, () => setting('provider'))
+  if (!gotProvider.ok) return
+  const provider = gotProvider.value as ProviderId | 'none' | ''
   if (stale()) return
-  const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+  const gotCredential =
+    provider && provider !== 'none'
+      ? await tryStorageStep(photoUri, stale, () => loadCredential(provider))
+      : ({ ok: true, value: null } as const)
+  if (!gotCredential.ok) return
+  const credential = gotCredential.value
   if (stale()) return
   if (!credential || !provider || provider === 'none') {
     setPhase({
@@ -615,12 +682,14 @@ export async function startLabelScan(photoUri: string): Promise<void> {
     return
   }
 
-  const model = (await setting('provider_model')) || cheapestModel(provider).id
+  const gotModel = await tryStorageStep(photoUri, stale, () => setting('provider_model'))
+  if (!gotModel.ok) return
+  const model = gotModel.value || cheapestModel(provider).id
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
 
   const baseUrl = await customProviderBaseUrl()
   if (stale()) return
-  const outcome = await runLabelScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, baseUrl)
+  const outcome = await runLabelScan(provider, { model, imageBase64: base64 }, credential, fetch, LOOKUP_TIMEOUT_MS, baseUrl)
   if (stale()) return
   if (!outcome.ok) {
     setPhase({
@@ -705,16 +774,26 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   let base64: string
   try {
     base64 = await preprocess(photoUri)
-  } catch {
+  } catch (err) {
+    // P1-4: diagnose by error shape, always log — see startScan.
+    console.error('[scan] preprocess failed', err)
     if (stale()) return
-    setPhase({ kind: 'failed', photoUri, message: 'Could not read the photo. Try taking it again.', canRetry: false })
+    const failure = describePreprocessFailure(err)
+    setPhase({ kind: 'failed', photoUri, message: failure.message, canRetry: failure.canRetry })
     return
   }
   lastCapture = { photoUri, base64 }
 
-  const provider = (await setting('provider')) as ProviderId | 'none' | ''
+  const gotProvider = await tryStorageStep(photoUri, stale, () => setting('provider'))
+  if (!gotProvider.ok) return
+  const provider = gotProvider.value as ProviderId | 'none' | ''
   if (stale()) return
-  const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+  const gotCredential =
+    provider && provider !== 'none'
+      ? await tryStorageStep(photoUri, stale, () => loadCredential(provider))
+      : ({ ok: true, value: null } as const)
+  if (!gotCredential.ok) return
+  const credential = gotCredential.value
   if (stale()) return
   if (!credential || !provider || provider === 'none') {
     setPhase({
@@ -726,12 +805,14 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     })
     return
   }
-  const model = (await setting('provider_model')) || cheapestModel(provider).id
+  const gotModel = await tryStorageStep(photoUri, stale, () => setting('provider_model'))
+  if (!gotModel.ok) return
+  const model = gotModel.value || cheapestModel(provider).id
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
   const baseUrl = await customProviderBaseUrl()
   if (stale()) return
-  const outcome = await runReceiptScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, baseUrl)
+  const outcome = await runReceiptScan(provider, { model, imageBase64: base64 }, credential, fetch, LOOKUP_TIMEOUT_MS, baseUrl)
   if (stale()) return
   if (!outcome.ok) {
     setPhase({
@@ -767,7 +848,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
         { model, itemName: item.name, brand: merchant },
         credential,
         fetch,
-        30_000,
+        LOOKUP_TIMEOUT_MS,
         baseUrl,
       ),
     })),
@@ -826,7 +907,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
     return
   }
 
-  readyFromRows(rows, photoUri, 'receipt-scan', RECEIPT_SCAN_PROMPT_VERSION, webLookups)
+  readyFromRows(rows, photoUri, 'receipt-scan', RECEIPT_SCAN_PROMPT_VERSION, webLookups, unresolved)
 }
 
 /**
@@ -834,32 +915,49 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
  * what the user typed.
  */
 export async function lookupOther(rowId: string, typed: string): Promise<void> {
-  const provider = (await setting('provider')) as ProviderId | 'none' | ''
-  if (!provider || provider === 'none') return
-  const credential = await loadCredential(provider)
-  if (!credential) return
-  const model = (await setting('provider_model')) || cheapestModel(provider).id
+  try {
+    const provider = (await setting('provider')) as ProviderId | 'none' | ''
+    if (!provider || provider === 'none') return
+    const credential = await loadCredential(provider)
+    if (!credential) return
+    const model = (await setting('provider_model')) || cheapestModel(provider).id
 
-  setWebLookup(rowId, { status: 'running' })
-  const lookup = await runWebLookup(
-    provider,
-    { model, itemName: typed, brand: null },
-    credential,
-    fetch,
-    30_000,
-    await customProviderBaseUrl(),
-  )
-  if (!lookup.ok) {
+    setWebLookup(rowId, { status: 'running' })
+    const lookup = await runWebLookup(
+      provider,
+      { model, itemName: typed, brand: null },
+      credential,
+      fetch,
+      LOOKUP_TIMEOUT_MS,
+      await customProviderBaseUrl(),
+    )
+    if (!lookup.ok) {
+      setWebLookup(rowId, { status: 'failed' })
+      return
+    }
+    const parsed = WebLookupResultZ.safeParse(lookup.raw)
+    if (!parsed.success || !parsed.data.found || parsed.data.options.length === 0) {
+      setWebLookup(rowId, { status: 'failed' })
+      return
+    }
+    setWebLookup(rowId, { status: 'done', result: parsed.data })
+    if (parsed.data.options.length === 1) {
+      // P2-4 companion: the same hand-beats-machine rule refineMisses lives by.
+      // A single-option auto-apply must never overwrite a row the user edited
+      // while the lookup was in flight — leave the option on the card instead;
+      // the user can still tap it.
+      const current = getPhase()
+      const row =
+        current.kind === 'ready' ? current.result.meal.ingredients.find((r) => r.id === rowId) : undefined
+      if (row && row.userEditedAt == null) {
+        applyWebOption(rowId, parsed.data.options[0]!, parsed.data.source_url)
+      }
+    }
+  } catch (err) {
+    // User-initiated (fire-and-forget from the question card) — a storage or
+    // network throw must degrade to the card's failed state, never an
+    // unhandled rejection.
+    console.error('[scan] "Other" lookup failed', err)
     setWebLookup(rowId, { status: 'failed' })
-    return
-  }
-  const parsed = WebLookupResultZ.safeParse(lookup.raw)
-  if (!parsed.success || !parsed.data.found || parsed.data.options.length === 0) {
-    setWebLookup(rowId, { status: 'failed' })
-    return
-  }
-  setWebLookup(rowId, { status: 'done', result: parsed.data })
-  if (parsed.data.options.length === 1) {
-    applyWebOption(rowId, parsed.data.options[0]!, parsed.data.source_url)
   }
 }

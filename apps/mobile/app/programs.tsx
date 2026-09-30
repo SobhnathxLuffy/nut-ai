@@ -109,7 +109,7 @@ export default function ProgramsScreen() {
 
       {!editing && (
         <Button
-          label="Create New Program"
+          label="Create new program"
           selected
           onPress={() => {
             setName('')
@@ -159,7 +159,7 @@ export default function ProgramsScreen() {
           )}
 
           <Row>
-            <Button label="Save Program" selected disabled={!routines.length} onPress={() => void action.run(handleSave)} />
+            <Button label="Save program" selected disabled={!routines.length} onPress={() => void action.run(handleSave)} />
             <Button label="Cancel" onPress={() => setEditing(false)} />
           </Row>
         </Card>
@@ -167,7 +167,7 @@ export default function ProgramsScreen() {
 
       <Label>Saved Programs ({programs.length})</Label>
       {!programs.length && (
-        <Label muted>No active programs. Tap Create New Program to start a routine schedule.</Label>
+        <Label muted>No active programs. Tap Create new program to start a routine schedule.</Label>
       )}
 
       {programs.map((p) => {
@@ -192,7 +192,7 @@ export default function ProgramsScreen() {
             {todayRoutineId && (
               <View style={{ padding: 10, borderRadius: 10, backgroundColor: t.affirmTint }}>
                 <Label>Today's Scheduled Workout: {routineName ?? 'Routine'}</Label>
-                <Button label="Launch Today's Workout" selected onPress={() => void action.run(() => handleLaunch(todayRoutineId))} />
+                <Button label="Launch today's workout" selected onPress={() => void action.run(() => handleLaunch(todayRoutineId))} />
               </View>
             )}
             {!todayRoutineId && <Label muted>Rest day scheduled for today</Label>}

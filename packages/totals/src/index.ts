@@ -180,6 +180,19 @@ export function toDisplayTotals(t: MacroTotals): DisplayTotals {
  * already-label-rounded fat values gives a different answer from rounding the true
  * sum once.
  */
+/**
+ * P3-D12: the DISPLAY form of a label-rounded calorie value. FDA's
+ * "less than 5 may be zero" is a rounding rule for arithmetic, but rendering
+ * a real 1-4 kcal serving as "0 kcal" reads as a fabricated zero. Surfaces
+ * that print a single declared value use this to say "<5" instead; sums keep
+ * using labelRounding.calories / true arithmetic.
+ */
+export function declaredCaloriesLabel(kcal: number): string {
+  if (kcal <= 0) return '0'
+  if (kcal < 5) return '<5'
+  return String(labelRounding.calories(kcal))
+}
+
 export const labelRounding = {
   /** Nearest 5 up to and including 50; nearest 10 above 50; under 5 may be zero. */
   calories(kcal: number): number {

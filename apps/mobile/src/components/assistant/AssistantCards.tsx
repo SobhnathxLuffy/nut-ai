@@ -60,26 +60,47 @@ const s = StyleSheet.create({
   btnText: { fontWeight: 'bold' }
 })
 
-export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
+/**
+ * P2-30 (f): ONE proposal card. MealProposalCard and
+ * WorkoutRoutineProposalCard were the same component wearing two names —
+ * identical SAVED/FAILED/CANCELLED/PENDING rows, identical Confirm/Cancel
+ * pair — and their failure copy had already drifted ("tap Review & Save"
+ * vs "tap Confirm"). Callers now pass a title, the bullet lines, and the
+ * confirm-button label.
+ */
+export function ProposalCard({
+  title,
+  lines,
+  status,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  title: string
+  lines: string[]
+  status?: string
+  confirmLabel: string
+  onConfirm?: () => void
+  onCancel?: () => void
+}) {
   const t = useTheme()
   return (
     <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
-      <Text style={[s.title, { color: t.text }]}>Meal Proposal: {data.name}</Text>
-      {/* Unit-count aware: "2 rotis" renders as "2 × 40 g", not one 80 g blob. */}
-      {expandProposalIngredients(data.ingredients).map((ing, i) => (
-        <Text key={i} style={[s.body, { color: t.text }]}>• {ing.display}</Text>
+      <Text style={[s.title, { color: t.text }]}>{title}</Text>
+      {lines.map((line, i) => (
+        <Text key={i} style={[s.body, { color: t.text }]}>• {line}</Text>
       ))}
       {status === 'SAVED' && <View style={[s.row, { marginTop: space.sm, alignItems: 'center' }]}><Icon name="check" size={16} color={t.protein} /><Text style={[s.body, { color: t.protein, fontWeight: 'bold', marginBottom: 0 }]}>  Saved</Text></View>}
-      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>Save failed — tap Review & Save to try again.</Text>}
+      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>Save failed — tap {confirmLabel} to try again.</Text>}
       {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
       {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
 
       {(status === 'PROPOSED' || status === 'FAILED') && (
         <View style={s.row}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Review and save this meal" onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
-            <Text style={[s.btnText, { color: t.bgElevated }]}>Review & Save</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={confirmLabel} onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
+            <Text style={[s.btnText, { color: t.bgElevated }]}>{confirmLabel}</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Cancel this meal proposal" onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Cancel this ${confirmLabel.toLowerCase()} proposal`} onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
             <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
           </Pressable>
         </View>
@@ -88,29 +109,29 @@ export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: 
   )
 }
 
-export function WorkoutRoutineProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
-  const t = useTheme()
+export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
+  // Unit-count aware: "2 rotis" renders as "2 × 40 g", not one 80 g blob.
   return (
-    <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
-      <Text style={[s.title, { color: t.text }]}>Routine Proposal: {data.name}</Text>
-      {data.exercises.map((ex: any, i: number) => (
-        <Text key={i} style={[s.body, { color: t.text }]}>• {ex.name}: {ex.sets} sets x {ex.reps}</Text>
-      ))}
-      {status === 'SAVED' && <View style={[s.row, { marginTop: space.sm, alignItems: 'center' }]}><Icon name="check" size={16} color={t.protein} /><Text style={[s.body, { color: t.protein, fontWeight: 'bold', marginBottom: 0 }]}>  Saved</Text></View>}
-      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>Save failed — tap Confirm to try again.</Text>}
-      {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
-      {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
+    <ProposalCard
+      title={`Meal Proposal: ${data.name}`}
+      lines={expandProposalIngredients(data.ingredients).map((ing) => ing.display)}
+      status={status}
+      confirmLabel="Review & Save"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  )
+}
 
-      {(status === 'PROPOSED' || status === 'FAILED') && (
-        <View style={s.row}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Confirm this routine" onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
-            <Text style={[s.btnText, { color: t.bgElevated }]}>Confirm</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Cancel this routine proposal" onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
-            <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
-          </Pressable>
-        </View>
-      )}
-    </View>
+export function WorkoutRoutineProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
+  return (
+    <ProposalCard
+      title={`Routine Proposal: ${data.name}`}
+      lines={data.exercises.map((ex: { name: string; sets: string | number; reps: string | number }) => `${ex.name}: ${ex.sets} sets x ${ex.reps}`)}
+      status={status}
+      confirmLabel="Confirm"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   )
 }

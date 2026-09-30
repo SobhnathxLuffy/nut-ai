@@ -14,8 +14,6 @@ import { Button } from '../src/components/Screen'
 import '../src/ui/alert-web'
 
 import { ONBOARDING_DONE_KEY } from '../src/onboarding/done-key'
-export { ONBOARDING_DONE_KEY }
-
 /**
  * The entry gate.
  *

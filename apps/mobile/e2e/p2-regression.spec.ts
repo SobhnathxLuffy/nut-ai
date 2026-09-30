@@ -78,7 +78,9 @@ test.describe('P2-14 + P2-16: search header counts and short-query copy', () => 
     ).toBeVisible({ timeout: 30_000 })
 
     await search.fill('pa')
-    await expect(page.getByText('Keep typing — search and ingredient decomposition need at least 3 characters.')).toBeVisible()
+    // P3-U7 (QA completion): the hint was aligned with the real gates —
+    // search fires at 2 characters, decomposition needs 3.
+    await expect(page.getByText('Search results appear from 2 characters — dish decomposition needs 3.')).toBeVisible()
     await expect(page.getByRole('button', { name: /Decompose/ })).toHaveCount(0)
   })
 })

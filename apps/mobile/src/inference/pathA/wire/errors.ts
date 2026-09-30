@@ -1,6 +1,7 @@
 import type { ProviderId } from '@nutai/prompt'
 import { extractJsonObject } from './json'
 import type { ScanFailure } from './types'
+import { SCAN_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * Shared error taxonomy and payload extraction (QA Wave 4 god-file split).
@@ -10,7 +11,8 @@ import type { ScanFailure } from './types'
  * no matter which transport produced them.
  */
 
-export const DEFAULT_TIMEOUT_MS = 45_000
+/** P3-D16: the 45s scan/vision ceiling is named in the shared timeouts module. */
+export const DEFAULT_TIMEOUT_MS = SCAN_TIMEOUT_MS
 
 export function classify(status: number, body: string): ScanFailure {
   if (status === 401 || status === 403) {

@@ -55,6 +55,47 @@ export function gateScanProvider<C extends { value: string }>(
 }
 
 // ---------------------------------------------------------------------------
+// Preprocess failure diagnosis (QA P1-4)
+// ---------------------------------------------------------------------------
+
+export type PreprocessFailure = { message: string; canRetry: boolean }
+
+/**
+ * ANY throw inside the preprocess stage used to be diagnosed as "could not
+ * read the photo" with retry disabled — the exact mechanism that mislabeled
+ * the thali RangeError, guaranteed to recur invisibly under a new root cause.
+ * Branch on the error shape instead (pure, so decisions.test.ts pins it):
+ *
+ *  - RangeError / string-length / allocation errors: the photo is too large
+ *    for this device's JS engine to process. Retrying the same photo fails
+ *    the same way, so retry stays disabled — but the diagnosis is honest.
+ *  - Decode-shaped errors (atob InvalidCharacterError, malformed data):
+ *    keep the established "could not read the photo" copy, no retry.
+ *  - Everything else (transient native/imagemanipulator failures): retrying
+ *    may genuinely work, so offer the retry.
+ *
+ * The caller ALWAYS logs the raw error alongside — the silent part of the
+ * original bug was as damaging as the mislabel.
+ */
+export function describePreprocessFailure(err: unknown): PreprocessFailure {
+  // Native bridges and cross-realm throws do not always produce real Error
+  // instances — read name/message defensively off whatever shape arrived.
+  const name = typeof (err as { name?: unknown } | null)?.name === 'string' ? (err as { name: string }).name : ''
+  const rawMsg = (err as { message?: unknown } | null)?.message
+  const msg = typeof rawMsg === 'string' ? rawMsg : String(err)
+  if (name === 'RangeError' || /string length|invalid array length|allocation failed/i.test(msg)) {
+    return {
+      message: 'This photo is too large for this device to process. Try a smaller or lower-quality photo.',
+      canRetry: false,
+    }
+  }
+  if (name === 'InvalidCharacterError' || /decod|malformed|unsupported|corrupt|not a valid/i.test(msg)) {
+    return { message: 'Could not read the photo. Try taking it again.', canRetry: false }
+  }
+  return { message: 'Preparing the photo failed unexpectedly. Try again.', canRetry: true }
+}
+
+// ---------------------------------------------------------------------------
 // Scan meta merging (fix-scan re-analysis)
 // ---------------------------------------------------------------------------
 

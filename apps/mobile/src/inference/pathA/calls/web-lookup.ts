@@ -6,6 +6,7 @@ import type { Credential, WebLookupOutcome } from '../wire/types'
 import { lookupTextFor } from '../transports'
 import { openAiResellerLookupRequest } from '../transports/openai'
 import { postVisionJson } from './vision'
+import { LOOKUP_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * The web-lookup refinement call (QA Wave 4 god-file split) — the provider's
@@ -21,7 +22,7 @@ export async function runWebLookup(
   input: { model: string; itemName: string; brand: string | null; visualContext?: string | null },
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 30_000,
+  timeoutMs = LOOKUP_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
   // The OpenAI lookup rides the Responses API, which virtually no reseller

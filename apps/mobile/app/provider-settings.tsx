@@ -10,6 +10,7 @@ import { baseUrlWarning } from '../src/inference/base-url'
 import { clearCredential, loadCredential, maskCredential } from '../src/inference/credentials'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { RESELLER_BASE_URL_PLACEHOLDER } from '@nutai/prompt'
 
 /**
  * Provider settings — everything the onboarding key screen can do, available
@@ -233,7 +234,7 @@ export default function ProviderSettings() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   keyboardType="url"
-                  placeholder="https://aicredits.in/v1"
+                  placeholder={RESELLER_BASE_URL_PLACEHOLDER}
                   placeholderTextColor={theme.textFaint}
                   style={[styles.input, { borderColor: theme.border, color: theme.text }]}
                 />
@@ -302,7 +303,7 @@ export default function ProviderSettings() {
               })}
             </View>
             <TextInput
-              value={assistantModelId && !PROVIDER_MODELS[provider].some((m) => m.id === assistantModelId) ? assistantModelId : ''}
+              value={assistantModelId ?? ''}
               onChangeText={(v) => setAssistantModelId(v.trim())}
               onBlur={saveAssistantModel}
               onEndEditing={saveAssistantModel}

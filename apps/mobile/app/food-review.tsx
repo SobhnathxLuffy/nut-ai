@@ -1,13 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { assistantGlobalStatus } from '../src/inference/pathA/assistant'
 import { useMemo, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { decodeFoodReview } from '../src/data/food-review'
 import { logManualFood, logManualMealWithItems } from '../src/data/manual-food'
 import { db } from '../src/data/repo'
 import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { Field } from '../src/components/Field'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -128,14 +129,14 @@ export default function FoodReview() {
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: insets.bottom + 80, gap: space.md }}>
       <View style={styles.header}><Text style={[type.title,{color:theme.text}]}>Review food</Text><Pressable accessibilityRole="button" accessibilityLabel="Cancel review" onPress={()=>router.back()} hitSlop={space.md}><Text style={[type.label,{color:theme.textMuted}]}>Cancel</Text></Pressable></View>
       {base ? <>
-        <Field label="Food name" value={name} onChange={setName}/>
+        <Field label="Food name" value={name} onValueChange={setName}/>
         <Text style={[type.caption,{color:theme.textMuted}]}>{SOURCE_NAMES[base.matchedFoodSource] ?? 'Food database'}{base.matchedFoodSource === 'ingredient_decomposition' ? ' · cooking amounts are estimates' : ''}</Text>
         {decoded.value?.selections && decoded.value.selections.length > 1 ? <Text style={[type.caption,{color:theme.textMuted}]}>{decoded.value.selections.map(item=>item.displayName).join(' · ')}</Text> : null}
         <View style={styles.row}>
-          <Field label="Quantity (how many)" value={quantity} onChange={updateQuantity} numeric/>
-          <Field label="Grams in 1 quantity" value={unitGrams} onChange={updateUnitGrams} numeric/>
+          <Field label="Quantity (how many)" value={quantity} onValueChange={updateQuantity} numeric/>
+          <Field label="Grams in 1 quantity" value={unitGrams} onValueChange={updateUnitGrams} numeric/>
         </View>
-        <Field label="Total grams" value={grams} onChange={updateGrams} numeric/>
+        <Field label="Total grams" value={grams} onValueChange={updateGrams} numeric/>
         {base.grams > 0 ? (
           <Text style={[type.micro, { color: theme.textMuted, marginTop: -space.xs }]}>
             Standard serving: 1 × {Math.round(base.grams * 10) / 10} g — change how many you had and the weight of one piece or bowl
@@ -167,7 +168,7 @@ export default function FoodReview() {
             ) : null}
           </View>
         ) : null}
-        <Field label="Date (YYYY-MM-DD)" value={date} onChange={setDate}/>
+        <Field label="Date (YYYY-MM-DD)" value={date} onValueChange={setDate} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD" autoCorrect={false} autoCapitalize="none"/>
         {!dateValid ? <Text style={[type.caption,{color:theme.safety}]}>Enter a real calendar date in YYYY-MM-DD format, like {localDate(Date.now())}.</Text> : null}
         <Text style={[type.caption,{color:theme.textMuted}]}>Meal</Text>
         <View style={styles.slots}>{SLOTS.map(value=><Pressable key={value} accessibilityRole="button" accessibilityLabel={`Select ${value} meal slot`} onPress={()=>setSlot(value)} style={[styles.slot,{borderColor:theme.border,backgroundColor:slot===value?theme.text:theme.bgElevated}]}><Text style={[type.label,{color:slot===value?theme.bg:theme.text}]}>{value[0]!.toUpperCase()+value.slice(1)}</Text></Pressable>)}</View>
@@ -190,5 +191,4 @@ export default function FoodReview() {
   </KeyboardAvoidingView>
 }
 
-function Field({label,value,onChange,numeric=false}:{label:string;value:string;onChange:(v:string)=>void;numeric?:boolean}) { const theme=useTheme(); return <View style={{flex:1}}><Text style={[type.caption,{color:theme.textMuted,marginBottom:space.xs}]}>{label}</Text><TextInput accessibilityLabel={label} value={value} onChangeText={onChange} keyboardType={numeric?'decimal-pad':'default'} style={[styles.input,{color:theme.text,borderColor:theme.border,backgroundColor:theme.bgElevated}]}/></View> }
 const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:17},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},primary:{minHeight:54,borderRadius:radius.pill,alignItems:'center',justifyContent:'center',marginTop:space.md},ingredientsCard:{borderWidth:StyleSheet.hairlineWidth,borderColor:'rgba(128,128,128,0.35)',borderRadius:radius.md,padding:space.md,gap:space.xs},ingredientRow:{flexDirection:'row',alignItems:'center',gap:space.sm},editIngredientsBtn:{marginTop:space.xs,minHeight:MIN_TAP_TARGET,borderWidth:1,borderRadius:radius.md,alignItems:'center',justifyContent:'center',paddingHorizontal:space.md}})

@@ -1,6 +1,8 @@
 import { ANTHROPIC_OAUTH_BETA, type ProviderId } from '@nutai/prompt'
 import { withBaseUrl } from '../base-url'
 import type { Credential, ScanFailure } from './client'
+import { ANTHROPIC_MESSAGES_URL, ANTHROPIC_MODELS_URL, GOOGLE_BASE_URL, OPENAI_CHAT_URL, OPENAI_MODELS_URL } from '@nutai/prompt'
+import { VALIDATION_TIMEOUT_MS } from '@nutai/prompt'
 
 /**
  * Credential validation.
@@ -39,7 +41,7 @@ import type { Credential, ScanFailure } from './client'
 export interface ValidationOk {
   ok: true
   /** Which header shape the provider actually accepted. */
-  usedShape: 'x-api-key' | 'bearer' | 'query-param'
+  usedShape: 'x-api-key' | 'bearer' | 'header'
   modelId: string
 }
 
@@ -148,7 +150,7 @@ export async function validateCredential(
   model: string,
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 15_000,
+  timeoutMs = VALIDATION_TIMEOUT_MS,
   baseUrl?: string | null,
 ): Promise<ValidationResult> {
   // ---- Anthropic: two shapes, each probing the endpoint it would really use --
@@ -159,14 +161,14 @@ export async function validateCredential(
     const probes: Record<'x-api-key' | 'bearer', () => ReturnType<typeof attempt>> = {
       'x-api-key': () =>
         attempt(
-          `https://api.anthropic.com/v1/models/${encodeURIComponent(model)}`,
+          `${ANTHROPIC_MODELS_URL}/${encodeURIComponent(model)}`,
           { 'x-api-key': credential.value, 'anthropic-version': ANTHROPIC_VERSION },
           fetchImpl,
           timeoutMs,
         ),
       bearer: () =>
         attempt(
-          'https://api.anthropic.com/v1/messages',
+          ANTHROPIC_MESSAGES_URL,
           {
             authorization: `Bearer ${credential.value}`,
             'anthropic-version': ANTHROPIC_VERSION,
@@ -215,7 +217,7 @@ export async function validateCredential(
   // ---- OpenAI --------------------------------------------------------------
   if (provider === 'openai') {
     const retrieveUrl = withBaseUrl(
-      `https://api.openai.com/v1/models/${encodeURIComponent(model)}`,
+      `${OPENAI_MODELS_URL}/${encodeURIComponent(model)}`,
       baseUrl,
     )
     const r = await attempt(
@@ -247,7 +249,7 @@ export async function validateCredential(
     // Cost is one output token on whatever model was typed.
     if (baseUrl && r.status === 404) {
       const c = await attempt(
-        withBaseUrl('https://api.openai.com/v1/chat/completions', baseUrl),
+        withBaseUrl(OPENAI_CHAT_URL, baseUrl),
         { authorization: `Bearer ${credential.value}`, 'content-type': 'application/json' },
         fetchImpl,
         timeoutMs,
@@ -286,7 +288,7 @@ export async function validateCredential(
 
   // ---- Google --------------------------------------------------------------
   const r = await attempt(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}`,
+    `${GOOGLE_BASE_URL}/models/${encodeURIComponent(model)}`,
     { 'x-goog-api-key': credential.value },
     fetchImpl,
     timeoutMs,
@@ -305,6 +307,8 @@ export async function validateCredential(
       detail: `No response within ${timeoutMs / 1000}s.`,
     }
   }
-  if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'query-param', modelId: model }
+  // P2-12 companion: the key travels in the x-goog-api-key HEADER (as on the
+  // scan path) — the shape label must say so, not the retired query-param form.
+  if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'header', modelId: model }
   return { ok: false, error: classify(r.status, r.body), detail: `HTTP ${r.status} — ${r.body}` }
 }

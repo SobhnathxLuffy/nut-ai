@@ -1,10 +1,11 @@
 import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { reconcileFromMacros } from '@nutai/totals'
 import { currentGoal, overrideTargets, type CurrentGoal } from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { Field } from '../src/components/Field'
 import { radius, space, type } from '../src/theme/tokens'
 
 /**
@@ -89,9 +90,9 @@ export default function EditGoals() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
-        <Field label="Calories" unit="kcal" value={kcal} onChange={setKcal} />
-        <Field label="Protein" unit="g" value={protein} onChange={setProtein} />
-        <Field label="Fat" unit="g" value={fat} onChange={setFat} />
+        <Field label="Calories" unit="kcal" value={kcal} onValueChange={setKcal} />
+        <Field label="Protein" unit="g" value={protein} onValueChange={setProtein} />
+        <Field label="Fat" unit="g" value={fat} onValueChange={setFat} />
 
         <View style={[styles.derived, { backgroundColor: theme.bgSunken }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -141,31 +142,6 @@ export default function EditGoals() {
   )
 }
 
-function Field({
-  label, unit, value, onChange,
-}: {
-  label: string
-  unit: string
-  value: string
-  onChange: (v: string) => void
-}) {
-  const theme = useTheme()
-  return (
-    <View style={{ marginBottom: space.lg }}>
-      <Text style={[type.label, { color: theme.textMuted, marginBottom: space.xs }]}>{label}</Text>
-      <View style={[styles.field, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
-        <TextInput
-          keyboardType="number-pad"
-          value={value}
-          onChangeText={onChange}
-          accessibilityLabel={`${label} in ${unit}`}
-          style={[styles.input, { color: theme.text }]}
-        />
-        <Text style={[type.body, { color: theme.textMuted }]}>{unit}</Text>
-      </View>
-    </View>
-  )
-}
 
 const styles = StyleSheet.create({
   head: {

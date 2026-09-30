@@ -59,18 +59,42 @@ export async function seedExercises(db:DbAdapter):Promise<void> {
 }
 export async function listExercises(db:DbAdapter):Promise<Exercise[]> {
   const rows=await db.all<Row>('SELECT * FROM exercises WHERE deleted_at IS NULL ORDER BY name,id')
-  return rows.map(r=>{
-    const base = {name:r['name'],tracking_type:r['tracking_type'],aliases:JSON.parse(String(r['aliases_json'])),primary_muscles:JSON.parse(String(r['primary_muscles_json'])),secondary_muscles:JSON.parse(String(r['secondary_muscles_json'])),antagonist_muscles:JSON.parse(String(r['antagonist_muscles_json'])),equipment:JSON.parse(String(r['equipment_json'])),notes:r['notes'],media_uri:r['media_uri']};
-    const parsed = Number(r['is_custom']) ? ExerciseInput.parse(base) : base as any;
-    return {...parsed,id:Number(r['id']),uuid:String(r['uuid']),is_custom:Number(r['is_custom']),source:String(r['source'])}
-  })
+  return rows.map(rowToExercise)
+}
+/**
+ * P2-42: library rows come back through the TYPED library, not an `as any`
+ * cast. Library exercises are seeded with a deterministic uuid, so the uuid is
+ * a lossless key back to the ExerciseInput the row was written from — zero
+ * parsing, zero drift surface. Only user-created rows (and any row whose uuid
+ * no longer matches the library, e.g. after a seed rename) go through the
+ * zod parse, where a schema change fails loudly at the boundary instead of
+ * flowing untyped into workouts.
+ */
+let libraryByUuidIndex: Map<string, ExerciseInput> | null = null
+function libraryByUuid(uuid: string): ExerciseInput | null {
+  if (!libraryByUuidIndex) {
+    libraryByUuidIndex = new Map(
+      EXERCISE_LIBRARY.map((e) => [deterministicUuidV7(0, `nutai.exercise.v1:${e.name}`), e]),
+    )
+  }
+  return libraryByUuidIndex.get(uuid) ?? null
+}
+function rowToExercise(r:Row):Exercise {
+  const id=Number(r['id'])
+  const uuid=String(r['uuid'])
+  const isCustom=Number(r['is_custom'])
+  const source=String(r['source'])
+  if (!isCustom) {
+    const lib=libraryByUuid(uuid)
+    if (lib) return {...lib,id,uuid,is_custom:0,source}
+  }
+  const base={name:r['name'],tracking_type:r['tracking_type'],aliases:JSON.parse(String(r['aliases_json'])),primary_muscles:JSON.parse(String(r['primary_muscles_json'])),secondary_muscles:JSON.parse(String(r['secondary_muscles_json'])),antagonist_muscles:JSON.parse(String(r['antagonist_muscles_json'])),equipment:JSON.parse(String(r['equipment_json'])),notes:r['notes'],media_uri:r['media_uri']}
+  return {...ExerciseInput.parse(base),id,uuid,is_custom:isCustom,source}
 }
 export async function getExercise(db:DbAdapter,id:number):Promise<Exercise|null> {
   const r=await db.get<Row>('SELECT * FROM exercises WHERE id=? AND deleted_at IS NULL',[id])
   if(!r) return null
-  const base = {name:r['name'],tracking_type:r['tracking_type'],aliases:JSON.parse(String(r['aliases_json'])),primary_muscles:JSON.parse(String(r['primary_muscles_json'])),secondary_muscles:JSON.parse(String(r['secondary_muscles_json'])),antagonist_muscles:JSON.parse(String(r['antagonist_muscles_json'])),equipment:JSON.parse(String(r['equipment_json'])),notes:r['notes'],media_uri:r['media_uri']}
-  const parsed = Number(r['is_custom']) ? ExerciseInput.parse(base) : base as any
-  return {...parsed,id:Number(r['id']),uuid:String(r['uuid']),is_custom:Number(r['is_custom']),source:String(r['source'])}
+  return rowToExercise(r)
 }
 export async function isExerciseInWorkout(db:DbAdapter,workoutId:number,exerciseId:number):Promise<boolean> {
   const row=await db.get<{id:number}>('SELECT id FROM workout_exercises WHERE workout_id=? AND exercise_id=? AND deleted_at IS NULL LIMIT 1',[workoutId,exerciseId])

@@ -104,6 +104,7 @@ export async function runScanWithFallback(
 ): Promise<ScanOutcome & { usedSchemaFallback?: boolean }> {
   const first = await runScan(req, fetchImpl)
   const structural =
+    // eslint-disable-next-line no-restricted-syntax -- httpStatus is carrier info the outcome union deliberately does not surface
     !first.ok && (first as any).error?.httpStatus === 400 && req.jsonSchema != null
   if (!structural) return first
 

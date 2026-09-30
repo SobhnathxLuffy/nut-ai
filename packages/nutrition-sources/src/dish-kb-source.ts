@@ -130,7 +130,7 @@ export class DishKBSource implements NutritionSource {
       uncertaintyModel: JSON.parse(row.uncertainty_model_json || '{}'),
       resolver: JSON.parse(row.resolver_config_json || '{}'),
       provenance: { recordStatus: row.record_status }
-    } as any
+    } as any // eslint-disable-line no-restricted-syntax -- corpus read boundary: manifest fields are plain sqlite values
 
     // Draft records are searchable for coverage/review, but are never presented
     // as deterministic nutrition merely because an ID exists.

@@ -1,5 +1,5 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SetKind, SetValues, TRACKING_FIELDS } from '@nutai/core-schema'
 import { workoutDetail, saveSet, finishWorkout, reopenWorkout, discardWorkout, updateWorkout, editWorkoutExercise, groupExercises, removeSet, saveRoutine, type WorkoutExercise, type WorkoutSet } from '@nutai/training'
@@ -50,7 +50,11 @@ function SetEditor({exercise:e,set:s,active,advanced,refresh,unit,restSeconds=90
  const labels=getFieldLabels(unit)
  const toDisplayValues=useCallback((parsed:SetValues)=>setValuesToDisplay(parsed,unit),[unit])
  const [values,setValues]=useState<Record<string,string>>(()=>toDisplayValues(SetValues.parse(s)));const [kind,setKind]=useState(s.kind);const [error,setError]=useState('');const queue=useRef(Promise.resolve());const draft=useRef(SetValues.parse(s));const [saving,setSaving]=useState(false)
- useEffect(()=>{const parsed=SetValues.parse(s);setValues(toDisplayValues(parsed));draft.current=parsed;setKind(s.kind)},[s.id,s.completed_at,unit,JSON.stringify(SetValues.parse(s)),toDisplayValues])
+ // P3-A12: parse once per SET ROW OBJECT, not once per render — this component
+ // re-renders on every keystroke, and the old deps array re-ran SetValues.parse
+ // + JSON.stringify for every row on every one of those renders.
+ const parsedSet=useMemo(()=>SetValues.parse(s),[s])
+ useEffect(()=>{setValues(toDisplayValues(parsedSet));draft.current=parsedSet;setKind(s.kind)},[s.id,s.completed_at,s.kind,parsedSet,toDisplayValues])
  const persist=(next:SetValues,completed=false,nextKind=kind,refreshAfter=false)=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,next,{id:s.id,completed,kind:nextKind,restSeconds});if(refreshAfter)await refresh();setError('')}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}
  if(!active)return <Label>Set {s.sort_order+1} · {s.kind} · {describeSet(s,unit)}{s.completed_at?' · done':' · not completed'}</Label>
  const fields=[...TRACKING_FIELDS[e.tracking_type],...(advanced?['rir','rpe','tempo'] as const:[])]

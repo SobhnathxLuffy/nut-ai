@@ -1,22 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { db, deleteMeal } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
 import { getLoggedMeal, updateLoggedMeal, type LoggedMealDetail } from '../src/data/logged-meals'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { Field } from '../src/components/Field'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -42,28 +33,37 @@ export default function MealDetail() {
   const mealId = id && /^\d+$/.test(id) ? Number(id) : null
   const [meal, setMeal] = useState<EditableMeal | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // P3-U1: a deep link with a bad/missing id used to render 'Loading meal…'
+  // forever — the load effect had no else branch for a null row.
+  const [notFound, setNotFound] = useState(false)
   const [busy, setBusy] = useState(false)
   const isSavingRef = useRef(false)
   const [undoUuid, setUndoUuid] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!mealId) return
+    if (!mealId) {
+      setNotFound(true)
+      return
+    }
     let alive = true
     void (async () => {
       const value = await getLoggedMeal(await db(), mealId)
-      if (alive && value) {
-        setMeal({
-          id: value.id,
-          date: value.date,
-          slot: value.slot,
-          items: value.items.map((item) => ({
-            id: item.id,
-            name: item.name,
-            gramsText: String(item.grams),
-            kcalPer100g: item.kcalPer100g,
-          })),
-        })
+      if (!alive) return
+      if (!value) {
+        setNotFound(true)
+        return
       }
+      setMeal({
+        id: value.id,
+        date: value.date,
+        slot: value.slot,
+        items: value.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          gramsText: String(item.grams),
+          kcalPer100g: item.kcalPer100g,
+        })),
+      })
     })().catch((e) => setError(String(e)))
     return () => {
       alive = false
@@ -128,6 +128,20 @@ export default function MealDetail() {
   }
 
   if (!meal) {
+    if (notFound && !error) {
+      // P3-U1: an honest dead end with a way out, not an eternal spinner.
+      return (
+        <View style={{ flex: 1, backgroundColor: theme.bg, padding: space.lg, paddingTop: insets.top + space.lg, gap: space.md }}>
+          <Text style={[type.title, { color: theme.text }]}>Meal not found</Text>
+          <Text style={[type.body, { color: theme.textMuted }]}>
+            This meal may have been deleted or the link is out of date.
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={[styles.primaryBtn, { backgroundColor: theme.text }]}>
+            <Text style={[type.bodyStrong, { color: theme.bg }]}>Back</Text>
+          </Pressable>
+        </View>
+      )
+    }
     return (
       <View style={{ flex: 1, backgroundColor: theme.bg, padding: space.lg, paddingTop: insets.top + space.lg }}>
         <Text style={[type.body, { color: error ? theme.safety : theme.textMuted }]}>{error ?? 'Loading meal…'}</Text>
@@ -153,7 +167,7 @@ export default function MealDetail() {
           </Pressable>
         </View>
 
-        <Field label="Date (YYYY-MM-DD)" value={meal.date} onChange={(value) => setMeal({ ...meal, date: value })} />
+        <Field label="Date (YYYY-MM-DD)" value={meal.date} onValueChange={(value) => setMeal({ ...meal, date: value })} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD" autoCorrect={false} autoCapitalize="none" />
         <View style={styles.row}>
           {SLOTS.map((slot) => {
             const selected = meal.slot === slot
@@ -189,11 +203,11 @@ export default function MealDetail() {
 
           return (
             <View key={item.id} style={[styles.card, { borderColor: theme.border }]}>
-              <Field label="Food" value={item.name} onChange={(value) => changeItem(index, 'name', value)} />
+              <Field label="Food" value={item.name} onValueChange={(value) => changeItem(index, 'name', value)} />
               <Field
                 label="Grams"
                 value={item.gramsText}
-                onChange={(value) => changeItem(index, 'gramsText', value)}
+                onValueChange={(value) => changeItem(index, 'gramsText', value)}
                 numeric
               />
               <Text style={[type.caption, { color: theme.textMuted }]}>{preview}</Text>
@@ -270,33 +284,9 @@ export default function MealDetail() {
   )
 }
 
-function Field({
-  label,
-  value,
-  onChange,
-  numeric = false,
-}: {
-  label: string
-  value: string
-  onChange: (v: string) => void
-  numeric?: boolean
-}) {
-  const theme = useTheme()
-  return (
-    <View style={{ flex: 1 }}>
-      <Text style={[type.caption, { color: theme.textMuted }]}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        value={value}
-        onChangeText={onChange}
-        keyboardType={numeric ? 'decimal-pad' : 'default'}
-        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgElevated }]}
-      />
-    </View>
-  )
-}
 
 const styles = StyleSheet.create({
+  primaryBtn: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   slot: {

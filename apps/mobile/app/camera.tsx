@@ -110,6 +110,10 @@ export default function Camera() {
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<CameraMode>('food')
   const [reviewPref, setReviewPref] = useScanReviewPref()
+  // P2-28: a takePictureAsync rejection (permission revoked mid-session, native
+  // crash) used to be an unhandled rejection — the shutter just looked dead.
+  // Surface it on the dark overlay so the user can retry with a diagnosis.
+  const [captureError, setCaptureError] = useState<string | null>(null)
   // Barcode frames arrive continuously; only the FIRST detection may fire.
   const barcodeFired = useRef(false)
 
@@ -140,6 +144,7 @@ export default function Camera() {
   async function capture() {
     if (busy) return
     setBusy(true)
+    setCaptureError(null)
     try {
       const shot = await cameraRef.current?.takePictureAsync({ quality: 1, skipProcessing: false })
       if (!shot?.uri) return
@@ -155,6 +160,10 @@ export default function Camera() {
       if (mode === 'label') void startLabelScan(shot.uri)
       else if (mode === 'receipt') void startReceiptScan(shot.uri)
       else void startScan(shot.uri)
+    } catch (err) {
+      // P2-28: never a silent dead shutter.
+      console.error('[camera] capture failed', err)
+      setCaptureError('Could not take the photo — try again.')
     } finally {
       setBusy(false)
     }
@@ -201,6 +210,12 @@ export default function Camera() {
           })}
         </View>
 
+        {captureError ? (
+          <Text accessibilityLiveRegion="polite" style={[type.caption, { color: '#fff', textAlign: 'center', marginTop: space.sm }]}>
+            {captureError}
+          </Text>
+        ) : null}
+
         {mode === 'barcode' ? (
           <Text style={[type.caption, styles.hint]}>Point at the barcode — it scans on its own</Text>
         ) : (
@@ -242,10 +257,12 @@ function WebCameraFallback() {
   const [busy, setBusy] = useState(false)
   const [gtinError, setGtinError] = useState('')
   const [reviewPref, setReviewPref] = useScanReviewPref()
+  const [pickError, setPickError] = useState<string | null>(null)
 
   async function pickImage() {
     if (busy) return
     setBusy(true)
+    setPickError(null)
     try {
       const ImagePicker = require('expo-image-picker')
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -261,6 +278,10 @@ function WebCameraFallback() {
         else if (mode === 'receipt') void startReceiptScan(uri)
         else void startScan(uri)
       }
+    } catch (err) {
+      // P2-28 web companion: a picker crash must not strand the button.
+      console.error('[camera] photo pick failed', err)
+      setPickError('Could not pick that photo — try again.')
     } finally {
       setBusy(false)
     }
@@ -342,6 +363,8 @@ function WebCameraFallback() {
           </Text>
         </Pressable>
       )}
+
+      {pickError ? <Text accessibilityRole="alert" style={[type.caption, { color: theme.safety }]}>{pickError}</Text> : null}
 
       <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={space.md} style={{ marginTop: space.lg }}>
         <Text style={[type.body, { color: theme.textMuted }]}>Go back</Text>

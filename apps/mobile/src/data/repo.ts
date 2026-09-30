@@ -31,6 +31,7 @@ import { localDate, slotFor } from './date-utils'
 import { emitFoodMutation, getLastDeletedMealUndoUuid, setLastDeletedMealUndoUuid } from './food-mutations'
 import { clearCredential } from '../inference/credentials'
 import { openUserDb } from '../db/expo-adapter'
+import { PROVIDER_IDS } from '@nutai/prompt'
 
 export { localDate, slotFor, getLastDeletedMealUndoUuid, setLastDeletedMealUndoUuid }
 
@@ -90,7 +91,7 @@ export async function resetEverything(): Promise<void> {
     }
   })
 
-  for (const p of ['anthropic', 'openai', 'google'] as const) {
+  for (const p of PROVIDER_IDS) {
     await clearCredential(p)
   }
 
@@ -783,15 +784,6 @@ export async function listRecentOperations(limit: number = 20): Promise<Operatio
   return listOperations(h, { limit })
 }
 
-export async function latestUndoableMealOperation(): Promise<OperationRecord | null> {
-  const h = await db()
-  const [operation] = await listOperations(h, {
-    entityType: 'meals',
-    limit: 1,
-    includeUndone: false,
-  })
-  return operation ?? null
-}
 
 export async function compactHistory(options?: {
   maxAgeMs?: number

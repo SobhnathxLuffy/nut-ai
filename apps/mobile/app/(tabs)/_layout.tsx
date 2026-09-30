@@ -10,15 +10,11 @@ import { ActiveWorkoutCard } from '../../src/components/ActiveWorkout'
 /**
  * Three tabs plus the detached FAB.
  *
- * GROUPS IS GONE. A social feed cannot be local-first without a server we
- * operate, it needs Apple 1.2 moderation machinery before it can ship at all,
- * and it is the highest eating-disorder-risk surface in this product category.
- * Cutting it is the decision, not a gap.
+ * Product rationale (groups decision, always-usable FAB, IAP posture) lives in
+ * docs/product/fab-actions.md — P3-U14: not in code.
  *
- * The FAB is ALWAYS present and ALWAYS opens real logging. The reference
- * paywalls this button, which is the direct cause of its most-reported
- * complaint. No IAP is configured anywhere in this project, which is what leaves
- * App Store Guideline 3.1.1 nothing to attach to.
+ * P3-U14: every action in the sheet has a DISTINCT icon; no two rows may
+ * share one.
  */
 
 const TABS: ReadonlyArray<{ name: string; label: string; icon: IconName }> = [
@@ -39,9 +35,9 @@ const ACTIONS: Action[] = [
   { label: 'Log exercise', icon: 'dumbbell', route: '/log-exercise' },
   { label: 'Saved foods', icon: 'bookmark', route: '/saved-foods' },
   { label: 'Recipes', icon: 'bowl', route: '/recipes' },
-  { label: 'Food Database', icon: 'search', route: '/food-search' },
+  { label: 'Food Database', icon: 'bars', route: '/food-search' },
   { label: 'Scan food', icon: 'scan', route: '/camera' },
-  { label: 'AI Assistant', icon: 'search', route: '/assistant' },
+  { label: 'AI Assistant', icon: 'lotus', route: '/assistant' },
 ]
 
 export default function TabLayout() {
