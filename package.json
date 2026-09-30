@@ -31,8 +31,7 @@
     "indian-dishes:verify": "npm run build:tools-pkgs && node tools/indian-dishes/validate.mjs",
     "postinstall": "node scripts/patch-expo-modules-jsi.mjs",
     "indian-dishes:verify-mappings": "node tools/indian-dishes/verify-mappings.mjs",
-    "indian-dishes:curate": "node tools/indian-dishes/curate-drafts.mjs",
-    "indian-dishes:suggest": "node tools/indian-dishes/dish-ingredient-suggestions.mjs"
+    "indian-dishes:curate": "node tools/indian-dishes/curate-drafts.mjs"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

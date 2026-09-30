@@ -82,7 +82,11 @@ describe('provider wire formats', () => {
     const a = buildAnthropicRequest(base, { kind: 'api_key', value: 'k' }).body as any
     const g = buildGeminiRequest(base, 'k').body as any
     const o = buildOpenAIRequest(base, 'k').body as any
-    expect(a.system).toBe(SYSTEM_PROMPT)
+    // P3-8 (QA Wave 4): Anthropic's system is a BLOCK array carrying
+    // cache_control so the ~4.5K-token prefix is cached server-side.
+    expect(Array.isArray(a.system)).toBe(true)
+    expect(a.system[0].text).toBe(SYSTEM_PROMPT)
+    expect(a.system[0].cache_control).toEqual({ type: 'ephemeral' })
     expect(g.system_instruction.parts[0].text).toBe(SYSTEM_PROMPT)
     expect(o.messages[0].content).toBe(SYSTEM_PROMPT)
   })
@@ -90,7 +94,7 @@ describe('provider wire formats', () => {
   it('keeps per-scan context in the USER turn so the cached prefix stays stable', () => {
     const withCtx = { ...base, localSignalsBlock: '<user_context>hi</user_context>' }
     const a = buildAnthropicRequest(withCtx, { kind: 'api_key', value: 'k' }).body as any
-    expect(a.system).toBe(SYSTEM_PROMPT)
+    expect(a.system[0].text).toBe(SYSTEM_PROMPT)
     expect(JSON.stringify(a.messages)).toContain('user_context')
   })
 

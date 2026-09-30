@@ -26,6 +26,17 @@ import { db, customProviderBaseUrl, setting } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup } from '../inference/pathA/client'
 import { applyWebOption, beginScan, currentScanEpoch, getPhase, setPhase, setWebLookup } from './store'
+import {
+  BARCODE_NOT_FOUND_FAILURE,
+  BARCODE_NO_KEY_FAILURE,
+  gateScanProvider,
+  isUnambiguousLookup,
+  MAX_LOOKUPS_PER_SCAN,
+  mergeScanMeta,
+  planBarcodeScan,
+  selectRefinementTargets,
+  webOptionToIngredientRow,
+} from './decisions'
 import { stripJpegMetadataBase64 } from './jpeg-privacy'
 
 /**
@@ -130,32 +141,26 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
   const epoch = opts.epoch ?? beginScan()
   const stale = () => epoch !== currentScanEpoch()
   try {
-    const provider = (await setting('provider')) as ProviderId | 'none' | ''
+    const providerSetting = await setting('provider')
     if (stale()) return
-    if (!provider || provider === 'none') {
+    const credential =
+      providerSetting && providerSetting !== 'none' ? await loadCredential(providerSetting as ProviderId) : null
+    if (stale()) return
+    // P2-37 (QA Wave 4): the provider/credential gate is a pure decision now
+    // (decisions.ts) with its own contract tests.
+    const gate = gateScanProvider(providerSetting, credential)
+    if (!gate.ok) {
       setPhase({
         kind: 'failed',
         photoUri,
-        message:
-          'Photo scans need an API key. Add one in Profile — barcode, search and manual logging work without one.',
-        canRetry: false,
-        failureKind: 'no-key',
+        message: gate.message,
+        canRetry: gate.canRetry,
+        failureKind: gate.failureKind,
       })
       return
     }
-
-    const credential = await loadCredential(provider)
-    if (stale()) return
-    if (!credential) {
-      setPhase({
-        kind: 'failed',
-        photoUri,
-        message: 'Your saved key is missing. Re-enter it in Profile.',
-        canRetry: false,
-        failureKind: 'key-invalid',
-      })
-      return
-    }
+    const provider = gate.provider
+    const scanCredential = gate.credential
 
     const model = (await setting('provider_model')) || cheapestModel(provider).id
     const baseUrl = await customProviderBaseUrl()
@@ -165,7 +170,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     const outcome = await runScanWithFallback({
       provider,
       model,
-      credential,
+      credential: scanCredential,
       imagesBase64: [base64],
       localSignalsBlock: opts.fixBlock ?? '',
       jsonSchema: wireSchemaFor(provider),
@@ -268,24 +273,21 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
       photoUri,
       result,
       bands: result.items.map((i) => i.band),
-      meta: {
+      meta: mergeScanMeta(opts.priorMeta ?? null, {
         provider,
         model,
-        inputTokens: outcome.value.inputTokens + (opts.priorMeta?.inputTokens ?? 0),
-        outputTokens: outcome.value.outputTokens + (opts.priorMeta?.outputTokens ?? 0),
+        inputTokens: outcome.value.inputTokens,
+        outputTokens: outcome.value.outputTokens,
         // P2-9: one unknown-cost call makes the meal's total cost unknown —
         // null propagates rather than quietly reading as free.
-        costUsd:
-          outcome.value.costUsd == null && opts.priorMeta?.costUsd == null
-            ? null
-            : (outcome.value.costUsd ?? 0) + (opts.priorMeta?.costUsd ?? 0),
+        costUsd: outcome.value.costUsd,
         promptVersion: outcome.value.promptVersion,
-      },
+      }),
       webLookups: {},
     })
 
     // Fire-and-forget: refinement upgrades rows underneath the review screen.
-    void refineMisses(result, outcome.value.raw, provider, model, credential, epoch)
+    void refineMisses(result, outcome.value.raw, provider, model, scanCredential, epoch)
   } catch (err) {
     console.error('scan analyze failed', err)
     if (stale()) return
@@ -298,9 +300,6 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     })
   }
 }
-
-/** How many corpus misses we will pay to look up per scan. */
-const MAX_LOOKUPS_PER_SCAN = 2
 
 /**
  * Background refinement: every item the corpus missed gets one shot at being
@@ -320,16 +319,16 @@ async function refineMisses(
   // Two triggers: the corpus missed entirely, or the model saw a BRAND (a logo
   // counts — golden arches on the wrapper). A branded item that matched some
   // generic corpus row still deserves the brand's own published numbers.
-  const misses = result.items
-    .map((item, index) => ({ item, index }))
-    .filter(
-      ({ item, index }) =>
-        item.resolution === 'miss' || payload?.items[index]?.brand != null,
-    )
-    .slice(0, MAX_LOOKUPS_PER_SCAN)
+  // P2-37: target selection is a pure decision (miss-or-branded, capped).
+  const targets = selectRefinementTargets(
+    result.items.map((item) => ({ resolution: item.resolution, row: { id: item.row.id } })),
+    payload?.items ?? null,
+    MAX_LOOKUPS_PER_SCAN,
+  )
 
   await Promise.all(
-    misses.map(async ({ item, index }) => {
+    targets.map(async (index) => {
+      const item = result.items[index]!
       const rowId = item.row.id
       if (stale()) return
       setWebLookup(rowId, { status: 'running' })
@@ -372,7 +371,7 @@ async function refineMisses(
       // lookup was in flight — the late response must not silently overwrite
       // their typed grams. The lookup state stays 'done', so the user's edit
       // simply stands.
-      if (parsed.data.options.length === 1 && !parsed.data.question) {
+      if (isUnambiguousLookup(parsed.data)) {
         const cur = getPhase()
         if (cur.kind === 'ready') {
           const row = cur.result.meal.ingredients.find((r) => r.id === rowId)
@@ -497,6 +496,9 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   }
   if (stale()) return
 
+  // P2-37 (QA Wave 4): the barcode 3-step ROUTE (corpus hit → no-key pointer
+  // → one AI lookup) is a pure decision with contract tests in decisions.ts.
+  // The corpus-hit row construction stays here — it needs the resolver's food.
   if (food && food.energyKcal != null) {
     const grams = food.servingSizeG ?? 100
     readyFromRows(
@@ -532,19 +534,17 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   }
 
   // Not in the corpus. One web search, if we have the means.
-  const provider = (await setting('provider')) as ProviderId | 'none' | ''
+  const providerSetting = (await setting('provider')) as ProviderId | 'none' | ''
   if (stale()) return
-  const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+  const credential = providerSetting && providerSetting !== 'none' ? await loadCredential(providerSetting) : null
   if (stale()) return
-  if (!credential || !provider || provider === 'none') {
-    setPhase({
-      kind: 'failed',
-      photoUri: '',
-      message: 'This barcode is not in the bundled database. The Food label mode reads the printed panel directly and works without a key.',
-      canRetry: false,
-    })
+  const route = planBarcodeScan(food, !!credential?.value)
+  if (route.step === 'need-label-mode') {
+    setPhase(BARCODE_NO_KEY_FAILURE)
     return
   }
+  if (!credential || !providerSetting || providerSetting === 'none') return
+  const provider = providerSetting
 
   const model = (await setting('provider_model')) || cheapestModel(provider).id
   const baseUrl = await customProviderBaseUrl()
@@ -561,40 +561,17 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
   const opt = parsed?.success && parsed.data.found ? parsed.data.options[0] : undefined
   if (!opt) {
-    setPhase({
-      kind: 'failed',
-      photoUri: '',
-      message: 'Could not find this barcode in the database or online. Try the Food label mode — it reads the printed panel directly.',
-      canRetry: false,
-    })
+    setPhase(BARCODE_NOT_FOUND_FAILURE)
     return
   }
 
-  const grams = opt.serving_g ?? 100
-  const per100 = grams > 0 ? 100 / grams : 0
   readyFromRows(
     [
-      {
-        id: `row_${Date.now()}`,
-        displayName: opt.label,
-        sourceFoodId: null,
-        grams,
-        nutrientSnapshot: {
-          kcal: opt.calories_kcal * per100,
-          protein_g: opt.protein_g * per100,
-          fat_g: opt.fat_g * per100,
-          carbs_g: opt.carbs_g * per100,
-          fiber_g: opt.fiber_g == null ? null : opt.fiber_g * per100,
-          sugar_g: null,
-          sodium_mg: opt.sodium_mg == null ? null : opt.sodium_mg * per100,
-        },
-        origin: 'web_lookup',
-        sourceUrl: parsed!.success ? parsed!.data.source_url : null,
-        gramPathway: 'packaged_exact',
-        bandHalfPct: 0.1,
-        isEstimate: false,
-        assumptions: [],
-      },
+      webOptionToIngredientRow(
+        opt,
+        parsed!.success ? parsed!.data.source_url : null,
+        Date.now(),
+      ),
     ],
     null,
     'barcode-web',

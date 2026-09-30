@@ -1,17 +1,18 @@
 {
-  "generatedAt": "2026-09-30T10:54:04.753Z",
+  "generatedAt": "2026-09-30T11:39:38.909Z",
   "totalDishes": 362,
   "curatedDishes": 362,
   "draftDishes": 0,
   "fullyMappedDishes": 362,
+  "partiallyMappedDishes": 0,
+  "unmappedDishes": 0,
+  "verifiedYieldDishes": 362,
   "mappedSlots": 1451,
   "checkedSlots": 1451,
   "ifctMapped": 1070,
   "usdaMapped": 381,
   "hardErrorCount": 0,
-  "sanityWarningCount": 1,
+  "sanityWarningCount": 0,
   "hardErrors": [],
-  "sanityWarnings": [
-    "dish:in:avial (Avial) slot \"added_fat\": usda:170173 (Nuts, coconut milk, canned (liquid expressed from grated meat and water)) has 197 kcal/100g — low for a fat slot"
-  ]
+  "sanityWarnings": []
 }

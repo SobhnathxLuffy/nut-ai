@@ -68,8 +68,14 @@ test.describe('P2-14 + P2-16: search header counts and short-query copy', () => 
     const search = page.getByLabel('Search foods')
     await expect(search).toBeVisible({ timeout: 20_000 })
     // P2-14: the corpus line accounts for the bundled dish knowledge base.
-    // The wasm SQLite import takes a while on first boot — allow for it.
-    await expect(page.getByText(/\d+ IFCT foods · [\d,]+ USDA foods · \d+ dish KB · offline/)).toBeVisible({ timeout: 30_000 })
+    // P1-10 (QA Wave 4): the header now also states the shipped honesty split
+    // — fully-mapped and yield-verified counts straight from the artifact's
+    // build_manifest. The wasm SQLite import takes a while on first boot.
+    await expect(
+      page.getByText(
+        /\d+ IFCT foods · [\d,]+ USDA foods · [\d,]+ dish KB( · [\d,]+ fully mapped · [\d,]+ yield-verified)? · offline/,
+      ),
+    ).toBeVisible({ timeout: 30_000 })
 
     await search.fill('pa')
     await expect(page.getByText('Keep typing — search and ingredient decomposition need at least 3 characters.')).toBeVisible()

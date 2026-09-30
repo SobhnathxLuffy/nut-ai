@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
+import { StyleSheet, Text, View, TextInput, FlatList, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type, MIN_TAP_TARGET } from '../src/theme/tokens'
@@ -157,33 +157,42 @@ export default function IndianDishesScreen() {
       <Text style={{ color: t.textMuted, paddingHorizontal: space.md, marginTop: space.xs }}>Showing {dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'}</Text>
       
       {loading ? <ActivityIndicator style={{ marginTop: space.lg }} /> : (
-        <ScrollView style={s.scroll}>
-          {dishes.map(d => (
-            <Pressable key={d.id} accessibilityRole="button" accessibilityLabel={`Open ${d.name}`} onPress={() => openDish(d)} style={[s.row, { borderColor: t.border }]}>
+        // P2-23 (QA Wave 4): up to 500 dish rows used to mount at once inside
+        // a plain ScrollView — slow open and high memory on web and low-end
+        // Android. FlatList keeps only the visible rows alive.
+        <FlatList
+          style={s.scroll}
+          data={dishes}
+          keyExtractor={(item) => item.id}
+          initialNumToRender={12}
+          renderItem={({ item }) => (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.name}`} onPress={() => openDish(item)} style={[s.row, { borderColor: t.border }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[type.body, { color: t.text }]}>{d.name}</Text>
-                {d.aliases ? <Text style={[type.caption, { color: t.textMuted }]}>Also known as: {d.aliases}</Text> : null}
-                <Text style={[type.micro, { color: d.status === 'CURATED' ? t.protein : d.status === 'HOUSEHOLD' ? t.protein : t.safety, marginTop: space.xs }]}>
-                  {d.status === 'CURATED' ? 'CURATED RECIPE' : d.status === 'HOUSEHOLD' ? 'MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {prettyCategory(d.category)}
+                <Text style={[type.body, { color: t.text }]}>{item.name}</Text>
+                {item.aliases ? <Text style={[type.caption, { color: t.textMuted }]}>Also known as: {item.aliases}</Text> : null}
+                <Text style={[type.micro, { color: item.status === 'CURATED' ? t.protein : item.status === 'HOUSEHOLD' ? t.protein : t.safety, marginTop: space.xs }]}>
+                  {item.status === 'CURATED' ? 'CURATED RECIPE' : item.status === 'HOUSEHOLD' ? 'MY VERSION' : 'DRAFT / NEEDS REVIEW'} \u00b7 {prettyCategory(item.category)}
                 </Text>
               </View>
             </Pressable>
-          ))}
-          {dishes.length === 0 && !loading && (query.trim().length >= 2 ? (
-            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
-              No dishes match “{query.trim()}”. Try a shorter prefix like “idli”, or clear the search to browse all {filter === 'ALL' ? '362' : ''} identities.
-            </Text>
-          ) : filter === 'HOUSEHOLD' ? (
-            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
-              You have not saved any household versions yet.{'\n'}
-              Open any dish and use “Log household variant” to keep your own ingredients and portions.
-            </Text>
-          ) : filter === 'DRAFT_CURATED' ? (
-            <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
-              No draft dishes right now. Drafts appear here while a curated recipe is still under review.
-            </Text>
-          ) : null)}
-        </ScrollView>
+          )}
+          ListEmptyComponent={
+            query.trim().length >= 2 ? (
+              <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
+                No dishes match \u201c{query.trim()}\u201d. Try a shorter prefix like \u201cidli\u201d, or clear the search to browse all {filter === 'ALL' ? '362' : ''} identities.
+              </Text>
+            ) : filter === 'HOUSEHOLD' ? (
+              <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
+                You have not saved any household versions yet.{'\n'}
+                Open any dish and use \u201cLog household variant\u201d to keep your own ingredients and portions.
+              </Text>
+            ) : filter === 'DRAFT_CURATED' ? (
+              <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
+                No draft dishes right now. Drafts appear here while a curated recipe is still under review.
+              </Text>
+            ) : null
+          }
+        />
       )}
     </View>
   )

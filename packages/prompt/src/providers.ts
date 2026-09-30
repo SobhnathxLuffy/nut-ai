@@ -163,7 +163,13 @@ export function buildAnthropicRequest(input: BuildRequestInput, credential: { ki
     body: {
       model: input.model,
       max_tokens: input.maxTokens ?? 4096,
-      system: SYSTEM_PROMPT,
+      // P3-8 (QA Wave 4): the ~4.5K-token system prompt used to be re-sent
+      // byte-identical on EVERY scan with no caching arrangement. Marking the
+      // system block cache_control: ephemeral makes Anthropic cache it — the
+      // cached prefix is billed at 1/10th input price on the next call within
+      // the 5-minute TTL. OpenAI and Gemini keep their stable prefixes (they
+      // already are), so no wire change is needed for them.
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content }],
       ...(input.jsonSchema == null
         ? {}

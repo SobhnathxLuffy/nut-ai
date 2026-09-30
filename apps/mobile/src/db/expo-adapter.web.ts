@@ -8,7 +8,36 @@ async function loadSqliteWasm() {
       locateFile: (file: any) => '/' + file,
       print: console.log,
       printErr: console.error,
-    }).then((r: any) => { staticSqliteWasm = r; return r; });
+    }).then((r: any) => {
+      staticSqliteWasm = r;
+      return r;
+    }).then((r: any) => {
+      // P2-7 (QA Wave 4): the old web adapter SILENTLY rewrote every
+      // `CREATE VIRTUAL TABLE ... USING fts5` into a plain table if the
+      // module lacked FTS5 — the corpus schema would change shape without a
+      // word and every food_fts MATCH query would start throwing at runtime.
+      // The rewrite is gone; if FTS5 is missing we fail fast, at boot, with
+      // a diagnosis instead of a landmine.
+      const probe = new r.oo1.DB();
+      try {
+        let has = false;
+        probe.exec({
+          sql: "SELECT sqlite_compileoption_used('ENABLE_FTS5') AS v",
+          rowMode: 'object',
+          callback: (rowObj: any) => { has = Number(rowObj?.v) === 1; },
+        });
+        if (!has) {
+          throw new Error(
+            '[db] The bundled SQLite web module was built without FTS5. ' +
+            'Nut AI requires FTS5 for food search (food_fts). Serve the @sqlite.org/sqlite-wasm ' +
+            'build with ENABLE_FTS5 — refusing to open a corpus whose schema would silently change shape.',
+          );
+        }
+      } finally {
+        probe.close();
+      }
+      return r;
+    });
   }
   return sqliteWasmPromise;
 }
@@ -27,16 +56,7 @@ class SqliteWasmAdapter implements DbAdapter {
     }
     const results: any[] = [];
     const bindParams = params.map(p => typeof p === 'bigint' ? Number(p) : p);
-    
-    // Web DB Adapter Polyfill: Replace FTS5 with regular tables for migrations
-    if (sql.includes('USING fts5')) {
-      sql = sql.replace(/CREATE VIRTUAL TABLE (?:IF NOT EXISTS )?(\w+) USING fts5\(([\s\S]*?)\);?/g, (match, name, columns) => {
-        let cleanCols = columns.replace(/content=''/g, 'content TEXT').replace(/,?\s*tokenize[\s\S]*/g, '');
-        cleanCols = cleanCols.replace(/,\s*$/, '');
-        return `CREATE TABLE IF NOT EXISTS ${name}(rowid INTEGER PRIMARY KEY, ${cleanCols});`;
-      });
-    }
-    
+
     this.db.exec({
       sql,
       bind: bindParams,
@@ -273,20 +293,45 @@ export function resetCorpusPromises(): void {
   ifctOpenPromise = null;
 }
 
-export async function nutritionCorpusInfo(db: DbAdapter): Promise<{ foods: number; portions: number; dishes: number; builtAt: string | null }> {
+/** P1-10: corpus-honesty metrics shipped INSIDE the artifact they describe. */
+export interface DishKbHonesty {
+  dishes: number
+  fullyMapped: number | null
+  yieldVerified: number | null
+  builtAt: string | null
+}
+
+async function readDishKbHonesty(db: DbAdapter): Promise<DishKbHonesty | null> {
+  try {
+    const dishRows = await db.get<{ c: number }>('SELECT COUNT(*) c FROM dish_definitions');
+    const dishes = dishRows?.c ?? 0;
+    // Older bundles predate the dish_kb_* manifest keys — report what we know
+    // (the count) and leave the honesty split null rather than guessing.
+    const manifest = await db.all<{ key: string; value: string }>(
+      "SELECT key, value FROM build_manifest WHERE key IN ('dish_kb_fully_mapped','dish_kb_yield_verified','dish_kb_built_at')",
+    );
+    const pick = (key: string) => manifest.find((row) => row.key === key)?.value ?? null;
+    const fully = pick('dish_kb_fully_mapped');
+    const verified = pick('dish_kb_yield_verified');
+    return {
+      dishes,
+      fullyMapped: fully == null ? null : Number(fully),
+      yieldVerified: verified == null ? null : Number(verified),
+      builtAt: pick('dish_kb_built_at'),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function nutritionCorpusInfo(db: DbAdapter): Promise<{ foods: number; portions: number; dishes: number; builtAt: string | null; dishKb: DishKbHonesty | null }> {
   const foods = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods');
   const portions = await db.get<{ c: number }>('SELECT COUNT(*) c FROM food_portions');
   const built = await db.get<{ value: string }>("SELECT value FROM build_manifest WHERE key = 'built_at'");
-  // P2-14: surface the bundled dish knowledge base size alongside the food
-  // corpora. Older dish-less bundles simply report 0.
-  let dishes = 0;
-  try {
-    const dishRows = await db.get<{ c: number }>('SELECT COUNT(*) c FROM dish_definitions');
-    dishes = dishRows?.c ?? 0;
-  } catch {
-    dishes = 0;
-  }
-  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, dishes, builtAt: built?.value ?? null };
+  // P2-14 + P1-10: dish KB size AND its honesty split, straight from the
+  // shipped artifact's build_manifest.
+  const dishKb = await readDishKbHonesty(db);
+  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, dishes: dishKb?.dishes ?? 0, builtAt: built?.value ?? null, dishKb };
 }
 
 export async function ifctCorpusInfo(db: DbAdapter): Promise<{ foods: number; version: string | null }> {

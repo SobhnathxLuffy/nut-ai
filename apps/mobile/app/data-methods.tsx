@@ -41,7 +41,10 @@ export default function DataMethods() {
           dal, aromatics, tadka fat, water — and is pinned to a specific verified food id (for example, a
           roti's flour slot points at IFCT A019, whole wheat flour). That mapping is how the app knows which
           food goes into which dish, and it is validated at build time: a slot whose food id does not exist in
-          the shipped corpora fails the build instead of shipping silently.
+          the shipped corpora fails the build instead of shipping silently. The Food Database header states
+          the shipped truth from the artifact itself — how many dishes are fully mapped and how many carry a
+          verified cooked yield — so the app can never claim more verification than its own database holds
+          (P1-10: internal honesty has to match external claims).
         </Text>
       </Block>
 

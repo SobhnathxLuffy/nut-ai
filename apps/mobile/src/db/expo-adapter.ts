@@ -135,9 +135,42 @@ export function resetCorpusPromises(): void {
  * indistinguishable at the UI from "no match found". Surfacing the row count
  * turns a silent, confusing failure into an obvious one.
  */
+/** P1-10: corpus-honesty metrics shipped INSIDE the artifact they describe. */
+export interface DishKbHonesty {
+  dishes: number
+  /** Dishes whose every ingredient slot resolves to a corpus food id. */
+  fullyMapped: number | null
+  /** Dishes with a verified numeric cooked yield. */
+  yieldVerified: number | null
+  builtAt: string | null
+}
+
+async function readDishKbHonesty(db: DbAdapter): Promise<DishKbHonesty | null> {
+  try {
+    const dishRows = await db.get<{ c: number }>('SELECT COUNT(*) c FROM dish_definitions')
+    const dishes = dishRows?.c ?? 0
+    // Older bundles predate the dish_kb_* manifest keys — report what we know
+    // (the count) and leave the honesty split null rather than guessing.
+    const manifest = await db.all<{ key: string; value: string }>(
+      "SELECT key, value FROM build_manifest WHERE key IN ('dish_kb_fully_mapped','dish_kb_yield_verified','dish_kb_built_at')",
+    )
+    const pick = (key: string) => manifest.find((row) => row.key === key)?.value ?? null
+    const fully = pick('dish_kb_fully_mapped')
+    const verified = pick('dish_kb_yield_verified')
+    return {
+      dishes,
+      fullyMapped: fully == null ? null : Number(fully),
+      yieldVerified: verified == null ? null : Number(verified),
+      builtAt: pick('dish_kb_built_at'),
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function nutritionCorpusInfo(
   db: DbAdapter,
-): Promise<{ foods: number; portions: number; dishes: number; builtAt: string | null }> {
+): Promise<{ foods: number; portions: number; dishes: number; builtAt: string | null; dishKb: DishKbHonesty | null }> {
   const foods = await db.get<{ c: number }>('SELECT COUNT(*) c FROM foods')
     const portions = await db.get<{ c: number }>('SELECT COUNT(*) c FROM food_portions')
     const built = await db.get<{ value: string }>(
@@ -145,14 +178,11 @@ export async function nutritionCorpusInfo(
     )
   // P2-14: surface the bundled dish knowledge base size alongside the food
   // corpora. Older dish-less bundles simply report 0.
-  let dishes = 0
-  try {
-    const dishRows = await db.get<{ c: number }>('SELECT COUNT(*) c FROM dish_definitions')
-    dishes = dishRows?.c ?? 0
-  } catch {
-    dishes = 0
-  }
-  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, dishes, builtAt: built?.value ?? null }
+  // P1-10: alongside the count, ship the fully-mapped / yield-verified split
+  // from the artifact's own build_manifest so the app header cannot claim more
+  // than the shipped DB justifies.
+  const dishKb = await readDishKbHonesty(db)
+  return { foods: foods?.c ?? 0, portions: portions?.c ?? 0, dishes: dishKb?.dishes ?? 0, builtAt: built?.value ?? null, dishKb }
 }
 
 export async function ifctCorpusInfo(

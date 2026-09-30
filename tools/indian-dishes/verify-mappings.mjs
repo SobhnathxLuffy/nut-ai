@@ -31,6 +31,10 @@ const IFCT_DB = join(REPO, 'apps/mobile/assets/ifct.db')
 
 const MAPPED_STATUSES = new Set(['AUTO_MAPPED', 'MANUAL_OVERRIDE', 'mapped'])
 
+// P2-10: a slot labelled as fat must point at an actual fat. Coconut milk at
+// 197 kcal/100 g undercounted Avial's added fat by ~4x. Below 400 kcal/100 g
+// the mapping is a hard CI failure, not a warning nobody consumes.
+const FAT_SLOT_MIN_KCAL = 400
 const FAT_LABEL = /(added_fat|oil|ghee|butter|fat)/i
 const PROTEIN_LABEL_TOKENS = new Set(['animal_protein', 'chicken', 'mutton', 'egg', 'fish', 'prawn', 'meat', 'goat', 'liver', 'pork', 'duck'])
 
@@ -59,6 +63,13 @@ async function main() {
   let curatedDishes = 0
   let draftDishes = 0
   let fullyMappedDishes = 0
+  // P1-10: 'fully mapped' means every slot HAS a food id — it says nothing
+  // about whether cooked yields are verified. This counter is the honesty
+  // metric the headline report was missing: dishes whose yieldModel is
+  // status:'verified' with a finite, positive verifiedNumericYield.
+  let verifiedYieldDishes = 0
+  let partiallyMappedDishes = 0
+  let unmappedDishes = 0
 
   const cache = new Map()
   const loadFood = async (foodId) => {
@@ -106,11 +117,23 @@ async function main() {
       }
     }
 
+    // P1-10: verified-yield honesty metric (gated below, so a CURATED record
+    // that quietly loses its verified yield fails CI even if slots stay OK).
+    const ym = dish.cooking?.yieldModel
+    const yieldVerified =
+      ym?.status === 'verified' &&
+      typeof ym?.verifiedNumericYield === 'number' &&
+      Number.isFinite(ym.verifiedNumericYield) &&
+      ym.verifiedNumericYield > 0
+    if (yieldVerified) verifiedYieldDishes += 1
+
     let allSlotsMapped = slots.length > 0
+    let someSlotsMapped = false
     for (const slot of slots) {
       const mapping = slot.nutritionMapping
       const mapped = mapping && MAPPED_STATUSES.has(mapping.mappingStatus) && mapping.canonicalFoodId
       if (!mapped) allSlotsMapped = false
+      else someSlotsMapped = true
       if (isCurated) {
         // A CURATED dish has no room for pending-ambiguity statuses.
         if (!mapping || !MAPPED_STATUSES.has(mapping.mappingStatus) || !mapping.canonicalFoodId) {
@@ -139,14 +162,18 @@ async function main() {
       if (mapping.canonicalFoodId.startsWith('ifct:')) ifctHits += 1
       else usdaHits += 1
 
-      if (FAT_LABEL.test(slot.label) && food.energy_kcal < 300 && food.energy_kcal > 0) {
-        sanityWarnings.push(`${dish.id} (${dish.canonicalName}) slot "${slot.label}": ${mapping.canonicalFoodId} (${food.name}) has ${food.energy_kcal} kcal/100g — low for a fat slot`)
+      // P2-10: fat slots below the threshold are a HARD failure — the warning
+      // class was generated, never consumed, and Avial shipped on milk math.
+      if (FAT_LABEL.test(slot.label) && food.energy_kcal < FAT_SLOT_MIN_KCAL && food.energy_kcal > 0) {
+        hardErrors.push(`${dish.id} (${dish.canonicalName}) slot "${slot.label}": ${mapping.canonicalFoodId} (${food.name}) has ${food.energy_kcal} kcal/100g — below the ${FAT_SLOT_MIN_KCAL} kcal fat-slot floor`)
       }
       if (isProteinLabel(slot.label) && (food.protein_g == null || food.protein_g < 8)) {
         sanityWarnings.push(`${dish.id} (${dish.canonicalName}) slot "${slot.label}": ${mapping.canonicalFoodId} (${food.name}) has ${food.protein_g ?? 'null'} g protein/100g — low for a protein slot`)
       }
     }
     if (allSlotsMapped) fullyMappedDishes += 1
+    else if (someSlotsMapped) partiallyMappedDishes += 1
+    else unmappedDishes += 1
     // A draft with every slot still ambiguous cannot justify shipping a
     // search result at all — that dish needs curation, not a pass.
     if (!isCurated && slots.length > 0 && !slots.some((slot) => {
@@ -161,12 +188,22 @@ async function main() {
     hardErrors.push(`${dishes.length - fullyMappedDishes} dishes are not fully mapped despite ${draftDishes} drafts remaining`)
   }
 
+  // P1-10 CI gate: a corpus with CURATED records must state — and hold — a
+  // verified-yield count equal to its curated count. The graduation gates
+  // above already fail each offender; this makes the aggregate explicit.
+  if (curatedDishes > 0 && verifiedYieldDishes !== curatedDishes) {
+    hardErrors.push(`P1-10: verifiedYieldDishes (${verifiedYieldDishes}) does not match curatedDishes (${curatedDishes})`)
+  }
+
   const report = {
     generatedAt: new Date().toISOString(),
     totalDishes: dishes.length,
     curatedDishes,
     draftDishes,
     fullyMappedDishes,
+    partiallyMappedDishes,
+    unmappedDishes,
+    verifiedYieldDishes,
     mappedSlots,
     checkedSlots,
     ifctMapped: ifctHits,

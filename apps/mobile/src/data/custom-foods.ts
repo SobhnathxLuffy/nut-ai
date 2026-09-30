@@ -89,7 +89,10 @@ export async function getCustomFood(db: DbAdapter, id: number): Promise<CustomFo
 
 export async function listCustomFoods(db: DbAdapter): Promise<CustomFood[]> {
   const rows = await db.all<Record<string, unknown>>(
-    'SELECT * FROM user_foods WHERE deleted_at IS NULL ORDER BY lower(name), id',
+    // P2-34: bound the unbounded list — 500 custom foods covers any real
+    // household; beyond that the oldest alphabeticals would be unreachable
+    // from a plain render anyway.
+    'SELECT * FROM user_foods WHERE deleted_at IS NULL ORDER BY lower(name), id LIMIT 500',
   )
   return rows.map(rowToCustomFood)
 }

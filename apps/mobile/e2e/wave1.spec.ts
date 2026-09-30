@@ -43,12 +43,14 @@ test.describe('BUG-004: Silent Failure on Bad Deep Links', () => {
 });
 
 test.describe('BUG-007: Historical Day Navigation Blocked', () => {
-  // fixme(web-e2e): reaching Home requires a COMPLETED onboarding state, and a
-  // fresh Playwright profile is redirected into onboarding before '/' ever
-  // renders the DayStrip. Activating this test needs a state-seeding harness
-  // (drive the real onboarding flow, or seed the user DB kv flag) — the
-  // DayStrip history itself is covered by unit tests until then.
-  test.fixme('Home screen DayStrip includes 56 days of history instead of just 7', async ({ page }) => {
+  // P2-13 triage (QA Wave 4): ticketed skip, not a silent fixme. Blocker:
+  // reaching Home requires a COMPLETED onboarding state, and a fresh
+  // Playwright profile is redirected into onboarding before '/' ever renders
+  // the DayStrip. Activation condition: a state-seeding harness (drive the
+  // real onboarding flow, or seed the user DB kv flag from qa-backup.json).
+  // Until then the DayStrip history is guarded by unit tests, and the skip
+  // stays visible in every report as `test.skip` with this reason.
+  test.skip('Home screen DayStrip includes 56 days of history instead of just 7', async ({ page }) => {
     await page.goto('/');
 
     // We can't easily scroll horizontally in simple assertions, but we can assert
@@ -64,12 +66,13 @@ test.describe('BUG-007: Historical Day Navigation Blocked', () => {
 });
 
 test.describe('BUG-009: Workout Load Units', () => {
-  // fixme(web-e2e): needs (a) an active workout session — the set editor only
-  // exists after launching a routine — and (b) an accessibility label on the
-  // load input ('Load (lb)') that the current editor does not expose. The kg
-  // conversion itself IS covered by workout-units unit tests; this journey
-  // needs a workout-seeding harness first.
-  test.fixme('Workout set editor converts user lb input into canonical kg storage seamlessly', async ({ page }) => {
+  // P2-13 triage (QA Wave 4): ticketed skip, not a silent fixme. Blockers:
+  // (a) an active workout session — the set editor only exists after
+  // launching a routine — and (b) an accessibility label on the load input
+  // ('Load (lb)') the current editor does not expose. Activation condition: a
+  // workout-seeding harness (qa-backup.json) + the a11y label. The kg
+  // conversion itself IS covered by workout-units unit tests.
+  test.skip('Workout set editor converts user lb input into canonical kg storage seamlessly', async ({ page }) => {
     // Note: Since this is an E2E snippet, we're stubbing the flow for the test logic.
     await page.goto('/workout');
 

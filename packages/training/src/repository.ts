@@ -38,6 +38,15 @@ function exerciseRow(e:ExerciseInput):Row {
   return {name:e.name,tracking_type:e.tracking_type,aliases_json:JSON.stringify(e.aliases),primary_muscles_json:JSON.stringify(e.primary_muscles),secondary_muscles_json:JSON.stringify(e.secondary_muscles),antagonist_muscles_json:JSON.stringify(e.antagonist_muscles),equipment_json:JSON.stringify(e.equipment),notes:e.notes,media_uri:e.media_uri}
 }
 export async function seedExercises(db:DbAdapter):Promise<void> {
+  // P2-36 (QA Wave 4): short-circuit the per-launch reseed. The old loop ran
+  // one SELECT per library exercise inside a transaction on EVERY boot — the
+  // dominant first-paint cost on web-wasm. One COUNT answers "already seeded"
+  // (user-created rows only ever push the count ABOVE the library size, and
+  // uuid-deterministic ids mean re-inserts are no-ops anyway).
+  if (EXERCISE_LIBRARY.length > 0) {
+    const count = await db.get<{ c:number }>('SELECT COUNT(*) as c FROM exercises')
+    if ((count?.c ?? 0) >= EXERCISE_LIBRARY.length) return
+  }
   await db.transaction(async tx=>{
     for(const [i,e] of EXERCISE_LIBRARY.entries()) {
       const uuid=deterministicUuidV7(0,`nutai.exercise.v1:${e.name}`)
@@ -106,7 +115,11 @@ export async function addExerciseToRoutine(db:DbAdapter,routineId:number,exercis
   })
 }
 export const activeWorkout=(db:DbAdapter):Promise<Workout|null>=>db.get("SELECT * FROM workouts WHERE status='active' AND deleted_at IS NULL")
-export const workoutHistory=(db:DbAdapter):Promise<Workout[]>=>db.all("SELECT * FROM workouts WHERE status='completed' AND deleted_at IS NULL ORDER BY started_at DESC,id DESC")
+// P2-23 (QA Wave 4): this used to be unbounded — the Train tab mounted
+// hundreds of cards after months of use and re-rendered the whole list on any
+// action. 120 completed workouts is far beyond what a journal tab should
+// render at once; the list is windowed in the screen as well.
+export const workoutHistory=(db:DbAdapter):Promise<Workout[]>=>db.all("SELECT * FROM workouts WHERE status='completed' AND deleted_at IS NULL ORDER BY started_at DESC,id DESC LIMIT 120")
 export async function startWorkout(db:DbAdapter, date:string, name='Quick workout', now=Date.now()):Promise<number> {
   validateLocalDate(date)
   return mutate(db,now,async(tx,c)=>{

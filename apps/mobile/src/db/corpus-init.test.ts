@@ -88,6 +88,17 @@ describe('corpus initialization & retry logic', () => {
       if (sql.includes("build_manifest")) return { value: '2026-09-14T00:00:00Z' }
       return null;
     });
+    // P1-10: the honesty split rides the build_manifest key list.
+    mockDbInstance.getAllAsync.mockImplementation(async (sql) => {
+      if (sql.includes('dish_kb_fully_mapped')) {
+        return [
+          { key: 'dish_kb_fully_mapped', value: '362' },
+          { key: 'dish_kb_yield_verified', value: '362' },
+          { key: 'dish_kb_built_at', value: '2026-09-30T00:00:00Z' },
+        ]
+      }
+      return []
+    });
 
     const fakeAdapter = await openNutritionDb()
 
@@ -98,6 +109,35 @@ describe('corpus initialization & retry logic', () => {
       portions: 14200,
       dishes: 362,
       builtAt: '2026-09-14T00:00:00Z',
+      dishKb: {
+        dishes: 362,
+        fullyMapped: 362,
+        yieldVerified: 362,
+        builtAt: '2026-09-30T00:00:00Z',
+      },
+    })
+  })
+
+  it('P1-10: older bundles without dish_kb_* manifest keys report a null honesty split, never a guess', async () => {
+    mockDbInstance.getFirstAsync.mockImplementation(async (sql) => {
+      if (sql.includes("sqlite_master")) return { c: 1 }
+      if (sql.includes("FROM foods")) return { c: 8520 }
+      if (sql.includes("food_portions")) return { c: 14200 }
+      if (sql.includes("dish_definitions")) return { c: 362 }
+      if (sql.includes("build_manifest")) return { value: '2026-09-14T00:00:00Z' }
+      return null;
+    });
+    mockDbInstance.getAllAsync.mockResolvedValue([])
+
+    const fakeAdapter = await openNutritionDb()
+    const info = await nutritionCorpusInfo(fakeAdapter)
+
+    expect(info.dishes).toBe(362)
+    expect(info.dishKb).toEqual({
+      dishes: 362,
+      fullyMapped: null,
+      yieldVerified: null,
+      builtAt: null,
     })
   })
 

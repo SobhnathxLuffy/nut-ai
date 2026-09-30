@@ -61,8 +61,12 @@ export default function Home() {
     const [g, t, days] = await Promise.all([
       currentGoal(),
       dayTotals(localDate(selected)),
+      // P2-34 (QA Wave 4): this scan used to run with NO limit on every Home
+      // focus — a linearly-growing query on the hottest screen. The DayStrip
+      // renders 56 days and the streak never counts more than it renders;
+      // 120 covers both plus a wide margin, forever.
       h.all<{ local_date: string }>(
-        'SELECT DISTINCT local_date FROM meals WHERE deleted_at IS NULL ORDER BY local_date DESC',
+        'SELECT DISTINCT local_date FROM meals WHERE deleted_at IS NULL ORDER BY local_date DESC LIMIT 120',
       ),
     ])
     setAdaptive(outcome)
@@ -87,10 +91,55 @@ export default function Home() {
   useEffect(() => subscribeFoodMutations(() => { void loadData() }), [loadData])
 
   if (!goal || !totals) {
+    // P2-36 (QA Wave 4): boot no longer gates first paint behind migrate +
+    // seed + three queries. The shell renders immediately — real header, real
+    // DayStrip (it needs no DB) — with quiet placeholder blocks where the
+    // numbers will land, so cold start reads as structure, not a blank wait.
     return (
-      <View style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Text style={[type.body, { color: theme.textMuted }]}>Loading your day…</Text>
-      </View>
+      <ScrollView
+        style={{ backgroundColor: theme.bg }}
+        contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: 150 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={[styles.wordmark, { color: theme.text }]}>Nut AI</Text>
+          <View style={[styles.streakPill, { backgroundColor: theme.bgSunken }]}>
+            <Icon name="flame" size={16} color={theme.textFaint} />
+            <Text style={[type.bodyStrong, { color: theme.textFaint }]}>–</Text>
+          </View>
+        </View>
+
+        <DayStrip selected={offset} onSelect={setOffset} />
+
+        <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
+          <View style={[styles.heroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
+            <View style={{ flex: 1, gap: space.sm }}>
+              <SkeletonBlock width={120} height={40} theme={theme} />
+              <SkeletonBlock width={110} height={16} theme={theme} />
+            </View>
+            <SkeletonBlock width={128} height={128} round theme={theme} />
+          </View>
+
+          <View style={styles.macroRow}>
+            <SkeletonBlock width={104} height={124} theme={theme} radius={radius.xl} />
+            <SkeletonBlock width={104} height={124} theme={theme} radius={radius.xl} />
+            <SkeletonBlock width={104} height={124} theme={theme} radius={radius.xl} />
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
+          <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent', gap: space.sm }]}>
+            <SkeletonBlock width={140} height={18} theme={theme} />
+            <SkeletonBlock width="100%" height={16} theme={theme} />
+            <SkeletonBlock width="80%" height={16} theme={theme} />
+          </View>
+        </View>
+
+        <View style={{ paddingHorizontal: space.lg, marginTop: space.xl, gap: space.md }}>
+          <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Daily timeline</Text>
+          <SkeletonBlock width="100%" height={120} theme={theme} radius={radius.xl} />
+        </View>
+      </ScrollView>
     )
   }
 
@@ -333,6 +382,34 @@ function MacroCard({
         </View>
       </View>
     </View>
+  )
+}
+
+/** Quiet boot placeholder: no spinner, no fake data — just shape. */
+function SkeletonBlock({
+  width,
+  height,
+  theme,
+  radius: blockRadius = radius.md,
+  round = false,
+}: {
+  width: number | `${number}%`
+  height: number
+  theme: ReturnType<typeof useTheme>
+  radius?: number
+  round?: boolean
+}) {
+  return (
+    <View
+      accessibilityLabel="Loading"
+      style={{
+        width,
+        height,
+        borderRadius: round ? 999 : blockRadius,
+        backgroundColor: theme.bgSunken,
+        opacity: 0.8,
+      }}
+    />
   )
 }
 

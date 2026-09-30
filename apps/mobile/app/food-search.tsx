@@ -86,6 +86,7 @@ export default function FoodSearch() {
     ifctFoods: number
     ifctVersion: string | null
     dishes: number
+    dishKb: { dishes: number; fullyMapped: number | null; yieldVerified: number | null } | null
   } | null>(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ScoredCandidate[]>([])
@@ -565,7 +566,15 @@ export default function FoodSearch() {
     if (initialization === 'error') return error ?? 'Offline food data could not be opened.'
     if (!corpus) return ''
     // P2-14: the header must also account for the dish knowledge base.
-    return `${corpus.ifctFoods.toLocaleString()} IFCT foods · ${corpus.foods.toLocaleString()} USDA foods · ${corpus.dishes.toLocaleString()} dish KB · offline`
+    // P1-10: the header states what the shipped artifact actually carries —
+    // fully-mapped and yield-verified counts come from its own build_manifest,
+    // so the app can never claim more verification than the DB holds.
+    const kb = corpus.dishKb
+    let dishPart = `${corpus.dishes.toLocaleString()} dish KB`
+    if (kb && kb.fullyMapped != null && kb.yieldVerified != null) {
+      dishPart = `${kb.dishes.toLocaleString()} dish KB · ${kb.fullyMapped.toLocaleString()} fully mapped · ${kb.yieldVerified.toLocaleString()} yield-verified`
+    }
+    return `${corpus.ifctFoods.toLocaleString()} IFCT foods · ${corpus.foods.toLocaleString()} USDA foods · ${dishPart} · offline`
   }, [corpus, initialization, error])
 
   return (

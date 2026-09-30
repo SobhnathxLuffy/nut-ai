@@ -1,0 +1,228 @@
+import type { IngredientRow } from '@nutai/core-schema'
+import type { ProviderId } from '@nutai/prompt'
+
+/**
+ * Pure per-scan decision logic (QA Wave 4, P2-37).
+ *
+ * orchestrator.ts is 763 lines of glue with four 100+-line scan functions —
+ * the highest-risk coordination code in the app, and until now it had ZERO
+ * direct tests because every decision was welded to its I/O. This module
+ * extracts the decisions that route a scan (mode gating, refinement target
+ * selection, meta merging, barcode next-step) as PURE functions: same input,
+ * same output, no store writes, no fetch, no clock. The orchestrator keeps the
+ * I/O and calls these; decisions.test.ts pins the contract.
+ */
+
+// ---------------------------------------------------------------------------
+// Provider / credential gating (photo scan entry)
+// ---------------------------------------------------------------------------
+
+export type ProviderGateFailure = {
+  ok: false
+  failureKind: 'no-key' | 'key-invalid'
+  message: string
+  canRetry: false
+}
+
+/**
+ * The gate every model-backed scan passes first: a named provider with a
+ * saved credential, or an honest failure phase. A missing key is DIFFERENT
+ * from a rejected key — the first is "add one", the second is "re-enter it".
+ */
+export function gateScanProvider<C extends { value: string }>(
+  providerSetting: string | null | undefined,
+  credential: C | null | undefined,
+): { ok: true; provider: ProviderId; credential: C } | ProviderGateFailure {
+  const provider = providerSetting as ProviderId | 'none' | '' | null | undefined
+  if (!provider || provider === 'none') {
+    return {
+      ok: false,
+      failureKind: 'no-key',
+      message:
+        'Photo scans need an API key. Add one in Profile — barcode, search and manual logging work without one.',
+      canRetry: false,
+    }
+  }
+  if (!credential || !credential.value) {
+    return {
+      ok: false,
+      failureKind: 'key-invalid',
+      message: 'Your saved key is missing. Re-enter it in Profile.',
+      canRetry: false,
+    }
+  }
+  return { ok: true, provider, credential }
+}
+
+// ---------------------------------------------------------------------------
+// Scan meta merging (fix-scan re-analysis)
+// ---------------------------------------------------------------------------
+
+export interface ScanMeta {
+  provider: ProviderId
+  model: string
+  inputTokens: number
+  outputTokens: number
+  /** P2-9: null = a custom model whose catalogue price is unknown. */
+  costUsd: number | null
+  promptVersion: string
+}
+
+/**
+ * A fix re-analysis rides on top of the original call, so its tokens ADD.
+ * Cost propagates null: one unknown-cost call makes the meal's total unknown —
+ * null must never quietly read as free. (P2-9; the shipped code previously
+ * contradicted its own comment by summing a known fix cost over an unknown
+ * original — the contract tests caught it and the documented principle won.)
+ * A null PRIOR means "no prior call" — the new cost simply stands.
+ */
+export function mergeScanMeta(
+  prior: Pick<ScanMeta, 'inputTokens' | 'outputTokens' | 'costUsd'> | null,
+  next: ScanMeta,
+): ScanMeta {
+  const priorKnown = prior == null || prior.costUsd != null
+  const nextKnown = next.costUsd != null
+  return {
+    provider: next.provider,
+    model: next.model,
+    inputTokens: next.inputTokens + (prior?.inputTokens ?? 0),
+    outputTokens: next.outputTokens + (prior?.outputTokens ?? 0),
+    costUsd: !priorKnown || !nextKnown ? null : next.costUsd! + prior!.costUsd!,
+    promptVersion: next.promptVersion,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Background refinement target selection
+// ---------------------------------------------------------------------------
+
+/** How many corpus misses we will pay to look up per scan. */
+export const MAX_LOOKUPS_PER_SCAN = 2
+
+/**
+ * Two triggers, in row order, capped: the corpus missed entirely, or the model
+ * saw a BRAND (a logo counts — golden arches on the wrapper). A branded item
+ * that matched some generic corpus row still deserves the brand's own
+ * published numbers.
+ */
+export function selectRefinementTargets(
+  items: ReadonlyArray<{ resolution: string; row: { id: string } }>,
+  payloadItems: ReadonlyArray<{ brand?: string | null } | null | undefined> | null,
+  max: number = MAX_LOOKUPS_PER_SCAN,
+): number[] {
+  const targets = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item, index }) => item.resolution === 'miss' || payloadItems?.[index]?.brand != null)
+    .map(({ index }) => index)
+    .slice(0, max)
+  return targets
+}
+
+/** A lookup with exactly one option and no open question applies itself. */
+export function isUnambiguousLookup(result: { found: boolean; options: readonly unknown[]; question?: string | null }): boolean {
+  return result.found && result.options.length === 1 && !result.question
+}
+
+// ---------------------------------------------------------------------------
+// Barcode routing
+// ---------------------------------------------------------------------------
+
+export interface BarcodeCorpusFood {
+  name: string
+  foodId: string | null
+  servingSizeG: number | null
+  energyKcal: number | null
+  source: string
+}
+
+export type BarcodeRoute =
+  /** Corpus GTIN hit with usable energy — the zero-cost path, no model call. */
+  | { step: 'corpus-ready'; source: string }
+  /** Corpus miss (or hit with no energy) and NO credential — honest pointer
+   * at the label scanner, which works without a key. */
+  | { step: 'need-label-mode' }
+  /** Corpus miss with a credential — one server-side search attempt. */
+  | { step: 'try-web-lookup' }
+
+/**
+ * The barcode 3-step flow's routing decision, pure: decoded GTIN → offline
+ * corpus lookup → only on miss (with means) → one AI lookup. A reseller
+ * gateway never gets a "search" promise — the lookup builder downgrades to
+ * plain completions upstream; the ROUTE is unchanged, the honesty lives in
+ * the transport.
+ */
+export function planBarcodeScan(corpusFood: BarcodeCorpusFood | null, hasCredential: boolean): BarcodeRoute {
+  if (corpusFood && corpusFood.energyKcal != null) {
+    return { step: 'corpus-ready', source: corpusFood.source }
+  }
+  if (!hasCredential) return { step: 'need-label-mode' }
+  return { step: 'try-web-lookup' }
+}
+
+/** The failure phase when the corpus missed and no key exists. */
+export const BARCODE_NO_KEY_FAILURE = {
+  kind: 'failed' as const,
+  photoUri: '',
+  message:
+    'This barcode is not in the bundled database. The Food label mode reads the printed panel directly and works without a key.',
+  canRetry: false as const,
+}
+
+/** The failure phase when the corpus missed and the lookup found nothing. */
+export const BARCODE_NOT_FOUND_FAILURE = {
+  kind: 'failed' as const,
+  photoUri: '',
+  message:
+    'Could not find this barcode in the database or online. Try the Food label mode — it reads the printed panel directly.',
+  canRetry: false as const,
+}
+
+// ---------------------------------------------------------------------------
+// Web lookup option → packaged-exact ingredient row
+// ---------------------------------------------------------------------------
+
+export interface WebLookupOption {
+  label: string
+  serving_g: number | null
+  calories_kcal: number
+  protein_g: number
+  fat_g: number
+  carbs_g: number
+  fiber_g: number | null
+  sodium_mg: number | null
+}
+
+/**
+ * Convert one web-lookup option into a packaged_exact row. The option's
+ * numbers are PER SERVING; the snapshot is per-100 g — scaled by the printed
+ * serving weight, which is the exactness the pathway name promises.
+ */
+export function webOptionToIngredientRow(
+  opt: WebLookupOption,
+  sourceUrl: string | null,
+  now: number,
+): IngredientRow {
+  const grams = opt.serving_g ?? 100
+  const per100 = grams > 0 ? 100 / grams : 0
+  return {
+    id: `row_${now}`,
+    displayName: opt.label,
+    sourceFoodId: null,
+    grams,
+    nutrientSnapshot: {
+      kcal: opt.calories_kcal * per100,
+      protein_g: opt.protein_g * per100,
+      fat_g: opt.fat_g * per100,
+      carbs_g: opt.carbs_g * per100,
+      fiber_g: opt.fiber_g == null ? null : opt.fiber_g * per100,
+      sugar_g: null,
+      sodium_mg: opt.sodium_mg == null ? null : opt.sodium_mg * per100,
+    },
+    origin: 'web_lookup',
+    sourceUrl,
+    gramPathway: 'packaged_exact',
+    bandHalfPct: 0.1,
+    isEstimate: false,
+    assumptions: [],
+  }
+}

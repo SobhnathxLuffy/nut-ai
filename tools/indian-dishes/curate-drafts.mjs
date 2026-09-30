@@ -104,6 +104,10 @@ const SPINACH = 'ifct:C033'
 const COCONUT_FRESH = 'ifct:H007'
 const COCONUT_DRY = 'ifct:H006'
 const COCONUT_MILK = 'usda:170173'
+// P2-10: a FAT slot must point at an actual fat (>= 400 kcal/100 g), never at
+// coconut milk (197 kcal) — verify-mappings now hard-fails on that. Coconut
+// oil is the classic Avial finish (drizzled off heat), not a milk gravy.
+const COCONUT_OIL = 'usda:171412' // "Oil, coconut" (SR Legacy), 892 kcal/100g
 const SESAME = 'ifct:H009'
 const GROUNDNUT = 'ifct:H012'
 const CASHEW = 'ifct:H005'
@@ -395,7 +399,7 @@ const OVERRIDES = {
   'Cabbage Poriyal': { portion: 120, slots: { primary_vegetable: { foodId: CABBAGE, range: [0.6, 0.75] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.08], note: 'Dry poriyal carries no gravy.' } } },
   'Beetroot Poriyal': { portion: 120, slots: { primary_vegetable: { foodId: BEETROOT, range: [0.6, 0.75] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.08], note: 'Dry poriyal carries no gravy.' } } },
   'Cabbage Foogath': { portion: 120, slots: { primary_vegetable: { foodId: CABBAGE, range: [0.6, 0.75] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.08], note: 'Dry foogath carries no gravy.' } } },
-  Avial: { portion: 160, slots: { primary_vegetable: { foodId: MIXED_VEG, range: [0.5, 0.65] }, added_fat: { foodId: COCONUT_MILK, range: [0.05, 0.1], note: 'Avial finishes with coconut milk.' } } },
+  Avial: { portion: 160, slots: { primary_vegetable: { foodId: MIXED_VEG, range: [0.5, 0.65] }, added_fat: { foodId: COCONUT_OIL, range: [0.01, 0.03], note: 'Avial finishes with raw coconut oil drizzled off heat (P2-10: fat slot must be an oil, not coconut milk).' } } },
   Thoran: { portion: 120, slots: { primary_vegetable: { foodId: CABBAGE, range: [0.55, 0.7], note: 'Classic thoran uses shredded cabbage.' }, gravy_base_optional: { foodId: COCONUT_FRESH, range: [0.05, 0.1], note: 'Thoran finishes with scraped coconut.' } } },
   Undhiyu: { portion: 200, slots: { primary_vegetable: { foodId: MIXED_VEG, range: [0.5, 0.65] } } },
   'Aloo Chokha': { slots: { primary_vegetable: { foodId: POTATO, range: [0.7, 0.85] }, added_fat: { foodId: MUSTARD_OIL, range: [0.04, 0.08], note: 'Chokha is finished with mustard oil.' } } },

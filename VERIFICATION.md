@@ -573,3 +573,79 @@ Findings and fixes:
 Gates: lint 0 · typecheck clean · 682/682 tests · node purity · golden
 queries · IFCT verify · 362/362 dishes CURATED · 1451/1451 slots mapped ·
 density audit PASS · filling audit PASS · reconciliation PASS.
+
+## QA Wave 4 — Structural (client split, repo invariants, boot/perf, corpus honesty)
+
+Implements the QA report's Wave 4 roadmap (all 10 rows), against findings P1-9,
+P1-10, P2-3, P2-3x, P2-22/23, P2-32/33/34/35/36/37/38/39/41/43, P3-2/3, P3-8,
+P3-31, P3-45.
+
+- **client.ts god-file split (P2-3x, P3-2/3):** the 1,333-line module is now an
+  ~90-line stable import barrel over `wire/` (types, error taxonomy, fenced-JSON,
+  provider-agnostic SSE/XHR core), `transports/` (openai / anthropic / google
+  envelope shapes + request builders) and `calls/` (scan, vision one-shots, web
+  lookup, correction, chat, chat stream). Public surface unchanged; all 90
+  pathA tests pass against the barrel unchanged.
+- **repo.ts invariant suite (P1-9):** direct vitest coverage on
+  @nutai/db-adapter/node in-memory DB — logMeal roundtrip, undo/redo chains
+  (LIFO redo verified), snapshot restore incl. scan-cost ledger, idempotency-key
+  dedupe for logMeal AND deleteMeal, compaction, resetEverything.
+- **orchestrator decision extraction (P2-37):** pure `src/scan/decisions.ts`
+  (provider gate, meta merge, refinement target selection, unambiguous-lookup
+  rule, barcode 3-step routing, web-option→row conversion) + 17 contract tests.
+  Contract testing caught a real bug on extraction: mergeScanMeta contradicted
+  its own P2-9 comment (summed a known fix cost over an unknown original);
+  the documented principle now wins.
+- **Compaction wired + bounded queries + N+1 (P2-33/34/43):** compactHistory
+  now runs once per DB open (maxCount 500 / maxAge 90d, fire-and-forget,
+  never blocks boot); Home streak scan LIMIT 120; mealsForDay single
+  `meal_id IN (...)` query grouped in JS (was one query per meal); custom-foods
+  list bounded at 500.
+- **Boot (P2-36):** seedExercises short-circuits behind
+  `SELECT COUNT(*) FROM exercises` (was a per-exercise SELECT loop every
+  launch); Home renders the real shell — header, live DayStrip, skeleton
+  blocks — before db() resolves instead of a bare "Loading your day…" gate.
+- **Lists + poll (P2-22/23):** indian-dishes renders via FlatList (was 500
+  rows in a ScrollView); train history query bound (LIMIT 120) and windowed
+  (8 cards + Show-all); ActiveWorkout's 1-second FULL-DATABASE poll now runs
+  only while a rest timer is live — the 1s tick is a pure clock update.
+- **Bundle diet (P2-32, P3-45):** removed deps sql.js, wa-sqlite, @expo/ui,
+  expo-linking AND expo-crypto (verified: zero source imports; expo-doctor
+  reports nothing requiring it); deleted public/ wa-sqlite-async.wasm,
+  wa-sqlite.wasm and test-wasm.html = 1,761,235 bytes (~1.68 MB) of genuinely
+  dead payload per deployment. CORRECTION TO THE CENSUS: public/sqlite3.wasm
+  is NOT dead — it is byte-identical (sha256 2ee8f3da…) to
+  node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3.wasm, the module binary
+  the web adapter fetches at '/sqlite3.wasm' via locateFile. It is RESTORED;
+  deleting it was verified to break web boot (the e2e restore harness caught
+  the 404 within one run — exactly what the verification gates are for).
+- **Token economy (P3-8):** Anthropic scan requests carry the system prompt as
+  a cache_control: ephemeral block — the ~4.5K-token prefix now hits the
+  provider cache (1/10th input price) instead of re-billing byte-identical on
+  every scan. OpenAI/Gemini prefixes unchanged (stability is their caching).
+- **Corpus honesty (P1-10, P2-38/39):** verify-mappings now reports
+  verifiedYieldDishes and CI-fails when it ≠ curatedDishes; fat slots below
+  400 kcal/100 g are HARD errors (the warning class nobody consumed — Avial
+  proved it). Avial's added_fat moved from canned coconut milk (197 kcal,
+  ~4x undercount) to Oil, coconut (usda:171412, 892 kcal, range 1-3%). The
+  provably-inert IngredientSuggestion mechanism (generator targeted drafts;
+  zero drafts; injector skipped CURATED) is DELETED. build-sqlite refuses the
+  fossil-seed fallback (P2-12) and ships honesty metrics inside
+  nutrition.db's build_manifest; the Food Database header and "How food & dish
+  data works" screen render the shipped truth (362 dishes · 362 fully mapped ·
+  362 yield-verified) instead of trusting a docs report.
+- **Web adapter + e2e (P2-7, P2-35, P2-41, P3-31):** the FTS5 rewrite polyfill
+  is deleted; the web wasm module is feature-probed at load and fails fast
+  with a clear diagnosis when FTS5 is missing (the corpus schema can no longer
+  silently change shape). Both parked e2e fixme journeys are converted to
+  ticketed skips with blockers + activation conditions recorded in-file.
+  Web dirty-guards for routines/search/exercise-detail already shipped in
+  Wave 3's shared hook.
+- **Golden prompt tests (P3-3):** packages/prompt/golden.test.ts pins the
+  SYSTEM_PROMPT sha256, PROMPT_VERSION, and the per-provider request
+  envelopes (incl. the new cache_control block) so prompt drift is loud.
+
+Gates: lint 0 · typecheck clean · 815/815 tests · node purity 18/18 · golden
+queries 26/26 · IFCT verify · 362/362 fully mapped · 362/362 yield-verified ·
+0 hard errors · 0 sanity warnings · density audit PASS · filling audit PASS ·
+reconciliation PASS · public/ wasm −2.51 MB.

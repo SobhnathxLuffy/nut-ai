@@ -40139,21 +40139,22 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.05,
-       0.1
+       0.01,
+       0.03
       ],
-      "verified": true
+      "verified": true,
+      "note": "Raw coconut oil finish, 1-3% of raw ingredient mass."
      },
      "nutritionMapping": {
       "preferredSources": [
        "USDA_FDC",
        "ifct"
       ],
-      "canonicalFoodId": "usda:170173",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Nuts, coconut milk, canned (liquid expressed from grated meat and water)",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Avial finishes with coconut milk. Reviewed per-dish mapping; id verified against the shipped corpus."
+      "canonicalFoodId": "usda:171412",
+      "mappingStatus": "MANUAL_OVERRIDE",
+      "mappedName": "Oil, coconut",
+      "mappingMethod": "manual_override",
+      "reviewNote": "P2-10 (QA Wave 4): a fat slot must point at an actual fat. Coconut milk (197 kcal/100g) undercounted the added fat ~4x; coconut oil (892 kcal/100g, SR Legacy usda:171412) is the classic Avial finish drizzled off heat."
      }
     },
     {

@@ -51,7 +51,13 @@ export async function db(): Promise<DbAdapter> {
   if (!opening) opening = (async () => {
     const handle = await openUserDb()
     await migrate(handle, Date.now())
-    console.log("--- MIGRATION FINISHED ---"); await seedExercises(handle)
+    await seedExercises(handle)
+    // P2-33 (QA Wave 4): compaction used to be dead code — the operations
+    // table (with full meal snapshots) grew unbounded for the install's
+    // lifetime. It runs once per open, off the critical path, and NEVER
+    // blocks or fails boot: worst case the journal keeps growing until the
+    // next launch.
+    void compactOperations(handle, { maxCount: 500, maxAgeMs: 90 * 86_400_000 }).catch(() => {})
     cached = handle
     return handle
   })().catch(error => { opening = null; throw error })
@@ -521,32 +527,43 @@ export async function mealsForDay(date: string): Promise<DayMeal[]> {
     'SELECT id, meal_slot, logged_at, analysis_status FROM meals WHERE local_date = ? ORDER BY logged_at ASC, id ASC',
     [date],
   )
+  if (meals.length === 0) return []
 
-  const result: DayMeal[] = []
-  for (const m of meals) {
-    const items = await h.all<{
-      id: number
-      display_name: string
-      grams: number
-      snap_energy_kcal: number | null
-    }>(
-      'SELECT id, display_name, grams, snap_energy_kcal FROM log_items WHERE meal_id = ? ORDER BY sort_order ASC, id ASC',
-      [m.id],
-    )
-    result.push({
-      id: m.id,
-      slot: m.meal_slot,
-      loggedAt: m.logged_at,
-      analysisStatus: m.analysis_status,
-      items: items.map((i) => ({
-        id: i.id,
-        displayName: i.display_name,
-        grams: i.grams,
-        energyKcal: Math.round((i.snap_energy_kcal ?? 0) * (i.grams / 100)),
-      })),
-    })
+  // P2-34 (QA Wave 4): this used to run ONE log_items query PER meal — the
+  // hottest screen paid N+1 latency on every focus. One IN-query grouped in
+  // JS is equivalent: sort_order ASC, id ASC within each meal.
+  const placeholders = meals.map(() => '?').join(', ')
+  const itemRows = await h.all<{
+    meal_id: number
+    id: number
+    display_name: string
+    grams: number
+    snap_energy_kcal: number | null
+    sort_order: number
+  }>(
+    `SELECT meal_id, id, display_name, grams, snap_energy_kcal, sort_order
+     FROM log_items WHERE meal_id IN (${placeholders}) ORDER BY sort_order ASC, id ASC`,
+    meals.map((m) => m.id),
+  )
+  const byMeal = new Map<number, typeof itemRows>()
+  for (const row of itemRows) {
+    const list = byMeal.get(row.meal_id)
+    if (list) list.push(row)
+    else byMeal.set(row.meal_id, [row])
   }
-  return result
+
+  return meals.map((m) => ({
+    id: m.id,
+    slot: m.meal_slot,
+    loggedAt: m.logged_at,
+    analysisStatus: m.analysis_status,
+    items: (byMeal.get(m.id) ?? []).map((i) => ({
+      id: i.id,
+      displayName: i.display_name,
+      grams: i.grams,
+      energyKcal: Math.round((i.snap_energy_kcal ?? 0) * (i.grams / 100)),
+    })),
+  }))
 }
 
 // ---------------------------------------------------------------------------

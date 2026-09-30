@@ -20,7 +20,6 @@ import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 
 type DishDef = any
 interface Component { id: string, name: string, foodId: string | null, resolvedName: string | null, source: string, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null }
-interface Suggestion { foodId: string, label: string, defaultGrams: number }
 
 // WEB-003: household variants are persisted in the writable user DB. The table
 // mirrors the corpus schema columns this screen reads and writes.
@@ -181,14 +180,10 @@ export default function DishComposerScreen() {
         }
 
         // Build components from the saved template. The template's own slots
-        // win; if every slot is an unmapped generic label, fall back to the
-        // name-derived ingredient suggestions baked into the dish record.
+        // win. (P2-11: the name-derived "ingredientSuggestions" fallback was
+        // deleted — the mechanism was provably inert for the all-CURATED
+        // corpus and never produced a single suggestion.)
         const slots: any[] = parsed.recipeTemplate.ingredientSlots ?? []
-        const anyMapped = slots.some((slot) => slot.nutritionMapping?.canonicalFoodId)
-        const suggestions: Suggestion[] = Array.isArray(parsed.recipeTemplate.ingredientSuggestions)
-          ? parsed.recipeTemplate.ingredientSuggestions
-          : []
-        const useSuggestions = !anyMapped && suggestions.length > 0
 
         // FRACTION -> GRAMS: verified slot ranges are mass fractions of the
         // raw batch. dishIngredientBreakdown converts them to the SAME
@@ -208,21 +203,7 @@ export default function DishComposerScreen() {
         //   3. Otherwise the selector opens at No Added Oil (0 g) — the
         //      recipe's own named fat rows are the single source of truth.
         let fatDefaultApplied = false
-        if (useSuggestions) {
-          for (const s of suggestions) {
-            const comp = newComponent(s.label, s.foodId, s.foodId.split(':')[0], s.defaultGrams ?? 100)
-            const nutrients = await fetchFoodNutrients(db, ifctDb, userDb, s.foodId)
-            if (nutrients) {
-              comp.resolvedName = nutrients.name
-              comp.kcal = nutrients.kcal
-              comp.protein_g = nutrients.protein_g
-              comp.carbs_g = nutrients.carbs_g
-              comp.fat_g = nutrients.fat_g
-            }
-            comps.push(comp)
-          }
-        } else {
-          for (const slot of slots) {
+        for (const slot of slots) {
             const foodId = slot.nutritionMapping?.canonicalFoodId || null
             const line = breakdown.lines.find((candidate) => candidate.label === slot.label)
             // FOLDING RULE: a fat_variable slot whose mapped food the Cooking
@@ -255,7 +236,6 @@ export default function DishComposerScreen() {
               }
             }
             comps.push(comp)
-          }
         }
         if (alive) {
           if (breakdown.standardPortionGrams != null) setPortion(String(breakdown.standardPortionGrams))
