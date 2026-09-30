@@ -151,6 +151,7 @@ export default function IndianDishesScreen() {
         onChangeText={setQuery}
         placeholder="Search 362 identities (e.g. litti, idli)"
         placeholderTextColor={t.textFaint}
+        accessibilityLabel="Search dishes"
       />
       
       <Text style={{ color: t.textMuted, paddingHorizontal: space.md, marginTop: space.xs }}>Showing {dishes.length} {dishes.length === 1 ? 'dish' : 'dishes'}</Text>
@@ -163,7 +164,7 @@ export default function IndianDishesScreen() {
                 <Text style={[type.body, { color: t.text }]}>{d.name}</Text>
                 {d.aliases ? <Text style={[type.caption, { color: t.textMuted }]}>Also known as: {d.aliases}</Text> : null}
                 <Text style={[type.micro, { color: d.status === 'CURATED' ? t.protein : d.status === 'HOUSEHOLD' ? t.protein : t.safety, marginTop: space.xs }]}>
-                  {d.status === 'CURATED' ? '✓ CURATED RECIPE' : d.status === 'HOUSEHOLD' ? '🏠 MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {prettyCategory(d.category)}
+                  {d.status === 'CURATED' ? 'CURATED RECIPE' : d.status === 'HOUSEHOLD' ? 'MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {prettyCategory(d.category)}
                 </Text>
               </View>
             </Pressable>
@@ -175,7 +176,7 @@ export default function IndianDishesScreen() {
           ) : filter === 'HOUSEHOLD' ? (
             <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
               You have not saved any household versions yet.{'\n'}
-              Open any dish and use “Log Household Variant” to keep your own ingredients and portions.
+              Open any dish and use “Log household variant” to keep your own ingredients and portions.
             </Text>
           ) : filter === 'DRAFT_CURATED' ? (
             <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>

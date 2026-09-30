@@ -760,6 +760,7 @@ export default function FoodSearch() {
             onChangeText={setDecomposeName}
             placeholder="Dish Name"
             placeholderTextColor={theme.textFaint}
+            accessibilityLabel="Dish name"
             style={[styles.smallInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
           />
 
@@ -963,6 +964,9 @@ export default function FoodSearch() {
               {COOKING_METHOD_OPTIONS.map((item) => (
                 <Pressable
                   key={item.method}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.label} cooking method`}
+                  accessibilityState={{ selected: selectedMethod === item.method }}
                   onPress={() => setSelectedMethod(item.method)}
                   style={[
                     styles.chip,
@@ -1033,7 +1037,7 @@ export default function FoodSearch() {
               onPress={handleLogDecomposed}
               style={[styles.actionBtn, { flex: 1, backgroundColor: theme.protein, borderColor: theme.protein }]}
             >
-              <Text style={[type.body, { color: theme.bg, fontWeight: '600' }]}>Review & Log Dish</Text>
+              <Text style={[type.body, { color: theme.bg, fontWeight: '600' }]}>Review & log dish</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -1108,6 +1112,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
+    minHeight: MIN_TAP_TARGET,
+    justifyContent: 'center',
   },
   nutritionBox: {
     marginTop: space.md,

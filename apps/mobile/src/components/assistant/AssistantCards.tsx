@@ -3,6 +3,7 @@ import { router } from 'expo-router'
 import { useTheme } from '../../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../../src/theme/tokens'
 import { expandProposalIngredients } from '../../data/proposal-ingredients'
+import { Icon } from '../Icon'
 
 export function LastWorkoutCard({ data }: { data: any }) {
   const t = useTheme()
@@ -11,7 +12,7 @@ export function LastWorkoutCard({ data }: { data: any }) {
       <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
         <Text style={[s.title, { color: t.text }]}>No records found</Text>
         <Text style={[s.body, { color: t.textMuted }]}>We couldn't find a past workout for that exercise.</Text>
-        <Pressable onPress={() => router.push('/log-exercise')} style={[s.btn, { backgroundColor: t.text }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Log an exercise" onPress={() => router.push('/log-exercise')} style={[s.btn, { backgroundColor: t.text }]}>
           <Text style={[s.btnText, { color: t.bgElevated }]}>Log an exercise</Text>
         </Pressable>
       </View>
@@ -68,17 +69,17 @@ export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: 
       {expandProposalIngredients(data.ingredients).map((ing, i) => (
         <Text key={i} style={[s.body, { color: t.text }]}>• {ing.display}</Text>
       ))}
-      {status === 'SAVED' && <Text style={[s.body, { color: t.protein, fontWeight: 'bold' }]}>✓ SAVED</Text>}
-      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>✗ FAILED (Tap to retry)</Text>}
+      {status === 'SAVED' && <View style={[s.row, { marginTop: space.sm, alignItems: 'center' }]}><Icon name="check" size={16} color={t.protein} /><Text style={[s.body, { color: t.protein, fontWeight: 'bold', marginBottom: 0 }]}>  Saved</Text></View>}
+      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>Save failed — tap Review & Save to try again.</Text>}
       {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
       {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
 
       {(status === 'PROPOSED' || status === 'FAILED') && (
         <View style={s.row}>
-          <Pressable onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Review and save this meal" onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
             <Text style={[s.btnText, { color: t.bgElevated }]}>Review & Save</Text>
           </Pressable>
-          <Pressable onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel this meal proposal" onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
             <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
           </Pressable>
         </View>
@@ -95,17 +96,17 @@ export function WorkoutRoutineProposalCard({ data, status, onConfirm, onCancel }
       {data.exercises.map((ex: any, i: number) => (
         <Text key={i} style={[s.body, { color: t.text }]}>• {ex.name}: {ex.sets} sets x {ex.reps}</Text>
       ))}
-      {status === 'SAVED' && <Text style={[s.body, { color: t.protein, fontWeight: 'bold' }]}>✓ SAVED</Text>}
-      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>✗ FAILED (Tap to retry)</Text>}
+      {status === 'SAVED' && <View style={[s.row, { marginTop: space.sm, alignItems: 'center' }]}><Icon name="check" size={16} color={t.protein} /><Text style={[s.body, { color: t.protein, fontWeight: 'bold', marginBottom: 0 }]}>  Saved</Text></View>}
+      {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>Save failed — tap Confirm to try again.</Text>}
       {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
       {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
 
       {(status === 'PROPOSED' || status === 'FAILED') && (
         <View style={s.row}>
-          <Pressable onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Confirm this routine" onPress={onConfirm} style={[s.btn, { backgroundColor: t.text, flex: 1 }]}>
             <Text style={[s.btnText, { color: t.bgElevated }]}>Confirm</Text>
           </Pressable>
-          <Pressable onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel this routine proposal" onPress={onCancel} style={[s.btn, { backgroundColor: t.bgElevated, borderWidth: 1, borderColor: t.text, flex: 1 }]}>
             <Text style={[s.btnText, { color: t.text }]}>Cancel</Text>
           </Pressable>
         </View>

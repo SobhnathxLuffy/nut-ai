@@ -31,6 +31,7 @@ import {
 } from '../src/data/recipes'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
+import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -184,6 +185,12 @@ export default function Recipes() {
       resetEditor()
     }
   }, [isDirty])
+
+  // P2-15: web parity for the Android-only hardware-back guard — reload and
+  // tab close now get the browser leave-confirmation while the editor holds
+  // unsaved work. (Browser back cannot be intercepted on expo-router web; see
+  // src/ui/web-dirty-guard.ts.)
+  useWebDirtyGuard(editingId != null)
 
   useEffect(() => {
     if (editingId == null) return
@@ -492,7 +499,7 @@ export default function Recipes() {
                 v{recipe.versionNumber} · {Math.round(recipe.servingSizeG)} g · {recipe.energyKcal === null ? 'calories unknown' : `${Math.round(recipe.energyKcal)} kcal`}
               </Text>
             </View>
-            <Pressable accessibilityLabel={`Edit ${recipe.name}`} onPress={() => void beginEdit(recipe.id)} style={styles.rowCommand}>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${recipe.name}`} onPress={() => void beginEdit(recipe.id)} style={styles.rowCommand}>
               <Icon name="pencil" size={18} color={theme.textMuted} />
             </Pressable>
             <Pressable
@@ -502,7 +509,7 @@ export default function Recipes() {
             >
               <Text style={[type.label, { color: theme.text }]}>Log</Text>
             </Pressable>
-            <Pressable accessibilityLabel={`Delete ${recipe.name}`} onPress={()=>Alert.alert('Delete this recipe?','Existing diary entries keep their saved nutrition.',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void (async()=>{const uuid=await deleteRecipe(await db(),recipe.id,Date.now());setUndoUuid(uuid);await reload()})()}])} style={styles.rowCommand}><Icon name="close" size={18} color={theme.safety}/></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${recipe.name}`} onPress={()=>Alert.alert('Delete this recipe?','Existing diary entries keep their saved nutrition.',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void (async()=>{const uuid=await deleteRecipe(await db(),recipe.id,Date.now());setUndoUuid(uuid);await reload()})()}])} style={styles.rowCommand}><Icon name="close" size={18} color={theme.safety}/></Pressable>
           </View>
         ))}
       </ScrollView>

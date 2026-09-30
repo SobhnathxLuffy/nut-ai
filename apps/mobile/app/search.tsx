@@ -6,6 +6,7 @@ import { addExercise, createExercise, isExerciseInWorkout, listEquipment, listEx
 import { rankSearch, type SearchEntity } from '@nutai/search'
 import { db } from '../src/data/repo'
 import { setPendingRoutineExercises } from '../src/data/routine-draft'
+import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Button, Card, Field, Label, Row, useAction } from '../src/components/Screen'
 
 let cachedBuiltinDocs: SearchEntity[] | null = null
@@ -41,6 +42,9 @@ export default function SearchScreen(){
     }
     return new Set()
   })
+
+  // P3-47: web parity for the Android-only back guard (same batch as P2-15).
+  useWebDirtyGuard(custom)
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {

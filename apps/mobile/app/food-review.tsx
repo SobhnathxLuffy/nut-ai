@@ -32,7 +32,7 @@ export default function FoodReview() {
       return { value: parsed, error: null } 
     }
     catch { 
-      return { value: null, error: 'Data corrupted, go back' } 
+      return { value: null, error: 'This saved meal has damaged data and cannot be opened. Go back and log the food again.' }
     }
   }, [params.payload])
   const base = decoded.value?.selection

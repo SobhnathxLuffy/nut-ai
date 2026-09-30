@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Alert, StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
-import { radius, space, type } from '../src/theme/tokens'
+import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 import { openNutritionDb, openIfctDb, openUserDb } from '../src/db/expo-adapter'
 
 import type { DbAdapter } from '@nutai/db-adapter'
@@ -102,13 +102,10 @@ export default function DishComposerScreen() {
   const [useRecipeYield, setUseRecipeYield] = useState(true)
 
   // Ingredient search across user foods + IFCT + USDA, plus the create-new
-  // flow for ingredients no database knows.
-  const [ingredientQuery, setIngredientQuery] = useState('')
-  const [ingredientResults, setIngredientResults] = useState<IngredientOption[]>([])
-  const [ingredientSearching, setIngredientSearching] = useState(false)
-  const [showCreateIngredient, setShowCreateIngredient] = useState(false)
-  const [newIngredient, setNewIngredient] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
-  const [creatingIngredient, setCreatingIngredient] = useState(false)
+  // flow for ingredients no database knows — now owned PER COMPONENT by
+  // <IngredientResolver> (QA P2-21): one shared query state used to make
+  // every unresolved component's box type into the same query, duplicate the
+  // same result list, and attach taps to the wrong row.
 
   useEffect(() => {
     let alive = true
@@ -304,31 +301,6 @@ export default function DishComposerScreen() {
     setComponents(components.map(c => c.id === id ? { ...c, grams: parseFloat(text) || 0 } : c))
   }
 
-  // Live multi-corpus ingredient search while typing.
-  useEffect(() => {
-    if (!db) return
-    const term = ingredientQuery.trim()
-    if (term.length < 2) {
-      setIngredientResults([])
-      setIngredientSearching(false)
-      return
-    }
-    let alive = true
-    setIngredientSearching(true)
-    const timer = setTimeout(async () => {
-      try {
-        const options = await searchIngredientOptions(db, ifctDb ?? undefined, userDb ?? undefined, term)
-        if (alive) {
-          setIngredientResults(options)
-          setIngredientSearching(false)
-        }
-      } catch {
-        if (alive) setIngredientSearching(false)
-      }
-    }, 250)
-    return () => { alive = false; clearTimeout(timer) }
-  }, [ingredientQuery, db, ifctDb, userDb])
-
   const attachCandidate = (id: string, option: IngredientOption, nutrients: NutrientFetch | null) => {
     setComponents(components.map(c => c.id === id ? {
       ...c,
@@ -340,49 +312,6 @@ export default function DishComposerScreen() {
       carbs_g: nutrients?.carbs_g ?? null,
       fat_g: nutrients?.fat_g ?? null,
     } : c))
-  }
-
-  const selectIngredientOption = async (id: string, option: IngredientOption) => {
-    if (!db) return
-    const nutrients = await fetchFoodNutrients(db, ifctDb, userDb, option.foodId)
-    attachCandidate(id, option, nutrients)
-    setIngredientQuery('')
-    setIngredientResults([])
-  }
-
-  async function handleCreateIngredient(attachTo: string | null) {
-    if (!userDb || creatingIngredient) return
-    const name = newIngredient.name.trim()
-    const kcal = parseFloat(newIngredient.kcal)
-    const protein = parseFloat(newIngredient.protein) || 0
-    const carbs = parseFloat(newIngredient.carbs) || 0
-    const fat = parseFloat(newIngredient.fat) || 0
-    if (!name || !Number.isFinite(kcal) || kcal < 0) {
-      Alert.alert('Missing values', 'Give the ingredient a name and its kcal per 100 g.')
-      return
-    }
-    setCreatingIngredient(true)
-    try {
-      const food = await createIngredientFood(userDb, { name, kcal, protein_g: protein, carbs_g: carbs, fat_g: fat }, Date.now())
-      if (attachTo) {
-        attachCandidate(attachTo, { foodId: `userfood:${food.uuid}`, label: food.name, source: 'userfood', kcalPer100g: food.calories }, {
-          name: food.name, kcal: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fat_g: food.fat_g,
-        })
-      } else {
-        setComponents(prev => [...prev, {
-          id: nextComponentKey(), name: food.name, foodId: `userfood:${food.uuid}`, resolvedName: food.name, source: 'userfood', grams: 100,
-          kcal: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fat_g: food.fat_g,
-        }])
-      }
-      setNewIngredient({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
-      setShowCreateIngredient(false)
-      setIngredientQuery('')
-      setIngredientResults([])
-    } catch (e) {
-      Alert.alert('Could not save the ingredient', String(e))
-    } finally {
-      setCreatingIngredient(false)
-    }
   }
 
   const fatOption = COOKING_FAT_OPTIONS.find((f) => f.optionId === fatOptionId) ?? COOKING_FAT_OPTIONS[0]
@@ -527,7 +456,7 @@ export default function DishComposerScreen() {
       </View>
 
       {dish?.recordStatus === 'CURATED' ? (
-        <Text style={[s.alert, { color: t.protein }]}>✓ Curated Recipe. You can still modify to a household variant.</Text>
+        <Text style={[s.alert, { color: t.protein }]}>Curated recipe — you can still modify to a household variant.</Text>
       ) : (
         <Text style={[s.alert, { color: t.safety }]}>Draft Recipe. Review ingredients and quantities before logging.</Text>
       )}
@@ -552,48 +481,13 @@ export default function DishComposerScreen() {
           </View>
 
           {!c.foodId && (
-            <View style={{ marginTop: space.sm }}>
-               <Text style={[type.micro, { color: t.textMuted }]}>Search your foods, IFCT and USDA — results appear as you type.</Text>
-               <TextInput
-                 value={ingredientQuery}
-                 onChangeText={(text) => { setIngredientQuery(text); setShowCreateIngredient(false) }}
-                 placeholder="Search ingredient databases"
-                 placeholderTextColor={t.textMuted}
-                 autoCorrect={false}
-                 autoCapitalize="none"
-                 style={[s.searchInput, { color: t.text, borderColor: t.border }]}
-                 accessibilityLabel={`Search databases for ${c.name}`}
-               />
-               {ingredientSearching && <ActivityIndicator style={{ marginTop: 4 }} color={t.textFaint} />}
-               {ingredientResults.map((res) => (
-                  <Pressable key={res.foodId} accessibilityRole="button" accessibilityLabel={`Select ${res.label}`} onPress={() => selectIngredientOption(c.id, res)} style={{ padding: space.sm, borderBottomWidth: 1, borderColor: t.border }}>
-                     <Text style={{ color: t.text }}>{res.label}</Text>
-                     <Text style={[type.micro, { color: t.textMuted }]}>
-                       {res.source === 'ifct' ? 'IFCT 2017' : res.source === 'userfood' ? 'Your foods' : 'USDA'}
-                       {res.kcalPer100g != null ? ` · ${Math.round(res.kcalPer100g)} kcal/100g` : ''}
-                     </Text>
-                  </Pressable>
-               ))}
-               {ingredientQuery.trim().length >= 2 && !ingredientSearching && ingredientResults.length === 0 && (
-                 <Pressable accessibilityRole="button" onPress={() => { setNewIngredient((prev) => ({ ...prev, name: ingredientQuery.trim() })); setShowCreateIngredient(true) }} style={[s.btn, { borderColor: t.protein, paddingVertical: 8 }]}>
-                   <Text style={{ color: t.protein, textAlign: 'center' }}>+ Create “{ingredientQuery.trim()}” as a custom ingredient</Text>
-                 </Pressable>
-               )}
-               {showCreateIngredient && (
-                 <View style={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border, marginTop: space.sm }]}>
-                   <Text style={[type.caption, { color: t.text, fontWeight: '700' }]}>New ingredient (values per 100 g)</Text>
-                   <TextInput value={newIngredient.name} onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, name: text }))} placeholder="Name" placeholderTextColor={t.textMuted} style={[s.searchInput, { color: t.text, borderColor: t.border }]} accessibilityLabel="Ingredient name" />
-                   <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xs }}>
-                     {([['kcal', 'kcal'], ['protein', 'P g'], ['carbs', 'C g'], ['fat', 'F g']] as const).map(([field, placeholder]) => (
-                       <TextInput key={field} value={newIngredient[field]} onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, [field]: text }))} placeholder={placeholder} placeholderTextColor={t.textMuted} keyboardType="numeric" style={[s.input, { flex: 1, width: undefined, color: t.text, borderColor: t.border }]} accessibilityLabel={`${placeholder} per 100 grams`} />
-                     ))}
-                   </View>
-                   <Pressable accessibilityRole="button" accessibilityLabel="Save custom ingredient" disabled={creatingIngredient} onPress={() => handleCreateIngredient(c.id)} style={[s.btn, { backgroundColor: t.protein, borderColor: t.protein, paddingVertical: 8 }]}>
-                     <Text style={{ color: t.bg, textAlign: 'center', fontWeight: '700' }}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
-                   </Pressable>
-                 </View>
-               )}
-            </View>
+            <IngredientResolver
+              component={c}
+              db={db}
+              ifctDb={ifctDb}
+              userDb={userDb}
+              onResolve={(option, nutrients) => attachCandidate(c.id, option, nutrients)}
+            />
           )}
         </View>
       ))}
@@ -632,7 +526,7 @@ export default function DishComposerScreen() {
           style={[s.chip, { backgroundColor: useRecipeYield ? t.protein : t.bg, borderColor: t.border, alignSelf: 'flex-start', marginHorizontal: space.md, marginTop: space.xs }]}
         >
           <Text style={[type.micro, { color: useRecipeYield ? t.bg : t.text, fontWeight: '700' }]}>
-            ✓ Verified recipe yield ×{recipeYield} (matches curated numbers)
+            Verified recipe yield ×{recipeYield} (matches curated numbers)
           </Text>
         </Pressable>
       ) : null}
@@ -673,10 +567,152 @@ export default function DishComposerScreen() {
         )}
       </View>
 
-      <Pressable accessibilityRole="button" accessibilityLabel="Log Household Variant" onPress={logDish} style={[s.saveBtn, { backgroundColor: hasUnknowns ? t.bgElevated : t.text, borderColor: t.border }]}>
-        <Text style={{ color: hasUnknowns ? t.textMuted : t.bg, fontWeight: 'bold', textAlign: 'center' }}>Log Household Variant</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Log household variant" onPress={logDish} style={[s.saveBtn, { backgroundColor: hasUnknowns ? t.bgElevated : t.text, borderColor: t.border }]}>
+        <Text style={{ color: hasUnknowns ? t.textMuted : t.bg, fontWeight: 'bold', textAlign: 'center' }}>Log household variant</Text>
       </Pressable>
     </ScrollView>
+  )
+}
+
+/**
+ * QA P2-21: ONE resolver per unresolved component, holding its own query,
+ * results, and create-form state. The previous single shared
+ * ingredientQuery/ingredientResults pair made every unresolved ingredient's
+ * box type into the same query at once, rendered the same result list under
+ * all of them, and attached a tapped result to only one row while the others
+ * stayed stuck.
+ */
+function IngredientResolver({
+  component,
+  db,
+  ifctDb,
+  userDb,
+  onResolve,
+}: {
+  component: Component
+  db: DbAdapter | null
+  ifctDb: DbAdapter | null
+  userDb: DbAdapter | null
+  onResolve: (option: IngredientOption, nutrients: NutrientFetch | null) => void
+}) {
+  const t = useTheme()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<IngredientOption[]>([])
+  const [searching, setSearching] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newIngredient, setNewIngredient] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
+  const [creating, setCreating] = useState(false)
+
+  // Live multi-corpus ingredient search while typing (debounced, per box).
+  useEffect(() => {
+    if (!db) return
+    const term = query.trim()
+    if (term.length < 2) {
+      setResults([])
+      setSearching(false)
+      return
+    }
+    let alive = true
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const options = await searchIngredientOptions(db, ifctDb ?? undefined, userDb ?? undefined, term)
+        if (alive) {
+          setResults(options)
+          setSearching(false)
+        }
+      } catch {
+        if (alive) setSearching(false)
+      }
+    }, 250)
+    return () => { alive = false; clearTimeout(timer) }
+  }, [query, db, ifctDb, userDb])
+
+  const resolve = async (option: IngredientOption) => {
+    if (!db) return
+    const nutrients = await fetchFoodNutrients(db, ifctDb, userDb, option.foodId)
+    onResolve(option, nutrients)
+    setQuery('')
+    setResults([])
+  }
+
+  async function handleCreate() {
+    if (!userDb || creating) return
+    const name = newIngredient.name.trim()
+    const kcal = parseFloat(newIngredient.kcal)
+    const protein = parseFloat(newIngredient.protein) || 0
+    const carbs = parseFloat(newIngredient.carbs) || 0
+    const fat = parseFloat(newIngredient.fat) || 0
+    if (!name || !Number.isFinite(kcal) || kcal < 0) {
+      Alert.alert('Missing values', 'Give the ingredient a name and its kcal per 100 g.')
+      return
+    }
+    setCreating(true)
+    try {
+      const food = await createIngredientFood(userDb, { name, kcal, protein_g: protein, carbs_g: carbs, fat_g: fat }, Date.now())
+      onResolve(
+        { foodId: `userfood:${food.uuid}`, label: food.name, source: 'userfood', kcalPer100g: food.calories },
+        { name: food.name, kcal: food.calories, protein_g: food.protein_g, carbs_g: food.carbs_g, fat_g: food.fat_g },
+      )
+      setNewIngredient({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
+      setShowCreate(false)
+      setQuery('')
+      setResults([])
+    } catch (e) {
+      Alert.alert('Could not save the ingredient', String(e))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <View style={{ marginTop: space.sm }}>
+      <Text style={[type.micro, { color: t.textMuted }]}>Search your foods, IFCT and USDA — results appear as you type.</Text>
+      <TextInput
+        value={query}
+        onChangeText={(text) => { setQuery(text); setShowCreate(false) }}
+        placeholder="Search ingredient databases"
+        placeholderTextColor={t.textMuted}
+        autoCorrect={false}
+        autoCapitalize="none"
+        style={[s.searchInput, { color: t.text, borderColor: t.border }]}
+        accessibilityLabel={`Search databases for ${component.name}`}
+      />
+      {searching && <ActivityIndicator style={{ marginTop: 4 }} color={t.textFaint} />}
+      {results.map((res) => (
+        <Pressable key={res.foodId} accessibilityRole="button" accessibilityLabel={`Select ${res.label}`} onPress={() => void resolve(res)} style={{ padding: space.sm, borderBottomWidth: 1, borderColor: t.border, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}>
+          <Text style={{ color: t.text }}>{res.label}</Text>
+          <Text style={[type.micro, { color: t.textMuted }]}>
+            {res.source === 'ifct' ? 'IFCT 2017' : res.source === 'userfood' ? 'Your foods' : 'USDA'}
+            {res.kcalPer100g != null ? ` · ${Math.round(res.kcalPer100g)} kcal/100g` : ''}
+          </Text>
+        </Pressable>
+      ))}
+      {query.trim().length >= 2 && !searching && results.length === 0 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Create ${query.trim()} as a custom ingredient`}
+          onPress={() => { setNewIngredient((prev) => ({ ...prev, name: query.trim() })); setShowCreate(true) }}
+          style={[s.btn, { borderColor: t.protein, paddingVertical: 8 }]}
+        >
+          <Text style={{ color: t.protein, textAlign: 'center' }}>+ Create “{query.trim()}” as a custom ingredient</Text>
+        </Pressable>
+      )}
+      {showCreate && (
+        <View style={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border, marginTop: space.sm }]}>
+          <Text style={[type.caption, { color: t.text, fontWeight: '700' }]}>New ingredient (values per 100 g)</Text>
+          <TextInput value={newIngredient.name} onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, name: text }))} placeholder="Name" placeholderTextColor={t.textMuted} style={[s.searchInput, { color: t.text, borderColor: t.border }]} accessibilityLabel="Ingredient name" />
+          <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xs }}>
+            {([['kcal', 'kcal'], ['protein', 'P g'], ['carbs', 'C g'], ['fat', 'F g']] as const).map(([field, placeholder]) => (
+              <TextInput key={field} value={newIngredient[field]} onChangeText={(text) => setNewIngredient((prev) => ({ ...prev, [field]: text }))} placeholder={placeholder} placeholderTextColor={t.textMuted} keyboardType="numeric" style={[s.input, { flex: 1, width: undefined, color: t.text, borderColor: t.border }]} accessibilityLabel={`${placeholder} per 100 grams`} />
+            ))}
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Save custom ingredient" disabled={creating} onPress={() => void handleCreate()} style={[s.btn, { backgroundColor: t.protein, borderColor: t.protein, paddingVertical: 8 }]}>
+            <Text style={{ color: t.bg, textAlign: 'center', fontWeight: '700' }}>{creating ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
   )
 }
 
@@ -685,9 +721,9 @@ const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.md },
   alert: { padding: space.md, fontWeight: 'bold' },
   row: { flexDirection: 'row', padding: space.md, borderBottomWidth: 1, alignItems: 'center' },
-  input: { borderWidth: 1, borderRadius: 4, width: 60, textAlign: 'center', paddingVertical: 4 },
-  searchInput: { borderWidth: 1, borderRadius: 4, paddingVertical: 4, paddingHorizontal: 8, marginTop: 4 },
-  chip: { paddingHorizontal: space.sm, paddingVertical: 6, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth },
+  input: { borderWidth: 1, borderRadius: radius.sm, width: 60, textAlign: 'center', paddingVertical: 4, minHeight: MIN_TAP_TARGET },
+  searchInput: { borderWidth: 1, borderRadius: radius.sm, paddingVertical: 4, paddingHorizontal: 8, marginTop: 4, minHeight: MIN_TAP_TARGET },
+  chip: { paddingHorizontal: space.sm, paddingVertical: 6, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, minHeight: MIN_TAP_TARGET, justifyContent: 'center' },
   btn: { margin: space.md, padding: space.md, borderWidth: 1, borderRadius: radius.md, alignItems: 'center' },
   summary: { margin: space.md, padding: space.md, borderWidth: 1, borderRadius: radius.md },
   saveBtn: { margin: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1 }

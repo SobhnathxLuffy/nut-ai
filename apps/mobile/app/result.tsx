@@ -239,6 +239,17 @@ export default function Result() {
     return (
       <View style={{ flex: 1, backgroundColor: theme.bg }}>
         <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
+          {/* P2-14: an accidental scan gets an explicit way out — the analyzing
+              and failed states already have Close; the ready state did not. */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Discard this scan"
+            onPress={() => { reset(); router.back() }}
+            hitSlop={space.md}
+            style={{ alignSelf: 'flex-end', minHeight: MIN_TAP_TARGET, justifyContent: 'center', paddingHorizontal: space.xs }}
+          >
+            <Text style={[type.body, { color: theme.textMuted }]}>Discard</Text>
+          </Pressable>
           <Text style={[type.title, { color: theme.text }]}>
             {result.items[0]?.row.displayName ?? 'Your meal'}
           </Text>
@@ -310,6 +321,16 @@ export default function Result() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
+        {/* P2-14: same explicit discard path as the quick view. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Discard this scan"
+          onPress={() => { reset(); router.back() }}
+          hitSlop={space.md}
+          style={{ alignSelf: 'flex-end', minHeight: MIN_TAP_TARGET, justifyContent: 'center', paddingHorizontal: space.xs }}
+        >
+          <Text style={[type.body, { color: theme.textMuted }]}>Discard</Text>
+        </Pressable>
         <Text style={[type.title, { color: theme.text }]}>
           {result.items[0]?.row.displayName ?? 'Your meal'}
         </Text>
@@ -377,7 +398,13 @@ export default function Result() {
         {preAnswered.length > 0 && (
           <View style={{ marginTop: space.lg, gap: space.xs }}>
             {preAnswered.map((q) => (
-              <Pressable key={q.question.id} onPress={() => answerQuestion(q, q.appliedDefault ?? '')} hitSlop={space.xs}>
+              <Pressable
+                key={q.question.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${q.disclosure} — change this answer`}
+                onPress={() => answerQuestion(q, q.appliedDefault ?? '')}
+                hitSlop={space.xs}
+              >
                 <Text style={[type.caption, { color: theme.textMuted }]}>
                   {q.disclosure} · <Text style={{ color: theme.uncertain }}>change</Text>
                 </Text>
@@ -991,7 +1018,27 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
       </View>
     )
   }
-  if (state.status === 'failed') return null
+  if (state.status === 'failed') {
+    // P2-14 lookup-failure row: a failed lookup used to vanish silently —
+    // say what happened and what still holds, instead of nothing.
+    return (
+      <View
+        accessibilityRole="alert"
+        accessibilityLabel="Web lookup failed. The estimate above stays unchanged."
+        style={[styles.lookupQuiet, { backgroundColor: theme.uncertainBg, marginTop: space.sm }]}
+      >
+        <Icon name="close" size={14} color={theme.uncertain} />
+        <View style={{ flex: 1 }}>
+          <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>
+            Web lookup failed — the estimate above stays unchanged.
+          </Text>
+          <Text style={[type.micro, { color: theme.textMuted, marginTop: 1 }]}>
+            Use Fix result to re-run the scan, or edit the grams directly.
+          </Text>
+        </View>
+      </View>
+    )
+  }
 
   const result: WebLookupResult = state.result
   // A single auto-applied option needs no card — the row above already shows
@@ -1013,6 +1060,8 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
         {result.options.map((opt) => (
           <Pressable
             key={opt.label}
+            accessibilityRole="button"
+            accessibilityLabel={`${opt.label}${opt.serving_desc ? `, ${opt.serving_desc}` : ''}, ${Math.round(opt.calories_kcal)} kcal`}
             onPress={() => applyWebOption(rowId, opt, result.source_url)}
             style={[styles.optionRow, { borderColor: theme.uncertain, backgroundColor: theme.bg }]}
           >
@@ -1042,17 +1091,25 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
               style={[styles.otherInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bg }]}
             />
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Search the web for this food"
               onPress={() => {
                 if (otherText.trim()) void lookupOther(rowId, otherText.trim())
                 setOtherOpen(false)
               }}
               hitSlop={space.sm}
+              style={{ minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
             >
               <Icon name="search" size={18} color={theme.text} />
             </Pressable>
           </View>
         ) : (
-          <Pressable onPress={() => setOtherOpen(true)} style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bg }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="It was something else — search the web"
+            onPress={() => setOtherOpen(true)}
+            style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bg }]}
+          >
             <Text style={[type.body, { color: theme.textMuted }]}>Other…</Text>
           </Pressable>
         )}

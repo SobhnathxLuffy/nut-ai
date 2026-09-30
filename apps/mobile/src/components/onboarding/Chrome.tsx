@@ -24,7 +24,7 @@ export function ProgressBar({ step, total }: { step: number; total: number }) {
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: total, now: step }}
-      style={[styles.track, { backgroundColor: theme.isDark ? theme.border : '#EDEDF0' }]}
+      style={[styles.track, { backgroundColor: theme.bgSunkenStrong }]}
     >
       <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: theme.text }]} />
     </View>
@@ -41,7 +41,7 @@ export function OnboardingHeader({ step, total }: { step: number; total: number 
         accessibilityLabel="Go back"
         onPress={() => router.back()}
         hitSlop={space.sm}
-        style={[styles.back, { backgroundColor: theme.isDark ? theme.bgElevated : '#F3F3F6' }]}
+        style={[styles.back, { backgroundColor: theme.bgChrome }]}
       >
         <View style={{ transform: [{ rotate: '180deg' }] }}>
           <Icon name="chevron" size={19} color={theme.text} weight={2.2} />
@@ -143,7 +143,7 @@ export function OnboardingScreen({
           onPress={onCta}
           style={[
             styles.primary,
-            { backgroundColor: ctaDisabled ? (theme.isDark ? theme.border : '#E5E5EA') : theme.text },
+            { backgroundColor: ctaDisabled ? theme.bgSunkenStrong : theme.text },
           ]}
         >
           <Text style={[type.bodyStrong, { color: ctaDisabled ? theme.textMuted : theme.bg, fontSize: 18 }]}>

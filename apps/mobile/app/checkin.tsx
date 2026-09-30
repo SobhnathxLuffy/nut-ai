@@ -311,7 +311,7 @@ export default function CheckinScreen() {
               style={[styles.cta, { backgroundColor: busy ? theme.border : theme.text }]}
             >
               <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 17 }]}>
-                {busy ? 'Applying…' : 'Accept New Target'}
+                {busy ? 'Applying…' : 'Accept new target'}
               </Text>
             </Pressable>
 

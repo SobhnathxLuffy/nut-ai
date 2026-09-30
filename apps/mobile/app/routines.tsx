@@ -13,6 +13,7 @@ import {
 } from '@nutai/training'
 import { db, localDate } from '../src/data/repo'
 import { consumePendingRoutineExercises } from '../src/data/routine-draft'
+import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 import { useTheme } from '../src/theme/ThemeProvider'
 
@@ -37,6 +38,12 @@ export default function RoutinesScreen() {
     }>
   >([])
   const initialLoadedRef = useRef(false)
+
+  // P2-15/P3-47: web parity — reload and tab close now get the browser
+  // leave-confirmation while the editor holds unsaved routine work. (Browser
+  // back cannot be intercepted on expo-router web; see
+  // src/ui/web-dirty-guard.ts.)
+  useWebDirtyGuard(editing)
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -212,7 +219,7 @@ export default function RoutinesScreen() {
 
       {!editing && (
         <Button
-          label="Create New Routine"
+          label="Create new routine"
           selected
           onPress={() => {
             setName('')
@@ -336,7 +343,7 @@ export default function RoutinesScreen() {
 
       <Label>Saved Routines ({routines.length})</Label>
       {!routines.length && (
-        <Label muted>No routines created yet. Tap Create New Routine above.</Label>
+        <Label muted>No routines created yet. Tap Create new routine above.</Label>
       )}
 
       {routines.map((r) => {

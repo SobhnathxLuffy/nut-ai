@@ -49,6 +49,10 @@ export const palette = {
   // Success is quiet on purpose. Logging a meal is not an achievement to
   // celebrate; it is a thing you did.
   affirm: '#2E9E6B',
+
+  // Heart/health identity coral (onboarding health tile, charts artwork).
+  // Iconographic anatomy colour — NOT a status; never use it for warnings.
+  heart: '#E8615A',
 } as const
 
 export interface Theme {
@@ -69,12 +73,26 @@ export interface Theme {
   safety: string
   safetyBg: string
   affirm: string
+  /** Heart/health identity coral (iconographic, never a status). */
+  heart: string
   /** Low-alpha washes for "tinted card" moments — the only sanctioned way to tint. */
   affirmTint: string
   uncertainTint: string
   proteinTint: string
   /** A barely-there raised row inside an elevated card. */
   rowRaised: string
+  /**
+   * Onboarding chrome fills (QA P2-19). These exist so the flow's light-gray
+   * surfaces come from tokens instead of `theme.isDark ? token : hex`
+   * ternaries — dark mode gets a contrast-checked value, not a leftover.
+   * Each light value preserves the exact hex the ternaries used.
+   */
+  /** Track/step surfaces one step stronger than bgSunken (progress track, disabled CTA). */
+  bgSunkenStrong: string
+  /** The circular back button fill on onboarding headers. */
+  bgChrome: string
+  /** Wells inside an elevated card (option glyph circle, segmented track). */
+  bgSunkenVariant: string
   isDark: boolean
 }
 
@@ -96,10 +114,14 @@ export const lightTheme: Theme = {
   safety: palette.safety,
   safetyBg: palette.safetyBg,
   affirm: palette.affirm,
+  heart: palette.heart,
   affirmTint: '#2E9E6B1A',
   uncertainTint: '#8B7BD81A',
   proteinTint: '#3E7BFA1A',
   rowRaised: '#0B0B0F08',
+  bgSunkenStrong: '#EDEDF0',
+  bgChrome: '#F3F3F6',
+  bgSunkenVariant: '#F0F0F3',
   isDark: false,
 }
 
@@ -128,10 +150,14 @@ export const darkTheme: Theme = {
   safety: '#F0655B',
   safetyBg: '#3A1E1C',
   affirm: '#4FBE8C',
+  heart: '#F2766B',
   affirmTint: '#4FBE8C26',
   uncertainTint: '#A99AE626',
   proteinTint: '#6E9BFF26',
   rowRaised: '#FFFFFF0A',
+  bgSunkenStrong: palette.ink700,
+  bgChrome: palette.ink800,
+  bgSunkenVariant: palette.ink900,
   isDark: true,
 }
 

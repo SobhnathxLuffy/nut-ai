@@ -32,7 +32,8 @@ test.describe('BUG-004: Silent Failure on Bad Deep Links', () => {
     await page.goto(`/food-review?payload=${encodeURIComponent(badPayload)}`);
 
     // We expect the explicit error boundary message rather than a redirect to Onboarding
-    const errorText = page.getByText('Data corrupted');
+    // (Wave 3 copy pass: the message now states the cause and the way out).
+    const errorText = page.getByText('damaged data and cannot be opened');
     await expect(errorText).toBeVisible();
 
     // And a fallback 'Back' button should render

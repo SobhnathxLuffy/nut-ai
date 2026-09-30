@@ -83,7 +83,7 @@ export default function ProviderSettings() {
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <View style={[styles.head, { paddingTop: insets.top + space.sm }]}>
         <Text style={[type.title, { color: theme.text }]}>AI provider</Text>
-        <Pressable onPress={() => router.back()} hitSlop={space.md}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close provider settings" onPress={() => router.back()} hitSlop={space.md}>
           <Icon name="close" size={22} color={theme.textMuted} />
         </Pressable>
       </View>

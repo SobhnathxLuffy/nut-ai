@@ -1,7 +1,10 @@
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
+import { Text } from 'react-native'
 import { Screen, Button, Card, Label, Row, useAction } from '../../src/components/Screen'
 import { DayTimeline } from '../../src/components/DayTimeline'
+import { useTheme } from '../../src/theme/ThemeProvider'
+import { space, type } from '../../src/theme/tokens'
 import { subscribeFoodMutations } from '../../src/data/food-mutations'
 import { db, localDate } from '../../src/data/repo'
 import {
@@ -97,6 +100,15 @@ function RecentFoodList({
   foods: RecentFood[]
   action: ReturnType<typeof useAction>
 }) {
+  const theme = useTheme()
+  if (foods.length === 0) {
+    // P2-14: a brand-new user saw dead space here — say what will appear.
+    return (
+      <Text style={[type.body, { color: theme.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
+        Nothing here yet — log a few foods and they will appear.
+      </Text>
+    )
+  }
   return (
     <>
       {foods.slice(0, 8).map((r) => (
@@ -126,6 +138,15 @@ function ShortcutList({
   shortcuts: Shortcut[]
   action: ReturnType<typeof useAction>
 }) {
+  const theme = useTheme()
+  if (shortcuts.length === 0) {
+    // P2-14: same new-user guidance as the Recent/Frequent lists.
+    return (
+      <Text style={[type.body, { color: theme.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
+        Nothing here yet — save a favorite or usual meal and it will appear.
+      </Text>
+    )
+  }
   return (
     <>
       {shortcuts.map((s) => (

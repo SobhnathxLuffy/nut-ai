@@ -16,6 +16,7 @@ import {
   type Workout,
 } from '@nutai/training'
 import { db, localDate } from '../src/data/repo'
+import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Button, Card, Label, Row, useAction } from '../src/components/Screen'
 
 export default function ExerciseDetailScreen() {
@@ -25,6 +26,9 @@ export default function ExerciseDetailScreen() {
   const [routines, setRoutines] = useState<Routine[]>([])
   const [showRoutineChooser, setShowRoutineChooser] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
+
+  // P3-47: web parity for the Android-only back guard (same batch as P2-15).
+  useWebDirtyGuard(showRoutineChooser)
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -174,7 +178,7 @@ export default function ExerciseDetailScreen() {
             <Card>
               <Label>Select a Routine</Label>
               <Button
-                label="+ Create New Routine"
+                label="+ Create new routine"
                 selected
                 disabled={action.busy}
                 onPress={() => {
@@ -186,7 +190,7 @@ export default function ExerciseDetailScreen() {
               />
 
               {!routines.length ? (
-                <Label muted>No routines found. Tap Create New Routine above.</Label>
+                <Label muted>No routines found. Tap Create new routine above.</Label>
               ) : (
                 routines.map((r) => {
                   let count = 0

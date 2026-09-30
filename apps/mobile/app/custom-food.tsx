@@ -26,6 +26,7 @@ import {
 } from '../src/data/custom-foods'
 import { db, localDate } from '../src/data/repo'
 import { encodeFoodReview } from '../src/data/food-review'
+import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -91,6 +92,37 @@ export default function CustomFoodScreen() {
   const [filter, setFilter] = useState('')
   const [initialForm, setInitialForm] = useState<FormState>(EMPTY)
 
+  // P2-15: browser back cannot be intercepted on web (expo-router's fork
+  // dispatches a NAVIGATE action, which never fires beforeRemove), so for the
+  // create flow the draft persists in sessionStorage and is restored on
+  // return — losing work becomes impossible instead of announced. Cleared on
+  // save and delete. The create form is the high-value case: editing an
+  // existing food falls back to its last-saved DB state, like a native cancel.
+  const draftKey = editId === null ? 'nutai:custom-food-draft:new' : `nutai:custom-food-draft:${editId}`
+  const restoreTriedRef = useRef(false)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || editId !== null || restoreTriedRef.current) return
+    restoreTriedRef.current = true
+    try {
+      const raw = window.sessionStorage.getItem(draftKey)
+      if (raw) setForm(JSON.parse(raw) as FormState)
+    } catch {
+      // A corrupt draft is worse than none — drop it.
+      window.sessionStorage.removeItem(draftKey)
+    }
+  }, [])
+  useEffect(() => {
+    if (Platform.OS !== 'web' || editId !== null) return
+    if (JSON.stringify(form) === JSON.stringify(EMPTY)) {
+      window.sessionStorage.removeItem(draftKey)
+      return
+    }
+    window.sessionStorage.setItem(draftKey, JSON.stringify(form))
+  }, [form, draftKey, editId])
+  const clearDraft = () => {
+    if (Platform.OS === 'web') window.sessionStorage.removeItem(draftKey)
+  }
+
   useEffect(() => {
     let alive = true
     void (async () => {
@@ -137,8 +169,12 @@ export default function CustomFoodScreen() {
   }
 
   const dirty = JSON.stringify(form) !== JSON.stringify(initialForm)
+  // P2-15: reload/tab-close get the browser's own leave-confirmation while the
+  // form is dirty; the create flow additionally persists its draft (above), so
+  // a browser back loses nothing.
+  useWebDirtyGuard(dirty)
   const cancel = () => dirty
-    ? Alert.alert('Discard changes?', 'Your unsaved food changes will be lost.', [{ text: 'Keep editing', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: () => router.back() }])
+    ? Alert.alert('Discard changes?', 'Your unsaved food changes will be lost.', [{ text: 'Keep editing', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: () => { clearDraft(); router.back() } }])
     : router.back()
 
   useEffect(() => {
@@ -172,11 +208,12 @@ export default function CustomFoodScreen() {
         ? await createCustomFood(handle, input, Date.now())
         : await updateCustomFood(handle, editId, input, Date.now())
       if (logAfter) {
+        clearDraft()
         router.replace({ pathname: '/food-review', params: { payload: encodeFoodReview({
           selection: customFoodSelection(food),
           date: params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : localDate(Date.now()),
         }) } } as never)
-      } else router.back()
+      } else { clearDraft(); router.back() }
     } catch (error) {
       isSavingRef.current = false
       Alert.alert('Could not save food', error instanceof Error ? error.message : String(error))
@@ -271,7 +308,7 @@ export default function CustomFoodScreen() {
               style={[styles.secondary, { borderColor: theme.border }]}
             ><Text style={[type.bodyStrong, { color: theme.text }]}>Save &amp; review log</Text></Pressable>
 
-            {editId !== null ? <Pressable accessibilityRole="button" onPress={() => Alert.alert('Delete this food?', 'Existing diary entries keep their saved nutrition.', [{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void (async()=>{await deleteCustomFood(await db(),editId,Date.now());router.back()})()}])} style={[styles.secondary,{borderColor:theme.safety}]}><Text style={[type.bodyStrong,{color:theme.safety}]}>Delete food</Text></Pressable> : null}
+            {editId !== null ? <Pressable accessibilityRole="button" onPress={() => Alert.alert('Delete this food?', 'Existing diary entries keep their saved nutrition.', [{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void (async()=>{await deleteCustomFood(await db(),editId,Date.now());clearDraft();router.back()})()}])} style={[styles.secondary,{borderColor:theme.safety}]}><Text style={[type.bodyStrong,{color:theme.safety}]}>Delete food</Text></Pressable> : null}
 
             {editId === null && existing.length > 0 ? (
               <View style={{ gap: space.sm, marginTop: space.lg }}>

@@ -1,22 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Pressable, Platform } from 'react-native'
-const showAlert = (title: string, msg?: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
-    const text = msg ? title + '\n' + msg : title;
-    if (buttons && buttons.length > 1) {
-      if (window.confirm(text)) {
-        buttons[1]?.onPress?.();
-      } else {
-        buttons[0]?.onPress?.();
-      }
-    } else {
-      window.alert(text);
-      buttons?.[0]?.onPress?.();
-    }
-  } else {
-    Alert.alert(title, msg, buttons);
-  }
-}
+import { Alert, Pressable } from 'react-native'
 
 import { router, useFocusEffect } from 'expo-router'
 import { timeline, type TimelineEvent } from '@nutai/timeline'
@@ -83,7 +66,7 @@ export function DayTimeline({
   }, [date])
 
   const action = useAction(refresh)
-  useFocusEffect(useCallback(() => { void refresh().catch((e) => showAlert('Could not load day', String(e))) }, [refresh]))
+  useFocusEffect(useCallback(() => { void refresh().catch((e) => Alert.alert('Could not load day', String(e))) }, [refresh]))
   useEffect(() => subscribeFoodMutations(() => { void refresh() }), [refresh])
   const perform = (fn: () => Promise<unknown>) => { void action.run(fn) }
   const repeat = (id: number) => perform(async () => { const h = await db(); await repeatSnapshots(h, [await mealSnapshot(h, id)], date) })
@@ -130,12 +113,12 @@ export function DayTimeline({
     />
 
     <Row><Button label="Log food" onPress={()=>router.push({pathname:'/food-search',params:{date}} as never)}/><Button label="Add weight" onPress={()=>router.push('/log-weight')}/><Button label="Start workout" onPress={()=>router.push('/(tabs)/train' as never)}/></Row>
-    {food&&<Button label="Copy yesterday into this day" disabled={action.busy} onPress={()=>showAlert('Copy yesterday?',`Meals will be added to ${date}. Existing entries stay in place. You can undo the entire copy.`,[{text:'Cancel',style:'cancel'},{text:'Add meals',onPress:()=>perform(async()=>copyYesterday(await db(),date))}])}/>}
+    {food&&<Button label="Copy yesterday into this day" disabled={action.busy} onPress={()=>Alert.alert('Copy yesterday?',`Meals will be added to ${date}. Existing entries stay in place. You can undo the entire copy.`,[{text:'Cancel',style:'cancel'},{text:'Add meals',onPress:()=>perform(async()=>copyYesterday(await db(),date))}])}/>}
     {action.feedback}{mealUndoUuid&&<Button label="Undo deleted meal" onPress={()=>perform(async()=>{const r=await undoRecordedOperation(mealUndoUuid);if(!r.success)throw new Error(r.error??'Could not restore meal');setMealUndoUuid(null);setLastDeletedMealUndoUuid(null)})}/>}<Row><Button label={undoTarget?`Undo: ${describeOperation(undoTarget)}`:'Undo last action'} onPress={()=>perform(async()=>{const r=await undoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to undo')})}/><Button label={redoTarget?`Redo: ${describeOperation(redoTarget)}`:'Redo'} onPress={()=>perform(async()=>{const r=await redoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to redo')})}/></Row>
     <Label>Daily timeline · available offline</Label>
     {loaded&&events.length===0&&<Card><Label>No entries for this day yet.</Label><Label muted>Use the logging actions above whenever you’re ready.</Label></Card>}
     {events.map(e=><Card key={e.id}><PressableMeal enabled={e.type==='meal'} onPress={()=>router.push({pathname:'/meal-detail',params:{id:e.entity_id}} as never)}><Label>{new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · {e.label}</Label><Label muted>{e.type === 'weight' && e.weight_kg != null ? formatWeightKg(e.weight_kg, weightUnit) : e.detail}</Label></PressableMeal>
-      {e.type==='meal'&&<Row><Button label="Repeat meal" disabled={action.busy} onPress={()=>repeat(e.entity_id)}/><Button label="Favorite" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'favorite',e.detail))}/><Button label="Save usual meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'usual',e.detail))}/><Button label="Save meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'saved',e.detail))}/><Button label="Delete meal" onPress={()=>showAlert('Delete this meal?','You can restore it with Undo.',[{text:'Cancel',style:'cancel'},{text:'Delete',onPress:()=>perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid)})}])}/></Row>}
+      {e.type==='meal'&&<Row><Button label="Repeat meal" disabled={action.busy} onPress={()=>repeat(e.entity_id)}/><Button label="Favorite" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'favorite',e.detail))}/><Button label="Save usual meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'usual',e.detail))}/><Button label="Save meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'saved',e.detail))}/><Button label="Delete meal" onPress={()=>Alert.alert('Delete this meal?','You can restore it with Undo.',[{text:'Cancel',style:'cancel'},{text:'Delete',onPress:()=>perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid)})}])}/></Row>}
       {(e.type==='workout'||e.type==='pr')&&<Button label="Open workout" onPress={()=>router.push({pathname:'/workout',params:{id:e.entity_id}} as never)}/>}</Card>)}
   </>
 }

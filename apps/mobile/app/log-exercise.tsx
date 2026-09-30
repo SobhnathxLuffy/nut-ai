@@ -179,7 +179,14 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
             {anchors.map((a) => {
               const active = a.level === level
               return (
-                <Pressable key={a.level} onPress={() => setLevel(a.level)} hitSlop={space.sm}>
+                <Pressable
+                  key={a.level}
+                  accessibilityRole="radio"
+                  accessibilityLabel={`${a.title} intensity`}
+                  accessibilityState={{ selected: active }}
+                  onPress={() => setLevel(a.level)}
+                  hitSlop={space.sm}
+                >
                   <Text style={[active ? type.heading : type.bodyStrong, { color: active ? theme.text : theme.textMuted }]}>
                     {a.title}
                   </Text>
@@ -296,7 +303,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
 
       if (!parsed?.success) {
         setBusy(false)
-        setError(outcome.ok ? 'Could not turn that into an estimate — try adding a duration.' : (outcome.error?.message ?? 'The estimate failed.'))
+        setError(outcome.ok ? 'Could not turn that into an estimate — try adding a duration.' : (outcome.error?.message ?? 'The estimate failed — nothing was written. Try again, or use Run, Weight lifting or Manual instead.'))
         return
       }
 
@@ -305,7 +312,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
       router.back()
     } catch (caught) {
       setBusy(false)
-      setError(caught instanceof Error && caught.message ? caught.message : 'The estimate failed. Nothing was written.')
+      setError(caught instanceof Error && caught.message ? caught.message : 'Could not estimate this exercise — nothing was written. Check the description and try again.')
     }
   }
 
