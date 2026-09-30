@@ -1,4 +1,5 @@
 import { ANTHROPIC_OAUTH_BETA, type ProviderId } from '@nutai/prompt'
+import { withBaseUrl } from '../base-url'
 import type { Credential, ScanFailure } from './client'
 
 /**
@@ -109,6 +110,7 @@ export async function validateCredential(
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 15_000,
+  baseUrl?: string | null,
 ): Promise<ValidationResult> {
   // ---- Anthropic: two shapes, each probing the endpoint it would really use --
   if (provider === 'anthropic') {
@@ -174,7 +176,7 @@ export async function validateCredential(
   // ---- OpenAI --------------------------------------------------------------
   if (provider === 'openai') {
     const r = await attempt(
-      `https://api.openai.com/v1/models/${encodeURIComponent(model)}`,
+      withBaseUrl(`https://api.openai.com/v1/models/${encodeURIComponent(model)}`, baseUrl),
       { authorization: `Bearer ${credential.value}` },
       fetchImpl,
       timeoutMs,

@@ -32,6 +32,7 @@ vi.mock('expo-file-system', () => ({
 // Mock API call to prevent real network requests
 vi.mock('../data/repo', () => ({
   setting: vi.fn().mockResolvedValue('test-provider'),
+  customProviderBaseUrl: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('../inference/credentials', () => ({

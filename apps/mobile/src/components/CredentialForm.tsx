@@ -2,7 +2,7 @@ import * as Clipboard from 'expo-clipboard'
 import { useState } from 'react'
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
-import { putSetting } from '../data/repo'
+import { customProviderBaseUrl, putSetting } from '../data/repo'
 import { looksPlausible, saveCredential, type CredentialKind } from '../inference/credentials'
 import { validateCredential } from '../inference/pathA/validate'
 import { useTheme } from '../theme/ThemeProvider'
@@ -58,7 +58,14 @@ export function CredentialForm({
     setBusy(true)
     setError(null)
 
-    const res = await validateCredential(provider, model.id, { kind, value: value.trim() })
+    const res = await validateCredential(
+      provider,
+      model.id,
+      { kind, value: value.trim() },
+      fetch,
+      15_000,
+      await customProviderBaseUrl(),
+    )
     setBusy(false)
 
     if (!res.ok) {

@@ -18,7 +18,7 @@ import { loadFood, resolveByText } from '@nutai/resolver'
 import { buildCorrectionPrompt, cheapestModel, type ProviderId } from '@nutai/prompt'
 import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
 import { Icon, type IconName } from '../src/components/Icon'
-import { logMeal, setting, db as openUserDb } from '../src/data/repo'
+import { customProviderBaseUrl, logMeal, setting, db as openUserDb } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
@@ -511,7 +511,7 @@ export default function Result() {
       if (provider && provider !== 'none') {
         const model = (await setting('provider_model')) || cheapestModel(provider).id
         const built = buildCorrectionPrompt(note, phase.result.meal.ingredients)
-        const res = await runCorrectionIntent({ provider, model, systemPrompt: built.system, userPrompt: built.user })
+        const res = await runCorrectionIntent({ provider, model, systemPrompt: built.system, userPrompt: built.user, baseUrl: await customProviderBaseUrl() })
         if (res.ok) {
           const intent = CorrectionIntentZ.parse(res.intent)
           if (intent.operations.length === 0 && intent.clarification_needed) {

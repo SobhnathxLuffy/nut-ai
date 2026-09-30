@@ -22,7 +22,7 @@ import { recomputeAfterEdit, runPipeline, validatePayload, type ScanResult } fro
 import { resolveByBarcode } from '@nutai/resolver'
 import { openIfctDb, openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
-import { db, setting } from '../data/repo'
+import { db, customProviderBaseUrl, setting } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
 import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup } from '../inference/pathA/client'
 import { applyWebOption, getPhase, setPhase, setWebLookup } from './store'
@@ -142,6 +142,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
   }
 
   const model = (await setting('provider_model')) || cheapestModel(provider).id
+  const baseUrl = await customProviderBaseUrl()
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
   const outcome = await runScanWithFallback({
@@ -151,6 +152,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     imagesBase64: [base64],
     localSignalsBlock: opts.fixBlock ?? '',
     jsonSchema: wireSchemaFor(provider),
+    baseUrl,
   })
 
   if (!outcome.ok) {
@@ -275,6 +277,9 @@ async function refineMisses(
           visualContext: source?.legible_label_text ?? null,
         },
         credential,
+        fetch,
+        30_000,
+        await customProviderBaseUrl(),
       )
 
       if (!lookup.ok) {
@@ -534,7 +539,7 @@ export async function startLabelScan(photoUri: string): Promise<void> {
   const model = (await setting('provider_model')) || cheapestModel(provider).id
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
 
-  const outcome = await runLabelScan(provider, { model, imageBase64: base64 }, credential)
+  const outcome = await runLabelScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, await customProviderBaseUrl())
   if (!outcome.ok) {
     setPhase({
       kind: 'failed',
@@ -636,7 +641,7 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
   const model = (await setting('provider_model')) || cheapestModel(provider).id
 
   setPhase({ kind: 'analyzing', photoUri, stage: 'identifying' })
-  const outcome = await runReceiptScan(provider, { model, imageBase64: base64 }, credential)
+  const outcome = await runReceiptScan(provider, { model, imageBase64: base64 }, credential, fetch, 30_000, await customProviderBaseUrl())
   if (!outcome.ok) {
     setPhase({
       kind: 'failed',

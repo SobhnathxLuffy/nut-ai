@@ -160,6 +160,17 @@ export async function putSetting(key: string, value: string): Promise<void> {
   await h.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)', [key, value])
 }
 
+/**
+ * The optional custom OpenAI-compatible base URL (AI resellers like
+ * aicredits.in). Null when unset — every caller then uses the official
+ * endpoint. The pure URL rewriting lives in inference/base-url.ts.
+ */
+export async function customProviderBaseUrl(): Promise<string | null> {
+  const raw = await setting('provider_base_url')
+  const trimmed = (raw ?? '').trim()
+  return trimmed ? trimmed : null
+}
+
 /** Manual target override from the plan screen's pencil icons. */
 export async function overrideTargets(
   next: { targetKcal: number; macros: MacroTargets },

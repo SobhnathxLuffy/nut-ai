@@ -12,6 +12,7 @@ import {
   EXERCISE_ESTIMATE_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
+import { withBaseUrl } from '../base-url'
 
 /**
  * Path A — the cloud inference client.
@@ -106,6 +107,8 @@ export interface ScanRequest {
   localSignalsBlock: string
   jsonSchema: unknown
   timeoutMs?: number
+  /** Optional OpenAI-compatible base URL (resellers). Only rewrites OpenAI calls. */
+  baseUrl?: string | null
 }
 
 const DEFAULT_TIMEOUT_MS = 45_000
@@ -181,9 +184,10 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS)
   const started = Date.now()
+  const url = withBaseUrl(built.url, req.baseUrl)
 
   try {
-    const res = await fetchImpl(built.url, {
+    const res = await fetchImpl(url, {
       method: 'POST',
       headers: built.headers,
       body: JSON.stringify(built.body),
@@ -271,8 +275,9 @@ export async function runLabelScan(
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 30_000,
+  baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
-  return postVisionJson(provider, buildLabelScanRequest(provider, input, credential), fetchImpl, timeoutMs)
+  return postVisionJson(provider, buildLabelScanRequest(provider, input, credential), fetchImpl, timeoutMs, baseUrl)
 }
 
 /**
@@ -281,7 +286,7 @@ export async function runLabelScan(
  */
 export async function runExerciseEstimate(
   provider: ProviderId,
-  input: { model: string; description: string; weightKg: number | null },
+  input: { model: string; description: string; weightKg: number | null; baseUrl?: string | null },
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 20_000,
@@ -292,7 +297,7 @@ export async function runExerciseEstimate(
     credential,
     EXERCISE_ESTIMATE_PROMPT_VERSION,
   )
-  return postVisionJson(provider, built, fetchImpl, timeoutMs)
+  return postVisionJson(provider, built, fetchImpl, timeoutMs, input.baseUrl)
 }
 
 /** Receipt transcription: same transport, different instruction and validator. */
@@ -302,8 +307,9 @@ export async function runReceiptScan(
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 30_000,
+  baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
-  return postVisionJson(provider, buildReceiptScanRequest(provider, input, credential), fetchImpl, timeoutMs)
+  return postVisionJson(provider, buildReceiptScanRequest(provider, input, credential), fetchImpl, timeoutMs, baseUrl)
 }
 
 async function postVisionJson(
@@ -311,11 +317,13 @@ async function postVisionJson(
   built: { url: string; headers: Record<string, string>; body: unknown },
   fetchImpl: typeof fetch,
   timeoutMs: number,
+  baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const url = withBaseUrl(built.url, baseUrl)
   try {
-    const res = await fetchImpl(built.url, {
+    const res = await fetchImpl(url, {
       method: 'POST',
       headers: built.headers,
       body: JSON.stringify(built.body),
@@ -385,12 +393,17 @@ export async function runWebLookup(
   credential: Credential,
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 30_000,
+  baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
   const built = buildWebLookupRequest(provider, input, credential)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  // NOTE: the OpenAI lookup rides the Responses API, which most resellers do
+  // not proxy. A reseller 404 here fails gracefully in the background — the
+  // scan itself is never affected.
+  const url = withBaseUrl(built.url, baseUrl)
   try {
-    const res = await fetchImpl(built.url, {
+    const res = await fetchImpl(url, {
       method: 'POST',
       headers: built.headers,
       body: JSON.stringify(built.body),
@@ -448,7 +461,7 @@ import type { CorrectionIntent } from '@nutai/core-schema'
 import { loadCredential } from '../credentials'
 
 export async function runCorrectionIntent(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; baseUrl?: string | null },
   fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: true; intent: CorrectionIntent } | { ok: false; error: ScanFailure }> {
   try {
@@ -471,7 +484,7 @@ export async function runCorrectionIntent(
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     
     if (req.provider === 'openai') {
-      url = 'https://api.openai.com/v1/chat/completions'
+      url = withBaseUrl('https://api.openai.com/v1/chat/completions', req.baseUrl)
       headers['Authorization'] = `Bearer ${cred}`
     } else if (req.provider === 'google') {
       url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${cred}`
@@ -526,7 +539,7 @@ export async function runCorrectionIntent(
 }
 
 export async function runAssistantChatApi(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[] },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[]; baseUrl?: string | null },
   fetchImpl: typeof fetch = fetch
 ) {
   // WEB-007 fix: fallback models used to be hardcoded (`gpt-4o`,
@@ -571,7 +584,7 @@ export async function runAssistantChatApi(
 }
 
 export async function runAssistantChatApiSingle(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[] },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[]; baseUrl?: string | null },
   fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: true; text: string } | { ok: false; error: ScanFailure }> {
   try {
@@ -605,7 +618,7 @@ export async function runAssistantChatApiSingle(
     let bodyStr = ''
 
     if (req.provider === 'openai') {
-      url = 'https://api.openai.com/v1/chat/completions'
+      url = withBaseUrl('https://api.openai.com/v1/chat/completions', req.baseUrl)
       headers = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${cred}`,

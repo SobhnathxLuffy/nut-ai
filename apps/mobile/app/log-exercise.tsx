@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ExerciseEstimateZ } from '@nutai/core-schema'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { Icon, type IconName } from '../src/components/Icon'
-import { logExercise, setting, weightHistory } from '../src/data/repo'
+import { customProviderBaseUrl, logExercise, setting, weightHistory } from '../src/data/repo'
 import {
   exerciseKcal,
   INTENSITY_ANCHORS,
@@ -278,7 +278,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
 
     const model = (await setting('provider_model')) || cheapestModel(provider).id
     const kg = await latestWeightKg()
-    const outcome = await runExerciseEstimate(provider, { model, description: desc, weightKg: kg }, credential)
+    const outcome = await runExerciseEstimate(provider, { model, description: desc, weightKg: kg, baseUrl: await customProviderBaseUrl() }, credential)
     const parsed = outcome.ok ? ExerciseEstimateZ.safeParse(outcome.raw) : null
 
     if (!parsed?.success) {

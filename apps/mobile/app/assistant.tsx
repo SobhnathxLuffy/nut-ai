@@ -13,7 +13,7 @@ import { radius, space, type } from '../src/theme/tokens'
 import { router, useFocusEffect } from 'expo-router'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/date-utils'
-import { db as openUserDb, setting, putSetting } from '../src/data/repo'
+import { customProviderBaseUrl, db as openUserDb, setting, putSetting } from '../src/data/repo'
 import { loadCorrectionRows, applyLoggedMealCorrections, type LoggedCorrectionWrite } from '../src/data/log-corrections'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { loadFood, resolveByText } from '@nutai/resolver'
@@ -198,7 +198,14 @@ export default function AssistantScreen() {
         setLoading(false)
         return
       }
-      const model = (await setting('provider_model')) || cheapestModel(configuredProvider).id
+      // Chatbot model split: the assistant prefers its OWN model (cheap text
+      // models are fine here — no vision needed) and only falls back to the
+      // scan model when no separate choice was made.
+      const model =
+        (await setting('assistant_model')) ||
+        (await setting('provider_model')) ||
+        cheapestModel(configuredProvider).id
+      const baseUrl = await customProviderBaseUrl()
 
       // Multi-turn memory: every prior persisted text turn rides along.
       const res = await runAssistantChat(text, async (system, user, history) => {
@@ -208,6 +215,7 @@ export default function AssistantScreen() {
           systemPrompt: system,
           userPrompt: user,
           history,
+          baseUrl,
         })
         if (!r?.ok) throw new Error(r.error?.message || 'API failed')
         return r.text

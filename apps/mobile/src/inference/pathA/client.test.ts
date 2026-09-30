@@ -1,6 +1,7 @@
 vi.mock('../credentials', () => ({ loadCredential: vi.fn(() => 'fake-key') }))
 import { describe, expect, it, vi } from 'vitest'
 import { runLabelScan, runScan, runScanWithFallback, runWebLookup } from './client'
+import { withBaseUrl } from '../base-url'
 
 /**
  * The cloud client against scripted responses: envelope extraction for every
@@ -188,5 +189,65 @@ describe('runLabelScan', () => {
     const r = await runLabelScan('openai', { model: 'm', imageBase64: 'AAAA' }, { kind: 'api_key', value: 'k' }, impl)
     expect(r.ok).toBe(true)
     expect(calls[0]!.url).toContain('/v1/chat/completions')
+  })
+})
+
+describe('withBaseUrl — OpenAI-compatible reseller override', () => {
+  it('rewrites the official OpenAI prefix onto the custom base', () => {
+    expect(withBaseUrl('https://api.openai.com/v1/chat/completions', 'https://aicredits.in/v1')).toBe(
+      'https://aicredits.in/v1/chat/completions',
+    )
+    expect(withBaseUrl('https://api.openai.com/v1/models/gpt-4o-mini', 'https://proxy.example/v1')).toBe(
+      'https://proxy.example/v1/models/gpt-4o-mini',
+    )
+  })
+
+  it('normalizes full-endpoint pastes and trailing slashes', () => {
+    expect(withBaseUrl('https://api.openai.com/v1/chat/completions', 'https://aicredits.in/v1/')).toBe(
+      'https://aicredits.in/v1/chat/completions',
+    )
+    expect(
+      withBaseUrl('https://api.openai.com/v1/chat/completions', 'https://aicredits.in/v1/chat/completions'),
+    ).toBe('https://aicredits.in/v1/chat/completions')
+  })
+
+  it('leaves official URLs and non-OpenAI endpoints untouched', () => {
+    expect(withBaseUrl('https://api.openai.com/v1/chat/completions', null)).toBe(
+      'https://api.openai.com/v1/chat/completions',
+    )
+    expect(withBaseUrl('https://api.openai.com/v1/chat/completions', '   ')).toBe(
+      'https://api.openai.com/v1/chat/completions',
+    )
+    // Anthropic/Gemini dialects pass through — the override is OpenAI-only.
+    expect(withBaseUrl('https://api.anthropic.com/v1/messages', 'https://aicredits.in/v1')).toBe(
+      'https://api.anthropic.com/v1/messages',
+    )
+    expect(
+      withBaseUrl('https://generativelanguage.googleapis.com/v1beta/models/m:generateContent', 'https://x/v1'),
+    ).toBe('https://generativelanguage.googleapis.com/v1beta/models/m:generateContent')
+  })
+
+  it('routes the scan call to the reseller base when baseUrl is set', async () => {
+    const calls: Array<{ url: string }> = []
+    const impl = (async (url: string) => {
+      calls.push({ url })
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"is_food":false,"refusal_reason":"nope","items":[]}' } }], usage: { prompt_tokens: 1, completion_tokens: 1 } }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as unknown as typeof fetch
+    await runScan(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: 'k' },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+        baseUrl: 'https://aicredits.in/v1',
+      },
+      impl,
+    )
+    expect(calls[0]!.url).toBe('https://aicredits.in/v1/chat/completions')
   })
 })
