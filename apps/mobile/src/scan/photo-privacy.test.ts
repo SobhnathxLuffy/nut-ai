@@ -91,6 +91,26 @@ describe('AIP-002: Photo Privacy & Preprocessing', () => {
     ])
   })
 
+  it('handles a large re-encode (~260KB scan) without the spread argument limit', () => {
+    // REGRESSION: the SOS-to-EOI copy used to be one output.push(...scan)
+    // spread. A ~240KB thali photo exceeds the JS engine's ~125k-argument
+    // limit, preprocessing threw RangeError, and the user saw "Could not read
+    // the photo" one second after picking a perfectly good file. Chunks must
+    // be merged with typed-array copy, never spread.
+    const head = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x01, 0xff, 0xda, 0x00, 0x02, 0x11, 0x22])
+    const scan = new Uint8Array(260_000).fill(0x5a) // entropy bytes, no 0xff
+    const tail = Uint8Array.from([0xff, 0xd9])
+    const input = new Uint8Array(head.length + scan.length + tail.length)
+    input.set(head, 0)
+    input.set(scan, head.length)
+    input.set(tail, head.length + scan.length)
+
+    const output = Buffer.from(stripJpegMetadataBase64(Buffer.from(input).toString('base64')), 'base64')
+    expect(output.length).toBe(input.length)
+    expect([...output.subarray(0, head.length)]).toEqual([...head])
+    expect([...output.subarray(output.length - 2)]).toEqual([0xff, 0xd9])
+  })
+
   it('returns only the explicitly sanitized payload from preprocessing', async () => {
     await expect(preprocess('file:///tmp/raw-camera-photo.jpg')).resolves.toBe('/9j/2Q==')
   })

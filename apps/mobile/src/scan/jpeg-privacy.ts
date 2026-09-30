@@ -20,6 +20,27 @@ function isStandalone(marker: number): boolean {
 }
 
 /**
+ * Merge byte chunks WITHOUT spreading. The old implementation pushed the
+ * entire compressed scan (`bytes.subarray(markerStart)` — often 100-300KB for
+ * a 1024px photo) as spread arguments into a plain array, which throws
+ * "Maximum call stack size exceeded" above the engine's ~125k-argument limit.
+ * That is how a detailed thali photo failed preprocessing in one second while
+ * a smaller pizza squeaked through — an engine limit masquerading as a
+ * "could not read the photo" error.
+ */
+function mergeChunks(chunks: Uint8Array[]): Uint8Array {
+  let total = 0
+  for (const c of chunks) total += c.length
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const c of chunks) {
+    out.set(c, offset)
+    offset += c.length
+  }
+  return out
+}
+
+/**
  * Remove EXIF/XMP and other application metadata from an already re-encoded
  * JPEG. APP0/JFIF is retained; APP1–APP15 and comment segments are removed.
  * The compressed scan is copied byte-for-byte, so this adds no image loss.
@@ -27,7 +48,7 @@ function isStandalone(marker: number): boolean {
 export function stripJpegMetadataBase64(base64: string): string {
   const bytes = decodeBase64(base64)
   if (bytes[0] !== SOI[0] || bytes[1] !== SOI[1]) throw new Error('Sanitized photo is not a JPEG')
-  const output: number[] = [...SOI]
+  const chunks: Uint8Array[] = [bytes.subarray(0, 2)]
   let offset = 2
   while (offset < bytes.length) {
     if (bytes[offset] !== 0xff) throw new Error('Malformed JPEG marker stream')
@@ -37,12 +58,12 @@ export function stripJpegMetadataBase64(base64: string): string {
     if (marker === undefined) throw new Error('Truncated JPEG marker')
     offset++
     if (marker === 0xda) {
-      output.push(...bytes.subarray(markerStart))
-      offset = bytes.length
+      // Everything from SOS onward is the compressed scan — copy verbatim.
+      chunks.push(bytes.subarray(markerStart))
       break
     }
     if (isStandalone(marker)) {
-      output.push(...bytes.subarray(markerStart, offset))
+      chunks.push(bytes.subarray(markerStart, offset))
       if (marker === 0xd9) break
       continue
     }
@@ -51,10 +72,10 @@ export function stripJpegMetadataBase64(base64: string): string {
     if (length < 2 || offset + length > bytes.length) throw new Error('Invalid JPEG segment length')
     const segmentEnd = offset + length
     const privateMetadata = (marker >= 0xe1 && marker <= 0xef) || marker === 0xfe
-    if (!privateMetadata) output.push(...bytes.subarray(markerStart, segmentEnd))
+    if (!privateMetadata) chunks.push(bytes.subarray(markerStart, segmentEnd))
     offset = segmentEnd
   }
-  const sanitized = Uint8Array.from(output)
+  const sanitized = mergeChunks(chunks)
   assertNoJpegPrivateMetadata(sanitized)
   return encodeBase64(sanitized)
 }

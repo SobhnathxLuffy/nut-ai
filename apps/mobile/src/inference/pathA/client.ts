@@ -106,6 +106,12 @@ export interface ScanRequest {
   imagesBase64: readonly string[]
   localSignalsBlock: string
   jsonSchema: unknown
+  /**
+   * The original wire schema, carried ONLY on the structural-400 retry (see
+   * runScanWithFallback) so the request can ship it as instruction text while
+   * structured-output mode stays off. Ignored when jsonSchema is non-null.
+   */
+  instructionSchema?: unknown
   timeoutMs?: number
   /** Optional OpenAI-compatible base URL (resellers). Only rewrites OpenAI calls. */
   baseUrl?: string | null
@@ -129,7 +135,7 @@ function classify(status: number, body: string): ScanFailure {
   if (status >= 500) {
     return { kind: 'error-retryable', message: 'The provider had a server error.', retryable: true, httpStatus: status }
   }
-  if (/refus|safety|policy/i.test(body)) {
+  if (/content_policy|moderation|inappropriate|safety/i.test(body)) {
     return { kind: 'content-refusal', message: 'The provider declined to analyze this image.', retryable: false, httpStatus: status }
   }
   return { kind: 'error-retryable', message: `Unexpected response (${status}).`, retryable: true, httpStatus: status }
@@ -137,27 +143,46 @@ function classify(status: number, body: string): ScanFailure {
 
 /** Pull the JSON payload out of each provider's differently-shaped envelope. */
 function extractPayload(provider: ProviderId, json: unknown): { raw: unknown; inputTokens: number; outputTokens: number } | null {
+  // The content string is whatever the model wrote. With structured-output
+  // mode it is clean JSON; in degraded (json_object / instruction-contract)
+  // mode it is USUALLY clean — but a malformed payload must read as a shape
+  // failure, NOT escape as a thrown parse error and get misfiled as offline
+  // by runScan's catch-all.
+  const safeParse = (text: unknown): unknown => {
+    if (typeof text !== 'string') return text
+    try {
+      return JSON.parse(text)
+    } catch {
+      return undefined
+    }
+  }
   const j = json as Record<string, any>
   try {
     if (provider === 'anthropic') {
       const text = j.content?.[0]?.text
+      const raw = safeParse(text)
+      if (raw === undefined) return null
       return {
-        raw: typeof text === 'string' ? JSON.parse(text) : text,
+        raw,
         inputTokens: j.usage?.input_tokens ?? 0,
         outputTokens: j.usage?.output_tokens ?? 0,
       }
     }
     if (provider === 'openai') {
       const text = j.choices?.[0]?.message?.content
+      const raw = safeParse(text)
+      if (raw === undefined) return null
       return {
-        raw: typeof text === 'string' ? JSON.parse(text) : text,
+        raw,
         inputTokens: j.usage?.prompt_tokens ?? 0,
         outputTokens: j.usage?.completion_tokens ?? 0,
       }
     }
     const text = j.candidates?.[0]?.content?.parts?.[0]?.text
+    const raw = safeParse(text)
+    if (raw === undefined) return null
     return {
-      raw: typeof text === 'string' ? JSON.parse(text) : text,
+      raw,
       inputTokens: j.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: j.usageMetadata?.candidatesTokenCount ?? 0,
     }
@@ -172,6 +197,7 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
     imagesBase64: req.imagesBase64,
     localSignalsBlock: req.localSignalsBlock,
     jsonSchema: req.jsonSchema,
+    instructionSchema: req.instructionSchema,
   }
 
   const built =
@@ -261,7 +287,14 @@ export async function runScanWithFallback(
     !first.ok && (first as any).error?.httpStatus === 400 && req.jsonSchema != null
   if (!structural) return first
 
-  const second = await runScan({ ...req, jsonSchema: null }, fetchImpl)
+  // Second attempt: structured-output mode OFF, but the schema ships as TEXT
+  // in the instruction (instructionSchema). A degraded scan that still knows
+  // the field contract beats a free-form answer that drifts — the drift was
+  // exactly what failed client-side Zod on reseller gateways.
+  const second = await runScan(
+    { ...req, jsonSchema: null, instructionSchema: req.jsonSchema },
+    fetchImpl,
+  )
   return second.ok ? { ...second, usedSchemaFallback: true } : first
 }
 

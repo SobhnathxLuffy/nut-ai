@@ -1,5 +1,6 @@
 vi.mock('../credentials', () => ({ loadCredential: vi.fn(() => 'fake-key') }))
 import { describe, expect, it, vi } from 'vitest'
+import { buildOpenAIRequest } from '@nutai/prompt'
 import { runLabelScan, runScan, runScanWithFallback, runWebLookup } from './client'
 import { withBaseUrl } from '../base-url'
 
@@ -249,5 +250,117 @@ describe('withBaseUrl — OpenAI-compatible reseller override', () => {
       impl,
     )
     expect(calls[0]!.url).toBe('https://aicredits.in/v1/chat/completions')
+  })
+})
+
+describe('wire-schema sanitation and the instruction-contract fallback', () => {
+  const SCHEMA = {
+    $schema: 'http://json-schema.org/draft-07/schema#',
+    type: 'object',
+    additionalProperties: false,
+    required: ['schema_version', 'refusal_reason'],
+    properties: {
+      schema_version: { type: 'string', enum: ['1.0.0'] },
+      refusal_reason: { type: ['string', 'null'] },
+      container: {
+        anyOf: [
+          { type: 'object', properties: { type: { type: 'string' }, fill_fraction: { type: 'number' } }, required: ['type', 'fill_fraction'], additionalProperties: false },
+          { type: 'null' },
+        ],
+      },
+    },
+  }
+
+  it('sanitizes the wire schema in the OpenAI body — nullable unions 400 on Go gateways', () => {
+    const built = buildOpenAIRequest(
+      { model: 'gpt-4o-mini', imagesBase64: ['AAAA'], localSignalsBlock: '', jsonSchema: SCHEMA },
+      'k',
+    ).body as any
+    const wire = built.response_format.json_schema.schema
+    expect(wire.$schema).toBeUndefined()
+    expect(wire.properties.refusal_reason).toEqual({ type: 'string' })
+    expect(wire.properties.container.type).toBe('object')
+    expect(wire.required).toEqual(['schema_version', 'refusal_reason'])
+    expect(built.response_format.json_schema.strict).toBe(true)
+  })
+
+  it('the structural-400 retry ships the schema as instruction text, not structured output', async () => {
+    const { calls, impl } = scripted([
+      { status: 400, body: '{"error":{"message":"cannot unmarshal array into Go struct field"}}' },
+      {
+        status: 200,
+        body: JSON.stringify({
+          choices: [{ message: { content: '{"schema_version":"1.0.0","refusal_reason":null}' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }),
+      },
+    ])
+    const res = await runScanWithFallback(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: 'k' },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: SCHEMA,
+      },
+      impl,
+    )
+    expect(res.ok).toBe(true)
+    expect((res as any).usedSchemaFallback).toBe(true)
+    expect(calls).toHaveLength(2)
+    const second = calls[1]!.body
+    expect(second.response_format).toEqual({ type: 'json_object' })
+    const userText = second.messages.find((m: any) => m.role === 'user').content[0].text
+    expect(userText).toContain('OUTPUT CONTRACT')
+    expect(userText).toContain('refusal_reason')
+    expect(userText).toContain('"schema_version"')
+  })
+
+  it('a 400 whose body merely echoes our refusal_reason field is NOT a content refusal', async () => {
+    const { impl } = scripted([
+      { status: 400, body: '{"error":{"message":"Invalid schema: Definition.properties.refusal_reason.type"}}' },
+    ])
+    const res = await runScan(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: 'k' },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+      },
+      impl,
+    )
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error.kind).toBe('error-retryable')
+  })
+
+  it('unparseable model content is a shape failure, not "offline"', async () => {
+    const { impl } = scripted([
+      {
+        status: 200,
+        body: JSON.stringify({
+          choices: [{ message: { content: 'not json at all {' } }],
+          usage: { prompt_tokens: 1, completion_tokens: 1 },
+        }),
+      },
+    ])
+    const res = await runScan(
+      {
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        credential: { kind: 'api_key', value: 'k' },
+        imagesBase64: ['AAAA'],
+        localSignalsBlock: '',
+        jsonSchema: null,
+      },
+      impl,
+    )
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.kind).toBe('schema-violation')
+      expect(res.error.message).toContain('unexpected shape')
+    }
   })
 })

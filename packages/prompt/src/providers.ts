@@ -1,4 +1,5 @@
 import { SYSTEM_PROMPT, PROMPT_VERSION } from './system-prompt.js'
+import { sanitizeJsonSchemaForWire, schemaContractBlock } from './schema-compat.js'
 
 /**
  * Provider wire formats.
@@ -100,6 +101,15 @@ export interface BuildRequestInput {
    * that degrades to prompt-shaped JSON beats a scan that fails.
    */
   jsonSchema: unknown
+  /**
+   * The ORIGINAL wire schema, used when `jsonSchema` is null (the structural-
+   * 400 retry): instead of structured-output mode, the schema ships as TEXT
+   * inside the instruction, so even gateways with no schema support receive a
+   * complete field contract. Without it, free-form `json_object` answers
+   * drifted — missing schema_version, enums, gram estimates — and failed the
+   * client-side Zod pass. Null/undefined when structured-output mode is on.
+   */
+  instructionSchema?: unknown
   maxTokens?: number
 }
 
@@ -136,9 +146,15 @@ export function buildAnthropicRequest(input: BuildRequestInput, credential: { ki
     type: 'image',
     source: { type: 'base64', media_type: 'image/jpeg', data },
   }))
-  const text = input.localSignalsBlock
+  const baseText = input.localSignalsBlock
     ? `${input.localSignalsBlock}\n\n${USER_INSTRUCTION}`
     : USER_INSTRUCTION
+  // Structured-output mode rejected with a 400 earlier: ship the schema as
+  // text so the free-form answer still carries every required field.
+  const text =
+    input.jsonSchema == null && input.instructionSchema != null
+      ? `${baseText}\n\n${schemaContractBlock(sanitizeJsonSchemaForWire(input.instructionSchema as Record<string, unknown>) ?? (input.instructionSchema as Record<string, unknown>))}`
+      : baseText
   content.push({ type: 'text', text })
 
   return {
@@ -162,10 +178,26 @@ export function buildOpenAIRequest(input: BuildRequestInput, apiKey: string): Pr
     type: 'image_url',
     image_url: { url: `data:image/jpeg;base64,${data}` },
   }))
-  const text = input.localSignalsBlock
+  const baseText = input.localSignalsBlock
     ? `${input.localSignalsBlock}\n\n${USER_INSTRUCTION}`
     : USER_INSTRUCTION
+  const text =
+    input.jsonSchema == null && input.instructionSchema != null
+      ? `${baseText}\n\n${schemaContractBlock(sanitizeJsonSchemaForWire(input.instructionSchema as Record<string, unknown>) ?? (input.instructionSchema as Record<string, unknown>))}`
+      : baseText
   content.unshift({ type: 'text', text })
+
+  // The wire schema is SANITIZED: nullable type-arrays ("type": ["string",
+  // "null"]) and anyOf null-branches are flattened, because OpenAI-compatible
+  // gateways implemented in Go (aicredits.in and others) cannot unmarshal type
+  // unions and 400 the ENTIRE scan before it ever reaches the model. Official
+  // OpenAI accepts both shapes, and the flattened one stays true to the Zod
+  // validator — it merely stops offering null, so the model answers "" or 0,
+  // which parse identically on our side.
+  const wireSchema =
+    input.jsonSchema == null
+      ? null
+      : sanitizeJsonSchemaForWire(input.jsonSchema as Record<string, unknown>) ?? input.jsonSchema
 
   return {
     url: 'https://api.openai.com/v1/chat/completions',
@@ -177,12 +209,12 @@ export function buildOpenAIRequest(input: BuildRequestInput, apiKey: string): Pr
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content },
       ],
-      ...(input.jsonSchema == null
+      ...(wireSchema == null
         ? { response_format: { type: 'json_object' } }
         : {
             response_format: {
               type: 'json_schema',
-              json_schema: { name: 'VisionPayload', strict: true, schema: input.jsonSchema },
+              json_schema: { name: 'VisionPayload', strict: true, schema: wireSchema },
             },
           }),
     },
@@ -194,9 +226,13 @@ export function buildGeminiRequest(input: BuildRequestInput, apiKey: string): Pr
   const parts: unknown[] = input.imagesBase64.map((data) => ({
     inline_data: { mime_type: 'image/jpeg', data },
   }))
-  const text = input.localSignalsBlock
+  const baseText = input.localSignalsBlock
     ? `${input.localSignalsBlock}\n\n${USER_INSTRUCTION}`
     : USER_INSTRUCTION
+  const text =
+    input.jsonSchema == null && input.instructionSchema != null
+      ? `${baseText}\n\n${schemaContractBlock(sanitizeJsonSchemaForWire(input.instructionSchema as Record<string, unknown>) ?? (input.instructionSchema as Record<string, unknown>))}`
+      : baseText
   parts.push({ text })
 
   return {
