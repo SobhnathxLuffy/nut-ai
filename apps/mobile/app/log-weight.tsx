@@ -28,6 +28,9 @@ export default function LogWeight() {
   const [unit, setUnit] = useState<WeightUnit>('kg')
   const [saving, setSaving] = useState(false)
   const [ready, setReady] = useState(false)
+  // A failed write must surface: stranding the CTA on 'Save' leaves the user
+  // unable to tell success from failure.
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -53,8 +56,14 @@ export default function LogWeight() {
   async function save() {
     if (saving) return
     setSaving(true)
-    await logWeight(kg, Date.now())
-    router.back()
+    setError(null)
+    try {
+      await logWeight(kg, Date.now())
+      router.back()
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : 'Could not save your weight. Nothing was written.')
+      setSaving(false)
+    }
   }
 
   return (
@@ -96,6 +105,12 @@ export default function LogWeight() {
         </>
       ) : null}
 
+      {error ? (
+        <Text accessibilityRole="alert" style={[type.caption, { color: theme.safety, paddingHorizontal: space.lg, marginTop: space.sm }]}>
+          {error}
+        </Text>
+      ) : null}
+
       <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.lg) }]}>
         <Pressable
           accessibilityRole="button"
@@ -103,7 +118,7 @@ export default function LogWeight() {
           onPress={save}
           style={[styles.cta, { backgroundColor: saving || !ready ? theme.border : theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Save</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>{saving ? 'Saving…' : 'Save'}</Text>
         </Pressable>
       </View>
     </View>

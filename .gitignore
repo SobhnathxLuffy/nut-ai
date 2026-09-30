@@ -52,3 +52,9 @@ tools/nutrition-data/data/
 /test_*.js
 /window_dump.xml
 /walkthrough.md
+
+# Compiled artifacts of src/data/backup-core.ts — the bundler resolves the .ts;
+# a stale .js beside it is a two-sources-of-truth trap (QA P2-31/P2-3).
+apps/mobile/src/data/backup-core.js
+apps/mobile/src/data/backup-core.js.map
+apps/mobile/src/data/backup-core.d.ts.map

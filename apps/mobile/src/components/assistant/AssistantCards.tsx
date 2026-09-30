@@ -8,7 +8,7 @@ export function LastWorkoutCard({ data }: { data: any }) {
   const t = useTheme()
   if (!data) {
     return (
-      <View style={[s.card, { backgroundColor: t.bgElevated }]}>
+      <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
         <Text style={[s.title, { color: t.text }]}>No records found</Text>
         <Text style={[s.body, { color: t.textMuted }]}>We couldn't find a past workout for that exercise.</Text>
         <Pressable onPress={() => router.push('/log-exercise')} style={[s.btn, { backgroundColor: t.text }]}>
@@ -19,7 +19,7 @@ export function LastWorkoutCard({ data }: { data: any }) {
   }
 
   return (
-    <View style={[s.card, { backgroundColor: t.bgElevated }]}>
+    <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
       <Text style={[s.title, { color: t.text }]}>{data.name} (Last logged)</Text>
       <Text style={[s.body, { color: t.textMuted }]}>Date: {data.local_date}</Text>
       <Text style={[s.body, { color: t.textMuted }]}>Calories burned: {Math.round(data.kcal)} kcal</Text>
@@ -31,7 +31,7 @@ export function NutritionSummaryCard({ data }: { data: any }) {
   const t = useTheme()
 
   return (
-    <View style={[s.card, { backgroundColor: t.bgElevated }]}>
+    <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
       <Text style={[s.title, { color: t.text }]}>Nutrition Summary ({data.timeframe})</Text>
       {data.excludedDays?.length > 0 && (
         <Text style={[s.body, { color: t.safety }]}>
@@ -51,7 +51,7 @@ export function NutritionSummaryCard({ data }: { data: any }) {
 }
 
 const s = StyleSheet.create({
-  card: { padding: space.md, borderRadius: radius.md, marginVertical: space.sm, borderWidth: 1, borderColor: '#ccc' },
+  card: { padding: space.md, borderRadius: radius.md, marginVertical: space.sm, borderWidth: 1 },
   title: { ...type.heading, fontWeight: 'bold', marginBottom: space.xs },
   body: { ...type.body, marginBottom: space.xs },
   row: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
@@ -62,7 +62,7 @@ const s = StyleSheet.create({
 export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
   const t = useTheme()
   return (
-    <View style={[s.card, { backgroundColor: t.bgElevated }]}>
+    <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
       <Text style={[s.title, { color: t.text }]}>Meal Proposal: {data.name}</Text>
       {/* Unit-count aware: "2 rotis" renders as "2 × 40 g", not one 80 g blob. */}
       {expandProposalIngredients(data.ingredients).map((ing, i) => (
@@ -90,7 +90,7 @@ export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: 
 export function WorkoutRoutineProposalCard({ data, status, onConfirm, onCancel }: { data: any, status?: string, onConfirm?: () => void, onCancel?: () => void }) {
   const t = useTheme()
   return (
-    <View style={[s.card, { backgroundColor: t.bgElevated }]}>
+    <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
       <Text style={[s.title, { color: t.text }]}>Routine Proposal: {data.name}</Text>
       {data.exercises.map((ex: any, i: number) => (
         <Text key={i} style={[s.body, { color: t.text }]}>• {ex.name}: {ex.sets} sets x {ex.reps}</Text>

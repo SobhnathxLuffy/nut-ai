@@ -100,6 +100,9 @@ export default function Result() {
   const phase = useScan()
   const [expandedBand, setExpandedBand] = useState(false)
   const [logging, setLogging] = useState(false)
+  // P1-8: a failed DB write must say so — a silent catch here let the app's
+  // most important write no-op without a word (or double-log on re-scan).
+  const [logError, setLogError] = useState<string | null>(null)
   const [fixOpen, setFixOpen] = useState(false)
   const [fixText, setFixText] = useState('')
   const [fixBusy, setFixBusy] = useState(false)
@@ -185,16 +188,38 @@ export default function Result() {
   function logNow() {
     if (logging) return
     setLogging(true)
+    setLogError(null)
     void (async () => {
       try {
         await logMeal(result, phase.kind === 'ready' ? phase.meta : null, phase.kind === 'ready' ? phase.photoUri : null, Date.now())
         reset({ retainPhoto: true })
         router.dismissAll()
-      } catch {
+      } catch (caught) {
+        setLogError(caught instanceof Error && caught.message ? caught.message : 'Could not log this meal. Your data is unchanged.')
         setLogging(false)
       }
     })()
   }
+
+  /** Shared failure banner: shown above whichever action bar is visible. */
+  const logErrorEl = logError ? (
+    <View
+      accessibilityRole="alert"
+      accessibilityLabel={`Logging failed: ${logError}`}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.sm, backgroundColor: theme.safetyBg }}
+    >
+      <Text style={[type.caption, { color: theme.safety, flex: 1 }]}>{logError}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Retry logging"
+        onPress={logNow}
+        hitSlop={space.sm}
+        style={{ minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
+      >
+        <Text style={[type.bodyStrong, { color: theme.safety }]}>Retry</Text>
+      </Pressable>
+    </View>
+  ) : null
 
   if (reviewMode === 'quick' && quickEligible) {
     return (
@@ -235,6 +260,7 @@ export default function Result() {
         </ScrollView>
 
         <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
+          {logErrorEl}
           <View style={{ flexDirection: 'row', gap: space.md }}>
             <Pressable
               accessibilityRole="button"
@@ -390,6 +416,7 @@ export default function Result() {
       </ScrollView>
 
       <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
+        {logErrorEl}
         <View style={{ flexDirection: 'row', gap: space.md }}>
           <Pressable
             accessibilityRole="button"
@@ -1010,7 +1037,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     borderRadius: radius.pill,
     borderWidth: 1,
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: 'center',
   },
   row: {

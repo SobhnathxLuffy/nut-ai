@@ -1,10 +1,13 @@
-import { Stack, router, useRootNavigationState, useSegments } from 'expo-router'
+import { Stack, router, useRootNavigationState, useSegments, type ErrorBoundaryProps } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import Storage from 'expo-sqlite/kv-store'
 import { useEffect, useState } from 'react'
+import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider'
+import { space, type as typeScale } from '../src/theme/tokens'
+import { Button } from '../src/components/Screen'
 
 // WEB-001: patches Alert.alert with a real dialog on web. Must be imported
 // before any screen module so every Alert.alert call site gets the patch.
@@ -43,6 +46,50 @@ function useOnboardingGate() {
       alive = false
     }
   }, [navState?.key, segments, checked])
+}
+
+/**
+ * Root error boundary (expo-router contract: export `ErrorBoundary` from the
+ * root layout). Catches any render crash in the navigator — e.g. a corrupt DB
+ * row throwing during a screen's render — and offers recovery instead of a
+ * white screen. The boundary renders inside ThemeProvider, so useTheme works.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const t = useTheme()
+  // Re-render the crashed route first (retry clears the boundary state and
+  // remounts the navigator), then head to the Home tab once it is mounted.
+  const goHome = () => {
+    void retry().then(() => router.replace('/(tabs)' as never))
+  }
+  return (
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: t.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: space.xl,
+        gap: space.md,
+      }}
+    >
+      <Text style={{ ...typeScale.title, color: t.text }}>Something went wrong</Text>
+      <Text style={{ ...typeScale.body, color: t.textMuted, textAlign: 'center' }}>
+        The app hit an unexpected error. Your data is safe on this device.
+      </Text>
+      {error?.message ? (
+        <Text
+          numberOfLines={4}
+          style={{ ...typeScale.caption, color: t.textFaint, textAlign: 'center' }}
+        >
+          {error.message}
+        </Text>
+      ) : null}
+      <View style={{ gap: space.sm, alignSelf: 'stretch', marginTop: space.sm }}>
+        <Button label="Try again" onPress={() => void retry()} />
+        <Button label="Go home" onPress={goHome} />
+      </View>
+    </View>
+  )
 }
 
 function Root() {

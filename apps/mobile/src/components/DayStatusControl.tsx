@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
     borderRadius: radius.sm,
     borderWidth: 1,
-    minHeight: 28,
+    minHeight: 44,
     justifyContent: 'center',
   },
   optionsRow: {

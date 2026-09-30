@@ -14,10 +14,12 @@ import {
 import { db, localDate } from '../src/data/repo'
 import { consumePendingRoutineExercises } from '../src/data/routine-draft'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { useTheme } from '../src/theme/ThemeProvider'
 
 const PROGRESSION_KINDS = ['double', 'fixed', 'percentage', 'rir', 'manual'] as const
 
 export default function RoutinesScreen() {
+  const t = useTheme()
   const params = useLocalSearchParams<{ id?: string; addExerciseId?: string }>()
   const [routines, setRoutines] = useState<Routine[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([])
@@ -230,7 +232,7 @@ export default function RoutinesScreen() {
           {selectedExercises.map((se, idx) => {
             const exInfo = exercises.find((e) => e.id === se.exercise_id)
             return (
-              <View key={`${se.exercise_id}-${idx}`} style={{ gap: 8, padding: 12, borderRadius: 12, backgroundColor: '#ffffff0a' }}>
+              <View key={`${se.exercise_id}-${idx}`} style={{ gap: 8, padding: 12, borderRadius: 12, backgroundColor: t.rowRaised }}>
                 <Row>
                   <Label>{exInfo?.name ?? `Exercise #${se.exercise_id}`}</Label>
                   <Button label="Remove" onPress={() => handleRemoveExercise(idx)} />

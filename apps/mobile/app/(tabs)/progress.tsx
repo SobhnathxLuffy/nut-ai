@@ -174,7 +174,7 @@ function signedWeight(kg: number, unit: WeightUnit): string {
 
 const styles = StyleSheet.create({
   tabs: { gap: space.sm, paddingRight: space.lg }, windows: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.pill }, compactChip: { minHeight: 40, paddingHorizontal: 11 },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.pill }, compactChip: { minHeight: 44, paddingHorizontal: 11 },
   card: { borderWidth: 1, borderRadius: radius.xl, padding: space.lg, gap: space.md }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   metricCard: { width: '48%', minHeight: 120, borderRadius: radius.lg, padding: space.md, gap: space.xs }, metricValue: { fontSize: 23, fontWeight: '700' },
   dataRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }, reportRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },

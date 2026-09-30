@@ -69,6 +69,12 @@ export interface Theme {
   safety: string
   safetyBg: string
   affirm: string
+  /** Low-alpha washes for "tinted card" moments — the only sanctioned way to tint. */
+  affirmTint: string
+  uncertainTint: string
+  proteinTint: string
+  /** A barely-there raised row inside an elevated card. */
+  rowRaised: string
   isDark: boolean
 }
 
@@ -90,6 +96,10 @@ export const lightTheme: Theme = {
   safety: palette.safety,
   safetyBg: palette.safetyBg,
   affirm: palette.affirm,
+  affirmTint: '#2E9E6B1A',
+  uncertainTint: '#8B7BD81A',
+  proteinTint: '#3E7BFA1A',
+  rowRaised: '#0B0B0F08',
   isDark: false,
 }
 
@@ -118,6 +128,10 @@ export const darkTheme: Theme = {
   safety: '#F0655B',
   safetyBg: '#3A1E1C',
   affirm: '#4FBE8C',
+  affirmTint: '#4FBE8C26',
+  uncertainTint: '#A99AE626',
+  proteinTint: '#6E9BFF26',
+  rowRaised: '#FFFFFF0A',
   isDark: true,
 }
 

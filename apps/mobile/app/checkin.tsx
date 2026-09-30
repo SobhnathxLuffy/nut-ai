@@ -57,43 +57,50 @@ export default function CheckinScreen() {
     }, [loadReview]),
   )
 
-  const handleToggleLock = async (macro: keyof SafetySettings['locks']) => {
+  /**
+   * Shared optimistic-toggle persistence: write the new state optimistically,
+   * roll it back and say so if the save fails — a desynced toggle that LOOKS
+   * saved is worse than one that never moved.
+   */
+  const persistSafety = async (updated: SafetySettings) => {
+    const previous = safety
+    if (!previous || busy) return
+    setSafety(updated)
+    try {
+      const h = await db()
+      await saveSafety(h, updated)
+      await loadReview()
+    } catch (err) {
+      setSafety(previous)
+      Alert.alert('Could not save setting', err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleToggleLock = (macro: keyof SafetySettings['locks']) => {
     if (!safety || busy) return
-    const updated: SafetySettings = {
+    void persistSafety({
       ...safety,
       locks: {
         ...safety.locks,
         [macro]: !safety.locks[macro],
       },
-    }
-    setSafety(updated)
-    const h = await db()
-    await saveSafety(h, updated)
-    await loadReview()
+    })
   }
 
-  const handleToggleReviewed = async () => {
+  const handleToggleReviewed = () => {
     if (!safety || busy) return
-    const updated: SafetySettings = {
+    void persistSafety({
       ...safety,
       reviewed: !safety.reviewed,
-    }
-    setSafety(updated)
-    const h = await db()
-    await saveSafety(h, updated)
-    await loadReview()
+    })
   }
 
-  const handleToggleRisk = async (key: 'pregnant' | 'lactating' | 'eating_disorder_risk') => {
+  const handleToggleRisk = (key: 'pregnant' | 'lactating' | 'eating_disorder_risk') => {
     if (!safety || busy) return
-    const updated: SafetySettings = {
+    void persistSafety({
       ...safety,
       [key]: !safety[key],
-    }
-    setSafety(updated)
-    const h = await db()
-    await saveSafety(h, updated)
-    await loadReview()
+    })
   }
 
   const handleAccept = async () => {

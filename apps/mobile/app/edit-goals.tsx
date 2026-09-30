@@ -30,6 +30,8 @@ export default function EditGoals() {
   const [protein, setProtein] = useState('')
   const [fat, setFat] = useState('')
   const [saving, setSaving] = useState(false)
+  // A failed target override must surface — 'Saving…' forever reads as saved.
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -60,15 +62,21 @@ export default function EditGoals() {
   async function save() {
     if (!base || saving || kcalV <= 0 || impossible) return
     setSaving(true)
-    await overrideTargets(
-      {
-        targetKcal: kcalV,
-        macros: { protein_g: proteinV, fat_g: fatV, carbs_g: carbsV, carbsFloored: carbsV === 0 },
-      },
-      base,
-      Date.now(),
-    )
-    router.back()
+    setError(null)
+    try {
+      await overrideTargets(
+        {
+          targetKcal: kcalV,
+          macros: { protein_g: proteinV, fat_g: fatV, carbs_g: carbsV, carbsFloored: carbsV === 0 },
+        },
+        base,
+        Date.now(),
+      )
+      router.back()
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : 'Could not save your goals. Nothing was changed.')
+      setSaving(false)
+    }
   }
 
   return (
@@ -96,6 +104,12 @@ export default function EditGoals() {
           </Text>
         </View>
 
+        {error ? (
+          <View style={[styles.warn, { backgroundColor: theme.safetyBg }]} accessibilityRole="alert">
+            <Text style={[type.caption, { color: theme.safety }]}>{error}</Text>
+          </View>
+        ) : null}
+
         {impossible ? (
           <View style={[styles.warn, { backgroundColor: theme.safetyBg }]}>
             <Text style={[type.caption, { color: theme.safety }]}>
@@ -120,7 +134,7 @@ export default function EditGoals() {
           disabled={kcalV <= 0 || impossible || saving}
           style={[styles.cta, { backgroundColor: kcalV > 0 && !impossible ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Save</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>{saving ? 'Saving…' : 'Save'}</Text>
         </Pressable>
       </View>
     </View>

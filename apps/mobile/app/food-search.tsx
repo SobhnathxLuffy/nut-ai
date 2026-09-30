@@ -812,7 +812,7 @@ export default function FoodSearch() {
                     },
                   ]}
                 >
-                  <Text style={[type.micro, { color: decompItems.some((row) => row.foodId === item.foodId) ? '#fff' : theme.text }]}>
+                  <Text style={[type.micro, { color: decompItems.some((row) => row.foodId === item.foodId) ? theme.bg : theme.text }]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -906,7 +906,7 @@ export default function FoodSearch() {
                 onPress={handleCreateIngredient}
                 style={[styles.actionBtn, { marginTop: space.sm, backgroundColor: theme.protein, borderColor: theme.protein }]}
               >
-                <Text style={[type.label, { color: '#fff', fontWeight: '700' }]}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
+                <Text style={[type.label, { color: theme.bg, fontWeight: '700' }]}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
               </Pressable>
             </View>
           )}
@@ -932,7 +932,7 @@ export default function FoodSearch() {
                     },
                   ]}
                 >
-                  <Text style={[type.micro, { color: selectedFatId === item.optionId ? '#fff' : theme.text }]}>
+                  <Text style={[type.micro, { color: selectedFatId === item.optionId ? theme.bg : theme.text }]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -972,7 +972,7 @@ export default function FoodSearch() {
                     },
                   ]}
                 >
-                  <Text style={[type.micro, { color: selectedMethod === item.method ? '#fff' : theme.text }]}>
+                  <Text style={[type.micro, { color: selectedMethod === item.method ? theme.bg : theme.text }]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -1033,7 +1033,7 @@ export default function FoodSearch() {
               onPress={handleLogDecomposed}
               style={[styles.actionBtn, { flex: 1, backgroundColor: theme.protein, borderColor: theme.protein }]}
             >
-              <Text style={[type.body, { color: '#fff', fontWeight: '600' }]}>Review & Log Dish</Text>
+              <Text style={[type.body, { color: theme.bg, fontWeight: '600' }]}>Review & Log Dish</Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -1101,7 +1101,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
     fontSize: 14,
-    minHeight: 38,
+    minHeight: 44,
   },
   chip: {
     paddingHorizontal: space.sm,

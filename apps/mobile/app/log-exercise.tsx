@@ -137,6 +137,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
   const [level, setLevel] = useState<Intensity>('medium')
   const [minutes, setMinutes] = useState('15')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const anchors = INTENSITY_ANCHORS[exercise]
   const mins = Number.parseInt(minutes, 10)
@@ -147,16 +148,27 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
   async function save() {
     if (!valid || saving) return
     setSaving(true)
-    const kg = await latestWeightKg()
-    const kcal = exerciseKcal(exercise, level, kg, mins)
-    await saveEntry(`${KIND_META[exercise].title} — ${level}, ${mins} min`, kcal)
-    router.back()
+    setError(null)
+    try {
+      const kg = await latestWeightKg()
+      const kcal = exerciseKcal(exercise, level, kg, mins)
+      await saveEntry(`${KIND_META[exercise].title} — ${level}, ${mins} min`, kcal)
+      router.back()
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : 'Could not save this exercise. Nothing was written.')
+      setSaving(false)
+    }
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <Header title={KIND_META[exercise].title} icon={KIND_META[exercise].icon} onBack={onBack} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
+        {error ? (
+          <View accessibilityRole="alert" style={[styles.example, { backgroundColor: theme.safetyBg, marginBottom: space.md }]}>
+            <Text style={[type.caption, { color: theme.safety, lineHeight: 19 }]}>{error}</Text>
+          </View>
+        ) : null}
         <View style={styles.sectionHead}>
           <Icon name="sun" size={20} color={theme.text} />
           <Text style={[type.title, { color: theme.text, fontSize: 26 }]}>Set intensity</Text>
@@ -268,28 +280,33 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
     setBusy(true)
     setError(null)
 
-    const provider = (await setting('provider')) as ProviderId | 'none' | ''
-    const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
-    if (!credential || !provider || provider === 'none') {
+    try {
+      const provider = (await setting('provider')) as ProviderId | 'none' | ''
+      const credential = provider && provider !== 'none' ? await loadCredential(provider) : null
+      if (!credential || !provider || provider === 'none') {
+        setBusy(false)
+        setError('Describing a workout needs an API key — add one in Profile, or use Run, Weight lifting or Manual instead.')
+        return
+      }
+
+      const model = (await setting('provider_model')) || cheapestModel(provider).id
+      const kg = await latestWeightKg()
+      const outcome = await runExerciseEstimate(provider, { model, description: desc, weightKg: kg, baseUrl: await customProviderBaseUrl() }, credential)
+      const parsed = outcome.ok ? ExerciseEstimateZ.safeParse(outcome.raw) : null
+
+      if (!parsed?.success) {
+        setBusy(false)
+        setError(outcome.ok ? 'Could not turn that into an estimate — try adding a duration.' : (outcome.error?.message ?? 'The estimate failed.'))
+        return
+      }
+
+      const e = parsed.data
+      await saveEntry(e.duration_min ? `${e.label} — ${Math.round(e.duration_min)} min` : e.label, Math.round(e.calories_kcal))
+      router.back()
+    } catch (caught) {
       setBusy(false)
-      setError('Describing a workout needs an API key — add one in Profile, or use Run, Weight lifting or Manual instead.')
-      return
+      setError(caught instanceof Error && caught.message ? caught.message : 'The estimate failed. Nothing was written.')
     }
-
-    const model = (await setting('provider_model')) || cheapestModel(provider).id
-    const kg = await latestWeightKg()
-    const outcome = await runExerciseEstimate(provider, { model, description: desc, weightKg: kg, baseUrl: await customProviderBaseUrl() }, credential)
-    const parsed = outcome.ok ? ExerciseEstimateZ.safeParse(outcome.raw) : null
-
-    if (!parsed?.success) {
-      setBusy(false)
-      setError(outcome.ok ? 'Could not turn that into an estimate — try adding a duration.' : (outcome.error?.message ?? 'The estimate failed.'))
-      return
-    }
-
-    const e = parsed.data
-    await saveEntry(e.duration_min ? `${e.label} — ${Math.round(e.duration_min)} min` : e.label, Math.round(e.calories_kcal))
-    router.back()
   }
 
   return (
@@ -350,6 +367,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
   const [kcal, setKcal] = useState('')
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const n = Number.parseInt(kcal, 10)
   const valid = Number.isFinite(n) && n > 0 && n <= 5000
@@ -357,8 +375,14 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
   async function add() {
     if (!valid || saving) return
     setSaving(true)
-    await saveEntry(name.trim() || 'Workout', n)
-    router.back()
+    setError(null)
+    try {
+      await saveEntry(name.trim() || 'Workout', n)
+      router.back()
+    } catch (caught) {
+      setError(caught instanceof Error && caught.message ? caught.message : 'Could not save this exercise. Nothing was written.')
+      setSaving(false)
+    }
   }
 
   return (
@@ -390,6 +414,12 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.lg, lineHeight: 19 }]}>
           Recorded exactly as entered. Your number, your log.
         </Text>
+
+        {error ? (
+          <View accessibilityRole="alert" style={[styles.example, { backgroundColor: theme.safetyBg, marginTop: space.md }]}>
+            <Text style={[type.caption, { color: theme.safety, lineHeight: 19 }]}>{error}</Text>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg }]}>
@@ -398,7 +428,9 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
           disabled={!valid || saving}
           style={[styles.cta, { backgroundColor: valid ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Add Exercise</Text>
+          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
+            {saving ? 'Saving…' : 'Add Exercise'}
+          </Text>
         </Pressable>
       </View>
     </View>

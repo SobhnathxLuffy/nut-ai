@@ -13,7 +13,7 @@ import { loadCredential, maskCredential } from '../../src/inference/credentials'
 import { PROVIDER_NAME } from '../../src/components/CredentialForm'
 import { Icon } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
-import { radius, space, type } from '../../src/theme/tokens'
+import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
 
 /**
  * Profile.
@@ -40,40 +40,49 @@ export default function Profile() {
   const [providerLabel, setProviderLabel] = useState('—')
   const [dataBusy, setDataBusy] = useState(false)
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
+  // A failed profile load must be distinguishable from genuinely empty data —
+  // otherwise the screen shows '—' placeholders forever with no way to retry.
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useFocusEffect(
     useCallback(() => {
       let alive = true
       void (async () => {
-        const handle = await db()
-        const [g, avail, d, p, unit] = await Promise.all([
-          currentGoal(),
-          availability(),
-          setting('diet.style', 'balanced'),
-          setting('provider'),
-          readWeightUnit(handle),
-        ])
-        if (!alive) return
-        setGoal(g)
-        setDiet(d)
-        setWeightUnit(unit)
-        setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
-        if (!p || p === 'none') {
-          setProviderLabel('Not connected')
-        } else {
-          const cred = await loadCredential(p as ProviderId)
+        try {
+          const handle = await db()
+          const [g, avail, d, p, unit] = await Promise.all([
+            currentGoal(),
+            availability(),
+            setting('diet.style', 'balanced'),
+            setting('provider'),
+            readWeightUnit(handle),
+          ])
           if (!alive) return
-          setProviderLabel(
-            cred
-              ? `${PROVIDER_NAME[p as ProviderId]} · ${maskCredential(cred.value)}`
-              : `${PROVIDER_NAME[p as ProviderId]} · key missing`,
-          )
+          setGoal(g)
+          setDiet(d)
+          setWeightUnit(unit)
+          setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
+          if (!p || p === 'none') {
+            setProviderLabel('Not connected')
+          } else {
+            const cred = await loadCredential(p as ProviderId)
+            if (!alive) return
+            setProviderLabel(
+              cred
+                ? `${PROVIDER_NAME[p as ProviderId]} · ${maskCredential(cred.value)}`
+                : `${PROVIDER_NAME[p as ProviderId]} · key missing`,
+            )
+          }
+          if (alive) setLoadError(null)
+        } catch (caught) {
+          if (alive) setLoadError(caught instanceof Error ? caught.message : 'Could not load your profile.')
         }
       })()
       return () => {
         alive = false
       }
-    }, []),
+    }, [reloadKey]),
   )
 
   function connectHealth() {
@@ -174,6 +183,23 @@ export default function Profile() {
       showsVerticalScrollIndicator={false}
     >
       <Text style={[type.title, { color: theme.text }]}>Profile</Text>
+
+      {loadError ? (
+        <View accessibilityRole="alert" style={[styles.hero, { backgroundColor: theme.safetyBg, flexDirection: 'row', alignItems: 'center', gap: space.md }] }>
+          <Text style={[type.caption, { color: theme.safety, flex: 1, lineHeight: 19 }]}>
+            Could not load your profile. {loadError}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading profile"
+            onPress={() => setReloadKey(k => k + 1)}
+            hitSlop={space.sm}
+            style={{ minHeight: MIN_TAP_TARGET, justifyContent: 'center', paddingHorizontal: space.sm }}
+          >
+            <Text style={[type.bodyStrong, { color: theme.safety }]}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={[styles.hero, { backgroundColor: theme.bgSunken }]}>
         <Text style={[type.bodyStrong, { color: theme.text }]}>No account needed</Text>

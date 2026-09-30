@@ -402,7 +402,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs + 2,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    minHeight: 32,
+    minHeight: 44,
     justifyContent: 'center',
   },
   reviewPillActive: { backgroundColor: '#fff' },

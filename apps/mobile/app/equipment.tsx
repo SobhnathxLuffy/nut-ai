@@ -13,6 +13,7 @@ import {
 } from '@nutai/training'
 import { db } from '../src/data/repo'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { useTheme } from '../src/theme/ThemeProvider'
 
 const KINDS = [
   'plate',
@@ -28,6 +29,7 @@ const KINDS = [
 ] as const
 
 export default function EquipmentScreen() {
+  const t = useTheme()
   const params = useLocalSearchParams<{ target?: string }>()
   const [items, setItems] = useState<Equipment[]>([])
   const [targetWeight, setTargetWeight] = useState<string>(params.target ?? '')
@@ -190,7 +192,7 @@ export default function EquipmentScreen() {
         {calcResult && (
           <View style={{ gap: 10, marginTop: 8 }}>
             {calcResult.exact ? (
-              <View style={{ padding: 12, borderRadius: 12, backgroundColor: '#10b98120' }}>
+              <View style={{ padding: 12, borderRadius: 12, backgroundColor: t.affirmTint }}>
                 <Label>Exact Match: {calcResult.exact.load_kg} kg</Label>
                 <Label muted>
                   Per side: {formatPlates(calcResult.exact.per_side)}
@@ -201,13 +203,13 @@ export default function EquipmentScreen() {
               <>
                 <Label muted>No exact plate combination for {targetNum} kg.</Label>
                 {calcResult.lower && (
-                  <View style={{ padding: 10, borderRadius: 10, backgroundColor: '#f59e0b20' }}>
+                  <View style={{ padding: 10, borderRadius: 10, backgroundColor: t.uncertainTint }}>
                     <Label>Nearest lower: {calcResult.lower.load_kg} kg ({calcResult.lower.delta_kg} kg)</Label>
                     <Label muted>Per side: {formatPlates(calcResult.lower.per_side)}</Label>
                   </View>
                 )}
                 {calcResult.upper && (
-                  <View style={{ padding: 10, borderRadius: 10, backgroundColor: '#3b82f620' }}>
+                  <View style={{ padding: 10, borderRadius: 10, backgroundColor: t.proteinTint }}>
                     <Label>Nearest upper: {calcResult.upper.load_kg} kg (+{calcResult.upper.delta_kg} kg)</Label>
                     <Label muted>Per side: {formatPlates(calcResult.upper.per_side)}</Label>
                   </View>

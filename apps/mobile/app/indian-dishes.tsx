@@ -138,7 +138,7 @@ export default function IndianDishesScreen() {
             onPress={() => setFilter(f as any)}
             style={[s.filterBtn, { backgroundColor: filter === f ? t.protein : t.bgSunken, borderColor: filter === f ? t.protein : t.border }]}
           >
-            <Text style={[type.micro, { color: filter === f ? '#fff' : t.text }]}>
+            <Text style={[type.micro, { color: filter === f ? t.bg : t.text }]}>
               {f === 'DRAFT_CURATED' ? 'Draft' : f === 'CURATED' ? 'Curated' : f === 'HOUSEHOLD' ? 'My Version' : 'All'}
             </Text>
           </Pressable>
@@ -162,7 +162,7 @@ export default function IndianDishesScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={[type.body, { color: t.text }]}>{d.name}</Text>
                 {d.aliases ? <Text style={[type.caption, { color: t.textMuted }]}>Also known as: {d.aliases}</Text> : null}
-                <Text style={[type.micro, { color: d.status === 'CURATED' ? t.protein : d.status === 'HOUSEHOLD' ? "#3b82f6" : t.safety, marginTop: space.xs }]}>
+                <Text style={[type.micro, { color: d.status === 'CURATED' ? t.protein : d.status === 'HOUSEHOLD' ? t.protein : t.safety, marginTop: space.xs }]}>
                   {d.status === 'CURATED' ? '✓ CURATED RECIPE' : d.status === 'HOUSEHOLD' ? '🏠 MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {prettyCategory(d.category)}
                 </Text>
               </View>

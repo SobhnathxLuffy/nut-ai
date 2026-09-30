@@ -173,6 +173,7 @@ export function Row({ children }: { children: React.ReactNode }) {
  * Hook for async actions with loading/error state and automatic refresh.
  */
 export function useAction(refresh?: () => Promise<void>) {
+  const t = useTheme()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const isBusyRef = useRef(false)
@@ -202,7 +203,7 @@ export function useAction(refresh?: () => Promise<void>) {
         {busy && <ActivityIndicator accessibilityLabel="Saving" />}
         {!!error && (
           <View style={{ gap: 8, paddingVertical: 4 }}>
-            <Text accessibilityRole="alert" style={{ fontSize: 15, color: '#ef4444' }}>
+            <Text accessibilityRole="alert" style={{ fontSize: 15, color: t.safety }}>
               {error}
             </Text>
             {refresh && (

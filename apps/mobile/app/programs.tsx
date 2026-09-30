@@ -15,10 +15,12 @@ import { db, localDate } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
 import { friendlySetValueError } from '../src/data/workout-errors'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { useTheme } from '../src/theme/ThemeProvider'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
 export default function ProgramsScreen() {
+  const t = useTheme()
   const [programs, setPrograms] = useState<Program[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
 
@@ -188,7 +190,7 @@ export default function ProgramsScreen() {
               Started {plan.start_date} · {plan.weeks} weeks · {plan.schedule.length} days/week
             </Label>
             {todayRoutineId && (
-              <View style={{ padding: 10, borderRadius: 10, backgroundColor: '#10b98120' }}>
+              <View style={{ padding: 10, borderRadius: 10, backgroundColor: t.affirmTint }}>
                 <Label>Today's Scheduled Workout: {routineName ?? 'Routine'}</Label>
                 <Button label="Launch Today's Workout" selected onPress={() => void action.run(() => handleLaunch(todayRoutineId))} />
               </View>

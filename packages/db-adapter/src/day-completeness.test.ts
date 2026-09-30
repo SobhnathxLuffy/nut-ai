@@ -15,7 +15,7 @@ import {
   importBackupPayload,
   serializeBackup,
   parseBackup,
-} from '../../../apps/mobile/src/data/backup-core.js'
+} from '../../../apps/mobile/src/data/backup-core'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'

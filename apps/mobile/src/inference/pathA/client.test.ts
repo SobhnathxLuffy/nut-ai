@@ -4,11 +4,13 @@ import { buildOpenAIRequest } from '@nutai/prompt'
 import {
   createSseDeltaParser,
   extractFullCompletion,
+  runAssistantChatApiStream,
   runLabelScan,
   runScan,
   runScanWithFallback,
   runWebLookup,
 } from './client'
+import { loadCredential } from '../credentials'
 import { withBaseUrl } from '../base-url'
 
 /**
@@ -467,5 +469,146 @@ describe('extractFullCompletion — gateways that ignore stream:true', () => {
       ],
     })
     expect(d).toEqual({ text: 'Part 1 + Part 2', reasoning: 'plan' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// runAssistantChatApiStream — the XHR transport (P1-2 double-append, P1-3 stall)
+// ---------------------------------------------------------------------------
+
+/** Minimal XHR stand-in: the stream code only needs open/headers/responseText/events. */
+class FakeXhr {
+  status = 200
+  responseText = ''
+  responseType: string | undefined
+  onprogress: (() => void) | null = null
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  onabort: (() => void) | null = null
+  aborts = 0
+  open = vi.fn()
+  setRequestHeader = vi.fn()
+  send = vi.fn()
+  abort() {
+    this.aborts++
+    this.onabort?.()
+  }
+}
+
+const STREAM_BODY = JSON.stringify({
+  choices: [{ message: { content: 'Hello', reasoning_content: 'why' } }],
+  usage: { prompt_tokens: 10, completion_tokens: 4 },
+})
+
+async function setupStream() {
+  vi.mocked(loadCredential).mockResolvedValue({ kind: 'api_key', value: 'sk-stream' } as never)
+  return new FakeXhr()
+}
+
+describe('runAssistantChatApiStream', () => {
+  it('non-SSE plain JSON body arrives in chunks and parses ONCE — no double-append', async () => {
+    const xhr = await setupStream()
+    const deltas: Array<{ text?: string; reasoning?: string }> = []
+    const done = runAssistantChatApiStream(
+      { provider: 'openai', model: 'gpt-4o-mini', systemPrompt: 'sys', userPrompt: 'usr' },
+      { onDelta: (d) => deltas.push(d) },
+      () => xhr as unknown as XMLHttpRequest,
+    )
+    // The stream fn awaits the credential before wiring the XHR — let it run.
+    await vi.waitFor(() => {
+      if (typeof xhr.onprogress !== 'function') throw new Error('xhr not wired yet')
+    })
+
+    // The gateway ignored stream:true and sent a plain body in two TCP chunks.
+    xhr.responseText = STREAM_BODY.slice(0, 12)
+    xhr.onprogress!()
+    xhr.responseText = STREAM_BODY
+    xhr.onprogress!()
+    xhr.onload!()
+
+    const outcome = await done
+    expect(outcome.ok).toBe(true)
+    expect(outcome.text).toBe('Hello')
+    expect(outcome.reasoning).toBe('why')
+    // Exactly one full-content delta fires (from settleFromFullBody) — a
+    // duplicated body would have failed JSON.parse before this point.
+    expect(deltas).toEqual([{ text: 'Hello' }, { reasoning: 'why' }])
+  })
+
+  it('SSE chunks still stream through the delta parser untouched', async () => {
+    const xhr = await setupStream()
+    const deltas: Array<{ text?: string; reasoning?: string }> = []
+    const done = runAssistantChatApiStream(
+      { provider: 'openai', model: 'gpt-4o-mini', systemPrompt: 'sys', userPrompt: 'usr' },
+      { onDelta: (d) => deltas.push(d) },
+      () => xhr as unknown as XMLHttpRequest,
+    )
+    // The stream fn awaits the credential before wiring the XHR — let it run.
+    await vi.waitFor(() => {
+      if (typeof xhr.onprogress !== 'function') throw new Error('xhr not wired yet')
+    })
+
+    xhr.responseText = 'data: {"choices":[{"delta":{"content":"Hi"}}]}\n\n'
+    xhr.onprogress!()
+    xhr.onload!()
+
+    const outcome = await done
+    expect(outcome.ok).toBe(true)
+    expect(outcome.text).toBe('Hi')
+    expect(deltas).toEqual([{ text: 'Hi' }])
+  })
+
+  it('stall guard aborts a mid-stream silence and keeps the partial text', async () => {
+    vi.useFakeTimers()
+    try {
+      const xhr = await setupStream()
+      const done = runAssistantChatApiStream(
+        { provider: 'openai', model: 'gpt-4o-mini', systemPrompt: 'sys', userPrompt: 'usr', stallTimeoutMs: 20 },
+        {},
+        () => xhr as unknown as XMLHttpRequest,
+      )
+      // Drain the credential-load microtasks WITHOUT advancing fake timers —
+      // advancing here would fire the stall guard before the first chunk.
+      await vi.advanceTimersByTimeAsync(0)
+      if (typeof xhr.onprogress !== 'function') throw new Error('xhr not wired yet')
+
+      xhr.responseText = 'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'
+      xhr.onprogress!() // re-arms the guard; then the gateway goes silent
+      await vi.advanceTimersByTimeAsync(20)
+
+      const outcome = await done
+      expect(outcome.ok).toBe(false)
+      expect(outcome.partial).toBe(true)
+      expect(outcome.text).toBe('partial')
+      expect(outcome.error?.message).toBe('The answer stalled partway through.')
+      expect(xhr.aborts).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stall guard reports a silent gateway before the first byte', async () => {
+    vi.useFakeTimers()
+    try {
+      const xhr = await setupStream()
+      const done = runAssistantChatApiStream(
+        { provider: 'openai', model: 'gpt-4o-mini', systemPrompt: 'sys', userPrompt: 'usr', stallTimeoutMs: 20 },
+        {},
+        () => xhr as unknown as XMLHttpRequest,
+      )
+      // Drain the credential-load microtasks WITHOUT advancing fake timers —
+      // advancing here would fire the stall guard before the first chunk.
+      await vi.advanceTimersByTimeAsync(0)
+      if (typeof xhr.onprogress !== 'function') throw new Error('xhr not wired yet')
+
+      await vi.advanceTimersByTimeAsync(20)
+
+      const outcome = await done
+      expect(outcome.ok).toBe(false)
+      expect(outcome.partial).toBe(false)
+      expect(outcome.error?.message).toBe('The model did not start answering in time.')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

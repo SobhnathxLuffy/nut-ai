@@ -589,7 +589,7 @@ export default function DishComposerScreen() {
                      ))}
                    </View>
                    <Pressable accessibilityRole="button" accessibilityLabel="Save custom ingredient" disabled={creatingIngredient} onPress={() => handleCreateIngredient(c.id)} style={[s.btn, { backgroundColor: t.protein, borderColor: t.protein, paddingVertical: 8 }]}>
-                     <Text style={{ color: '#fff', textAlign: 'center', fontWeight: '700' }}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
+                     <Text style={{ color: t.bg, textAlign: 'center', fontWeight: '700' }}>{creatingIngredient ? 'Saving…' : 'Save ingredient (searchable afterwards)'}</Text>
                    </Pressable>
                  </View>
                )}
@@ -611,7 +611,7 @@ export default function DishComposerScreen() {
               onPress={() => { setFatOptionId(item.optionId); setFatGrams(String(item.defaultGrams)) }}
               style={[s.chip, { backgroundColor: fatOptionId === item.optionId ? t.protein : t.bg, borderColor: t.border }]}
             >
-              <Text style={[type.micro, { color: fatOptionId === item.optionId ? '#fff' : t.text }]}>{item.label}</Text>
+              <Text style={[type.micro, { color: fatOptionId === item.optionId ? t.bg : t.text }]}>{item.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -631,7 +631,7 @@ export default function DishComposerScreen() {
           onPress={() => setUseRecipeYield(true)}
           style={[s.chip, { backgroundColor: useRecipeYield ? t.protein : t.bg, borderColor: t.border, alignSelf: 'flex-start', marginHorizontal: space.md, marginTop: space.xs }]}
         >
-          <Text style={[type.micro, { color: useRecipeYield ? '#fff' : t.text, fontWeight: '700' }]}>
+          <Text style={[type.micro, { color: useRecipeYield ? t.bg : t.text, fontWeight: '700' }]}>
             ✓ Verified recipe yield ×{recipeYield} (matches curated numbers)
           </Text>
         </Pressable>
@@ -648,7 +648,7 @@ export default function DishComposerScreen() {
                 onPress={() => { setCookingMethod(item.method); setUseRecipeYield(false) }}
                 style={[s.chip, { backgroundColor: active ? t.protein : t.bg, borderColor: t.border }]}
               >
-                <Text style={[type.micro, { color: active ? '#fff' : t.text }]}>{item.label}</Text>
+                <Text style={[type.micro, { color: active ? t.bg : t.text }]}>{item.label}</Text>
               </Pressable>
             )
           })}

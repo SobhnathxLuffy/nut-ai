@@ -559,7 +559,7 @@ export async function runCorrectionIntent(
       // Google uses a different schema for messages
       payload.messages = undefined as any
       ;(payload as any).contents = [
-        { role: 'user', parts: [{ text: req.systemPrompt + "\\n\\n" + req.userPrompt }] }
+        { role: 'user', parts: [{ text: req.systemPrompt + "\n\n" + req.userPrompt }] }
       ]
       ;(payload as any).generationConfig = { responseMimeType: "application/json" }
     } else if (req.provider === 'anthropic') {
@@ -1005,23 +1005,37 @@ export async function runAssistantChatApiStream(
       resolve(outcome)
     }
 
-    let stall: ReturnType<typeof setTimeout> | null = req.stallTimeoutMs
-      ? setTimeout(() => {
-          if (processed === 0) {
-            xhr.abort()
-            finish({
-              ok: false,
-              text: '',
-              reasoning: '',
-              error: {
-                kind: 'error-retryable',
-                message: 'The model did not start answering in time.',
-                retryable: true,
-              },
-            })
-          }
-        }, req.stallTimeoutMs)
-      : null
+    let stall: ReturnType<typeof setTimeout> | null = null
+    // Set just before the stall guard aborts the request, so onabort — which
+    // abort() fires synchronously — defers to the stall's own finish() and the
+    // real diagnosis is not replaced by 'cancelled'.
+    let stallFired = false
+    // Arms (or re-arms) the stall timer. Fired whenever NO bytes arrive for
+    // stallTimeoutMs — either before the first byte (gateway accepted the
+    // connection and went silent) or mid-stream (gateway stalled partway).
+    const armStall = () => {
+      if (!req.stallTimeoutMs) return
+      if (stall) clearTimeout(stall)
+      stall = setTimeout(() => {
+        stallFired = true
+        xhr.abort()
+        finish({
+          ok: false,
+          text,
+          reasoning,
+          partial: text.length > 0,
+          error: {
+            kind: 'error-retryable',
+            message:
+              processed === 0
+                ? 'The model did not start answering in time.'
+                : 'The answer stalled partway through.',
+            retryable: true,
+          },
+        })
+      }, req.stallTimeoutMs)
+    }
+    armStall()
 
     if (handlers.abortRef) handlers.abortRef.current = () => xhr.abort()
 
@@ -1034,10 +1048,9 @@ export async function runAssistantChatApiStream(
       const full = xhr.responseText
       const chunk = full.slice(processed)
       processed = full.length
-      if (stall) {
-        clearTimeout(stall)
-        stall = null
-      }
+      // Re-arm: a fresh stallTimeoutMs window for every received chunk, so
+      // mid-stream stalls are covered too, not just the pre-first-byte case.
+      armStall()
       if (full.length > STREAM_MAX_BYTES) {
         tooLarge = true
         xhr.abort()
@@ -1048,8 +1061,16 @@ export async function runAssistantChatApiStream(
       if (!sawSse && !nonSseBody) {
         const head = chunk.trimStart()
         // SSE events open with "data:"/"event:" (or a leading ":" comment).
-        if (head.startsWith('data:') || head.startsWith('event:') || head.startsWith(':')) sawSse = true
-        else nonSseBody = chunk
+        if (head.startsWith('data:') || head.startsWith('event:') || head.startsWith(':')) {
+          sawSse = true
+        } else {
+          // Plain JSON body — the gateway ignored stream:true. Snapshot the
+          // first chunk only; settleFromFullBody parses the accumulated body
+          // once load fires. (Assigning AND appending here would double the
+          // first chunk — the 'AB' -> 'AAB' bug.)
+          nonSseBody = chunk
+          return
+        }
       }
       if (nonSseBody) {
         nonSseBody += chunk
@@ -1144,6 +1165,9 @@ export async function runAssistantChatApiStream(
         stall = null
       }
       if (settled) return
+      // The stall guard aborted: it finishes with the real diagnosis right
+      // after abort() returns — do not race it with 'cancelled'.
+      if (stallFired) return
       if (tooLarge) {
         finish({
           ok: false,

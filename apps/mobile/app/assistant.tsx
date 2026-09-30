@@ -10,7 +10,7 @@ import {
 } from '../src/inference/pathA/assistant'
 import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
 import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard } from '../src/components/assistant/AssistantCards'
-import { useTheme } from '../src/theme/ThemeProvider'
+import { useTheme, useMotionScale } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
 import { router, useFocusEffect } from 'expo-router'
 import { encodeFoodReview } from '../src/data/food-review'
@@ -126,6 +126,10 @@ async function resolveCorrectionFood(query: string, grams?: number): Promise<Man
 export default function AssistantScreen() {
   const t = useTheme()
   const insets = useSafeAreaInsets()
+  const motionScale = useMotionScale()
+  // Chat autoscroll (P1-7): every content-size change — a new message, or a
+  // streaming bubble growing word by word — pins the view to the newest line.
+  const scrollRef = useRef<ScrollView>(null)
   const [messages, setMessages] = useState<any[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -275,7 +279,17 @@ export default function AssistantScreen() {
       let streamError: string | null = null
 
       const stream = await runAssistantChatApiStream(
-        { provider: configuredProvider, model, systemPrompt: system, userPrompt: user, history: replay, baseUrl },
+        {
+          provider: configuredProvider,
+          model,
+          systemPrompt: system,
+          userPrompt: user,
+          history: replay,
+          baseUrl,
+          // Abort if the gateway sends nothing for 45s — before the first byte
+          // or mid-stream — so the chat never hangs on 'Thinking…' forever.
+          stallTimeoutMs: 45_000,
+        },
         { onDelta: patchStream, abortRef: abortRef.current },
       )
       if (stream.ok) {
@@ -464,7 +478,14 @@ export default function AssistantScreen() {
           </Pressable>
         ) : null}
       </View>
-      <ScrollView style={s.scroll}>
+      <ScrollView
+        ref={scrollRef}
+        style={s.scroll}
+        onContentSizeChange={() =>
+          // Animated scrolling respects reduce-motion (motionScale 0 = jump cut).
+          scrollRef.current?.scrollToEnd({ animated: motionScale !== 0 })
+        }
+      >
         {messages.map((m, i) => {
           // While a tool-call JSON is still streaming in, show a quiet
           // "preparing" state instead of raw JSON pouring into the bubble.
@@ -664,7 +685,7 @@ const s = StyleSheet.create({
     paddingVertical: space.xs + 2,
     borderRadius: radius.pill,
     borderWidth: 1,
-    minHeight: 32,
+    minHeight: 44,
     justifyContent: 'center',
   },
   scroll: { flex: 1, padding: space.md },
@@ -677,7 +698,7 @@ const s = StyleSheet.create({
     paddingVertical: space.sm,
     borderRadius: radius.md,
     alignItems: 'center',
-    minHeight: 40,
+    minHeight: 44,
     justifyContent: 'center',
   },
   inputRow: { flexDirection: 'row', padding: space.md, gap: space.sm },

@@ -61,6 +61,9 @@ const config: ExpoConfig = {
 
   android: {
     package: BUNDLE_ID,
+    // Native static config: one fixed colour baked into the APK at build time —
+    // the runtime theme system cannot apply here. Must stay a literal (QA P2-20
+    // exemption), and matches palette.ink900 in src/theme/tokens.ts.
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B0B0F' },
     permissions: ['android.permission.CAMERA'],
     // No Google Play Services dependency: all notifications are local, there is

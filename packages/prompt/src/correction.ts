@@ -11,7 +11,7 @@ export function buildCorrectionPrompt(
 The user is correcting an existing logged meal.
 
 Current items in the meal:
-${currentRows.map(r => "- [ID: " + r.id + "] " + r.displayName + " (" + r.grams + "g)").join('\\n')}
+${currentRows.map(r => "- [ID: " + r.id + "] " + r.displayName + " (" + r.grams + "g)").join('\n')}
 
 Analyze the user's correction request and output a JSON object matching the CorrectionIntent schema.
 Operations:

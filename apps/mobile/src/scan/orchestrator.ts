@@ -460,6 +460,9 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
     provider,
     { model, itemName: `the packaged food product with barcode (GTIN/UPC/EAN) ${gtin}`, brand: null },
     credential,
+    fetch,
+    30_000,
+    await customProviderBaseUrl(),
   )
   const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
   const opt = parsed?.success && parsed.data.found ? parsed.data.options[0] : undefined
@@ -675,6 +678,9 @@ export async function startReceiptScan(photoUri: string): Promise<void> {
         provider,
         { model, itemName: item.name, brand: merchant },
         credential,
+        fetch,
+        30_000,
+        await customProviderBaseUrl(),
       ),
     })),
   )
@@ -746,7 +752,14 @@ export async function lookupOther(rowId: string, typed: string): Promise<void> {
   const model = (await setting('provider_model')) || cheapestModel(provider).id
 
   setWebLookup(rowId, { status: 'running' })
-  const lookup = await runWebLookup(provider, { model, itemName: typed, brand: null }, credential)
+  const lookup = await runWebLookup(
+    provider,
+    { model, itemName: typed, brand: null },
+    credential,
+    fetch,
+    30_000,
+    await customProviderBaseUrl(),
+  )
   if (!lookup.ok) {
     setWebLookup(rowId, { status: 'failed' })
     return
