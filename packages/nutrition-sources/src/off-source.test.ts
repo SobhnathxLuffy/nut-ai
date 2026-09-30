@@ -79,4 +79,49 @@ describe('OpenFoodFactsSource', () => {
     await vi.advanceTimersByTimeAsync(8_001)
     await expect(pending).resolves.toBeNull()
   })
+
+  it('computes kcal from a COMPLETE macro profile when the energy field is missing', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        status: 1,
+        product: {
+          product_name: 'Macros only',
+          nutriments: { proteins_100g: 10, carbohydrates_100g: 60, fat_100g: 20 },
+        },
+      }),
+    })
+    const source = new OpenFoodFactsSource()
+    const res = await source.resolveByBarcode('12345678')
+    // 4*60 + 4*10 + 9*20 = 460
+    expect(res?.energyKcal).toBe(460)
+  })
+
+  it('stays silent on energy when the macro profile is INCOMPLETE (no fake precision)', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        status: 1,
+        product: { product_name: 'Carbs only', nutriments: { carbohydrates_100g: 60 } },
+      }),
+    })
+    const source = new OpenFoodFactsSource()
+    expect((await source.resolveByBarcode('12345678'))?.energyKcal).toBeNull()
+  })
+
+  it('parses a gram weight out of serving_size when serving_quantity is absent', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        status: 1,
+        product: {
+          product_name: 'Biscuits',
+          nutriments: { 'energy-kcal_100g': 480, proteins_100g: 6, carbohydrates_100g: 64, fat_100g: 20 },
+          serving_size: '60 g',
+        },
+      }),
+    })
+    const source = new OpenFoodFactsSource()
+    expect((await source.resolveByBarcode('12345678'))?.servingSizeG).toBe(60)
+  })
 })

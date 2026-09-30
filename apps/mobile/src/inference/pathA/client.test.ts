@@ -1,7 +1,14 @@
 vi.mock('../credentials', () => ({ loadCredential: vi.fn(() => 'fake-key') }))
 import { describe, expect, it, vi } from 'vitest'
 import { buildOpenAIRequest } from '@nutai/prompt'
-import { runLabelScan, runScan, runScanWithFallback, runWebLookup } from './client'
+import {
+  createSseDeltaParser,
+  extractFullCompletion,
+  runLabelScan,
+  runScan,
+  runScanWithFallback,
+  runWebLookup,
+} from './client'
 import { withBaseUrl } from '../base-url'
 
 /**
@@ -362,5 +369,103 @@ describe('wire-schema sanitation and the instruction-contract fallback', () => {
       expect(res.error.kind).toBe('schema-violation')
       expect(res.error.message).toContain('unexpected shape')
     }
+  })
+})
+
+describe('runWebLookup on a reseller base URL', () => {
+  it('openai + custom base uses chat completions (NOT the Responses API) and parses the chat envelope', async () => {
+    const { calls, impl } = scripted([
+      {
+        status: 200,
+        body: JSON.stringify({
+          choices: [{ message: { content: '{"found":true,"source_url":null,"question":null,"options":[{"label":"Maggi Masala","serving_g":70,"serving_desc":null,"calories_kcal":310,"protein_g":9,"carbs_g":45,"fat_g":11,"fiber_g":2,"sodium_mg":800}]}' } }],
+        }),
+      },
+    ])
+    const r = await runWebLookup(
+      'openai',
+      { model: 'gpt-4o-mini', itemName: 'Maggi noodles', brand: null },
+      { kind: 'api_key', value: 'k' },
+      impl,
+      30_000,
+      'https://aicredits.in/v1',
+    )
+    expect(r.ok).toBe(true)
+    expect((r.raw as any).found).toBe(true)
+    expect(calls[0]!.url).toBe('https://aicredits.in/v1/chat/completions')
+    // The no-search-tool caveat must be attached so the model cannot
+    // hallucinate a source URL.
+    expect(calls[0]!.body.messages[0].content).toContain('NO live search tool')
+    expect(calls[0]!.body.response_format).toEqual({ type: 'json_object' })
+  })
+
+  it('openai WITHOUT a base URL keeps the official Responses API with the search tool', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: JSON.stringify({ output: [{ type: 'message', content: [{ type: 'output_text', text: '{"found":false,"source_url":null,"question":null,"options":[]}' }] }] }) },
+    ])
+    await runWebLookup('openai', { model: 'm', itemName: 'x', brand: null }, { kind: 'api_key', value: 'k' }, impl)
+    expect(calls[0]!.url).toContain('/v1/responses')
+    expect(calls[0]!.body.tools).toEqual([{ type: 'web_search' }])
+  })
+})
+
+describe('createSseDeltaParser', () => {
+  it('openai: content and reasoning_content deltas survive arbitrary chunk splits', () => {
+    const parse = createSseDeltaParser('openai')
+    const stream =
+      'data: {"choices":[{"delta":{"reasoning_content":"thinking ha"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Hel"}}]}\n' +
+      'data: {"choices":[{"delta":{"content":"lo"}}]}\n' +
+      'data: {"choices":[{"delta":{"reasoning":"more thought"}}]}\n' +
+      'data: [DONE]\n'
+    // Feed in awkward slices.
+    let text = ''
+    let reasoning = ''
+    for (const c of [stream.slice(0, 37), stream.slice(37, 90), stream.slice(90)]) {
+      for (const d of parse(c)) {
+        text += d.text ?? ''
+        reasoning += d.reasoning ?? ''
+      }
+    }
+    expect(reasoning).toBe('thinking hamore thought')
+    expect(text).toBe('Hello')
+  })
+
+  it('anthropic: text_delta and thinking_delta land in separate lanes', () => {
+    const parse = createSseDeltaParser('anthropic')
+    const deltas = parse(
+      'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}\n\n' +
+        'event: content_block_delta\ndata: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}\n\n',
+    )
+    expect(deltas).toEqual([{ reasoning: 'hmm' }, { text: 'Hi' }])
+  })
+
+  it('google: thought-flagged parts go to reasoning, plain parts to text', () => {
+    const parse = createSseDeltaParser('google')
+    const deltas = parse(
+      'data: {"candidates":[{"content":{"parts":[{"text":"deep thought","thought":true}]}}]}\n\n' +
+        'data: {"candidates":[{"content":{"parts":[{"text":"Answer"}]}}]}\n\n',
+    )
+    expect(deltas).toEqual([{ reasoning: 'deep thought' }, { text: 'Answer' }])
+  })
+})
+
+describe('extractFullCompletion — gateways that ignore stream:true', () => {
+  it('openai: pulls text AND reasoning_content out of a plain completion body', () => {
+    const d = extractFullCompletion('openai', {
+      choices: [{ message: { content: 'Answer here', reasoning_content: 'thought chain' } }],
+    })
+    expect(d).toEqual({ text: 'Answer here', reasoning: 'thought chain' })
+  })
+
+  it('anthropic: concatenates text and thinking blocks', () => {
+    const d = extractFullCompletion('anthropic', {
+      content: [
+        { type: 'thinking', thinking: 'plan' },
+        { type: 'text', text: 'Part 1' },
+        { type: 'text', text: ' + Part 2' },
+      ],
+    })
+    expect(d).toEqual({ text: 'Part 1 + Part 2', reasoning: 'plan' })
   })
 })

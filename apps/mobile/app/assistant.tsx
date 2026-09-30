@@ -3,10 +3,12 @@ import { StyleSheet, Text, View, TextInput, ScrollView, Pressable } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   runAssistantChat,
+  buildAssistantTurn,
+  parseAssistantReply,
   applyProposal,
   assistantGlobalStatus,
 } from '../src/inference/pathA/assistant'
-import { runAssistantChatApi, type ChatTurn } from '../src/inference/pathA/client'
+import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
 import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard } from '../src/components/assistant/AssistantCards'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
@@ -15,6 +17,8 @@ import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/date-utils'
 import { customProviderBaseUrl, db as openUserDb, setting, putSetting } from '../src/data/repo'
 import { loadCorrectionRows, applyLoggedMealCorrections, type LoggedCorrectionWrite } from '../src/data/log-corrections'
+import { expandProposalIngredients } from '../src/data/proposal-ingredients'
+import { describeActiveModel, composeModelLine } from '../src/inference/active-model'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { loadFood, resolveByText } from '@nutai/resolver'
 import type { CorrectionIntent } from '@nutai/core-schema'
@@ -25,19 +29,26 @@ import type { ManualFoodSelection } from '../src/data/manual-food'
 const HISTORY_SETTING = 'assistant_history'
 const HISTORY_MAX_TURNS = 40
 
+// Chat context rides along with every send. The full persisted memory stays
+// at 40 turns, but the PROVIDER only ever sees the last 16 — older turns add
+// tokens the model barely uses, and the today-context block already carries
+// everything current.
+const HISTORY_MAX_REPLAY = 16
+
 async function resolveMealProposal(data: any): Promise<{ selection: ManualFoodSelection; selections: ManualFoodSelection[] }> {
   const [handle, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), openUserDb()])
   const sourceContext = { ifctDb, userDb }
   const resolvedSelections: ManualFoodSelection[] = []
 
-  for (const ing of (data.ingredients || [])) {
-    const grams = Number(ing.grams) || 100
+  // "2 rotis" expands to 2 rows of 40 g each (unit_count + per-unit grams);
+  // bowls and total-weight foods stay one row.
+  for (const ing of expandProposalIngredients(data.ingredients)) {
     const r = await resolveByText(handle, {
       canonicalFoodKey: ing.name,
       observedBrand: null,
       prepFacet: null,
       modelCategory: null,
-      estimatedGrams: grams,
+      estimatedGrams: ing.perUnitGrams,
     }, sourceContext)
 
     const matchCandidate = r.outcome.kind === 'auto_accept'
@@ -51,8 +62,9 @@ async function resolveMealProposal(data: any): Promise<{ selection: ManualFoodSe
       if (resolved) {
         const sel = await resolveSelection(handle, matchCandidate, resolved)
         sel.displayName = ing.name
-        sel.grams = grams
-        resolvedSelections.push(sel)
+        for (let row = 0; row < ing.rows; row++) {
+          resolvedSelections.push({ ...sel, grams: ing.perUnitGrams })
+        }
         continue
       }
     }
@@ -125,6 +137,38 @@ export default function AssistantScreen() {
   // provider; messages is what the user sees.
   const historyRef = useRef<ChatTurn[]>([])
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  // Word-by-word streaming: the in-flight request can be aborted when the user
+  // leaves the screen or starts over.
+  const abortRef = useRef<{ current: null | (() => void) }>({ current: null })
+  const [modelLine, setModelLine] = useState('')
+  const [openReasoning, setOpenReasoning] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    // Leaving the screen mid-stream releases the request.
+    const aborts = abortRef
+    return () => {
+      aborts.current.current?.()
+    }
+  }, [])
+
+  useFocusEffect(
+    useCallback(() => {
+      void describeActiveModel('chat').then((line) => setModelLine(line ?? ''))
+    }, [])
+  )
+
+  const closeAssistant = () => {
+    abortRef.current.current?.()
+    try {
+      if (typeof (router as any).canDismiss === 'function' && router.canDismiss()) {
+        router.back()
+        return
+      }
+    } catch {
+      // Fall through to the plain navigate below.
+    }
+    router.replace('/')
+  }
 
   useEffect(() => {
     let live = true
@@ -183,8 +227,7 @@ export default function AssistantScreen() {
     if (!input.trim() || loading) return
     const text = input.trim()
     setInput('')
-    const msgId = Date.now().toString()
-    setMessages(prev => [...prev, { id: msgId + '_user', role: 'user', content: text }])
+    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }])
     setLoading(true)
 
     try {
@@ -206,37 +249,90 @@ export default function AssistantScreen() {
         (await setting('provider_model')) ||
         cheapestModel(configuredProvider).id
       const baseUrl = await customProviderBaseUrl()
+      setModelLine(composeModelLine(model, baseUrl, configuredProvider))
 
-      // Multi-turn memory: every prior persisted text turn rides along.
-      const res = await runAssistantChat(text, async (system, user, history) => {
-        const r = await runAssistantChatApi({
-          provider: configuredProvider,
-          model,
-          systemPrompt: system,
-          userPrompt: user,
-          history,
-          baseUrl,
-        })
-        if (!r?.ok) throw new Error(r.error?.message || 'API failed')
-        return r.text
-      }, historyRef.current)
+      // The streaming bubble exists from the moment the send happens — deltas
+      // patch it in place, word by word.
+      const aiMsgId = (Date.now() + 1).toString()
+      setMessages(prev => [...prev, { id: aiMsgId, role: 'assistant', text: '', reasoning: '', streaming: true }])
+      const patchStream = (d: { text?: string; reasoning?: string }) =>
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === aiMsgId
+              ? {
+                  ...m,
+                  text: d.text ? (m.text || '') + d.text : m.text,
+                  reasoning: d.reasoning ? (m.reasoning || '') + d.reasoning : m.reasoning,
+                }
+              : m,
+          ),
+        )
 
-      const aiMsgId = Date.now().toString()
+      const { system, user } = await buildAssistantTurn(text)
+      const replay = historyRef.current.slice(-HISTORY_MAX_REPLAY)
+
+      let res = await parseAssistantReply('')
+      let streamError: string | null = null
+
+      const stream = await runAssistantChatApiStream(
+        { provider: configuredProvider, model, systemPrompt: system, userPrompt: user, history: replay, baseUrl },
+        { onDelta: patchStream, abortRef: abortRef.current },
+      )
+      if (stream.ok) {
+        res = await parseAssistantReply(stream.text)
+      } else if (stream.text.trim()) {
+        // Mid-stream drop with visible content: keep what arrived rather than
+        // discarding a half-read answer.
+        res = await parseAssistantReply(stream.text)
+        streamError = stream.error?.message || 'The connection dropped mid-answer.'
+      } else {
+        // Nothing streamed (no SSE support, dead gateway, empty stream) — the
+        // legacy non-streaming chain still answers, with its provider fallbacks.
+        const legacy = await runAssistantChat(text, async (sys, usr, history) => {
+          const r = await runAssistantChatApi({
+            provider: configuredProvider,
+            model,
+            systemPrompt: sys,
+            userPrompt: usr,
+            history: (history ?? []).slice(-HISTORY_MAX_REPLAY),
+            baseUrl,
+          })
+          if (!r?.ok) throw new Error(r.error?.message || 'API failed')
+          return r.text
+        }, historyRef.current)
+        res = legacy
+      }
+
       if (res.toolCard?.tool_name?.startsWith('propose_') || res.toolCard?.tool_name === 'correct_logged_meal') {
         setProposalStatus(prev => ({ ...prev, [aiMsgId]: 'PROPOSED' }))
       }
-      setMessages(prev => [...prev, { id: aiMsgId, role: 'assistant', ...res }])
+      const finalText = res.text ?? ''
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === aiMsgId
+            ? {
+                ...m,
+                streaming: false,
+                text: streamError ? `${finalText}${finalText ? '\n\n' : ''}${streamError}` : finalText,
+                reasoning: stream.reasoning || (m.reasoning ?? ''),
+                toolCard: res.toolCard,
+              }
+            : m,
+        ),
+      )
 
       // Persist the exchange as plain text turns; tool-card-only replies leave
-      // no turn (normalizeHistory merges whatever comes next).
+      // no turn (normalizeHistory merges whatever comes next). Reasoning is
+      // display-only and never replayed to the provider.
       persistHistory([
         ...historyRef.current,
         { role: 'user', content: text },
-        ...(res.text?.trim() ? [{ role: 'assistant' as const, content: res.text.trim() }] : []),
+        ...(finalText.trim() ? [{ role: 'assistant' as const, content: finalText.trim() }] : []),
       ])
     } catch (e: any) {
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', text: e?.message || 'Sorry, an error occurred.' }])
     } finally {
+      abortRef.current.current = null
       setLoading(false)
     }
   }
@@ -332,10 +428,30 @@ export default function AssistantScreen() {
     }
   }
 
+  const toggleReasoning = (id: string) =>
+    setOpenReasoning(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
   return (
     <View style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={s.headerRow}>
-        <Text style={[s.header, { color: t.text }]}>AI Assistant</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close assistant"
+          onPress={closeAssistant}
+          hitSlop={space.sm}
+          style={[s.closeBtn, { borderColor: t.border }]}
+        >
+          <Text style={{ color: t.textMuted, fontSize: 18, lineHeight: 22 }}>×</Text>
+        </Pressable>
+        <View style={s.headerCenter}>
+          <Text style={[s.header, { color: t.text }]}>AI Assistant</Text>
+          {modelLine ? <Text style={[type.micro, { color: t.textFaint, marginTop: 1 }]}>{modelLine}</Text> : null}
+        </View>
         {historyLoaded && messages.length > 0 ? (
           <Pressable
             accessibilityRole="button"
@@ -349,10 +465,29 @@ export default function AssistantScreen() {
         ) : null}
       </View>
       <ScrollView style={s.scroll}>
-        {messages.map((m, i) => (
+        {messages.map((m, i) => {
+          // While a tool-call JSON is still streaming in, show a quiet
+          // "preparing" state instead of raw JSON pouring into the bubble.
+          const hidesRawToolJson = !!m.streaming && (m.text || '').trimStart().startsWith('{')
+          const thinkingOnly = !!m.streaming && !!m.reasoning && !m.text
+          return (
           <View key={m.id || i} style={[s.bubble, m.role === 'user' ? s.userBubble : s.aiBubble, { backgroundColor: m.role === 'user' ? t.text : t.bgElevated }]}>
             {m.content && <Text style={{ color: m.role === 'user' ? t.bgElevated : t.text }}>{m.content}</Text>}
-            {m.text && <Text style={{ color: m.role === 'user' ? t.bgElevated : t.text }}>{m.text}</Text>}
+            {thinkingOnly ? <Text style={[type.caption, { color: t.textMuted }]}>Thinking…</Text> : null}
+            {!thinkingOnly && m.reasoning ? (
+              <View style={{ marginTop: space.xs }}>
+                <Pressable accessibilityRole="button" accessibilityLabel="Toggle reasoning" onPress={() => toggleReasoning(m.id)} hitSlop={space.sm}>
+                  <Text style={[type.micro, { color: t.textFaint }]}>
+                    {openReasoning.has(m.id) ? '▾ Hide thinking' : '▸ Show thinking'}
+                  </Text>
+                </Pressable>
+                {openReasoning.has(m.id) ? (
+                  <Text style={[type.micro, { color: t.textFaint, marginTop: space.xs, lineHeight: 16 }]}>{m.reasoning}</Text>
+                ) : null}
+              </View>
+            ) : null}
+            {m.text && !hidesRawToolJson && <Text style={{ color: m.role === 'user' ? t.bgElevated : t.text }}>{m.text}</Text>}
+            {hidesRawToolJson && <Text style={[type.caption, { color: t.textMuted }]}>Preparing a proposal…</Text>}
             {m.toolCard?.tool_name === 'get_last_workout' && <LastWorkoutCard data={m.toolCard.data} />}
             {m.toolCard?.tool_name === 'get_nutrition_summary' && <NutritionSummaryCard data={m.toolCard.data} />}
             {m.toolCard?.tool_name === 'propose_meal' && (
@@ -380,7 +515,8 @@ export default function AssistantScreen() {
               />
             )}
           </View>
-        ))}
+          )
+        })}
       </ScrollView>
       <View style={s.inputRow}>
         <TextInput
@@ -506,8 +642,21 @@ function CorrectionProposalCard({
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: space.md, position: 'relative' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: space.md, position: 'relative', minHeight: 56 },
+  headerCenter: { alignItems: 'center' },
   header: { ...type.title, fontWeight: 'bold', textAlign: 'center' },
+  closeBtn: {
+    position: 'absolute',
+    left: space.md,
+    top: '50%',
+    marginTop: -16,
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   newChat: {
     position: 'absolute',
     right: space.md,

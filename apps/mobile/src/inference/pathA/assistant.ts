@@ -8,19 +8,31 @@ import { dateOffset } from '../../data/shortcuts'
 import type { ChatTurn } from './client'
 
 // A lightweight chat execution loop
-export async function runAssistantChat(
+export type AssistantReply = { text?: string; toolCard?: AssistantToolCall & { data: any } }
+
+/**
+ * The prompt half of one chat turn: system prompt + today-context + user text.
+ * Split out of runAssistantChat so the UI can drive its own STREAMING call and
+ * still share the exact same prompt assembly.
+ */
+export async function buildAssistantTurn(
   text: string,
-  executeApi: (system: string, user: string, history?: ChatTurn[]) => Promise<string>,
-  history: ChatTurn[] = []
-): Promise<{ text?: string, toolCard?: AssistantToolCall & { data: any } }> {
+  now: number = Date.now(),
+): Promise<{ system: string; user: string }> {
   // Today's log/goals ride along with every message — the model must never
   // answer "what did I eat" from memory when the app's own data is one block away.
-  const context = await buildTodayContext()
-  const userPrompt = context ? `${context}\n\n[USER MESSAGE]\n${text}` : text
+  const context = await buildTodayContext(now)
+  return {
+    system: ASSISTANT_SYSTEM_PROMPT,
+    user: context ? `${context}\n\n[USER MESSAGE]\n${text}` : text,
+  }
+}
 
-  // First, we call the API to see if it wants to use a tool or answer text.
-  const responseText = await executeApi(ASSISTANT_SYSTEM_PROMPT, userPrompt, history)
-
+/**
+ * The reply half of one chat turn: a tool call JSON is executed against local
+ * data and becomes a card; anything else is the visible answer text.
+ */
+export async function parseAssistantReply(responseText: string): Promise<AssistantReply> {
   try {
     const jsonStr = extractJson(responseText)
     if (jsonStr) {
@@ -30,11 +42,22 @@ export async function runAssistantChat(
         return { toolCard: { ...parsed.data, data } }
       }
     }
-  } catch (e) { console.error("Error", e)
+  } catch (e) {
+    console.error('Error', e)
     // If it's not valid JSON or something else, fall through
   }
-
   return { text: responseText.trim() }
+}
+
+export async function runAssistantChat(
+  text: string,
+  executeApi: (system: string, user: string, history?: ChatTurn[]) => Promise<string>,
+  history: ChatTurn[] = []
+): Promise<AssistantReply> {
+  // First, we call the API to see if it wants to use a tool or answer text.
+  const { system, user } = await buildAssistantTurn(text)
+  const responseText = await executeApi(system, user, history)
+  return parseAssistantReply(responseText)
 }
 
 function extractJson(text: string): string | null {

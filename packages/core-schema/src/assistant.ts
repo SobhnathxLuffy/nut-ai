@@ -12,8 +12,13 @@ export const ProposeMealArgsZ = z.object({
   name: z.string().describe('Name of the meal being logged'),
   ingredients: z.array(z.object({
     name: z.string().describe('Name of the food item'),
-    grams: z.number().describe('Estimated mass in grams'),
-  })).describe('List of ingredients in this meal'),
+    grams: z.number().describe('Weight in grams — of ONE unit when unit_count is above 1, otherwise the total'),
+    // Counted foods ("2 rotis") arrive as unit_count: 2 with per-unit grams.
+    // Optional with a default of 1 so every historical payload still parses.
+    unit_count: z.number().int().positive().max(12).optional().describe(
+      'How many pieces/units the user ate; omit or use 1 for bowls, cups and total-weight foods',
+    ),
+  })).describe('Every distinct food the user wants logged, in one list'),
 })
 
 export const ProposeWorkoutRoutineArgsZ = z.object({

@@ -11,6 +11,14 @@ function finiteNumber(value: unknown): number | null {
   return null
 }
 
+/** "60 g", "60g", "60 grams", "60ml" -> 60. Anything else -> null. */
+export function parseGramsFromServingSize(value: string): number | null {
+  const m = value.trim().match(/^(\d+(?:\.\d+)?)\s*(?:g|gram|grams|ml)\b/i)
+  if (!m) return null
+  const parsed = Number(m[1])
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
 export class OpenFoodFactsSource implements NutritionSource {
   readonly id = 'off'
   readonly priority = 60
@@ -59,6 +67,29 @@ export class OpenFoodFactsSource implements NutritionSource {
         ? product['nutriments'] : {}) as Record<string, unknown>
       const sodiumG = finiteNumber(nut['sodium_100g'])
 
+      const proteinG = finiteNumber(nut['proteins_100g'])
+      const carbG = finiteNumber(nut['carbohydrates_100g'])
+      const fatG = finiteNumber(nut['fat_100g'])
+
+      // A LOT of OFF products carry a complete macro profile but no
+      // energy-kcal field — those rows used to fall through as "not found"
+      // (the orchestrator requires energyKcal). When ALL three macros are
+      // present, Atwater 4/4/9 gives an honest per-100 g figure; with a
+      // partial profile the computation would only LOOK exact, so we stay
+      // silent instead.
+      let energyKcal = finiteNumber(nut['energy-kcal_100g'])
+      if (energyKcal == null && proteinG != null && carbG != null && fatG != null) {
+        energyKcal = Math.round((4 * carbG + 4 * proteinG + 9 * fatG) * 10) / 10
+      }
+
+      // serving_quantity is usually numeric but arrives as a string on some
+      // rows; when it is absent, "serving_size: '60 g'" carries the weight.
+      const servingQuantity =
+        finiteNumber(product['serving_quantity']) ??
+        (typeof product['serving_size'] === 'string'
+          ? parseGramsFromServingSize(product['serving_size'])
+          : null)
+
       return {
         foodId: `off:${barcode}`,
         sourceId: barcode,
@@ -67,14 +98,14 @@ export class OpenFoodFactsSource implements NutritionSource {
         name: typeof product['product_name'] === 'string' ? product['product_name']
           : typeof product['product_name_en'] === 'string' ? product['product_name_en'] : 'Unknown Product',
         brand: typeof product['brands'] === 'string' ? product['brands'] : null,
-        energyKcal: finiteNumber(nut['energy-kcal_100g']),
-        proteinG: finiteNumber(nut['proteins_100g']),
-        fatG: finiteNumber(nut['fat_100g']),
-        carbG: finiteNumber(nut['carbohydrates_100g']),
+        energyKcal,
+        proteinG,
+        fatG,
+        carbG,
         fiberG: finiteNumber(nut['fiber_100g']),
         sugarG: finiteNumber(nut['sugars_100g']),
         sodiumMg: sodiumG == null ? null : sodiumG * 1000,
-        servingSizeG: finiteNumber(product['serving_quantity']),
+        servingSizeG: servingQuantity,
         servingDesc: typeof product['serving_size'] === 'string' ? product['serving_size'] : null,
         license: 'odbl-1.0',
         source: 'off'

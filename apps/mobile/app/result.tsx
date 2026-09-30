@@ -23,6 +23,7 @@ import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
+import { describeActiveModel } from '../src/inference/active-model'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { isQuickEligible } from '../src/scan/quick-mode'
 import {
@@ -39,6 +40,31 @@ import {
 } from '../src/scan/store'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+
+/**
+ * The small "which model is reading this photo" line. BYO-key means the user
+ * chose (and pays) a specific model — the scan screen should show exactly what
+ * runs, the same way the assistant header does.
+ */
+function ScanModelCaption() {
+  const theme = useTheme()
+  const [line, setLine] = useState('')
+  useEffect(() => {
+    let live = true
+    void describeActiveModel('scan').then((m) => {
+      if (live) setLine(m ?? '')
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  if (!line) return null
+  return (
+    <Text style={[type.micro, { color: theme.textFaint, marginTop: space.xs, textAlign: 'center' }]}>
+      Scanning with {line}
+    </Text>
+  )
+}
 
 /**
  * The result screen.
@@ -99,6 +125,7 @@ export default function Result() {
         <Image source={{ uri: phase.photoUri }} style={styles.photo} />
         <ActivityIndicator color={theme.textMuted} style={{ marginTop: space.xl }} />
         <Text style={[type.heading, { color: theme.text, marginTop: space.md }]}>{copy}</Text>
+        <ScanModelCaption />
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center' }]}>
           Your photo is saved — nothing is lost if this fails.
         </Text>

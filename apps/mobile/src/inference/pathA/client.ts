@@ -6,10 +6,12 @@ import {
   buildOpenAIRequest,
   buildReceiptScanRequest,
   buildTextJsonRequest,
+  buildWebLookupInstruction,
   buildWebLookupRequest,
   computeScanCost,
   cheapestModel,
   EXERCISE_ESTIMATE_PROMPT_VERSION,
+  WEB_LOOKUP_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
 import { withBaseUrl } from '../base-url'
@@ -428,12 +430,40 @@ export async function runWebLookup(
   timeoutMs = 30_000,
   baseUrl?: string | null,
 ): Promise<WebLookupOutcome> {
-  const built = buildWebLookupRequest(provider, input, credential)
+  // The OpenAI lookup rides the Responses API, which virtually no reseller
+  // proxies (aicredits, OpenRouter: 404). On a custom base URL the same
+  // instruction is sent through PLAIN chat completions instead — the model
+  // answers from what it reliably knows and is told to say found:false when
+  // unsure, which rescues major branded products without ever hallucinating a
+  // source. Official-endpoint lookups keep the real server-side search tool.
+  const onReseller = provider === 'openai' && !!baseUrl
+  const built = onReseller
+    ? {
+        url: 'https://api.openai.com/v1/chat/completions',
+        headers: {
+          authorization: `Bearer ${credential.value}`,
+          'content-type': 'application/json',
+        },
+        body: {
+          model: input.model,
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content:
+                buildWebLookupInstruction(input) +
+                '\n\nYou have NO live search tool in this conversation. Use only product nutrition facts ' +
+                'you are highly confident about from training (major brands, chain restaurants, packaged staples). ' +
+                'When you are not confident the product matches, set "found" to false. NEVER invent a source_url — set it to null.',
+            },
+          ],
+          response_format: { type: 'json_object' },
+        },
+        promptVersion: WEB_LOOKUP_PROMPT_VERSION,
+      }
+    : buildWebLookupRequest(provider, input, credential)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
-  // NOTE: the OpenAI lookup rides the Responses API, which most resellers do
-  // not proxy. A reseller 404 here fails gracefully in the background — the
-  // scan itself is never affected.
   const url = withBaseUrl(built.url, baseUrl)
   try {
     const res = await fetchImpl(url, {
@@ -458,9 +488,14 @@ export async function runWebLookup(
       const texts = (j.content ?? []).filter((b: any) => b?.type === 'text')
       out = texts.length ? texts[texts.length - 1].text : null
     } else if (provider === 'openai') {
-      // Responses API: output[] items; the message item holds output_text parts.
-      const msg = (j.output ?? []).find((o: any) => o?.type === 'message')
-      out = msg?.content?.map((c: any) => c?.text ?? '').join('') ?? j.output_text ?? null
+      // Chat-completions shape (official scans AND the reseller fallback above)
+      // takes priority; the Responses API shape is the official-endpoint form.
+      out =
+        j.choices?.[0]?.message?.content ??
+        (() => {
+          const msg = (j.output ?? []).find((o: any) => o?.type === 'message')
+          return msg?.content?.map((c: any) => c?.text ?? '').join('') ?? j.output_text ?? null
+        })()
     } else {
       out = (j.candidates?.[0]?.content?.parts ?? []).map((p: any) => p?.text ?? '').join('') || null
     }
@@ -668,7 +703,9 @@ export async function runAssistantChatApiSingle(
         model: payload.model,
         system: payload.messages.find((m) => m.role === 'system')?.content,
         messages: payload.messages.filter((m) => m.role !== 'system'),
-        max_tokens: 1024,
+        // 2048, not 1024: reasoning models spend the budget on thinking before
+        // the visible answer starts, and 1024 truncated exactly those answers.
+        max_tokens: 2048,
       })
     } else if (req.provider === 'google') {
       url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:generateContent?key=${cred}`
@@ -679,7 +716,8 @@ export async function runAssistantChatApiSingle(
         contents: [
           ...historyContents,
           { role: 'user', parts: [{ text: `${req.systemPrompt}\n\n${req.userPrompt}` }] }
-        ]
+        ],
+        generationConfig: { maxOutputTokens: 2048 },
       })
     } else {
       return { ok: false, error: { kind: 'error-retryable', message: 'Unsupported provider', retryable: false } }
@@ -713,4 +751,420 @@ export async function runAssistantChatApiSingle(
   } catch (e: any) {
     return { ok: false, error: { kind: 'error-retryable', message: e.message, retryable: true } }
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Streaming chat — word-by-word answers with visible reasoning.
+ *
+ * The scan path stays deliberately non-streaming (one request, one JSON
+ * object). The CHATBOT is the opposite: a silent 20-second wait reads as a
+ * broken app, and reasoning models spend most of that time thinking. Both
+ * problems share one fix — stream.
+ *
+ * Transport is XMLHttpRequest, NOT fetch: React Native's fetch cannot read an
+ * incremental body, while XHR's onprogress hands us growing responseText on
+ * every platform (RN, web, Node+undici in tests). The SSE wire formats are
+ * parsed per provider into two lanes — visible text and reasoning — because
+ * DeepSeek/Qwen/GLM-style gateways put thinking in `reasoning_content`, and
+ * showing it is the difference between "it froze" and "it's thinking".
+ * ------------------------------------------------------------------ */
+
+export interface SseDelta {
+  text?: string
+  reasoning?: string
+}
+
+/**
+ * Pure per-provider SSE delta parser. Fed raw network chunks, returns the
+ * deltas they completed. Keeps a trailing-partial-line buffer internally, so
+ * chunk boundaries can split anywhere — including mid-JSON.
+ */
+export function createSseDeltaParser(
+  provider: ProviderId,
+): (chunk: string) => SseDelta[] {
+  let rest = ''
+
+  const deltaFromOpenAi = (obj: any): SseDelta | null => {
+    const d = obj?.choices?.[0]?.delta
+    if (!d) return null
+    const text = typeof d.content === 'string' ? d.content : ''
+    // Reasoning lane: DeepSeek (reasoning_content), Qwen/GLM gateways (reasoning).
+    const reasoning =
+      typeof d.reasoning_content === 'string'
+        ? d.reasoning_content
+        : typeof d.reasoning === 'string'
+          ? d.reasoning
+          : ''
+    if (!text && !reasoning) return null
+    return text ? { text } : { reasoning }
+  }
+
+  const deltaFromAnthropic = (obj: any): SseDelta | null => {
+    if (obj?.type !== 'content_block_delta') return null
+    if (obj.delta?.type === 'text_delta' && typeof obj.delta.text === 'string') return { text: obj.delta.text }
+    if (obj.delta?.type === 'thinking_delta' && typeof obj.delta.thinking === 'string') return { reasoning: obj.delta.thinking }
+    return null
+  }
+
+  const deltasFromGoogle = (obj: any): SseDelta[] => {
+    const parts = obj?.candidates?.[0]?.content?.parts
+    if (!Array.isArray(parts)) return []
+    const out: SseDelta[] = []
+    for (const p of parts) {
+      if (typeof p?.text !== 'string' || !p.text) continue
+      // Gemini 2.5 thinking summaries arrive as parts flagged thought: true.
+      out.push(p.thought === true ? { reasoning: p.text } : { text: p.text })
+    }
+    return out
+  }
+
+  return (chunk: string): SseDelta[] => {
+    rest += chunk
+    const deltas: SseDelta[] = []
+    let nl: number
+    while ((nl = rest.indexOf('\n')) !== -1) {
+      const line = rest.slice(0, nl).replace(/\r$/, '')
+      rest = rest.slice(nl + 1)
+      if (!line.startsWith('data:')) continue
+      const payload = line.slice(5).trim()
+      if (!payload || payload === '[DONE]') continue
+      let obj: any
+      try {
+        obj = JSON.parse(payload)
+      } catch {
+        continue
+      }
+      if (provider === 'openai') {
+        const d = deltaFromOpenAi(obj)
+        if (d) deltas.push(d)
+      } else if (provider === 'anthropic') {
+        const d = deltaFromAnthropic(obj)
+        if (d) deltas.push(d)
+      } else {
+        deltas.push(...deltasFromGoogle(obj))
+      }
+    }
+    return deltas
+  }
+}
+
+/** Extract (text, reasoning) from a NON-streamed completion body — the path a
+ * gateway that ignores stream:true comes back on. */
+export function extractFullCompletion(provider: ProviderId, j: any): SseDelta {
+  if (provider === 'openai') {
+    const msg = j?.choices?.[0]?.message
+    return {
+      text: typeof msg?.content === 'string' ? msg.content : '',
+      reasoning:
+        typeof msg?.reasoning_content === 'string'
+          ? msg.reasoning_content
+          : typeof msg?.reasoning === 'string'
+            ? msg.reasoning
+            : '',
+    }
+  }
+  if (provider === 'anthropic') {
+    let text = ''
+    let reasoning = ''
+    for (const block of j?.content ?? []) {
+      if (block?.type === 'text' && typeof block.text === 'string') text += block.text
+      if (block?.type === 'thinking' && typeof block.thinking === 'string') reasoning += block.thinking
+    }
+    return { text, reasoning }
+  }
+  let text = ''
+  let reasoning = ''
+  for (const p of j?.candidates?.[0]?.content?.parts ?? []) {
+    if (typeof p?.text !== 'string') continue
+    if (p.thought === true) reasoning += p.text
+    else text += p.text
+  }
+  return { text, reasoning }
+}
+
+export interface AssistantStreamHandlers {
+  /** Called on the UI thread for every parsed delta, in arrival order. */
+  onDelta?: (d: SseDelta) => void
+  /** Filled with an abort function the caller can invoke to cancel the stream. */
+  abortRef?: { current: null | (() => void) }
+}
+
+export interface AssistantStreamOutcome {
+  ok: boolean
+  text: string
+  reasoning: string
+  error?: ScanFailure
+  /** True when at least one visible text delta arrived before the failure. */
+  partial?: boolean
+}
+
+const STREAM_MAX_BYTES = 256_000
+
+/**
+ * One streaming chat completion. NO provider fallback chain here — that lives
+ * in the caller, which decides between a failed stream and the legacy
+ * non-streaming call. XHR, because RN fetch cannot stream.
+ */
+export async function runAssistantChatApiStream(
+  req: {
+    provider: ProviderId
+    model: string
+    systemPrompt: string
+    userPrompt: string
+    history?: ChatTurn[]
+    baseUrl?: string | null
+    /** Guards the "no bytes at all" case; streaming itself is unbounded. */
+    stallTimeoutMs?: number
+  },
+  handlers: AssistantStreamHandlers = {},
+  xhrFactory: () => XMLHttpRequest = () => new XMLHttpRequest(),
+): Promise<AssistantStreamOutcome> {
+  const credObj = await loadCredential(req.provider)
+  if (!credObj || !credObj.value) {
+    return {
+      ok: false,
+      text: '',
+      reasoning: '',
+      error: { kind: 'key-invalid', message: `No credentials for ${req.provider}`, retryable: false },
+    }
+  }
+  const cred = credObj.value
+
+  const history = normalizeHistory(req.history ?? [])
+  let url = ''
+  let headers: Record<string, string> = {}
+  let bodyStr = ''
+
+  if (req.provider === 'openai') {
+    url = withBaseUrl('https://api.openai.com/v1/chat/completions', req.baseUrl)
+    headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${cred}` }
+    bodyStr = JSON.stringify({
+      model: req.model,
+      stream: true,
+      messages: [
+        { role: 'system', content: req.systemPrompt },
+        ...history.map((t) => ({ role: t.role, content: t.content })),
+        { role: 'user', content: req.userPrompt },
+      ],
+    })
+  } else if (req.provider === 'anthropic') {
+    url = 'https://api.anthropic.com/v1/messages'
+    headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': cred,
+      'anthropic-version': '2023-06-01',
+    }
+    bodyStr = JSON.stringify({
+      model: req.model,
+      system: req.systemPrompt,
+      messages: [
+        ...history.map((t) => ({ role: t.role, content: t.content })),
+        { role: 'user', content: req.userPrompt },
+      ],
+      max_tokens: 2048,
+      stream: true,
+    })
+  } else if (req.provider === 'google') {
+    url = `https://generativelanguage.googleapis.com/v1beta/models/${req.model}:streamGenerateContent?alt=sse`
+    headers = { 'Content-Type': 'application/json', 'x-goog-api-key': cred }
+    bodyStr = JSON.stringify({
+      contents: [
+        ...history.map((t) => ({
+          role: t.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: t.content }],
+        })),
+        { role: 'user', parts: [{ text: `${req.systemPrompt}\n\n${req.userPrompt}` }] },
+      ],
+      generationConfig: { maxOutputTokens: 2048 },
+    })
+  } else {
+    return {
+      ok: false,
+      text: '',
+      reasoning: '',
+      error: { kind: 'error-retryable', message: 'Unsupported provider', retryable: false },
+    }
+  }
+
+  return await new Promise<AssistantStreamOutcome>((resolve) => {
+    const xhr = xhrFactory()
+    const parse = createSseDeltaParser(req.provider)
+
+    let processed = 0
+    let text = ''
+    let reasoning = ''
+    let sawSse = false
+    let nonSseBody = ''
+    let tooLarge = false
+    let settled = false
+
+    const finish = (outcome: AssistantStreamOutcome) => {
+      if (settled) return
+      settled = true
+      if (handlers.abortRef) handlers.abortRef.current = null
+      resolve(outcome)
+    }
+
+    let stall: ReturnType<typeof setTimeout> | null = req.stallTimeoutMs
+      ? setTimeout(() => {
+          if (processed === 0) {
+            xhr.abort()
+            finish({
+              ok: false,
+              text: '',
+              reasoning: '',
+              error: {
+                kind: 'error-retryable',
+                message: 'The model did not start answering in time.',
+                retryable: true,
+              },
+            })
+          }
+        }, req.stallTimeoutMs)
+      : null
+
+    if (handlers.abortRef) handlers.abortRef.current = () => xhr.abort()
+
+    xhr.open('POST', url, true)
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+    xhr.responseType = 'text'
+
+    xhr.onprogress = () => {
+      if (settled) return
+      const full = xhr.responseText
+      const chunk = full.slice(processed)
+      processed = full.length
+      if (stall) {
+        clearTimeout(stall)
+        stall = null
+      }
+      if (full.length > STREAM_MAX_BYTES) {
+        tooLarge = true
+        xhr.abort()
+        return
+      }
+      if (!chunk) return
+
+      if (!sawSse && !nonSseBody) {
+        const head = chunk.trimStart()
+        // SSE events open with "data:"/"event:" (or a leading ":" comment).
+        if (head.startsWith('data:') || head.startsWith('event:') || head.startsWith(':')) sawSse = true
+        else nonSseBody = chunk
+      }
+      if (nonSseBody) {
+        nonSseBody += chunk
+        return
+      }
+
+      for (const d of parse(chunk)) {
+        if (d.text) text += d.text
+        if (d.reasoning) reasoning += d.reasoning
+        handlers.onDelta?.(d)
+      }
+    }
+
+    const settleFromFullBody = (status: number) => {
+      const body = nonSseBody || xhr.responseText
+      if (status >= 400) {
+        finish({ ok: false, text, reasoning, partial: text.length > 0, error: classify(status, body) })
+        return
+      }
+      let j: any
+      try {
+        j = JSON.parse(body)
+      } catch {
+        finish({
+          ok: false,
+          text,
+          reasoning,
+          partial: text.length > 0,
+          error: { kind: 'schema-violation', message: 'The provider returned malformed JSON.', retryable: false },
+        })
+        return
+      }
+      const full = extractFullCompletion(req.provider, j)
+      if (full.text) {
+        text += full.text
+        handlers.onDelta?.({ text: full.text })
+      }
+      if (full.reasoning) {
+        reasoning += full.reasoning
+        handlers.onDelta?.({ reasoning: full.reasoning })
+      }
+      finish({ ok: true, text, reasoning })
+    }
+
+    xhr.onload = () => {
+      if (stall) {
+        clearTimeout(stall)
+        stall = null
+      }
+      if (settled) return
+      if (nonSseBody || xhr.status >= 400) {
+        settleFromFullBody(xhr.status)
+        return
+      }
+      // Flush any complete final line the stream ended without a newline on.
+      for (const d of parse('\n')) {
+        if (d.text) text += d.text
+        if (d.reasoning) reasoning += d.reasoning
+        handlers.onDelta?.(d)
+      }
+      if (text.length === 0 && reasoning.length === 0) {
+        // Some gateways return 200 with an empty stream when the upstream
+        // failed. Let the caller fall back rather than render a blank bubble.
+        finish({
+          ok: false,
+          text: '',
+          reasoning: '',
+          error: { kind: 'schema-violation', message: 'The provider returned an empty stream.', retryable: true },
+        })
+        return
+      }
+      finish({ ok: true, text, reasoning })
+    }
+
+    xhr.onerror = () => {
+      if (stall) {
+        clearTimeout(stall)
+        stall = null
+      }
+      finish({
+        ok: false,
+        text,
+        reasoning,
+        partial: text.length > 0,
+        error: { kind: 'offline', message: 'No connection to the provider.', retryable: true },
+      })
+    }
+
+    xhr.onabort = () => {
+      if (stall) {
+        clearTimeout(stall)
+        stall = null
+      }
+      if (settled) return
+      if (tooLarge) {
+        finish({
+          ok: false,
+          text,
+          reasoning,
+          partial: text.length > 0,
+          error: { kind: 'schema-violation', message: 'The answer was too long to receive.', retryable: true },
+        })
+        return
+      }
+      // Caller-invoked abort (screen closed / stop pressed): surface as a
+      // cancelled stream, keeping whatever already streamed in.
+      finish({
+        ok: false,
+        text,
+        reasoning,
+        partial: text.length > 0,
+        error: { kind: 'error-retryable', message: 'cancelled', retryable: true },
+      })
+    }
+
+    xhr.send(bodyStr)
+  })
 }

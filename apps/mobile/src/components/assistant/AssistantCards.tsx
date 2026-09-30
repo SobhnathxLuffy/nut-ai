@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, Pressable } from 'react-native'
 import { router } from 'expo-router'
 import { useTheme } from '../../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../../src/theme/tokens'
+import { expandProposalIngredients } from '../../data/proposal-ingredients'
 
 export function LastWorkoutCard({ data }: { data: any }) {
   const t = useTheme()
@@ -63,8 +64,9 @@ export function MealProposalCard({ data, status, onConfirm, onCancel }: { data: 
   return (
     <View style={[s.card, { backgroundColor: t.bgElevated }]}>
       <Text style={[s.title, { color: t.text }]}>Meal Proposal: {data.name}</Text>
-      {data.ingredients.map((ing: any, i: number) => (
-        <Text key={i} style={[s.body, { color: t.text }]}>• {ing.name} ({ing.grams}g)</Text>
+      {/* Unit-count aware: "2 rotis" renders as "2 × 40 g", not one 80 g blob. */}
+      {expandProposalIngredients(data.ingredients).map((ing, i) => (
+        <Text key={i} style={[s.body, { color: t.text }]}>• {ing.display}</Text>
       ))}
       {status === 'SAVED' && <Text style={[s.body, { color: t.protein, fontWeight: 'bold' }]}>✓ SAVED</Text>}
       {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>✗ FAILED (Tap to retry)</Text>}
