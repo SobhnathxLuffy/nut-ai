@@ -1,8 +1,9 @@
 import * as Clipboard from 'expo-clipboard'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { cheapestModel, type ProviderId } from '@nutai/prompt'
-import { customProviderBaseUrl, putSetting } from '../data/repo'
+import { PROVIDER_MODELS, cheapestModel, type ProviderId } from '@nutai/prompt'
+import { customProviderBaseUrl, putSetting, setting } from '../data/repo'
+import { normalizeBaseUrl } from '../inference/base-url'
 import { looksPlausible, saveCredential, type CredentialKind } from '../inference/credentials'
 import { validateCredential } from '../inference/pathA/validate'
 import { useTheme } from '../theme/ThemeProvider'
@@ -49,28 +50,60 @@ export function CredentialForm({
   const [detail, setDetail] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
   const [shape, setShape] = useState<string | null>(null)
+  // Reseller support (OpenAI-compatible gateways like aicredits.in). These live
+  // INSIDE the form — not behind a saved key in settings — because the exact
+  // bug that motivated them: the base URL was only configurable AFTER a key
+  // was saved, so a first-time reseller key was always verified against
+  // api.openai.com and always rejected. Drafts initialize from the saved
+  // settings so the Replace-key flow never silently drops them.
+  const [baseUrl, setBaseUrl] = useState('')
+  const [modelOverride, setModelOverride] = useState('')
+  const [hint, setHint] = useState<string | null>(null)
 
   const model = cheapestModel(provider)
+  const modelId = modelOverride.trim() || model.id
+  const customModel = PROVIDER_MODELS[provider].some((m) => m.id === modelId) ? null : modelId
   const plausible = looksPlausible(provider, kind, value)
+
+  useEffect(() => {
+    void (async () => {
+      const savedUrl = await customProviderBaseUrl()
+      if (savedUrl) setBaseUrl(savedUrl)
+      const savedModel = await setting('provider_model')
+      // Prefill when the saved model belongs to this provider: either a
+      // catalogue id, or a vendor-prefixed reseller id ("openai/gpt-4o-mini") —
+      // official OpenAI model names never contain a slash, so a slash means
+      // the id came from a custom endpoint and must survive a re-verify.
+      if (
+        savedModel &&
+        (PROVIDER_MODELS[provider].some((m) => m.id === savedModel) || savedModel.includes('/'))
+      ) {
+        setModelOverride(savedModel)
+      }
+    })()
+  }, [provider])
 
   async function verify() {
     if (busy || !plausible) return
     setBusy(true)
     setError(null)
+    setHint(null)
 
+    const usedBaseUrl = normalizeBaseUrl(baseUrl) || null
     const res = await validateCredential(
       provider,
-      model.id,
+      modelId,
       { kind, value: value.trim() },
       fetch,
       15_000,
-      await customProviderBaseUrl(),
+      usedBaseUrl,
     )
     setBusy(false)
 
     if (!res.ok) {
       setError(explain(res.error.kind, res.error.message))
       setDetail(res.detail)
+      setHint(res.hint ?? null)
       return
     }
 
@@ -80,10 +113,13 @@ export function CredentialForm({
     const acceptedKind = res.usedShape === 'bearer' ? 'oauth' : 'api_key'
     await saveCredential(provider, { kind: acceptedKind, value: value.trim() })
     await putSetting('provider', provider)
-    await putSetting('provider_model', model.id)
+    await putSetting('provider_model', modelId)
+    // Persist the base URL exactly as verified — including a deliberate empty
+    // value, which clears a stale reseller override.
+    await putSetting('provider_base_url', usedBaseUrl ?? '')
     setShape(res.usedShape)
     setOk(true)
-    onSaved(model.id)
+    onSaved(modelId)
   }
 
   return (
@@ -147,6 +183,60 @@ export function CredentialForm({
         )}
       </View>
 
+      {/*
+       * Reseller fields live HERE, before Verify — a reseller key verified
+       * without its base URL always lands on api.openai.com and always 401s.
+       * The URL is persisted on blur too, so a failed verify for an unrelated
+       * reason does not lose what was typed.
+       */}
+      {provider === 'openai' ? (
+        <View style={[styles.reseller, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
+          <Text style={[type.bodyStrong, { color: theme.text }]}>Using a reseller? (optional)</Text>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
+            Keys from OpenAI-compatible resellers work here — aicredits.in, OpenRouter, a proxy.
+            Paste the base URL their dashboard shows (ends in /v1), and the exact model ID if it
+            differs from the default. Leave empty for official OpenAI.
+          </Text>
+          <TextInput
+            accessibilityLabel="Reseller base URL"
+            placeholder="https://aicredits.in/v1"
+            placeholderTextColor={theme.textFaint}
+            value={baseUrl}
+            onChangeText={(t) => {
+              setBaseUrl(t)
+              setError(null)
+              setDetail(null)
+              setHint(null)
+              setOk(false)
+            }}
+            onEndEditing={() => void putSetting('provider_base_url', normalizeBaseUrl(baseUrl))}
+            onBlur={() => void putSetting('provider_base_url', normalizeBaseUrl(baseUrl))}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            editable={!busy}
+            style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+          />
+          <TextInput
+            accessibilityLabel="Reseller model ID"
+            placeholder={`Model ID (default ${model.id})`}
+            placeholderTextColor={theme.textFaint}
+            value={modelOverride}
+            onChangeText={(t) => {
+              setModelOverride(t)
+              setError(null)
+              setDetail(null)
+              setHint(null)
+              setOk(false)
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!busy}
+            style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+          />
+        </View>
+      ) : null}
+
       <TextInput
         accessibilityLabel="API credential"
         placeholder={kind === 'oauth' ? 'Paste the token' : 'sk-…'}
@@ -174,6 +264,11 @@ export function CredentialForm({
       {error ? (
         <View style={[styles.result, { backgroundColor: theme.safetyBg }]}>
           <Text style={[type.caption, { color: theme.safety, lineHeight: 19 }]}>{error}</Text>
+          {hint ? (
+            <Text style={[type.caption, { color: theme.safety, marginTop: space.sm, lineHeight: 19 }]}>
+              {hint}
+            </Text>
+          ) : null}
           {detail ? (
             <Text style={[styles.mono, { color: theme.safety, marginTop: space.sm, fontSize: 11 }]}>
               {detail}
@@ -190,7 +285,10 @@ export function CredentialForm({
           </View>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
             Verified as {shape === 'bearer' ? 'an OAuth / CLI token' : 'an API key'}. Using{' '}
-            {model.label} at roughly ${model.approxScanCostUsd.toFixed(4)} per scan.
+            {customModel
+              ? `${customModel} — cost is whatever your reseller charges for it`
+              : `${model.label} at roughly $${model.approxScanCostUsd.toFixed(4)} per scan`}
+            .
           </Text>
         </View>
       ) : (
@@ -235,6 +333,21 @@ const styles = StyleSheet.create({
   tabs: { flexDirection: 'row', borderRadius: radius.pill, padding: 4, marginBottom: space.lg },
   tab: { flex: 1, alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.pill },
   how: { padding: space.lg, borderRadius: radius.lg },
+  reseller: {
+    marginTop: space.lg,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  resellerInput: {
+    marginTop: space.md,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    fontSize: 14,
+    minHeight: 48,
+  },
   code: {
     flexDirection: 'row',
     alignItems: 'center',

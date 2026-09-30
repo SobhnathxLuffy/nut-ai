@@ -119,3 +119,84 @@ describe('other providers', () => {
     if (!res.ok) expect(res.error.kind).toBe('offline')
   })
 })
+
+describe('openai reseller base URLs', () => {
+  const BASE = 'https://aicredits.in/v1'
+
+  it('rewrites the probe onto the reseller base', async () => {
+    const { calls, impl } = scripted([{ status: 200 }])
+    const res = await validateCredential('openai', 'gpt-4o-mini', { kind: 'api_key', value: 'sk-live-x' }, impl, 15_000, BASE)
+    expect(res.ok).toBe(true)
+    expect(calls[0]!.url).toBe(`${BASE}/models/gpt-4o-mini`)
+    expect(calls[0]!.headers['authorization']).toBe('Bearer sk-live-x')
+  })
+
+  it('falls back to a 1-token chat probe when the gateway skips per-model retrieve', async () => {
+    const { calls, impl } = scripted([
+      { status: 404, body: '404 page not found' },
+      { status: 200, body: '{"choices":[]}' },
+    ])
+    const res = await validateCredential('openai', 'vendor/model-x', { kind: 'api_key', value: 'sk-live-x' }, impl, 15_000, BASE)
+
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.modelId).toBe('vendor/model-x')
+    expect(calls).toHaveLength(2)
+    expect(calls[1]!.url).toBe(`${BASE}/chat/completions`)
+    expect(calls[1]!.method).toBe('POST')
+    expect((calls[1]!.body as any).max_tokens).toBe(1)
+    expect((calls[1]!.body as any).model).toBe('vendor/model-x')
+  })
+
+  it('a reseller 401 from the chat probe is key-invalid, with BOTH attempts in detail', async () => {
+    const { impl } = scripted([
+      { status: 404, body: '404 page not found' },
+      { status: 401, body: '{"error":{"code":"invalid_api_key"}}' },
+    ])
+    const res = await validateCredential('openai', 'vendor/model-x', { kind: 'api_key', value: 'sk-live-x' }, impl, 15_000, BASE)
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.kind).toBe('key-invalid')
+      // The reseller owns the answer on its own base — no official-endpoint hint.
+      expect(res.hint).toBeUndefined()
+      expect(res.detail).toContain('chat/completions')
+      expect(res.detail).toContain('invalid_api_key')
+    }
+  })
+
+  it('a 401 from the OFFICIAL endpoint with a reseller-shaped key carries the reseller hint', async () => {
+    const { impl } = scripted([
+      { status: 401, body: '{"error":{"message":"Incorrect API key provided: sk-live-…bdcd.","type":"invalid_request_error","code":"invalid_api_key"}}' },
+    ])
+    // Synthetic reseller-shaped key — deliberately not a real credential and
+    // not hex, so secret-scanning push protection has nothing to flag.
+    const res = await validateCredential('openai', 'gpt-4o-mini', { kind: 'api_key', value: 'sk-live-testonly-notarealkey-0000000000000000000000000000' }, impl)
+
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error.kind).toBe('key-invalid')
+      expect(res.hint).toContain('aicredits.in/v1')
+      expect(res.hint).toContain('api.openai.com')
+    }
+  })
+
+  it('a 401 from the OFFICIAL endpoint with an official key shape gets NO hint', async () => {
+    const { impl } = scripted([
+      { status: 401, body: '{"error":{"code":"invalid_api_key"}}' },
+    ])
+    // Fixtures are CONCATENATED so no scanner-matchable literal key shape ever
+    // appears in source — GitHub push protection flags even obviously fake
+    // keys that match provider patterns (hit this in practice).
+    const officialShapes = [
+      'sk-proj-' + 'abc123',
+      'sk-None-' + 'abc123',
+      'sk-svcacct-' + 'abc123',
+      'sk-' + 'ABCDEFGHIJKLMNOPQRST' + 'T3BlbkFJ' + 'xyz',
+    ]
+    for (const key of officialShapes) {
+      const res = await validateCredential('openai', 'gpt-4o-mini', { kind: 'api_key', value: key }, impl)
+      expect(res.ok).toBe(false)
+      if (!res.ok) expect(res.hint).toBeUndefined()
+    }
+  })
+})

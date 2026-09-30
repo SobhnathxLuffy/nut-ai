@@ -184,7 +184,8 @@ export default function ProviderSettings() {
                 <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
                   Works with any OpenAI-compatible API reseller (aicredits.in, OpenRouter, a proxy).
                   Paste the base URL their dashboard shows — it must end in /v1. Leave empty to use
-                  api.openai.com directly.
+                  api.openai.com directly. These are the same fields offered on the key form when
+                  you tap Replace key.
                 </Text>
                 <TextInput
                   value={baseUrlDraft}

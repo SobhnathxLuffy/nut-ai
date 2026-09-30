@@ -48,11 +48,39 @@ export interface ValidationErr {
   error: ScanFailure
   /** Raw status and body snippet. Surfaced in the UI so failures are diagnosable. */
   detail: string
+  /**
+   * Actionable next step for a specific, detectable failure — currently the
+   * reseller-key shape pasted with no custom base URL set (HTTP 401 from the
+   * OFFICIAL endpoint is what that always produces). Optional; the UI renders
+   * it under the error text.
+   */
+  hint?: string
 }
 
 export type ValidationResult = ValidationOk | ValidationErr
 
 const ANTHROPIC_VERSION = '2023-06-01'
+
+/**
+ * Does this look like a key minted by OpenAI itself?
+ *
+ * Official shapes: `sk-proj-…`, `sk-svcacct-…`, `sk-None-…`, `sk-admin-…`, and
+ * the legacy `sk-…T3BlbkFJ…` (that fragment is base64 of ">OpenAI<" and appears
+ * in every legacy service key). Anything else — `sk-live-…`, `sk-or-v1-…`,
+ * `sk-xyz-…` — is somebody else's key format. Deliberately conservative: this
+ * only decides whether a 401 gets a reseller hint, never whether a key is
+ * accepted. The provider remains the authority on what is real.
+ */
+function looksLikeOfficialOpenAiKey(key: string): boolean {
+  return /^sk-(proj|svcacct|None|admin)-/.test(key) || /^sk-[A-Za-z0-9]{20}T3BlbkFJ/.test(key)
+}
+
+const RESELLER_HINT =
+  "This key's shape does not match an official OpenAI key. If it came from an " +
+  'OpenAI-compatible reseller (aicredits.in, OpenRouter, a proxy), enter their ' +
+  'base URL — for aicredits.in that is https://aicredits.in/v1 — in the Using a ' +
+  'reseller section below, then verify again. Your key was sent to api.openai.com, ' +
+  'which rejected it.'
 
 function classify(status: number, _body: string): ScanFailure {
   if (status === 401 || status === 403) {
@@ -175,8 +203,12 @@ export async function validateCredential(
 
   // ---- OpenAI --------------------------------------------------------------
   if (provider === 'openai') {
+    const retrieveUrl = withBaseUrl(
+      `https://api.openai.com/v1/models/${encodeURIComponent(model)}`,
+      baseUrl,
+    )
     const r = await attempt(
-      withBaseUrl(`https://api.openai.com/v1/models/${encodeURIComponent(model)}`, baseUrl),
+      retrieveUrl,
       { authorization: `Bearer ${credential.value}` },
       fetchImpl,
       timeoutMs,
@@ -196,7 +228,44 @@ export async function validateCredential(
       }
     }
     if (r.status >= 200 && r.status < 300) return { ok: true, usedShape: 'bearer', modelId: model }
-    return { ok: false, error: classify(r.status, r.body), detail: `HTTP ${r.status} — ${r.body}` }
+
+    // On a reseller base the per-model retrieve endpoint is the one OpenAI-
+    // compatible route gateways most often skip, while chat completions — the
+    // endpoint scans actually hit — works. Same philosophy as the Anthropic
+    // bearer probe: before declaring failure, ask the endpoint that matters.
+    // Cost is one output token on whatever model was typed.
+    if (baseUrl && r.status === 404) {
+      const c = await attempt(
+        withBaseUrl('https://api.openai.com/v1/chat/completions', baseUrl),
+        { authorization: `Bearer ${credential.value}`, 'content-type': 'application/json' },
+        fetchImpl,
+        timeoutMs,
+        { model, max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] },
+      )
+      if (!('offline' in c) && !('aborted' in c)) {
+        if (c.status >= 200 && c.status < 300) {
+          return { ok: true, usedShape: 'bearer', modelId: model }
+        }
+        return {
+          ok: false,
+          error: classify(c.status, c.body),
+          detail: `GET ${retrieveUrl} → HTTP ${r.status} — ${r.body}\nPOST chat/completions → HTTP ${c.status} — ${c.body}`,
+        }
+      }
+      // The fallback probe could not reach the network; report the retrieve
+      // result below rather than inventing a verdict.
+    }
+
+    const hint =
+      !baseUrl && r.status === 401 && !looksLikeOfficialOpenAiKey(credential.value)
+        ? RESELLER_HINT
+        : undefined
+    return {
+      ok: false,
+      error: classify(r.status, r.body),
+      detail: `HTTP ${r.status} — ${r.body}`,
+      ...(hint ? { hint } : {}),
+    }
   }
 
   // ---- Google --------------------------------------------------------------
