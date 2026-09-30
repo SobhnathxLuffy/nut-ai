@@ -1,9 +1,12 @@
 import { clamp, type ClampFlag } from '@nutai/clamp'
 import {
+  type HighImpactQuestion,
   type IngredientRow,
   type Item,
   type LoggedMeal,
   type NutrientRow100g,
+  type PortionContext,
+  type UncertaintyFactor,
   type VisionPayload,
 } from '@nutai/core-schema'
 import {
@@ -16,11 +19,12 @@ import {
 import type { DbAdapter } from '@nutai/db-adapter'
 import {
   estimateGrams,
+  OIL_ABSORPTION,
   type FoodDb,
   type PersonalPriors,
   type ResolvedRow,
 } from '@nutai/gram-engine'
-import { selectMealQuestions, type SelectedQuestion } from '@nutai/repair'
+import { ADDED_FAT_MULTIPLIERS, selectMealQuestions, type SelectedQuestion } from '@nutai/repair'
 import {
   loadFood,
   resolveByBarcode,
@@ -30,8 +34,24 @@ import {
 } from '@nutai/resolver'
 import { recomputeTotals, toDisplayTotals, type DisplayTotals } from '@nutai/totals'
 import { validateWithRepair } from './repair.js'
+import {
+  highImpactQuestionFrom,
+  portionContextFrom,
+  rowQualityFrom,
+  strongestDisclosedFatLevel,
+  summaryFrom,
+  uncertaintyFactorsFrom,
+  type RowPreparation,
+} from './scan-contract.js'
 
 export { payloadValidationIssues } from './repair.js'
+export type {
+  HighImpactQuestion,
+  PortionContext,
+  Preparation,
+  QualitativeAmount,
+  UncertaintyFactor,
+} from '@nutai/core-schema'
 
 /**
  * The pipeline — stages 4 through 9, wired.
@@ -116,6 +136,35 @@ export interface ScanResult {
   scene?: SceneSummary | null
   /** Convenience: the title string, already resolved. Same lifecycle as `scene`. */
   sceneDisplayName?: string | null
+  /**
+   * Schema v1.3 portion_context — the model's account of HOW MUCH of the meal
+   * the frame actually shows. Drives honest presentation of absolute-portion
+   * confidence; null when the payload carried no such block. Same lifecycle
+   * and typing rule as `scene`: optional in the TYPE (ScanResult is also
+   * constructed on paths with no vision payload at all), ALWAYS set by
+   * runPipeline — null when absent — so anything through the pipeline has a
+   * definitive value.
+   */
+  portionContext?: PortionContext | null
+  /** Schema v1.3 summary.what_is_known, verbatim. Same lifecycle as `scene`. */
+  knownSummary?: string | null
+  /** Schema v1.3 summary.what_is_not_known, verbatim. Same lifecycle as `scene`. */
+  unknownSummary?: string | null
+  /**
+   * Schema v1.3 major_uncertainties — what the model itself names as the
+   * drivers of the total's error, capped at the contract maximum. Empty (not
+   * null) when the payload named none. Same lifecycle as `scene`.
+   */
+  uncertaintyFactors?: UncertaintyFactor[]
+  /**
+   * Schema v1.3 highest_impact_question, VERBATIM — the model's own "ask me
+   * this first". The repair layer maps it onto a bank question when one of the
+   * keyword families matches AND that question's trigger can fire; when it
+   * cannot, the raw block surfaces HERE and the review UI renders it as an
+   * informational note. It is never swallowed and never forced into a bank
+   * chip. Same lifecycle as `scene`.
+   */
+  highImpactQuestion?: HighImpactQuestion | null
 }
 
 /** Adapts the nutrition corpus to the gram engine's narrow FoodDb interface. */
@@ -202,6 +251,17 @@ export async function runPipeline(
       }
     : null
 
+  // ---- Honesty blocks (contract v1.3.0) ------------------------------------
+  // Derived ONCE, before any branching, like the scene: they are claims about
+  // the answer as a whole, and they are exposed on the refusal result too.
+  // The mappers (scan-contract.ts) read the VALIDATED payload, share the
+  // schema owner's camelCase types, and stay defensive — an unreadable block
+  // degrades to its documented neutral instead of throwing.
+  const portionContext = portionContextFrom(payload)
+  const uncertaintyFactors = uncertaintyFactorsFrom(payload)
+  const highImpactQuestion = highImpactQuestionFrom(payload)
+  const { knownSummary, unknownSummary } = summaryFrom(payload)
+
   if (!payload.is_food) {
     return {
       isFood: false,
@@ -215,6 +275,11 @@ export async function runPipeline(
       zeroHitCount: 0,
       scene,
       sceneDisplayName: scene?.displayName ?? null,
+      portionContext,
+      knownSummary,
+      unknownSummary,
+      uncertaintyFactors,
+      highImpactQuestion,
     }
   }
 
@@ -321,6 +386,14 @@ export async function runPipeline(
           : null,
     }
 
+    // Quality fields (contract v1.3.0): the model's qualitative amount and
+    // its cooking-preparation disclosure, mapped defensively (scan-contract.ts)
+    // so an unusable value degrades to "no claim" instead of throwing.
+    // preparation is ALWAYS materialized (null = no data), the same way
+    // portionRange is; qualitativeAmount is null when the payload carried no
+    // usable one — an unnamed default is not a claim the model ever made.
+    const quality = rowQualityFrom(item)
+
     // ---- [8] CONFIDENCE ------------------------------------------------------
     const band = computeBand({
       row,
@@ -331,8 +404,22 @@ export async function runPipeline(
     })
     row.bandHalfPct = band.halfPct
 
+    // The quality-carrying row is materialized AFTER the band mutation above,
+    // so the spread snapshots the COMPUTED band half-width and not the gram
+    // engine's raw gram.halfPct the row was initialized with. Pre-wave code
+    // pushed this same (already-mutated) row; the spread must not resurrect
+    // the pre-computation value, or every fallback reader — store.ts's band
+    // re-alignment for rows added after the scan, recomputeAfterEdit's
+    // missing-band fallback, and the persisted band_half_pct column — quietly
+    // inherits a half-width nobody computed.
+    const rowWithQuality = {
+      ...row,
+      qualitativeAmount: quality.qualitativeAmount,
+      preparation: quality.preparation,
+    }
+
     items.push({
-      row,
+      row: rowWithQuality,
       band,
       resolution,
       ...(candidates ? { candidates } : {}),
@@ -347,25 +434,70 @@ export async function runPipeline(
         : {}),
     })
 
+    // ---- The hidden-fat row --------------------------------------------------
     // The oil correction adds MASS to the food; it must also add FAT, or the
     // correction silently understates calories while claiming to fix them.
-    if (gram.addedOilGrams != null && gram.addedOilGrams > 0) {
+    //
+    // Two sources, one row, never doubled:
+    //   1. The engine's absorbed-oil correction (visual cues + name-class
+    //      rates) — EVIDENCE, and it wins when it fired.
+    //   2. The model's OWN preparation disclosure (v1.3
+    //      preparation.added_cooking_fat 'moderate'|'heavy') when the engine
+    //      produced no oil row — the disclosed signal synthesizes the row the
+    //      name-regex heuristic would otherwise be the only route to.
+    //
+    // Synthesis math, deterministic and documented: the disclosed base reuses
+    // the engine's own pan-fried absorption rate (OIL_ABSORPTION.pan_fried_generic,
+    // the generic "cooking fat you cannot see" class), applied to the item's
+    // estimated grams, then scaled by the SAME level multipliers the added_fat
+    // answer bank uses (ADDED_FAT_MULTIPLIERS — moderate 1.0 is the base,
+    // heavy 1.6). 'none'/'light'/'unknown' disclosures synthesize nothing:
+    // light is under the base rate's own magnitude and none/unknown add no
+    // assumption to materialize.
+    const heuristicOilGrams = gram.addedOilGrams != null && gram.addedOilGrams > 0 ? gram.addedOilGrams : null
+    const disclosedFat: RowPreparation['addedCookingFat'] | null = quality.preparation?.addedCookingFat ?? null
+    let hiddenFatGrams: number | null = heuristicOilGrams
+    let hiddenFatDisclosed: RowPreparation['addedCookingFat'] | null = null
+    if (heuristicOilGrams == null && (disclosedFat === 'moderate' || disclosedFat === 'heavy')) {
+      const baseGrams = gram.grams * OIL_ABSORPTION['pan_fried_generic']!
+      hiddenFatGrams = baseGrams * ADDED_FAT_MULTIPLIERS[disclosedFat]!
+      hiddenFatDisclosed = disclosedFat
+    }
+
+    if (hiddenFatGrams != null && hiddenFatGrams > 0) {
       items.push({
         row: {
           id: `item-${index}-oil`,
           displayName: 'Cooking oil (absorbed)',
           sourceFoodId: null,
-          grams: gram.addedOilGrams,
+          grams: hiddenFatGrams,
           // Per 100 g of vegetable oil.
           nutrientSnapshot: { kcal: 884, protein_g: 0, fat_g: 100, carbs_g: 0, fiber_g: 0, sodium_mg: 0 },
           origin: 'assumption_filler',
           gramPathway: gram.pathway,
           bandHalfPct: 0.5,
           isEstimate: true,
-          assumptions: [{ type: 'oil_added', gramsEquiv: gram.addedOilGrams, userConfirmed: false }],
+          assumptions: [{ type: 'oil_added', gramsEquiv: hiddenFatGrams, userConfirmed: false }],
           // A synthetic row for fat nobody can see is the DEFINITION of
           // 'inferred' — structurally certain, never visually confirmed.
           visibility: 'inferred',
+          // For a DISCLOSED row, the synthesis carries the disclosure that
+          // produced it as its own preparation — the provenance of the
+          // assumption, and the marker that lets an added_fat answer rescale
+          // RELATIVE to the disclosed level instead of compounding onto it
+          // (heavy disclosure + 'heavy' answer = what already landed). The
+          // engine's cue-triggered row has no such disclosure and answers
+          // rescale its estimate directly.
+          ...(hiddenFatDisclosed != null
+            ? {
+                preparation: {
+                  method: quality.preparation?.method ?? '',
+                  intrinsicFat: quality.preparation?.intrinsicFat ?? 'unknown',
+                  addedCookingFat: hiddenFatDisclosed,
+                  confidence: quality.preparation?.confidence ?? 0,
+                } satisfies RowPreparation,
+              }
+            : {}),
         },
         band: { halfPct: 0.5, tier: 'very_wide', reasons: ['Absorbed frying oil is not visible.'] },
         resolution: 'miss',
@@ -397,13 +529,33 @@ export async function runPipeline(
   // eat the whole platter?" (thali_scope) instead of the per-item portion
   // question — one meal-level chip, in the scene's own vocabulary.
   const sceneInput = payload.scene ? { mealType: payload.scene.meal_type } : undefined
+  // The hidden-fat signal rides in too: the strongest disclosed cooking-fat
+  // level across the meal plus whether a hidden-fat row exists at all — the
+  // added_fat question's trigger. And the model's highest-impact question
+  // rides in as TEXT: the repair layer maps it onto a bank question and
+  // promotes that chip when the mapping hits and the trigger can fire.
+  const addedFatSignal = {
+    level: strongestDisclosedFatLevel(payload.items),
+    hasHiddenFatRow: items.some((i) => i.row.assumptions.some((a) => a.type === 'oil_added')),
+  }
   const questions = selectMealQuestions(
     payload.items.map((item, i) => ({
       item,
       ...(sceneInput ? { scene: sceneInput } : {}),
+      // The meal-level hidden-fat signal rides on EVERY item's SelectionInput:
+      // selectQuestions reads input.addedFat per item, and selectMealQuestions
+      // deduplicates the meal-level added_fat chip down to one. Parking it in
+      // the OPTIONS object instead was both a type error and a silent drop —
+      // nothing read it there, the trigger could never fire, and the
+      // added_fat question could never become applicable no matter what the
+      // model disclosed about its cooking fat.
+      addedFat: addedFatSignal,
       ...(items[i]?.gramDisagreement ? { gramDisagreement: items[i]!.gramDisagreement } : {}),
       ...(deps.severityWeight != null ? { severityWeight: deps.severityWeight } : {}),
     })),
+    {
+      highImpactQuestionText: highImpactQuestion?.question,
+    },
   )
 
   return {
@@ -418,6 +570,11 @@ export async function runPipeline(
     zeroHitCount,
     scene,
     sceneDisplayName: scene?.displayName ?? null,
+    portionContext,
+    knownSummary,
+    unknownSummary,
+    uncertaintyFactors,
+    highImpactQuestion,
   }
 }
 

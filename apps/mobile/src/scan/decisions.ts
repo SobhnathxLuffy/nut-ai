@@ -118,6 +118,14 @@ export type ScanSchemaMode = 'json-schema' | 'instruction'
  * the identical request and failed identically. This decision turns that dead
  * end into one automatic re-ask that FORCES the field contract as text.
  *
+ * 'truncated' is covered too: a length-cut answer is a BUDGET failure, not a
+ * shape failure — re-asking with the identical budget would truncate again,
+ * but the rescue goes through runScanWithFallback, whose internal escalation
+ * gives the retry a doubled (capped) budget. Sending the schema as
+ * instruction text on that retry also costs nothing structurally (a thinking
+ * model has no structured-output problem to begin with) and keeps the field
+ * contract in front of the model while it has room to finish.
+ *
  * Never retries when the first attempt already ran without a json_schema (the
  * retry would be a third identical billing), and never retries a transport
  * failure the user can actually fix (401, offline, timeout).
@@ -128,6 +136,7 @@ export function shouldRetryWithInstructionSchema(
 ): boolean {
   if (mode !== 'json-schema') return false
   if (attempt.ok) return !attempt.payloadUsable
+  if (attempt.failureKind === 'truncated') return true
   return attempt.failureKind === 'schema-violation'
 }
 

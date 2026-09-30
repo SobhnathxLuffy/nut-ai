@@ -83,6 +83,76 @@ describe('the system prompt', () => {
   it('specifies USDA-style keys, which is an IR lever rather than a style preference', () => {
     expect(SYSTEM_PROMPT).toMatch(/chicken breast, grilled/)
   })
+
+  it('opens with the two hard prohibitions the v1.3 contract is built on', () => {
+    expect(SYSTEM_PROMPT).toMatch(
+      /DO NOT calculate calories, protein, carbs, fat, or micronutrients\./,
+    )
+    expect(SYSTEM_PROMPT).toMatch(
+      /DO NOT invent exact grams when the image has no reliable scale reference\./,
+    )
+  })
+
+  it('separates MEAL IDENTITY from COMPONENTS with the pizza/thali examples', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Meal identity vs components/)
+    expect(SYSTEM_PROMPT).toMatch(/A pizza is ONE dish even though it contains dough, sauce, cheese and toppings\./)
+    expect(SYSTEM_PROMPT).toMatch(/"Components" and `items` are the same list/)
+  })
+
+  it('demands absolute-scale honesty — no fake grams without a scale reference', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Absolute scale — never fake grams/)
+    expect(SYSTEM_PROMPT).toMatch(/An honest "unknown" beats a fake "350 g" every single time\./)
+    expect(SYSTEM_PROMPT).toMatch(/portion_context\.scale_reference_available is false and/)
+  })
+
+  it('ranks the ONE highest-impact question: eaten > size > count > hidden fat > preparation', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Work down this priority list/)
+    expect(SYSTEM_PROMPT).toMatch(/HOW MUCH of the meal was or will be eaten/)
+    expect(SYSTEM_PROMPT).toMatch(/The overall SIZE of the total meal/)
+    expect(SYSTEM_PROMPT).toMatch(/The NUMBER of pieces, bowls or slices/)
+    expect(SYSTEM_PROMPT).toMatch(/A LARGE uncertainty in hidden cooking fat/)
+    expect(SYSTEM_PROMPT).toMatch(/The preparation type — fried versus grilled versus steamed\./)
+    expect(SYSTEM_PROMPT).toMatch(
+      /Do NOT prioritize trivia while portion is unknown: topping counts, garnish/,
+    )
+  })
+
+  it('prefers natural serving units over invented grams', () => {
+    expect(SYSTEM_PROMPT).toMatch(/slice, piece, roti, paratha, katori, bowl, cup, glass, spoon, serving\./)
+    expect(SYSTEM_PROMPT).toMatch(/People do not eat grams; they eat units\./)
+    expect(SYSTEM_PROMPT).toMatch(/Grams \(model_gram_estimate \/ model_gram_range\) only when JUSTIFIED/)
+  })
+
+  it('counts servings, not decorative fragments, and falls back to qualitative_amount', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Do not count decorative fragments\./)
+    expect(SYSTEM_PROMPT).toMatch(/"15 olive slices" is not portion/)
+    expect(SYSTEM_PROMPT).toMatch(/"tiny" \| "light" \| "moderate" \| "heavy" \|/)
+  })
+
+  it('distinguishes intrinsic fat from fat added IN COOKING', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Fat semantics — intrinsic fat is not added cooking fat/)
+    expect(SYSTEM_PROMPT).toMatch(/a paratha is\s*\n\s*"moderate" \(shallow-fried in ghee\)/)
+    expect(SYSTEM_PROMPT).toMatch(/a deep-fried ball \(samosa,/)
+    expect(SYSTEM_PROMPT).toMatch(/never to the fat the food itself contains/)
+  })
+
+  it('forbids hallucinating the foods commonly served with a meal', () => {
+    expect(SYSTEM_PROMPT).toMatch(/Visible vs inferred — never hallucinate the accompaniments/)
+    expect(SYSTEM_PROMPT).toMatch(/the papad that "usually comes with" a thali/)
+  })
+
+  it('documents the always-emitted meal-level honesty blocks', () => {
+    expect(SYSTEM_PROMPT).toMatch(/portion_context/)
+    expect(SYSTEM_PROMPT).toMatch(/whole_meal_visible/)
+    expect(SYSTEM_PROMPT).toMatch(/scale_reference_description/)
+    expect(SYSTEM_PROMPT).toMatch(/absolute_portion_confidence: "high" \| "medium" \|/)
+    expect(SYSTEM_PROMPT).toMatch(/major_uncertainties/)
+    expect(SYSTEM_PROMPT).toMatch(/impact_on_total_calories: "low" \| "medium" \| "high"/)
+    expect(SYSTEM_PROMPT).toMatch(/highest_impact_question/)
+    expect(SYSTEM_PROMPT).toMatch(/what_is_known, what_is_not_known/)
+    expect(SYSTEM_PROMPT).toMatch(/preparation\.intrinsic_fat/)
+    expect(SYSTEM_PROMPT).toMatch(/preparation\.added_cooking_fat/)
+  })
 })
 
 describe('local signals', () => {

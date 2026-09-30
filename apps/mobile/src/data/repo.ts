@@ -308,6 +308,12 @@ export async function logMeal(
       const existing = await getOperationByIdempotencyKey(tx, options.idempotencyKey)
       if (existing) return existing.entity_id
     }
+    // TODO(5-followup): the schema v1.3 MEAL-level honesty blocks —
+    // portion_context, major_uncertainties, highest_impact_question, summary —
+    // exist precisely so the eval harness can attribute error to a pathway,
+    // but the meals table has no columns to persist them. Until they are
+    // stored, every scan's honesty telemetry evaporates after the result
+    // screen unmounts and the harness can never score it.
     const meal = await tx.run(
       `INSERT INTO meals (logged_at, local_date, meal_slot, photo_uri, portion_eaten_fraction,
                           analysis_status, engine_id, prompt_version, schema_version,
@@ -334,6 +340,12 @@ export async function logMeal(
     )
     const mealId = Number(meal.lastInsertRowId)
 
+    // TODO(5-followup): the schema v1.3 per-row quality fields — visibility,
+    // portionRange, qualitativeAmount, preparation — are carried on the
+    // IngredientRow and shown on the result screen, but log_items has no
+    // columns for any of them, so a logged meal loses the model's own honesty
+    // disclosures the moment this transaction commits. Persist them (with a
+    // migration) so history keeps what the scan actually said.
     let sort = 0
     for (const row of result.meal.ingredients) {
       const itemSync = createSyncMetadata(now)

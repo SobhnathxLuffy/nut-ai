@@ -209,6 +209,12 @@ describe('barcode short-circuit', () => {
     expect(only.row.gramPathway).toBe('packaged_exact')
     expect(only.row.grams).toBe(40)
     expect(only.band.halfPct).toBeLessThan(0.05)
+    // The row pushed into the meal carries the COMPUTED confidence band's
+    // half-width, not the gram engine's raw pre-computation one — the raw
+    // value leaks back through recomputeAfterEdit's missing-band fallback,
+    // the review store's band re-alignment, and the persisted band_half_pct
+    // column, so a divergence here is a silent accuracy regression (5-a B6).
+    expect(only.row.bandHalfPct).toBe(only.band.halfPct)
   })
 })
 
@@ -395,5 +401,196 @@ describe('the scene-aware scan contract', () => {
     const r = await runPipeline(payload([item()]), deps(), foodDb)
     expect(r!.questions.some((q) => q.question.id === 'portion_eaten')).toBe(true)
     expect(r!.questions.some((q) => q.question.id === 'thali_scope')).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Honesty blocks + per-item quality fields (contract v1.3.0)
+// ---------------------------------------------------------------------------
+
+describe('contract v1.3 honesty blocks ride into ScanResult', () => {
+  // Optional in the payload contract, mapped defensively by scan-contract.ts.
+  // The fixtures write the blocks directly: the core-schema type declares
+  // them (the schema owner's landing this wave), so the compiler checks the
+  // fixture shapes against the real contract.
+  const v13Blocks = {
+    portion_context: {
+      whole_meal_visible: true,
+      scale_reference_available: true,
+      scale_reference_description: 'a credit card beside the plate',
+      absolute_portion_confidence: 'medium' as const,
+    },
+    major_uncertainties: [
+      { factor: 'Gravy depth not visible', impact_on_total_calories: 'high' as const },
+      { factor: 'Rice pile density', impact_on_total_calories: 'medium' as const },
+    ],
+    highest_impact_question: { question: 'How much ghee went into the dal?', options: ['None', 'A spoon', 'A lot'] },
+    summary: { what_is_known: 'Two dishes identified', what_is_not_known: 'Ghee quantity' },
+  }
+
+  it('maps the meal-level blocks onto ScanResult in camelCase', async () => {
+    const raw = {
+      ...payload([item(), item({ name: 'Dal', canonical_food_key: 'rice, white, cooked', food_form: 'piled' })]),
+      ...v13Blocks,
+    }
+    const r = await runPipeline(raw, deps(), foodDb)
+    expect(r!.portionContext).toEqual({
+      wholeMealVisible: true,
+      scaleReferenceAvailable: true,
+      scaleReferenceDescription: 'a credit card beside the plate',
+      absolutePortionConfidence: 'medium',
+    })
+    expect(r!.uncertaintyFactors).toEqual([
+      { factor: 'Gravy depth not visible', impactOnTotalCalories: 'high' },
+      { factor: 'Rice pile density', impactOnTotalCalories: 'medium' },
+    ])
+    expect(r!.highImpactQuestion).toEqual({
+      question: 'How much ghee went into the dal?',
+      options: ['None', 'A spoon', 'A lot'],
+    })
+    expect(r!.knownSummary).toBe('Two dishes identified')
+    expect(r!.unknownSummary).toBe('Ghee quantity')
+  })
+
+  it('rows carry qualitativeAmount and preparation, defaulting absence to null', async () => {
+    const raw = payload([
+      item({
+        name: 'Paratha',
+        qualitative_amount: 'moderate',
+        preparation: { method: 'shallow-fried', intrinsic_fat: 'low', added_cooking_fat: 'light', confidence: 0.8 },
+      }),
+      item({ name: 'Dal', canonical_food_key: 'rice, white, cooked', food_form: 'piled' }),
+    ])
+    const r = await runPipeline(raw, deps(), foodDb)
+    const first = r!.items[0]!.row
+    expect(first.qualitativeAmount).toBe('moderate')
+    expect(first.preparation).toEqual({
+      method: 'shallow-fried',
+      intrinsicFat: 'low',
+      addedCookingFat: 'light',
+      confidence: 0.8,
+    })
+    // A pre-1.3 item carries NO claim — null, not an invented default — and
+    // its preparation is materialized as null the way portionRange is.
+    const second = r!.items[1]!.row
+    expect(second.qualitativeAmount).toBeNull()
+    expect(second.preparation).toBeNull()
+  })
+
+  it('nulls and empties everything when the payload carries none of the blocks', async () => {
+    const r = await runPipeline(payload([item()]), deps(), foodDb)
+    expect(r!.portionContext).toBeNull()
+    expect(r!.knownSummary).toBeNull()
+    expect(r!.unknownSummary).toBeNull()
+    expect(r!.uncertaintyFactors).toEqual([])
+    expect(r!.highImpactQuestion).toBeNull()
+    // …and the scan itself is exactly the pre-1.3 behavior.
+    expect(r!.isFood).toBe(true)
+    expect(r!.items).toHaveLength(1)
+    expect(r!.totals.kcal).toBeGreaterThan(0)
+  })
+
+  it('exposes the blocks on a refusal result too — a claim about the answer, not the food', async () => {
+    const raw: VisionPayload = {
+      ...payload([]),
+      is_food: false,
+      refusal_reason: 'This photo shows a dog, not food.',
+      ...v13Blocks,
+    }
+    const r = await runPipeline(raw, deps(), foodDb)
+    expect(r!.isFood).toBe(false)
+    expect(r!.portionContext!.absolutePortionConfidence).toBe('medium')
+    expect(r!.uncertaintyFactors).toHaveLength(2)
+    expect(r!.highImpactQuestion!.question).toContain('ghee')
+    expect(r!.knownSummary).toBe('Two dishes identified')
+  })
+})
+
+describe('the disclosed hidden-fat row (contract v1.3 preparation)', () => {
+  it('synthesizes the hidden-fat row from a heavy disclosure when the engine fired none', async () => {
+    const raw = payload([
+      item({
+        name: 'Aloo paratha',
+        canonical_food_key: 'paratha',
+        cooking_method_cues: ['none_visible'],
+        model_gram_estimate: 150,
+        preparation: { method: 'shallow-fried', intrinsic_fat: 'low', added_cooking_fat: 'heavy', confidence: 0.7 },
+      }),
+    ])
+    const r = await runPipeline(raw, deps(), foodDb)
+    const source = r!.items.find((i) => i.row.displayName === 'Aloo paratha')!
+    const oil = r!.items.find((i) => i.row.origin === 'assumption_filler')
+    expect(oil).toBeDefined()
+    // Base = the engine's own pan-fried absorption rate on the item's grams;
+    // heavy scales it by the SAME table the added_fat answers use (1.6).
+    expect(oil!.row.grams).toBeCloseTo(source.row.grams * 0.06 * 1.6, 6)
+    expect(oil!.row.assumptions[0]!.type).toBe('oil_added')
+    // The synthesized row carries the disclosure that produced it, so an
+    // added_fat answer can rescale RELATIVE to the disclosed level.
+    expect(oil!.row.preparation!.addedCookingFat).toBe('heavy')
+    // And the fat macro moved, not just the mass.
+    const plain = await runPipeline(
+      payload([
+        item({ name: 'Aloo paratha', canonical_food_key: 'paratha', cooking_method_cues: ['none_visible'], model_gram_estimate: 150 }),
+      ]),
+      deps(), foodDb,
+    )
+    expect(r!.totals.fat_g).toBeGreaterThan(plain!.totals.fat_g)
+  })
+
+  it('never doubles the hidden-fat row when the engine heuristic also fired', async () => {
+    const raw = payload([
+      item({
+        name: 'Samosa',
+        canonical_food_key: 'samosa',
+        cooking_method_cues: ['deep_fried_color'],
+        model_gram_estimate: 100,
+        preparation: { method: '', intrinsic_fat: 'moderate', added_cooking_fat: 'heavy', confidence: 0.9 },
+      }),
+    ])
+    const r = await runPipeline(raw, deps(), foodDb)
+    const oilRows = r!.items.filter((i) => i.row.origin === 'assumption_filler')
+    expect(oilRows).toHaveLength(1)
+    // Evidence wins: the engine's cue-triggered row stands, unrescaled, and
+    // carries no preparation disclosure of its own.
+    expect(oilRows[0]!.row.grams).toBeCloseTo(100 * 0.12, 6)
+    expect(oilRows[0]!.row.preparation).toBeUndefined()
+  })
+
+  it('synthesizes nothing for none/light/unknown disclosures', async () => {
+    for (const level of ['none', 'light', 'unknown'] as const) {
+      const raw = payload([
+        item({
+          name: 'Aloo paratha',
+          canonical_food_key: 'paratha',
+          cooking_method_cues: ['none_visible'],
+          model_gram_estimate: 150,
+          preparation: { method: '', intrinsic_fat: 'low', added_cooking_fat: level, confidence: 0.8 },
+        }),
+      ])
+      const r = await runPipeline(raw, deps(), foodDb)
+      expect(r!.items.some((i) => i.row.origin === 'assumption_filler')).toBe(false)
+    }
+  })
+
+  it('lets the model\u2019s highest-impact question promote the matching chip to the front', async () => {
+    const raw = {
+      ...payload([
+        item({
+          name: 'Samosa',
+          canonical_food_key: 'samosa',
+          cooking_method_cues: ['deep_fried_color'],
+          model_gram_estimate: 100,
+          preparation: { method: '', intrinsic_fat: 'moderate', added_cooking_fat: 'moderate', confidence: 0.8 },
+        }),
+      ]),
+      highest_impact_question: { question: 'How much oil was used for frying?', options: ['None', 'A little', 'A lot'] },
+    }
+    const r = await runPipeline(raw, deps(), foodDb)
+    // added_fat fired (an oil row exists) and the oil-family mapping promoted
+    // it ahead of the meal's other applicable chips.
+    expect(r!.questions[0]!.question.id).toBe('added_fat')
+    // The raw block is still exposed for the review UI's informational note.
+    expect(r!.highImpactQuestion!.question).toContain('oil')
   })
 })

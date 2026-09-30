@@ -30,6 +30,18 @@ export type ScanFailureKind =
   | 'content-refusal'
   | 'schema-violation'
   /**
+   * The provider answered HTTP 200 but marked the completion as cut off by the
+   * output-token budget (OpenAI `finish_reason: "length"`, Gemini
+   * `finishReason: "MAX_TOKENS"`). A truncated scan payload is garbage by
+   * construction — half a JSON object parses into half a meal — so it is
+   * reported HONESTLY as its own kind instead of being fished or misfiled as
+   * a shape violation. Retryable: the budget is per-attempt, not per-user —
+   * the retry chain is real, not aspirational: runScanWithFallback fires one
+   * escalated retry at a doubled (capped) budget, and the orchestrator's
+   * instruction-schema rescue is the second layer behind that.
+   */
+  | 'truncated'
+  /**
    * A request that may or may not have been billed. NEVER auto-retried: no
    * provider offers an idempotency key for this endpoint, so a naive retry
    * double-bills the user for one photo.
@@ -61,6 +73,14 @@ export interface ScanSuccess {
   costUsd: number | null
   latencyMs: number
   promptVersion: string
+  /**
+   * The envelope's own finish marker when the provider sent one
+   * (choices[0].finish_reason / candidates[0].finishReason), null when it
+   * did not. Diagnostic metadata only — a 'length' answer never REACHES
+   * success (it fails as kind 'truncated' first); this exists so a success
+   * that rode an unusual stop reason is still auditable in the ledger.
+   */
+  finishReason?: string | null
 }
 
 export type ScanOutcome = { ok: true; value: ScanSuccess } | { ok: false; error: ScanFailure }
@@ -84,6 +104,14 @@ export interface ScanRequest {
    */
   instructionSchema?: unknown
   timeoutMs?: number
+  /**
+   * Per-attempt output budget (max_tokens / maxOutputTokens). Default is the
+   * catalogue's DEFAULT_SCAN_MAX_TOKENS (8192); the truncation-escalation
+   * retry in runScanWithFallback derives its HIGHER budget (doubled, capped
+   * at 16384) from this base, so an explicit override raises the whole chain
+   * with it and never silently resets to the default.
+   */
+  maxTokens?: number
   /** Optional OpenAI-compatible base URL (resellers). Only rewrites OpenAI calls. */
   baseUrl?: string | null
 }

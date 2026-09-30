@@ -138,6 +138,63 @@ export const SCHEMA_MALFORMED_JSON: ScanFailure = {
 }
 
 /**
+ * A length-truncated completion is its own honest failure, not a shape
+ * violation: the model hit its output-token budget (the live case that
+ * motivated this — a thinking model spent the budget on reasoning and
+ * returned ~100 visible tokens of half a JSON object). Fishing a half JSON
+ * produces half a meal, so the response is failed AS truncated and left
+ * unfished. Retryable — and the retry is now REAL, a two-layer chain, not an
+ * invitation to tap the button again:
+ *
+ *   1. runScanWithFallback immediately fires ONE escalated attempt at a
+ *      doubled budget (min(base*2, 16384)) — a thinking model that exhausted
+ *      8192 tokens reasoning usually completes at 16384;
+ *   2. if that also truncates, no further escalation happens here — the
+ *      orchestrator's instruction-schema rescue (shouldRetryWithInstruction-
+ *      Schema now accepts kind 'truncated') is the next layer, and its own
+ *      runScanWithFallback escalates again.
+ *
+ * Worst case for one user scan is therefore 4 billed attempts, each bounded
+ * by a budget that stays inside every catalogue model's output cap.
+ */
+export const TRUNCATION_FAILURE: ScanFailure = {
+  kind: 'truncated',
+  message: "The model's answer was cut off before it finished (output token budget). Retrying may help.",
+  retryable: true,
+}
+
+/**
+ * The envelope's own finish marker, read provider-agnostically: the OpenAI
+ * chat dialect carries `choices[0].finish_reason` (ALL gateway scans answer
+ * in this shape), native Google carries `candidates[0].finishReason`. Native
+ * Anthropic's `stop_reason` is deliberately not consulted here — the scan
+ * path reads the envelope of the dialect the request was MADE in, and the
+ * value is diagnostic metadata, never a control signal on its own.
+ */
+export function finishReasonFromEnvelope(json: unknown): string | null {
+  const j = json as Record<string, any> | null
+  if (!j || typeof j !== 'object') return null
+  const openai = j.choices?.[0]?.finish_reason
+  if (typeof openai === 'string' && openai) return openai
+  const google = j.candidates?.[0]?.finishReason
+  if (typeof google === 'string' && google) return google
+  return null
+}
+
+/**
+ * True when the finish marker says the completion was cut off by the output
+ * budget: OpenAI's 'length' or Google's 'MAX_TOKENS' (case-insensitive — the
+ * native value is upper-snake). Every other marker ('stop', 'end_turn',
+ * 'SAFETY', ...) and a MISSING marker (some gateways omit it) leave the
+ * response's handling unchanged.
+ */
+export function isLengthTruncated(finishReason: string | null | undefined): boolean {
+  if (!finishReason) return false
+  const r = finishReason.toLowerCase()
+  return r === 'length' || r === 'max_tokens'
+}
+
+/**
  * Collect every plausible completion-text slot from ANY provider envelope —
  * OpenAI chat (message.content string OR array of typed parts, legacy .text),
  * Anthropic (content blocks), Gemini (candidates parts), Responses API
@@ -228,7 +285,7 @@ export function extractScanPayload(
   provider: ProviderId,
   json: unknown,
   extractors: Record<ProviderId, (j: Record<string, any>) => { text: unknown } | null>,
-): { raw: unknown; inputTokens: number; outputTokens: number } | null {
+): { raw: unknown; inputTokens: number; outputTokens: number; finishReason: string | null } | null {
   // The content string is whatever the model wrote. With structured-output
   // mode it is clean JSON; in degraded (json_object / instruction-contract)
   // mode it is USUALLY clean — but a malformed payload must read as a shape
@@ -248,7 +305,10 @@ export function extractScanPayload(
     const raw = safeParse(extracted.text)
     if (raw === undefined) return null
     const usage = usageFromEnvelope(provider, j)
-    return { raw, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+    // Surfaced alongside the payload so the scan call can fail HONESTLY on a
+    // length-cut answer instead of accepting (or fishing) a half payload.
+    const finishReason = finishReasonFromEnvelope(json)
+    return { raw, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, finishReason }
   } catch {
     return null
   }

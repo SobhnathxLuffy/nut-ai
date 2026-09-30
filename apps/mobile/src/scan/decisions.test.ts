@@ -268,6 +268,22 @@ describe('contract: one-shot instruction-schema retry (degraded-answer rescue)',
     ).toBe(false)
   })
 
+  it('retries a truncated thinking-model answer — a budget failure, not a shape failure', () => {
+    // The length-cut answer is a real failure class on thinking models (the
+    // live gemini-2.5-flash case): the rescue re-asks with the schema as
+    // instruction text, and because the rescue rides runScanWithFallback its
+    // retry carries a doubled (capped) budget instead of the identical one.
+    expect(
+      shouldRetryWithInstructionSchema({ ok: false, failureKind: 'truncated', retryable: true }, 'json-schema'),
+    ).toBe(true)
+  })
+
+  it('truncated in instruction mode stays un-retried (no third identical billing)', () => {
+    expect(
+      shouldRetryWithInstructionSchema({ ok: false, failureKind: 'truncated', retryable: true }, 'instruction'),
+    ).toBe(false)
+  })
+
   it('never retries transport failures the user can actually fix', () => {
     for (const kind of ['key-invalid', 'offline', 'timeout-ambiguous', 'quota-exhausted', 'model-unavailable']) {
       expect(

@@ -3,6 +3,7 @@ import {
   buildGeminiRequest,
   buildOpenAIRequest,
   computeScanCost,
+  DEFAULT_SCAN_MAX_TOKENS,
   type ProviderId,
 } from '@nutai/prompt'
 import { withBaseUrl } from '../../base-url'
@@ -11,8 +12,11 @@ import {
   DEFAULT_TIMEOUT_MS,
   extractScanPayload,
   fishPayloadFromResponse,
+  finishReasonFromEnvelope,
+  isLengthTruncated,
   SCHEMA_MALFORMED_JSON,
   serializeBody,
+  TRUNCATION_FAILURE,
   usageFromEnvelope,
 } from '../wire/errors'
 import type { ScanOutcome, ScanRequest, ScanSuccess } from '../wire/types'
@@ -46,6 +50,15 @@ interface ScanAttempt {
   responseText: string | null
 }
 
+/**
+ * Ceiling for the truncation-escalation retry (DEFAULT doubled, then capped).
+ * The cap is what keeps the escalation inside every catalogue model's output
+ * limit — a raised budget that the provider itself rejects would trade one
+ * honest failure for a different one. Local to this module: the escalation
+ * is runScanWithFallback's private concern; callers shape it via req.maxTokens.
+ */
+const TRUNCATION_ESCALATION_MAX_TOKENS = 16384
+
 async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promise<ScanAttempt> {
   const viaGateway = !!req.baseUrl
   const input = {
@@ -54,6 +67,10 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
     localSignalsBlock: req.localSignalsBlock,
     jsonSchema: req.jsonSchema,
     instructionSchema: req.instructionSchema,
+    // Per-attempt output budget, threaded into every builder's
+    // `?? DEFAULT_SCAN_MAX_TOKENS`. Undefined = the catalogue default; the
+    // truncation-escalation retry below passes the RAISED value here.
+    maxTokens: req.maxTokens,
   }
 
   // ROUTING: on a custom base URL every provider rides the OpenAI builder —
@@ -100,6 +117,22 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
       return { outcome: { ok: false, error: SCHEMA_MALFORMED_JSON }, responseText: text }
     }
 
+    // HONEST TRUNCATION, checked BEFORE anything parses or fishes: the
+    // envelope's own finish marker is the provider telling us the completion
+    // was cut off by the output-token budget (the live aicredits.in case — a
+    // thinking model burned max_tokens on reasoning and returned ~100 visible
+    // tokens of half a JSON object, which used to parse-fail into a generic
+    // "could not recognise food"). A half payload is garbage by construction:
+    // it is failed AS truncated — never fished, never half-accepted — and
+    // surfaced as retryable because the retry is REAL, not an invitation to
+    // tap the button again: runScanWithFallback escalates once to a doubled
+    // budget, and the orchestrator's instruction-schema rescue is the layer
+    // behind that.
+    const finishReason = finishReasonFromEnvelope(json)
+    if (isLengthTruncated(finishReason)) {
+      return { outcome: { ok: false, error: TRUNCATION_FAILURE }, responseText: text }
+    }
+
     const extracted = extractScanPayload(envelope, json, scanPayloadExtractors)
     if (extracted && extracted.raw != null) {
       return {
@@ -114,6 +147,7 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
             costUsd: computeScanCost(req.provider, req.model, extracted.inputTokens, extracted.outputTokens),
             latencyMs: Date.now() - started,
             promptVersion: built.promptVersion,
+            finishReason,
           },
         },
         responseText: text,
@@ -138,6 +172,7 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
             costUsd: computeScanCost(req.provider, req.model, usage.inputTokens, usage.outputTokens),
             latencyMs: Date.now() - started,
             promptVersion: built.promptVersion,
+            finishReason,
           },
         },
         responseText: text,
@@ -165,13 +200,31 @@ export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch)
 import { classifyTransportError as classifyTransport } from '../wire/errors'
 
 /**
- * The scan with a structural safety net.
+ * The scan with a truncation escalation AND a structural safety net.
  *
- * A provider that rejects our schema DIALECT (a structural 400, before auth or
- * billing) should not brick scanning: the same request is retried once with no
- * structured-output mode at all, relying on the prompt plus client-side Zod.
- * That retry costs nothing extra — a structurally rejected request is never
- * billed. Auth failures (401/403) and everything else pass through untouched.
+ * TRUNCATION ESCALATION (thinking models): a completion that comes back
+ * finish-reason 'length' burned the attempt's output budget on reasoning and
+ * was failed honestly as kind 'truncated'. The SAME budget would truncate
+ * again, so exactly ONE escalated retry runs at min(base*2, 16384) — still
+ * inside every catalogue model's output cap — with the request's schema mode
+ * untouched. This is a BUDGET fix, not a structured-output fallback, so
+ * usedSchemaFallback stays absent on success. If the escalated attempt also
+ * truncates there is no second escalation here: the failure falls through to
+ * the fishing last-resort below, and the orchestrator's instruction-schema
+ * rescue (shouldRetryWithInstructionSchema accepts 'truncated') becomes the
+ * next layer — whose own runScanWithFallback escalates again. Worst case for
+ * one user scan is therefore 4 bounded billed attempts, each recorded.
+ *
+ * STRUCTURAL SAFETY NET: a provider that rejects our schema DIALECT (a
+ * structural 400, before auth or billing) should not brick scanning: the same
+ * request is retried once with no structured-output mode at all, relying on
+ * the prompt plus client-side Zod. That retry costs nothing extra — a
+ * structurally rejected request is never billed. The two nets are mutually
+ * exclusive BY CONSTRUCTION: a truncation is an HTTP 200 envelope failure
+ * (TRUNCATION_FAILURE carries no httpStatus), a dialect rejection is a
+ * classify() 400 — the same first outcome can never qualify for both. Auth
+ * failures (401/403), timeouts and every other failure pass through with no
+ * retry at all.
  */
 export async function runScanWithFallback(
   req: ScanRequest,
@@ -179,20 +232,46 @@ export async function runScanWithFallback(
 ): Promise<ScanOutcome & { usedSchemaFallback?: boolean }> {
   const started = Date.now()
   const first = await runScanAttempt(req, fetchImpl)
+  const truncated = !first.outcome.ok && first.outcome.error.kind === 'truncated'
+
+  // The escalated retry doubles the REQUEST'S OWN base (not a hardcoded
+  // default — an explicit req.maxTokens raises the whole chain with it) and
+  // caps at 16384 so a mis-typed override can never push past what catalogue
+  // models accept. At most ONE escalation here: if the raised budget also
+  // truncates, budget is no longer the diagnosis and more attempts belong to
+  // the orchestrator's rescue, not to this function.
+  const escalated = truncated
+    ? await runScanAttempt(
+        { ...req, maxTokens: Math.min((req.maxTokens ?? DEFAULT_SCAN_MAX_TOKENS) * 2, TRUNCATION_ESCALATION_MAX_TOKENS) },
+        fetchImpl,
+      )
+    : null
+  // Success on the raised budget returns as-is; usedSchemaFallback stays
+  // ABSENT — the escalated attempt reused the request's own schema mode, so
+  // it must not read as a structured-output fallback downstream.
+  if (escalated?.outcome.ok) return escalated.outcome
+
   const structural =
     // eslint-disable-next-line no-restricted-syntax -- httpStatus is carrier info the outcome union deliberately does not surface
     !first.outcome.ok && (first.outcome as any).error?.httpStatus === 400 && req.jsonSchema != null
-  if (!structural) return first.outcome
+  // A truncation does NOT return early: its second attempt already ran (the
+  // escalation above), and the fishing last-resort below still applies to
+  // both bodies before the honest failure is surfaced.
+  if (!structural && !truncated) return first.outcome
 
-  // Second attempt: structured-output mode OFF, but the schema ships as TEXT
-  // in the instruction (instructionSchema). A degraded scan that still knows
-  // the field contract beats a free-form answer that drifts — the drift was
-  // exactly what failed client-side Zod on reseller gateways.
-  const second = await runScanAttempt(
-    { ...req, jsonSchema: null, instructionSchema: req.jsonSchema },
-    fetchImpl,
-  )
-  if (second.outcome.ok) return { ...second.outcome, usedSchemaFallback: true }
+  // Second attempt in play. When the STRUCTURAL net fired: structured-output
+  // mode OFF, but the schema ships as TEXT in the instruction
+  // (instructionSchema) — a degraded scan that still knows the field contract
+  // beats a free-form answer that drifts, which is exactly what failed
+  // client-side Zod on reseller gateways. When the TRUNCATION escalation
+  // fired instead, that attempt IS the second one — no new request.
+  const second = structural
+    ? await runScanAttempt(
+        { ...req, jsonSchema: null, instructionSchema: req.jsonSchema },
+        fetchImpl,
+      )
+    : escalated
+  if (structural && second?.outcome.ok) return { ...second.outcome, usedSchemaFallback: true }
 
   // LAST RESORT before surfacing the failure: the retry ALSO failed. Fish a
   // JSON object out of any prose in EITHER response body — no new request, no
@@ -202,7 +281,7 @@ export async function runScanWithFallback(
   // converted into a fake payload.
   const usageEnvelope: ProviderId = req.baseUrl ? 'openai' : req.provider
   for (const attempt of [second, first]) {
-    if (!attempt.responseText) continue
+    if (attempt == null || !attempt.responseText) continue
     let parsedBody: unknown = attempt.responseText
     try {
       parsedBody = JSON.parse(attempt.responseText)

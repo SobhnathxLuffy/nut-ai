@@ -40,10 +40,14 @@ const ANTHROPIC_CRED = { kind: 'api_key' as const, value: 'test-key' }
 describe('golden: system prompt', () => {
   it('PROMPT_VERSION stays the pinned contract string', () => {
     // Intentional prompt version bumps MUST update this golden in the same
-    // commit — the version rides the scan ledger. v1.2.0 = scene-aware scan
-    // contract: scene classification, per-item visibility, model_gram_range,
-    // strengthened Indian hidden-fat guidance.
-    expect(PROMPT_VERSION).toBe('food-scan-v1.2.0')
+    // commit — the version rides the scan ledger. v1.3.0 = the live-tested
+    // reasoning-rule structure: hard prohibitions (no calorie math, no
+    // invented grams), meal identity vs components, absolute-scale honesty,
+    // high-impact-question priority, natural serving units, component amounts,
+    // fat semantics (intrinsic vs added cooking fat), visible-vs-inferred, and
+    // the always-emitted honesty blocks (portion_context, qualitative_amount,
+    // preparation, major_uncertainties, highest_impact_question, summary).
+    expect(PROMPT_VERSION).toBe('food-scan-v1.3.0')
   })
 
   it('SYSTEM_PROMPT bytes are pinned (update the golden deliberately)', () => {
@@ -86,7 +90,10 @@ describe('golden: anthropic scan request', () => {
       'content-type': 'application/json',
     })
     const body = req.body as Record<string, unknown>
-    expect(body['max_tokens']).toBe(4096)
+    // 8192, not 4096: thinking models (gemini-2.5-flash through OpenAI-
+    // compatible gateways) spend the completion budget on reasoning before the
+    // visible JSON — 4096 truncated scans mid-payload.
+    expect(body['max_tokens']).toBe(8192)
     expect(body['messages']).toHaveLength(1)
     expect(body['output_config']).toEqual({
       format: { type: 'json_schema', schema: VISION_WIRE_SCHEMA },
@@ -140,7 +147,7 @@ describe('golden: gemini scan request', () => {
  * reason in the commit message. Copy the digest from the failing assertion
  * message ("Received" line) into SYSTEM_PROMPT_GOLDEN_SHA256.
  */
-const SYSTEM_PROMPT_GOLDEN_SHA256 = '8daf62fa7f6f7f3fb8323a02c3d69f2227d2ef30b30c975fe33c5a2e0e560585'
+const SYSTEM_PROMPT_GOLDEN_SHA256 = '4acedf9197903e85a3b614951b797a95026ac3035731c605ee702e54e000e69f'
 
 // P3-D3: computed from the current ASSISTANT_SYSTEM_PROMPT. Update in the
 // same commit as an intentional prompt edit and say why in the message.

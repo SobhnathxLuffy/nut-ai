@@ -4,7 +4,7 @@ import type { ProviderId } from '@nutai/prompt'
 import type { ScanResult } from '@nutai/pipeline'
 import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { SelectedQuestion } from '@nutai/repair'
-import { wholeDishSizeMultiplier } from '@nutai/repair'
+import { ADDED_FAT_MULTIPLIERS, addedFatMultiplier, wholeDishSizeMultiplier } from '@nutai/repair'
 import { countAnswerValue, countMultiplierFor, rowIdForNamedQuestion } from './review'
 import { useSyncExternalStore } from 'react'
 import type { ScanFailureKind } from '../inference/pathA/client'
@@ -265,8 +265,60 @@ export function answerQuestion(q: SelectedQuestion, value: string) {
     editGrams(rowId, baseline * multiplier)
     return
   }
+  if (q.question.id === 'added_fat') {
+    // Schema v1.3 meal-level hidden-fat rescale. The question is about the
+    // MEAL's cooking fat, which may span several synthetic rows (two fried
+    // dishes); every hidden-fat row rescales from its OWN baseline, and no
+    // other row is touched.
+    if (phase.kind !== 'ready') return
+    const multiplier = addedFatMultiplier(value)
+    if (multiplier == null) return
+    for (const row of phase.result.meal.ingredients) {
+      if (!isHiddenFatRow(row)) continue
+      // Baseline = the grams the scan landed the assumption at (never the
+      // live grams — a prior answer or typed value must not compound).
+      const baseline = scanGramsByRowId.get(row.id) ?? row.grams
+      // The level the scan LANDED at is folded into the row (a disclosed
+      // 'heavy' row is already base × 1.6). Dividing it back out makes the
+      // answers REPLACE the level instead of compounding onto it: confirming
+      // 'heavy' on a heavy-landed row is a no-op, not 2.56×. Rows without a
+      // disclosure (the engine's cue-triggered rows) ARE the moderate
+      // reference — the landed estimate is what the table's 1.0 means.
+      const landed = landedAddedFatLevel(row)
+      const landedMult = landed != null ? ADDED_FAT_MULTIPLIERS[landed] : undefined
+      const reference =
+        typeof landedMult === 'number' && landedMult > 0 ? baseline / landedMult : baseline
+      const grams = reference * multiplier
+      if (!Number.isFinite(grams) || grams < 0) continue
+      // 'none' lands at 0 g — the row STAYS (at zero, contributing nothing to
+      // totals) rather than being removed, so a later answer can restore it,
+      // and confirming the level the scan already landed at is a no-op that
+      // never falsely stamps the row Confirmed.
+      if (grams === row.grams) continue
+      editGrams(row.id, grams)
+    }
+    return
+  }
   // Remaining answers swap a row's snapshot against a bundled filler food. That
   // lookup belongs to the resolver and is wired at the screen level.
+}
+
+/** The oil row marker the pipeline sets on every hidden-fat assumption row. */
+function isHiddenFatRow(row: IngredientRow): boolean {
+  return row.assumptions.some((a) => a.type === 'oil_added')
+}
+
+/**
+ * The disclosed cooking-fat level the scan landed this row at, read
+ * defensively off the schema v1.3 preparation block (the field is optional
+ * and its owner lands independently of this store). Null = no disclosure —
+ * the engine's heuristic rows have none, and their landed grams ARE the
+ * added_fat table's 1.0 reference.
+ */
+function landedAddedFatLevel(row: IngredientRow): string | null {
+  const prep = (row as { preparation?: { addedCookingFat?: unknown } | null }).preparation
+  const level = prep != null ? prep.addedCookingFat : undefined
+  return typeof level === 'string' && level in ADDED_FAT_MULTIPLIERS && level !== 'none' ? level : null
 }
 
 export function setWebLookup(rowId: string, state: WebLookupState) {

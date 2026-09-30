@@ -37,8 +37,27 @@ import { z } from 'zod'
  * attribution — nothing branches on its value — and @nutai/pipeline's repair
  * layer re-stamps old '1.0.0' answers before validation, which keeps accepting
  * them because every field this version adds is OPTIONAL.
+ *
+ * 1.2.0 (prompt v1.3.0 honesty blocks): adds the optional top-level
+ * `portion_context`, `major_uncertainties`, `highest_impact_question` and
+ * `summary` blocks and the optional per-item `qualitative_amount` and
+ * `preparation`. Same safety argument as 1.1.0, word for word: every field is
+ * OPTIONAL in Zod (only `highest_impact_question` is additionally nullable),
+ * the repair layer re-stamps whatever older version an answer carries before
+ * validation, and nothing downstream branches on the version string — it is
+ * inert eval-attribution metadata, not a migration gate.
+ *
+ * DESIGN NOTE — why the new string/enum fields prefer 'unknown'-sentinel enums
+ * and '' defaults over nullable: the reseller-gateway sanitizer
+ * (@nutai/prompt sanitizeJsonSchemaForWire) strips NULL BRANCHES from the wire
+ * schema, and the OpenAI strict dialect requires every property. A nullable
+ * string would leave the model nowhere honest to go on that path. An enum
+ * ending in 'unknown' (or a string defaulting to '') stays valid on every
+ * dialect AND keeps the honest "I could not tell" answer expressible.
+ * `highest_impact_question` is the deliberate exception: null is its honest
+ * "no question" state, mirroring model_gram_range's existing nullability.
  */
-export const SCHEMA_VERSION = '1.1.0' as const
+export const SCHEMA_VERSION = '1.2.0' as const
 
 /** Physical form. Selects which volume heuristic the gram engine applies. */
 export const FoodFormZ = z.enum(['discrete', 'flat', 'piled', 'liquid', 'wrapped', 'spread'])
@@ -183,6 +202,37 @@ export const QualitativeSizeZ = z
     "qualitative_size must be 'small', 'medium', 'large', or 'count:N'",
   )
 
+/**
+ * How much of THIS component the meal contains, relative to a normal serving
+ * of it — the model's honest answer for everything that cannot be counted in
+ * natural units (scattered garnishes, spread sauces, stirred-through herbs) or
+ * where even a broad gram range would be invented. Prompt v1.3.0 makes it
+ * mandatory in practice (always emitted); optional here so pre-1.3 payloads
+ * still validate. 'unknown' is the honest "I could not tell" — never silently
+ * guessed. Downstream treats absence exactly like 'unknown'.
+ */
+export const QualitativeAmountZ = z.enum(['tiny', 'light', 'moderate', 'heavy', 'unknown'])
+export type QualitativeAmount = z.infer<typeof QualitativeAmountZ>
+
+/**
+ * Fat levels for the preparation block. `intrinsic_fat` grades the fat the
+ * FOOD ITSELF contains (cheese, pepperoni, egg yolk); `added_cooking_fat`
+ * grades fat added IN COOKING — ghee/oil/butter brushed on, fried in, or
+ * tempered in — which is invisible once plated and is the single largest
+ * hidden calorie source. 'none' exists only on added_cooking_fat, because a
+ * food can genuinely be cooked without added fat (steamed rice, dry roti);
+ * intrinsic fat is never 'none' until measured, hence 'low' as its floor.
+ */
+export const PreparationZ = z.object({
+  /** What can be seen or responsibly inferred about how it was cooked. */
+  method: z.string().default(''),
+  intrinsic_fat: z.enum(['low', 'moderate', 'high', 'unknown']),
+  added_cooking_fat: z.enum(['none', 'light', 'moderate', 'heavy', 'unknown']),
+  /** Probability this whole preparation read is right. 0–1, like the rest. */
+  confidence: z.number().min(0).max(1),
+})
+export type Preparation = z.infer<typeof PreparationZ>
+
 export const MacrosZ = z.object({
   calories_kcal: z.number(),
   protein_g: z.number(),
@@ -257,6 +307,17 @@ export const ItemZ = z.object({
    * fat must be 'inferred' AND carry its own stated_assumptions entry.
    */
   visibility: VisibilityZ.optional(),
+  /**
+   * How much of this component the meal contains, relative to a normal serving
+   * of it. Absent means 'unknown' (the pre-1.3 default). See QualitativeAmountZ.
+   */
+  qualitative_amount: QualitativeAmountZ.optional(),
+  /**
+   * The model's cooking read: method, intrinsic fat, and ADDED COOKING FAT
+   * (ghee/oil/butter brushed on or fried in — never the food's own fat).
+   * Absent means the pre-1.3 payloads that predate the block. See PreparationZ.
+   */
+  preparation: PreparationZ.optional(),
   identification_confidence: z.number().min(0).max(1),
   /**
    * Probability the mass estimate is within ~20% of truth. Reported SEPARATELY
@@ -344,6 +405,55 @@ export const SceneZ = z.object({
 })
 export type Scene = z.infer<typeof SceneZ>
 
+/**
+ * The meal-level scale-honesty block (prompt v1.3.0): does the photo even
+ * support ABSOLUTE portion claims, and how much? This is where the model
+ * answers "the whole meal is in frame but there is no scale reference" — the
+ * exact situation that used to produce fake-precise grams. The 'unknown'
+ * sentinel on absolute_portion_confidence is deliberate: the wire sanitizer
+ * strips null branches, so "no idea" must be expressible as a VALUE.
+ * Optional in Zod so pre-1.3 payloads keep validating; the v1.3 prompt makes
+ * the model always emit it.
+ */
+export const PortionContextZ = z.object({
+  /** Whether the ENTIRE meal is in frame, not just part of it. */
+  whole_meal_visible: z.boolean(),
+  /** Whether any reliable scale reference (card, coin, can, named plate) exists. */
+  scale_reference_available: z.boolean(),
+  /** WHAT the reference is, when one exists — empty string when none. */
+  scale_reference_description: z.string().default(''),
+  absolute_portion_confidence: z.enum(['high', 'medium', 'low', 'unknown']),
+})
+
+/** One factor dominating the uncertainty in the meal's TOTAL calories. */
+export const UncertaintyFactorZ = z.object({
+  /** The specific uncertain thing, e.g. 'amount of ghee in the gravies'. */
+  factor: z.string().min(1),
+  /** How badly resolving this factor wrong would move the meal total. */
+  impact_on_total_calories: z.enum(['low', 'medium', 'high']),
+})
+
+/**
+ * The ONE question whose answer most reduces TOTAL-calorie uncertainty
+ * (prompt v1.3.0's priority list: eaten amount → meal size → piece count →
+ * hidden fat → preparation). Nullable, not sentinel-typed, because "there is
+ * no question" is a genuine state (refusals, fully-labeled packaged food) —
+ * the same honesty argument as model_gram_range's null. The wire sanitizer
+ * strips the null branch on the OpenAI-compatible path; the prompt instructs a
+ * {"question":"none","options":[]} object there, and Zod keeps accepting both.
+ */
+export const HighImpactQuestionZ = z.object({
+  question: z.string().min(4),
+  /** 2–6 one-tap answers when a handful covers the space; empty when freeform. */
+  options: z.array(z.string()).max(6),
+})
+
+/** Two honest sentences about the meal as a whole. */
+export const SummaryBlocksZ = z.object({
+  what_is_known: z.string().default(''),
+  what_is_not_known: z.string().default(''),
+})
+
 export const VisionPayloadZ = z.object({
   schema_version: z.literal(SCHEMA_VERSION),
   is_food: z.boolean(),
@@ -358,6 +468,23 @@ export const VisionPayloadZ = z.object({
   items: z.array(ItemZ),
   /** Whole-frame meal identity. Optional so pre-1.1 payloads still validate. */
   scene: SceneZ.optional(),
+  /**
+   * Scale-honesty block. Optional so pre-1.3 payloads still validate; the
+   * v1.3 prompt makes the model always emit it. See PortionContextZ.
+   */
+  portion_context: PortionContextZ.optional(),
+  /**
+   * Up to 5 factors dominating TOTAL-calorie uncertainty, most impactful
+   * first. Empty array is a valid, honest answer for an unambiguous photo.
+   */
+  major_uncertainties: z.array(UncertaintyFactorZ).max(5).optional(),
+  /**
+   * The single question that most reduces TOTAL-calorie uncertainty. Null is
+   * the honest "no question warranted". See HighImpactQuestionZ.
+   */
+  highest_impact_question: HighImpactQuestionZ.nullable().optional(),
+  /** Two honest sentences: what is known, what is not. See SummaryBlocksZ. */
+  summary: SummaryBlocksZ.optional(),
   meal_overall: MealOverallZ,
 })
 export type VisionPayload = z.infer<typeof VisionPayloadZ>

@@ -36,6 +36,14 @@ import {
   roundForUncertainty,
   sceneCaptionFor,
 } from '../src/scan/review'
+import {
+  portionConfidenceNoteFor,
+  preparationNoteFor,
+  shouldShowModelQuestionCard,
+  summaryLinesFor,
+  type ScanResultV13,
+  topUncertaintyFor,
+} from '../src/scan/review'
 import { describeActiveModel } from '../src/inference/active-model'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { isQuickEligible } from '../src/scan/quick-mode'
@@ -249,6 +257,26 @@ export default function Result() {
     .filter(([, s]) => s.status === 'failed')
     .map(([id]) => id)
 
+  // Task 3-c: what the model itself flagged, per contract v1.3.0. Today's
+  // pipeline does not set these fields yet; ScanResultV13 adds them OPTIONAL
+  // (a checked assignment, not a cast), so this is the single seam that turns
+  // into a no-op the moment 3-b lands the real declarations. Every decision
+  // below is a tested helper in src/scan/review.ts — the JSX only renders.
+  const resultV13: ScanResultV13 = result
+  const summaryLines = summaryLinesFor(resultV13)
+  const topUncertainty = topUncertaintyFor(resultV13.uncertaintyFactors, { rangeShown: showLikelyRange })
+  const portionNote = portionConfidenceNoteFor(resultV13.portionContext)
+  const modelQuestion = resultV13.highImpactQuestion ?? null
+  // A pre-answered chip is the same question silently answered by a default —
+  // it counts as "already on screen" for suppression, exactly like a
+  // highlighted chip would.
+  const showModelQuestion =
+    modelQuestion != null &&
+    shouldShowModelQuestionCard(resultV13, [
+      ...highlighted.map((q) => q.text),
+      ...preAnswered.map((q) => q.text),
+    ])
+
   function logNow() {
     if (logging) return
     setLogging(true)
@@ -308,6 +336,9 @@ export default function Result() {
               {sceneCaption}
             </Text>
           ) : null}
+          {/* Task 3-c: what the model could and could not see — under the
+              title/caption block in BOTH views. */}
+          <HonestySummaryCard known={summaryLines.known} unknown={summaryLines.unknown} />
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
             Quick result — every ingredient matched the database with high confidence, nothing needs a check.
           </Text>
@@ -327,6 +358,18 @@ export default function Result() {
                 {likelyRangeLabel(result.totals.kcal, result.mealBand)}
               </Text>
             ) : null}
+            {/* Task 3-c: the model's own biggest calorie flag, then the
+                portion-context chip — both quick and advanced views. */}
+            {topUncertainty ? (
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+                {topUncertainty}
+              </Text>
+            ) : null}
+            {portionNote ? (
+              <View accessibilityLabel={portionNote} style={[styles.portionChip, { backgroundColor: theme.uncertainBg }]}>
+                <Text style={[type.caption, { color: theme.uncertain }]}>{portionNote}</Text>
+              </View>
+            ) : null}
 
             <View style={{ marginTop: space.md }}>
               <ConfidenceChip
@@ -340,6 +383,13 @@ export default function Result() {
           </View>
 
           <MacroStats totals={result.totals} />
+
+          {/* Task 3-c: the model's ONE high-impact question — high-value
+              enough for the quick view too (a quick-eligible scan can still
+              carry one). Informational only, never a second way to answer. */}
+          {modelQuestion && showModelQuestion ? (
+            <ModelQuestionCard question={modelQuestion.question} options={modelQuestion.options} />
+          ) : null}
 
           {/* P2-9: a custom (reseller) model has no catalogue price — say so
               instead of the ledger quietly reading as free. */}
@@ -406,7 +456,8 @@ export default function Result() {
             {sceneCaption}
           </Text>
         ) : null}
-
+        {/* Task 3-c: known/unknown summary — under the title/caption block. */}
+        <HonestySummaryCard known={summaryLines.known} unknown={summaryLines.unknown} />
         {reviewMode === 'quick' && !quickEligible && (
           <View style={[styles.quickNotice, { backgroundColor: theme.uncertainBg }]}>
             <Text style={[type.caption, { color: theme.text, lineHeight: 19 }]}>
@@ -440,6 +491,18 @@ export default function Result() {
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
               {likelyRangeLabel(result.totals.kcal, result.mealBand)}
             </Text>
+          ) : null}
+          {/* Task 3-c: the model's own biggest calorie flag, then the
+              portion-context chip — both quick and advanced views. */}
+          {topUncertainty ? (
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+              {topUncertainty}
+            </Text>
+          ) : null}
+          {portionNote ? (
+            <View accessibilityLabel={portionNote} style={[styles.portionChip, { backgroundColor: theme.uncertainBg }]}>
+              <Text style={[type.caption, { color: theme.uncertain }]}>{portionNote}</Text>
+            </View>
           ) : null}
 
           <View style={{ marginTop: space.md }}>
@@ -501,6 +564,15 @@ export default function Result() {
           </View>
         )}
 
+        {/* Task 3-c: the model's ONE high-impact question, after the
+            question-chip section. Deliberately NON-interactive — answering
+            happens in the chips above; this only explains where one answer
+            would most improve the estimate. Suppressed when a chip already
+            carries the same question (shouldShowModelQuestionCard). */}
+        {modelQuestion && showModelQuestion ? (
+          <ModelQuestionCard question={modelQuestion.question} options={modelQuestion.options} />
+        ) : null}
+
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Ingredients</Text>
 
         {result.meal.ingredients.map((row) => {
@@ -512,6 +584,11 @@ export default function Result() {
           // while the number is still the model's own. Web-sourced rows keep
           // their citation — the per-100 g data it cites did not change.
           const provenance = estimateProvenanceLabel(row)
+          // Task 3-c: the model's preparation read (contract v1.3.0) — only a
+          // moderate/heavy ADDED cooking fat earns a note. Rendered as an
+          // additional muted line under the provenance chain; never replaces
+          // it (different facts: data source vs this meal's cooking).
+          const prepNote = preparationNoteFor(row)
           return (
             <View key={row.id}>
               <View style={[styles.row, { borderColor: theme.border }]}>
@@ -543,6 +620,9 @@ export default function Result() {
                     <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>
                       ⚠ Estimated
                     </Text>
+                  ) : null}
+                  {prepNote ? (
+                    <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>{prepNote}</Text>
                   ) : null}
                   {item && (
                     <ConfidenceChip
@@ -1329,6 +1409,61 @@ function MacroStats({ totals }: { totals: MacroTotals }) {
   )
 }
 
+/**
+ * Task 3-c: the known/unknown summary card (contract v1.3.0).
+ *
+ * Two independent, optional lines: what the model could SEE (theme.affirm)
+ * and what it could NOT (theme.uncertain — violet, an invitation to check,
+ * never a scold). Non-interactive by design; the card exists so silence can
+ * never fake knowledge. Renders nothing when both lines are absent —
+ * summaryLinesFor already applied the trimming/emptiness rules.
+ */
+function HonestySummaryCard({ known, unknown }: { known: string | null; unknown: string | null }) {
+  const theme = useTheme()
+  if (known == null && unknown == null) return null
+  return (
+    <View accessibilityLabel="What the model could and could not identify" style={[styles.honestyCard, { backgroundColor: theme.bgSunken }]}>
+      {known != null ? (
+        <Text style={[type.caption, { color: theme.affirm, lineHeight: 19 }]}>{known}</Text>
+      ) : null}
+      {unknown != null ? (
+        <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{unknown}</Text>
+      ) : null}
+    </View>
+  )
+}
+
+/**
+ * Task 3-c: the model's ONE high-impact question, stated as information.
+ *
+ * Deliberately NOT a chip: answering happens in the interactive violet chips
+ * above (3-b promotes keyword matches there); this card only explains which
+ * single answer would most improve the estimate. Neutral border + sunken
+ * background keep it visually distinct from the interactive question cards,
+ * and the explainer says so in words. No Pressable anywhere — it renders in
+ * both quick and advanced views whenever a chip does not already carry it.
+ */
+function ModelQuestionCard({ question, options }: { question: string; options: ReadonlyArray<string> }) {
+  const theme = useTheme()
+  return (
+    <View
+      accessibilityLabel={`The model's biggest question: ${question}`}
+      style={[styles.qCard, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+    >
+      <Text style={[type.label, { color: theme.textMuted }]}>The model's biggest question</Text>
+      <Text style={[type.bodyStrong, { color: theme.text, marginTop: space.xs }]}>{question}</Text>
+      {options.length > 0 ? (
+        <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
+          {options.join(' · ')}
+        </Text>
+      ) : null}
+      <Text style={[type.caption, { color: theme.textFaint, marginTop: space.sm, lineHeight: 19 }]}>
+        Answering this improves the estimate most. (Informational — tap a chip above to answer.)
+      </Text>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xl },
   statsPage: { flexDirection: 'row', gap: space.md },
@@ -1433,6 +1568,23 @@ const styles = StyleSheet.create({
     marginTop: space.md,
     padding: space.md,
     borderRadius: radius.md,
+  },
+  // Task 3-c: the known/unknown summary card — neutral sunken surface, the
+  // affirm/uncertain line colors carry the meaning. Static text, no tap.
+  honestyCard: {
+    marginTop: space.md,
+    padding: space.md,
+    borderRadius: radius.md,
+    gap: space.xs,
+  },
+  // Task 3-c: the portion-context honesty chip — a static badge (a View, not
+  // a Pressable), so it intentionally has no MIN_TAP_TARGET.
+  portionChip: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: space.md,
+    paddingVertical: space.xs,
+    borderRadius: radius.pill,
+    marginTop: space.xs,
   },
   actions: {
     position: 'absolute',

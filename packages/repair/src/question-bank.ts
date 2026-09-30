@@ -301,6 +301,37 @@ export const QUESTION_BANK: readonly BankQuestion[] = [
     defaultDisclosure: 'Used the counted amount',
     reasons: ['serving_count_ambiguous'],
   },
+  {
+    // Rank 15 (schema v1.3): the MEAL-level hidden-cooking-fat question. The
+    // rank-3 cooking_oil chip asks whether fat was involved at all; this one
+    // rescales an assumption that ALREADY exists — the absorbed-oil row the
+    // gram engine (or the model's own preparation disclosure) put on the meal.
+    // That is why it is multiplicative: 'moderate' is the estimate as landed,
+    // and the other answers REPLACE the level rather than add grams to it.
+    rank: 15,
+    id: 'added_fat',
+    text: 'How much oil/ghee was likely used in cooking this meal?',
+    // Home cooking fat is the single most over-determined complaint in the
+    // research corpus; one level of the ladder (light ↔ heavy) is worth well
+    // over 200 kcal on a real meal. Rounded down from cooking_oil's 240
+    // because the assumption this rescales already exists — the swing is the
+    // RESCALING error, not the whole hidden fat.
+    expectedSwingKcal: 180,
+    multiplicative: true,
+    options: [
+      { label: 'None', value: 'none' },
+      { label: 'Light', value: 'light' },
+      { label: 'Moderate', value: 'moderate' },
+      { label: 'Heavy', value: 'heavy' },
+    ],
+    // The neutral default keeps the landed assumption untouched (multiplier
+    // 1.0) — we never silently RESCALE a disclosed amount, we only disclose.
+    silentDefault: 'moderate',
+    defaultDisclosure: 'Assumed a moderate amount of cooking fat — tap to rescale',
+    // Explicit-trigger question like thali_scope: applicability is decided by
+    // the meal's hidden-fat signal (see selectQuestions), not by reason match.
+    reasons: ['none'],
+  },
 ]
 
 /**
@@ -391,6 +422,63 @@ export function countAnswerMultiplier(qualitativeSize: string, answerCount: numb
   const n = COUNT_SIZE.exec(qualitativeSize)
   if (n == null || answerCount <= 0) return null
   return answerCount / Number(n[1])
+}
+
+/**
+ * The added_fat answer table (schema v1.3), applied to the meal's hidden-fat /
+ * absorbed-oil assumption grams. The 1.0 reference is the MODERATE level: the
+ * amount the scan's assumption already represents.
+ *
+ *   none     0.0  the user says no cooking fat — the assumption's grams go to
+ *                 zero (the row stays, at 0 g, so a later answer can restore
+ *                 it; a removed row could not)
+ *   light    0.6  a Light answer trims the landed assumption to ~60%
+ *   moderate 1.0  keeps the estimate as landed
+ *   heavy    1.6  heavy home cooking (the classic unrestricted tadka/frying)
+ *
+ * The SAME table scales the pipeline's disclosed-fat synthesis
+ * (packages/pipeline): a 'heavy' preparation disclosure lands a row at base ×
+ * 1.6, so a user confirming 'heavy' on that row is a no-op, not a compounding
+ * 2.56×. One table, two consumers, one definition of a "level".
+ */
+export const ADDED_FAT_MULTIPLIERS: Readonly<Record<string, number>> = {
+  none: 0.0,
+  light: 0.6,
+  moderate: 1.0,
+  heavy: 1.6,
+}
+
+/**
+ * The grams multiplier for an added_fat answer. Any value outside the table
+ * maps to null — never to a guessed 1.0, because "unknown how to apply" and
+ * "keep the estimate" are different answers. ('none' is a real multiplier: 0.)
+ */
+export function addedFatMultiplier(optionValue: string): number | null {
+  const m = ADDED_FAT_MULTIPLIERS[optionValue]
+  return typeof m === 'number' ? m : null
+}
+
+/**
+ * The meal-level hidden-fat signal the pipeline computes for the added_fat
+ * trigger: the strongest disclosed `preparation.added_cooking_fat` level
+ * across the meal's items ('none' when nothing was disclosed) plus whether a
+ * hidden-fat row (absorbed-oil assumption) exists at all.
+ */
+export interface AddedFatSignal {
+  level: 'none' | 'unknown' | 'light' | 'moderate' | 'heavy'
+  hasHiddenFatRow: boolean
+}
+
+/**
+ * The added_fat trigger: a DISCLOSED uncertain level (the model said fat was
+ * used but could not pin it — anything except a clean 'none') OR an existing
+ * hidden-fat row to rescale. A meal where every row discloses 'none' and no
+ * absorbed-oil row exists has no hidden fat to ask about.
+ */
+export function isAddedFatTriggered(signal: AddedFatSignal | null | undefined): boolean {
+  if (signal == null) return false
+  if (signal.hasHiddenFatRow) return true
+  return signal.level === 'unknown' || signal.level === 'light' || signal.level === 'moderate' || signal.level === 'heavy'
 }
 
 export function questionByReason(reason: UncertaintyReason): BankQuestion | null {

@@ -1,6 +1,7 @@
 import type { Band, BandTier } from '@nutai/confidence'
 import { rangeFor } from '@nutai/confidence'
 import type { IngredientRow } from '@nutai/core-schema'
+import type { ScanResult } from '@nutai/pipeline'
 import { countAnswerMultiplier } from '@nutai/repair'
 
 /**
@@ -287,4 +288,266 @@ export function countAnswerValue(optionValue: string): number | null {
   if (optionValue === '4plus') return 4
   const n = Number(optionValue)
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+// ---------------------------------------------------------------------------
+// Contract v1.3.0 honesty surfaces — what the model itself flagged
+// ---------------------------------------------------------------------------
+
+/**
+ * Wave-3 contract slices, mirrored from contract v1.3.0: the fields 3-b wires
+ * onto ScanResult (known/unknownSummary, uncertaintyFactors,
+ * highImpactQuestion, portionContext) and onto IngredientRow (preparation).
+ * They live HERE as structural declarations — the same move as TitleInput —
+ * so the review screen compiles and tests before the pipeline lands the real
+ * fields, and keeps compiling unchanged the moment it does. The shapes are
+ * pinned next to the code that consumes them, so any drift in the landed
+ * contract shows up as a typecheck error at this seam, not as wrong UI.
+ */
+export interface PortionContext {
+  wholeMealVisible: boolean
+  scaleReferenceAvailable: boolean
+  scaleReferenceDescription: string | null
+  absolutePortionConfidence: 'low' | 'medium' | 'high' | 'unknown'
+}
+
+export interface UncertaintyFactor {
+  factor: string
+  impactOnTotalCalories: 'low' | 'medium' | 'high'
+}
+
+export interface ModelHighImpactQuestion {
+  question: string
+  options: string[]
+}
+
+export interface PreparationInfo {
+  method: string
+  intrinsicFat: 'low' | 'moderate' | 'high' | 'unknown'
+  addedCookingFat: 'none' | 'light' | 'moderate' | 'heavy' | 'unknown'
+  confidence: number
+}
+
+/**
+ * ScanResult as contract v1.3.0 delivers it. All five fields are OPTIONAL so
+ * a result built by today's pipeline — which does not set them yet — is still
+ * a valid ScanResultV13; result.tsx annotates its result with this type and
+ * reads the fields defensively. When 3-b lands the real declarations the
+ * alias becomes a no-op (a checked assignment, not a cast, so any shape drift
+ * fails the typecheck instead of silently changing the screen).
+ */
+export type ScanResultV13 = ScanResult & {
+  knownSummary?: string | null
+  unknownSummary?: string | null
+  uncertaintyFactors?: ReadonlyArray<UncertaintyFactor> | null
+  highImpactQuestion?: ModelHighImpactQuestion | null
+  portionContext?: PortionContext | null
+}
+
+/** IngredientRow as contract v1.3.0 delivers it. Same lifecycle as ScanResultV13. */
+export type IngredientRowV13 = IngredientRow & {
+  qualitativeAmount?: 'tiny' | 'light' | 'moderate' | 'heavy' | 'unknown' | null
+  preparation?: PreparationInfo | null
+}
+
+// -- Known/unknown summary card ------------------------------------------------
+
+/** Structural slice summaryLinesFor needs — keeps tests light (TitleInput pattern). */
+export interface SummaryLinesInput {
+  knownSummary?: string | null
+  unknownSummary?: string | null
+}
+
+export interface SummaryLines {
+  known: string | null
+  unknown: string | null
+}
+
+/**
+ * The known/unknown summary card's two lines, display-ready.
+ *
+ * Each summary is independently optional: the model may know things and not
+ * know others, know both, or have flagged neither. Null/undefined/empty and
+ * whitespace-only summaries mean "nothing to say" — the card renders only the
+ * lines that survive, and neither line exists to pad the other. The prefixes
+ * ("✓ " for what the model could see, "? " for what it could not) are part of
+ * the copy so the display contract is pinned in one tested place.
+ */
+export function summaryLinesFor(result: SummaryLinesInput): SummaryLines {
+  const known = cleanSummaryLine(result.knownSummary)
+  const unknown = cleanSummaryLine(result.unknownSummary)
+  return {
+    known: known == null ? null : `✓ ${known}`,
+    unknown: unknown == null ? null : `? ${unknown}`,
+  }
+}
+
+function cleanSummaryLine(raw: string | null | undefined): string | null {
+  if (raw == null) return null
+  const trimmed = raw.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+// -- Biggest calorie uncertainty line ------------------------------------------
+
+export interface TopUncertaintyOptions {
+  /** True when the "Likely range …" line is rendered beside the hero. */
+  rangeShown?: boolean
+}
+
+/**
+ * A factor that only restates OVERALL size uncertainty: a portion/amount/
+ * serving/size/weight noun AND an unknown/uncertain/estimated/guess/varies
+ * qualifier on the same normalized text. Deliberately narrow — a factor about
+ * hidden cooking fat, mixed composition, or count ambiguity ("cooking oil not
+ * visible", "curry composition estimated") contains neither keyword pair and
+ * is never suppressed, even with the range line showing.
+ */
+const AMOUNT_NOUN_RE = /\b(portion|amount|quantity|serving|size|weight)\b/
+const OPEN_UNCERTAINTY_RE = /\b(unknown|uncertain|uncertainty|unclear|estimated|guess|guessed|varies)\b/
+
+/**
+ * The single biggest calorie uncertainty, display-ready:
+ * "Biggest calorie uncertainty: {factor}".
+ *
+ * Selection: the first factor the model marked impact 'high' wins; when the
+ * model marked none high, the first factor of any impact is the honest
+ * fallback (the model DID flag something); no factors → null.
+ *
+ * DUPLICATION GUARD (documented ruling): when the "Likely range …" line is
+ * already on screen (rangeShown), a factor that merely restates overall
+ * portion/amount uncertainty adds nothing the range has not already said in
+ * numbers — the range IS that statement. Such factors are SKIPPED and
+ * selection falls through to the next candidate; if every factor is guarded,
+ * the line is not shown at all. When no range line is shown (tight band), the
+ * same factor is KEPT: it is then the only size honesty on the screen. The
+ * guard is the keyword pair above, not free-text similarity — simple,
+ * predictable, and tested.
+ */
+export function topUncertaintyFor(
+  factors: ReadonlyArray<UncertaintyFactor> | null | undefined,
+  options?: TopUncertaintyOptions,
+): string | null {
+  if (!factors || factors.length === 0) return null
+  const rangeShown = options?.rangeShown ?? false
+  const duplicatesRangeLine = (factorText: string): boolean => {
+    if (!rangeShown) return false
+    const text = factorText.trim().toLowerCase()
+    return AMOUNT_NOUN_RE.test(text) && OPEN_UNCERTAINTY_RE.test(text)
+  }
+  const pick = (impact: UncertaintyFactor['impactOnTotalCalories'] | 'any'): UncertaintyFactor | null => {
+    for (const f of factors) {
+      if (f.factor.trim() === '') continue
+      if ((impact === 'any' || f.impactOnTotalCalories === impact) && !duplicatesRangeLine(f.factor)) return f
+    }
+    return null
+  }
+  const chosen = pick('high') ?? pick('any')
+  return chosen == null ? null : `Biggest calorie uncertainty: ${chosen.factor.trim()}`
+}
+
+// -- Portion-context honesty chip ----------------------------------------------
+
+/**
+ * The portion-context chip's text, or null when nothing should show.
+ *
+ * RULINGS (documented):
+ * - Only 'low' and 'unknown' absolutePortionConfidence earn the chip. 'high'
+ *   is the model asserting a bound portion — a chip would be noise. 'medium'
+ *   is not chip-worthy either: the chip's job is to flag a GUESS, and medium
+ *   is not a guess; the confidence chip and its band already carry gradations.
+ * - The copy depends on scaleReferenceAvailable: claiming "no scale in photo"
+ *   while the contract says a reference object WAS found would itself be a
+ *   lie, so a found-but-insufficient reference gets the softer line. Both
+ *   variants stay short and non-alarmist — violet is an invitation, per the
+ *   theme's colour ruling.
+ */
+export function portionConfidenceNoteFor(context: PortionContext | null | undefined): string | null {
+  if (!context) return null
+  const { absolutePortionConfidence: confidence, scaleReferenceAvailable } = context
+  if (confidence !== 'low' && confidence !== 'unknown') return null
+  return scaleReferenceAvailable
+    ? 'Portion size is a rough guess'
+    : 'Portion size is a guess — no scale in photo'
+}
+
+// -- The model's one high-impact question ---------------------------------------
+
+/** Structural slice shouldShowModelQuestionCard needs. */
+export interface ModelQuestionInput {
+  highImpactQuestion?: ModelHighImpactQuestion | null
+}
+
+/**
+ * Question-text normalization for duplicate detection: lowercase, punctuation
+ * to spaces, whitespace collapsed. Punctuation is stripped (not preserved) so
+ * "pizza?" and "pizza" are the same token on BOTH sides of the comparison.
+ */
+function normalizeQuestionText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/** The suppression threshold: an active chip covering this share of the model question's tokens suppresses the card. */
+const QUESTION_DUPLICATE_THRESHOLD = 0.6
+
+/**
+ * Whether the model's high-impact question card should render.
+ *
+ * FALSE only when the question is absent/empty, or when an already-rendered
+ * question chip (3-b promotes keyword matches from the bank) covers ≥60% of
+ * the model question's normalized tokens — the same question must not appear
+ * twice on one screen, once as a chip and once as a card. Coverage is
+ * token-SET membership, not raw substring: "in" inside "cooking" must not
+ * count as covering the token "in", which would over-suppress. A chip that
+ * normalizes to nothing cannot suppress anything; the card's own option list
+ * is irrelevant to the decision.
+ */
+export function shouldShowModelQuestionCard(
+  result: ModelQuestionInput,
+  activeChipQuestions: ReadonlyArray<string>,
+): boolean {
+  const q = result.highImpactQuestion
+  if (!q) return false
+  const tokens = normalizeQuestionText(q.question).split(' ').filter((t) => t !== '')
+  if (tokens.length === 0) return false
+  for (const chip of activeChipQuestions) {
+    const chipTokens = new Set(normalizeQuestionText(chip).split(' ').filter((t) => t !== ''))
+    if (chipTokens.size === 0) continue
+    let covered = 0
+    for (const token of tokens) {
+      if (chipTokens.has(token)) covered++
+    }
+    if (covered / tokens.length >= QUESTION_DUPLICATE_THRESHOLD) return false
+  }
+  return true
+}
+
+// -- Per-row preparation signal --------------------------------------------------
+
+/**
+ * The per-row preparation subtitle fragment, or null.
+ *
+ * Only a stated addedCookingFat of 'moderate' | 'heavy' earns the note — the
+ * model is claiming the dish was likely cooked WITH meaningful added fat,
+ * which a per-100 g snapshot cannot see. 'none' and 'light' earn honest
+ * silence, 'unknown' explicitly claims nothing, and an absent preparation
+ * block means the model said nothing at all — no note is invented.
+ *
+ * RENDER CONTRACT with result.tsx: the row's provenance subtitle chain keeps
+ * its 2-d order (web citation → sourceAttribution → Confirmed → AI ESTIMATE →
+ * ⚠ Estimated) as its ONE subtitle line; this fragment renders as an
+ * ADDITIONAL muted micro line directly under it, never replacing it. The prep
+ * fact is about THIS meal's cooking; every chain entry is about where the
+ * per-100 g data came from or who owns the grams — different facts, so one
+ * never suppresses the other (suppressing "likely cooked in oil/ghee" behind
+ * a citation would hide exactly the fat the snapshot cannot see).
+ */
+export function preparationNoteFor(row: IngredientRowV13): string | null {
+  const fat = row.preparation?.addedCookingFat
+  if (fat !== 'moderate' && fat !== 'heavy') return null
+  return '· likely cooked in oil/ghee'
 }

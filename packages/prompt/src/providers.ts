@@ -114,6 +114,23 @@ export interface BuildRequestInput {
   maxTokens?: number
 }
 
+/**
+ * Default completion budget for a scan. 4096 was calibrated when every model
+ * answered in ~1-2K visible tokens; it is NOT enough headroom anymore:
+ * gemini-2.5-flash is a thinking model, and through OpenAI-compatible gateways
+ * its thinking consumes THIS budget — verified live, at 2500 it returned only
+ * ~100 visible tokens (truncated JSON), at 8192 it returned 2866 total
+ * completion tokens with a perfect 12-component v1.3 payload. Thinking plus a
+ * full multi-component contract does not fit in 4096 either, so the default
+ * rises with it. Callers may still override per request.
+ *
+ * EXPORTED on purpose: it is the single source of truth for the
+ * truncation-escalation math in the mobile scan client (runScanWithFallback
+ * doubles THIS value, capped, when a completion comes back length-cut) — a
+ * second hardcoded 8192 there would drift the first time this default moves.
+ */
+export const DEFAULT_SCAN_MAX_TOKENS = 8192
+
 export interface ProviderRequest {
   url: string
   headers: Record<string, string>
@@ -163,7 +180,7 @@ export function buildAnthropicRequest(input: BuildRequestInput, credential: { ki
     headers,
     body: {
       model: input.model,
-      max_tokens: input.maxTokens ?? 4096,
+      max_tokens: input.maxTokens ?? DEFAULT_SCAN_MAX_TOKENS,
       // P3-8 (QA Wave 4): the ~4.5K-token system prompt used to be re-sent
       // byte-identical on EVERY scan with no caching arrangement. Marking the
       // system block cache_control: ephemeral makes Anthropic cache it — the
@@ -211,7 +228,7 @@ export function buildOpenAIRequest(input: BuildRequestInput, apiKey: string): Pr
     headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
     body: {
       model: input.model,
-      max_tokens: input.maxTokens ?? 4096,
+      max_tokens: input.maxTokens ?? DEFAULT_SCAN_MAX_TOKENS,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content },
@@ -251,7 +268,7 @@ export function buildGeminiRequest(input: BuildRequestInput, apiKey: string): Pr
       generationConfig: {
         responseMimeType: 'application/json',
         ...(input.jsonSchema == null ? {} : { responseSchema: input.jsonSchema }),
-        maxOutputTokens: input.maxTokens ?? 4096,
+        maxOutputTokens: input.maxTokens ?? DEFAULT_SCAN_MAX_TOKENS,
       },
     },
     promptVersion: PROMPT_VERSION,

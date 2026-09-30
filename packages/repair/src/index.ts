@@ -2,9 +2,11 @@ import type { Item } from '@nutai/core-schema'
 import {
   QUESTION_BANK,
   inferStructuralUncertainty,
+  isAddedFatTriggered,
   isCountAmbiguous,
   isThaliLikeScene,
   isWholeDishItem,
+  type AddedFatSignal,
   type BankQuestion,
 } from './question-bank.js'
 
@@ -59,6 +61,13 @@ export interface SelectionInput {
    * meal-level fraction, and asking both would be two chips doing one job.
    */
   scene?: { mealType: string } | undefined
+  /**
+   * The meal-level hidden-fat signal (schema v1.3): the strongest disclosed
+   * `preparation.added_cooking_fat` level plus whether a hidden-fat row
+   * exists. Gates the `added_fat` question; a meal where every row discloses
+   * 'none' and no absorbed-oil row exists never asks it.
+   */
+  addedFat?: AddedFatSignal | undefined
 }
 
 export interface SelectedQuestion {
@@ -128,13 +137,15 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
 
     // Rank 1 applies to every plated scan — EXCEPT thali-like scenes, where
     // thali_scope is the meal-portion question in the user's own vocabulary.
-    // Ranks 2 and 9 have explicit triggers; 12-14 are scene/shape-triggered.
+    // Ranks 2 and 9 have explicit triggers; 12-15 are scene/shape/signal-
+    // triggered.
     if (q.id === 'portion_eaten') isApplicable = !thaliLike && item.legible_label_text == null
     else if (q.id === 'thali_scope') isApplicable = thaliLike && item.legible_label_text == null
     else if (q.id === 'servings_consumed') isApplicable = input.multiServingPackage === true
     else if (q.id === 'gram_disagreement') isApplicable = input.gramDisagreement != null
     else if (q.id === 'whole_dish_size') isApplicable = isWholeDishItem(item)
     else if (q.id === 'count_question') isApplicable = isCountAmbiguous(item)
+    else if (q.id === 'added_fat') isApplicable = isAddedFatTriggered(input.addedFat)
     else {
       isApplicable =
         structuralIds.has(q.id) ||
@@ -192,9 +203,7 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
 }
 
 /**
- * Highlighted questions across a whole meal, respecting the global cap.
- *
- * SCENE-LEVEL QUESTIONS fire once per MEAL, not once per bowl: a thali with
+ * Meal-level questions fire once per MEAL, not once per bowl: a thali with
  * eight items carries the scene on every item's SelectionInput, and answering
  * "did you eat the whole platter?" eight times is eight lies about eight
  * separate uncertainties. The highest-expected-value occurrence survives; the
@@ -202,29 +211,98 @@ export function selectQuestions(input: SelectionInput): SelectedQuestion[] {
  * the surviving chip IS the question and carries its own disclosure. Every
  * other question is never dropped: it is demoted to pre-answered so its silent
  * default still shows.
+ *
+ * added_fat joins thali_scope here: "how much oil/ghee in this MEAL" is one
+ * question about one meal-level assumption, no matter how many items the
+ * hidden-fat mass is spread across.
  */
-const SCENE_LEVEL_IDS: ReadonlySet<string> = new Set(['thali_scope'])
+const MEAL_LEVEL_IDS: ReadonlySet<string> = new Set(['thali_scope', 'added_fat'])
 
-export function selectMealQuestions(items: readonly SelectionInput[]): SelectedQuestion[] {
+/**
+ * The bank question a model's `highest_impact_question` text maps onto, by
+ * keyword family (case-insensitive), in the USER'S OWN priority order:
+ *
+ *   portion_eaten    — how much was actually eaten ("ate|eaten|finished|left|how much ... eat/had")
+ *   whole_dish_size  — how large the meal was ("diameter|inch|cm|how big/large|size of the plate/...")
+ *   added_fat        — how much cooking fat ("oil|ghee|butter|fried|fat ... cook|cook ... fat")
+ *   count_question   — how many pieces ("how many|pieces|slices|rotis|parathas|bowls|count")
+ *
+ * First family hit wins, so "How many did you eat?" promotes portion_eaten,
+ * not count_question — eaten amount outranks pieces. No hit (prose, or a
+ * question about something the bank does not cover) returns null, and the raw
+ * block then surfaces on ScanResult.highImpactQuestion for the review UI to
+ * render as an informational note. It is never silently swallowed.
+ */
+export type HighImpactTarget = 'portion_eaten' | 'whole_dish_size' | 'added_fat' | 'count_question'
+
+const HIGH_IMPACT_RULES: ReadonlyArray<{ target: HighImpactTarget; pattern: RegExp }> = [
+  { target: 'portion_eaten', pattern: /ate|eaten|finished|left|how much.*(eat|had)/ },
+  { target: 'whole_dish_size', pattern: /diameter|inch|cm|how (big|large)|size of (the )?(plate|dish|pan|pizza|cake|thali)/ },
+  { target: 'added_fat', pattern: /oil|ghee|butter|fried|fat.*cook|cook.*fat/ },
+  { target: 'count_question', pattern: /how many|pieces|slices|rotis|parathas|bowls|count/ },
+]
+
+export function highImpactPromotion(questionText: string): HighImpactTarget | null {
+  const t = questionText.toLowerCase()
+  for (const { target, pattern } of HIGH_IMPACT_RULES) {
+    if (pattern.test(t)) return target
+  }
+  return null
+}
+
+export interface MealQuestionsOptions {
+  /**
+   * The model's own highest-impact question text (schema v1.3), VERBATIM.
+   * When it maps onto a bank question whose trigger fired somewhere in the
+   * meal, that chip is PROMOTED to the front of the output — the model's "ask
+   * me this first" outranks raw expected value for the interrupt slots, but
+   * never exceeds MAX_QUESTIONS, and a question whose trigger cannot fire for
+   * this meal is never forced into existence (it stays an informational note
+   * on ScanResult.highImpactQuestion instead).
+   */
+  highImpactQuestionText?: string | undefined
+}
+
+export function selectMealQuestions(
+  items: readonly SelectionInput[],
+  opts?: MealQuestionsOptions,
+): SelectedQuestion[] {
   const all = items.flatMap((i) => selectQuestions(i))
   const kept: SelectedQuestion[] = []
-  const keptScene = new Map<string, SelectedQuestion>()
+  const keptMealLevel = new Map<string, SelectedQuestion>()
 
   for (const q of all) {
-    if (!SCENE_LEVEL_IDS.has(q.question.id)) {
+    if (!MEAL_LEVEL_IDS.has(q.question.id)) {
       kept.push(q)
       continue
     }
-    const existing = keptScene.get(q.question.id)
+    const existing = keptMealLevel.get(q.question.id)
     if (existing == null) {
-      keptScene.set(q.question.id, q)
+      keptMealLevel.set(q.question.id, q)
       kept.push(q)
     } else if (q.expectedValue > existing.expectedValue) {
       kept[kept.indexOf(existing)] = q
-      keptScene.set(q.question.id, q)
+      keptMealLevel.set(q.question.id, q)
     }
     // else: a strictly-weaker duplicate of a question the user IS being asked
     // once — removal, not silence.
+  }
+
+  // Promotion: the model's highest-impact question, mapped onto a bank chip
+  // that this meal's triggers actually produced, moves to the FRONT of the
+  // output. Triggerless mappings are ignored (never force a question into
+  // existence); the promoted chip keeps its own threshold semantics.
+  let promoted: SelectedQuestion | null = null
+  const promotedId = opts?.highImpactQuestionText ? highImpactPromotion(opts.highImpactQuestionText) : null
+  if (promotedId != null) {
+    const idx = kept.findIndex((q) => q.question.id === promotedId)
+    if (idx > 0) {
+      promoted = kept[idx]!
+      kept.splice(idx, 1)
+      kept.unshift(promoted)
+    } else if (idx === 0) {
+      promoted = kept[0]!
+    }
   }
 
   const highlighted = kept.filter((q) => q.state === 'highlighted')
@@ -233,10 +311,17 @@ export function selectMealQuestions(items: readonly SelectionInput[]): SelectedQ
 
   // Never more than MAX_QUESTIONS highlighted regardless of how many cleared the
   // threshold. Demote the lowest-value ones to pre-answered rather than dropping
-  // them — their defaults still get disclosed.
-  const keep = new Set(
-    [...highlighted].sort((a, b) => b.expectedValue - a.expectedValue).slice(0, MAX_QUESTIONS),
-  )
+  // them — their defaults still get disclosed. The promoted chip, when it is
+  // highlighted, holds its slot: the model flagged it as the single most
+  // impact-bearing uncertainty, and it still counts TOWARD the cap (the
+  // remaining slots fill by expected value, so at most MAX_QUESTIONS-1 others
+  // stay highlighted alongside it).
+  const keep = new Set<SelectedQuestion>()
+  if (promoted != null && promoted.state === 'highlighted') keep.add(promoted)
+  for (const q of [...highlighted].sort((a, b) => b.expectedValue - a.expectedValue)) {
+    if (keep.size >= MAX_QUESTIONS) break
+    keep.add(q)
+  }
   return kept.map((q) =>
     q.state === 'highlighted' && !keep.has(q)
       ? { ...q, state: 'pre_answered' as const, appliedDefault: q.question.silentDefault }

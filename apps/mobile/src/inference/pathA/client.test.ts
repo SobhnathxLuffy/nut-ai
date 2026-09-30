@@ -144,6 +144,114 @@ describe('runScanWithFallback', () => {
   })
 })
 
+describe('runScanWithFallback — truncation escalation (thinking models)', () => {
+  // WHY these fixtures: the live failure this pins is a gemini-2.5-flash scan
+  // through the aicredits.in reseller that returned HTTP 200 with
+  // finish_reason 'length' after ~126 visible tokens — the thinking budget
+  // consumed max_tokens and the JSON died mid-payload. The envelope that
+  // carries the marker is the OpenAI chat dialect (EVERY gateway scan answers
+  // in it), so the fixtures use the openai provider + gpt-4o-mini control
+  // exactly as the live verification did; the escalated attempt must show up
+  // in the WIRE body (max_tokens), not just in the outcome.
+  const TRUNCATED_BODY = JSON.stringify({
+    choices: [
+      {
+        message: { content: '{"schema_version":"1.3.0","items":[{"display_name":"piz' },
+        finish_reason: 'length',
+      },
+    ],
+    usage: { prompt_tokens: 500, completion_tokens: 8192 },
+  })
+  const GOOD_BODY = JSON.stringify({
+    choices: [{ message: { content: '{"is_food":true,"items":[]}' }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 500, completion_tokens: 900 },
+  })
+  const ESCALATION_REQ = (overrides: Record<string, unknown> = {}) => ({
+    provider: 'openai' as const,
+    model: 'gpt-4o-mini',
+    credential: { kind: 'api_key' as const, value: 'sk' },
+    imagesBase64: ['AAAA'],
+    localSignalsBlock: '',
+    jsonSchema: { type: 'object' },
+    ...overrides,
+  })
+
+  it('escalates ONCE on a length-cut answer: raised budget succeeds, no schema-fallback flag', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: TRUNCATED_BODY },
+      { status: 200, body: GOOD_BODY },
+    ])
+    const r = await runScanWithFallback(ESCALATION_REQ(), impl)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.value.raw).toEqual({ is_food: true, items: [] })
+    // Exactly the escalation — no structural retry, no third attempt.
+    expect(calls).toHaveLength(2)
+    // First attempt rode the 8192 default; the escalation doubled it.
+    expect(calls[0]!.body.max_tokens).toBe(8192)
+    expect(calls[1]!.body.max_tokens).toBe(16384)
+    // A budget retry is NOT a structured-output fallback: the flag the
+    // orchestrator reads must stay falsy so a later rescue decision cannot
+    // be misrouted into "already ran in instruction mode".
+    expect(r.usedSchemaFallback).toBeFalsy()
+    // Schema mode preserved — the escalated request still carries the schema.
+    expect(calls[1]!.body.response_format.type).toBe('json_schema')
+  })
+
+  it('both attempts truncate → honest truncated failure, still exactly 2 calls, second at 16384', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: TRUNCATED_BODY },
+      { status: 200, body: TRUNCATED_BODY },
+    ])
+    const r = await runScanWithFallback(ESCALATION_REQ(), impl)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe('truncated')
+    expect(calls).toHaveLength(2)
+    expect(calls[1]!.body.max_tokens).toBe(16384)
+  })
+
+  it('a non-truncation failure never escalates: a 401 stays ONE call', async () => {
+    const { calls, impl } = scripted([{ status: 401, body: '{}' }])
+    const r = await runScanWithFallback(ESCALATION_REQ(), impl)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe('key-invalid')
+    expect(calls).toHaveLength(1)
+  })
+
+  it('a transport (offline) failure never escalates either', async () => {
+    let calls = 0
+    const impl = (async () => {
+      calls++
+      throw new TypeError('Network request failed')
+    }) as unknown as typeof fetch
+    const r = await runScanWithFallback(ESCALATION_REQ(), impl)
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.error.kind).toBe('offline')
+    expect(calls).toBe(1)
+  })
+
+  it('a clean first answer makes ONE call at the default budget', async () => {
+    const { calls, impl } = scripted([{ status: 200, body: GOOD_BODY }])
+    const r = await runScanWithFallback(ESCALATION_REQ(), impl)
+    expect(r.ok).toBe(true)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.body.max_tokens).toBe(8192)
+  })
+
+  it('the escalation derives from the REQUEST base, not a hardcoded default', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: TRUNCATED_BODY },
+      { status: 200, body: GOOD_BODY },
+    ])
+    // An explicit 4096 base doubles to 8192 — pinned so nobody can replace
+    // the (req.maxTokens ?? DEFAULT) * 2 math with a literal.
+    const r = await runScanWithFallback(ESCALATION_REQ({ maxTokens: 4096 }), impl)
+    expect(r.ok).toBe(true)
+    expect(calls).toHaveLength(2)
+    expect(calls[0]!.body.max_tokens).toBe(4096)
+    expect(calls[1]!.body.max_tokens).toBe(8192)
+  })
+})
+
 describe('runWebLookup JSON fishing', () => {
   it('anthropic: takes the LAST text block — tool blocks interleave before it', async () => {
     const { impl } = scripted([

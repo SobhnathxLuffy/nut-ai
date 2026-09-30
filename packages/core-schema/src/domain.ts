@@ -89,6 +89,40 @@ export interface AssumptionTag {
   userConfirmed: boolean
 }
 
+/**
+ * Stored-domain mirrors of the prompt-v1.3.0 honesty blocks carried on the
+ * wire (see @nutai/core-schema PortionContextZ / UncertaintyFactorZ /
+ * HighImpactQuestionZ / SummaryBlocksZ). Wire names are snake_case; these are
+ * the camelCase shapes the pipeline and UI consume.
+ */
+export interface PortionContext {
+  /** Whether the ENTIRE meal is in frame, not just part of it. */
+  wholeMealVisible: boolean
+  /** Whether any reliable scale reference (card, coin, can, named plate) exists. */
+  scaleReferenceAvailable: boolean
+  /** WHAT the reference is, when one exists — empty string when none. */
+  scaleReferenceDescription: string
+  absolutePortionConfidence: 'high' | 'medium' | 'low' | 'unknown'
+}
+
+/** One factor dominating the uncertainty in the meal's TOTAL calories. */
+export interface UncertaintyFactor {
+  factor: string
+  impactOnTotalCalories: 'low' | 'medium' | 'high'
+}
+
+/** The ONE question that most reduces TOTAL-calorie uncertainty. */
+export interface HighImpactQuestion {
+  question: string
+  options: string[]
+}
+
+/** Two honest sentences about the meal as a whole. */
+export interface SummaryBlocks {
+  whatIsKnown: string
+  whatIsNotKnown: string
+}
+
 export interface IngredientRow {
   id: string
   displayName: string
@@ -125,6 +159,25 @@ export interface IngredientRow {
    * discrete_count, user_edited) has no reason to carry one.
    */
   portionRange?: { minG: number; maxG: number } | null
+  /**
+   * How much of this component the meal contains, relative to a normal serving
+   * of it ('tiny'|'light'|'moderate'|'heavy'|'unknown'). Carried from the
+   * v1.3.0 payload for eval attribution and UI presentation; absent/null on
+   * every pathway that predates the block (barcode, label, receipt, manual).
+   */
+  qualitativeAmount?: 'tiny' | 'light' | 'moderate' | 'heavy' | 'unknown' | null
+  /**
+   * The model's cooking read: method, intrinsic fat, and ADDED COOKING FAT —
+   * fat added IN COOKING (ghee/oil/butter brushed on or fried in), never the
+   * food's own fat. Null/absent when the pathway predates the v1.3 block or
+   * the model could not say.
+   */
+  preparation?: {
+    method: string
+    intrinsicFat: 'low' | 'moderate' | 'high' | 'unknown'
+    addedCookingFat: 'none' | 'light' | 'moderate' | 'heavy' | 'unknown'
+    confidence: number
+  } | null
   /**
    * True once the user has directly edited a macro on this row. Forces calories to
    * be recomputed via Atwater and the "recalculated from macros" note to show.

@@ -19,6 +19,18 @@ import {
   rowIdForNamedQuestion,
   sceneCaptionFor,
 } from './review'
+import type {
+  ModelHighImpactQuestion,
+  PortionContext,
+  PreparationInfo,
+} from './review'
+import {
+  preparationNoteFor,
+  portionConfidenceNoteFor,
+  shouldShowModelQuestionCard,
+  summaryLinesFor,
+  topUncertaintyFor,
+} from './review'
 import { answerQuestion, editGrams, getPhase, reset, setPhase } from './store'
 
 /**
@@ -349,6 +361,200 @@ describe('count question math', () => {
     expect(countAnswerValue('4plus')).toBe(4)
     expect(countAnswerValue('as_counted')).toBeNull()
     expect(countAnswerValue('garbage')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Contract v1.3.0 honesty surfaces (task 3-c) — what the model itself flagged
+// ---------------------------------------------------------------------------
+
+describe('summaryLinesFor', () => {
+  it('renders both lines display-ready with their prefixes', () => {
+    expect(
+      summaryLinesFor({
+        knownSummary: 'Rice, dal, and chapati are clearly visible',
+        unknownSummary: 'The amount of ghee in the tadka',
+      }),
+    ).toEqual({
+      known: '✓ Rice, dal, and chapati are clearly visible',
+      unknown: '? The amount of ghee in the tadka',
+    })
+  })
+
+  it('renders each line independently', () => {
+    expect(summaryLinesFor({ knownSummary: 'Whole meal is visible', unknownSummary: null })).toEqual({
+      known: '✓ Whole meal is visible',
+      unknown: null,
+    })
+    expect(summaryLinesFor({ knownSummary: null, unknownSummary: 'Cooking fat is not visible' })).toEqual({
+      known: null,
+      unknown: '? Cooking fat is not visible',
+    })
+  })
+
+  it('treats whitespace-only, empty, and absent summaries as nothing to say', () => {
+    expect(summaryLinesFor({ knownSummary: '   ', unknownSummary: '' })).toEqual({ known: null, unknown: null })
+    expect(summaryLinesFor({})).toEqual({ known: null, unknown: null })
+  })
+
+  it('trims the model\'s text', () => {
+    expect(summaryLinesFor({ knownSummary: '  Two chapatis visible  ', unknownSummary: ' \t ' }).known).toBe(
+      '✓ Two chapatis visible',
+    )
+  })
+})
+
+describe('topUncertaintyFor', () => {
+  it('picks the first high-impact factor', () => {
+    expect(
+      topUncertaintyFor([
+        { factor: 'cooking oil not visible', impactOnTotalCalories: 'medium' },
+        { factor: 'curry composition estimated', impactOnTotalCalories: 'high' },
+        { factor: 'rice quantity uncertain', impactOnTotalCalories: 'high' },
+      ]),
+    ).toBe('Biggest calorie uncertainty: curry composition estimated')
+  })
+
+  it('falls back to the first factor of any impact when the model marked none high', () => {
+    expect(topUncertaintyFor([{ factor: 'rice quantity uncertain', impactOnTotalCalories: 'low' }])).toBe(
+      'Biggest calorie uncertainty: rice quantity uncertain',
+    )
+  })
+
+  it('returns null with no factors, and skips blank factor text', () => {
+    expect(topUncertaintyFor([])).toBeNull()
+    expect(topUncertaintyFor(null)).toBeNull()
+    expect(topUncertaintyFor(undefined)).toBeNull()
+    expect(topUncertaintyFor([{ factor: '   ', impactOnTotalCalories: 'high' }])).toBeNull()
+  })
+
+  it('skips a factor that duplicates the shown likely-range line and falls through', () => {
+    const factors = [
+      { factor: 'Portion size unknown.', impactOnTotalCalories: 'high' as const },
+      { factor: 'cooking oil not visible', impactOnTotalCalories: 'medium' as const },
+    ]
+    // The range line already IS the size statement, in numbers — say the next
+    // thing instead.
+    expect(topUncertaintyFor(factors, { rangeShown: true })).toBe(
+      'Biggest calorie uncertainty: cooking oil not visible',
+    )
+    // No range line shown (tight band): the factor is then the only size
+    // honesty on the screen — keep it.
+    expect(topUncertaintyFor(factors)).toBe('Biggest calorie uncertainty: Portion size unknown.')
+  })
+
+  it('never suppresses factors that are not about overall amount, even with the range showing', () => {
+    expect(
+      topUncertaintyFor([{ factor: 'cooking oil not visible', impactOnTotalCalories: 'high' }], { rangeShown: true }),
+    ).toBe('Biggest calorie uncertainty: cooking oil not visible')
+  })
+
+  it('returns null when every factor is guarded', () => {
+    expect(
+      topUncertaintyFor([{ factor: 'total amount unclear', impactOnTotalCalories: 'high' }], { rangeShown: true }),
+    ).toBeNull()
+  })
+})
+
+describe('portionConfidenceNoteFor', () => {
+  const context = (confidence: PortionContext['absolutePortionConfidence'], scaleReferenceAvailable = false): PortionContext => ({
+    wholeMealVisible: true,
+    scaleReferenceAvailable,
+    scaleReferenceDescription: scaleReferenceAvailable ? 'a credit card beside the plate' : null,
+    absolutePortionConfidence: confidence,
+  })
+
+  it('flags a low-confidence portion when no scale reference was found', () => {
+    expect(portionConfidenceNoteFor(context('low'))).toBe('Portion size is a guess — no scale in photo')
+  })
+
+  it('keeps the copy honest when a reference WAS found but confidence stayed low', () => {
+    expect(portionConfidenceNoteFor(context('low', true))).toBe('Portion size is a rough guess')
+  })
+
+  it('treats unknown confidence as a guess too', () => {
+    expect(portionConfidenceNoteFor(context('unknown'))).toBe('Portion size is a guess — no scale in photo')
+  })
+
+  it('stays silent on medium and high confidence and on a missing context', () => {
+    expect(portionConfidenceNoteFor(context('medium'))).toBeNull()
+    expect(portionConfidenceNoteFor(context('high'))).toBeNull()
+    expect(portionConfidenceNoteFor(null)).toBeNull()
+    expect(portionConfidenceNoteFor(undefined)).toBeNull()
+  })
+})
+
+describe('shouldShowModelQuestionCard', () => {
+  const q = (question: string, options: string[] = ['Yes', 'No']): ModelHighImpactQuestion => ({ question, options })
+  const input = (question: ModelHighImpactQuestion | null) => ({ highImpactQuestion: question })
+
+  it('shows the card when there are no chips', () => {
+    expect(shouldShowModelQuestionCard(input(q('How much oil was used in the curry?')), [])).toBe(true)
+  })
+
+  it('shows no card without a model question, or with a question that normalizes to nothing', () => {
+    expect(shouldShowModelQuestionCard(input(null), ['How much oil was used in the curry?'])).toBe(false)
+    expect(shouldShowModelQuestionCard(input(q('???')), [])).toBe(false)
+  })
+
+  it('suppresses when a chip carries the same question', () => {
+    expect(
+      shouldShowModelQuestionCard(input(q('How much oil was used in the curry?')), [
+        'How much oil was used in the curry?',
+      ]),
+    ).toBe(false)
+  })
+
+  it('suppresses at or above the 60% token-coverage threshold with different phrasing', () => {
+    // Model tokens: how, much, oil, was, used, in, the, curry (8). Chip covers
+    // how, much, oil, the, curry → 5/8 = 62.5% ≥ 60% → same question twice.
+    expect(
+      shouldShowModelQuestionCard(input(q('How much oil was used in the curry?')), [
+        'How much oil went into the curry?',
+      ]),
+    ).toBe(false)
+  })
+
+  it('keeps the card below the threshold', () => {
+    // Covered: was, in, the → 3/8 = 37.5% — a different question.
+    expect(
+      shouldShowModelQuestionCard(input(q('How much oil was used in the curry?')), [
+        'Was the rice cooked in broth?',
+      ]),
+    ).toBe(true)
+  })
+
+  it('normalizes case, punctuation, and whitespace on both sides', () => {
+    expect(
+      shouldShowModelQuestionCard(input(q('  How   LARGE was the pizza? ')), ['HOW LARGE WAS THE PIZZA']),
+    ).toBe(false)
+  })
+
+  it('ignores chips that normalize to nothing, and ignores the option list entirely', () => {
+    expect(shouldShowModelQuestionCard(input(q('How much oil was used?', [])), ['???'])).toBe(true)
+    expect(shouldShowModelQuestionCard(input(q('How much oil was used in the curry?', [])), [])).toBe(true)
+  })
+})
+
+describe('preparationNoteFor', () => {
+  const prep = (addedCookingFat: PreparationInfo['addedCookingFat']): PreparationInfo => ({
+    method: 'pan fried',
+    intrinsicFat: 'low',
+    addedCookingFat,
+    confidence: 0.8,
+  })
+
+  it('flags moderate and heavy added cooking fat', () => {
+    expect(preparationNoteFor({ ...row(), preparation: prep('moderate') })).toBe('· likely cooked in oil/ghee')
+    expect(preparationNoteFor({ ...row(), preparation: prep('heavy') })).toBe('· likely cooked in oil/ghee')
+  })
+
+  it('stays silent for none, light, unknown, a null block, and a row without preparation', () => {
+    expect(preparationNoteFor({ ...row(), preparation: prep('none') })).toBeNull()
+    expect(preparationNoteFor({ ...row(), preparation: prep('light') })).toBeNull()
+    expect(preparationNoteFor({ ...row(), preparation: prep('unknown') })).toBeNull()
+    expect(preparationNoteFor({ ...row(), preparation: null })).toBeNull()
+    expect(preparationNoteFor(row())).toBeNull()
   })
 })
 
