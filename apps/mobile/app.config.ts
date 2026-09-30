@@ -101,7 +101,16 @@ const config: ExpoConfig = {
     './plugins/withAutomaticSigning',
   ],
 
-  experiments: { typedRoutes: true },
+  // GitHub Pages project sites host the app under /<repo>/ — scripts/
+  // build-ghpages.sh exports with EXPO_PUBLIC_WEB_BASE=/nut-ai, which drives
+  // both this baseUrl and the inlined asset prefix in the web DB adapter.
+  // Unset (default) keeps root-anchored hosting byte-identical to before.
+  experiments: {
+    typedRoutes: true,
+    ...(process.env.EXPO_PUBLIC_WEB_BASE
+      ? { baseUrl: process.env.EXPO_PUBLIC_WEB_BASE }
+      : {}),
+  },
 
   web: {
     // The app bootstraps SQLite-WASM, its own web DB adapter and expo-router

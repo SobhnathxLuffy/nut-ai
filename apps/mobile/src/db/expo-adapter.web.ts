@@ -1,6 +1,15 @@
 import { DbAdapter, RunResult, SqlValue } from '@nutai/db-adapter'
 import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 
+/**
+ * Sub-path hosting support (GitHub Pages project sites serve the app under
+ * /<repo>/). EXPO_PUBLIC_WEB_BASE is statically inlined by Metro at export
+ * time (e.g. '/nut-ai' — set by scripts/build-ghpages.sh); unset means
+ * root-anchored hosting (serve-3000.py), producing exactly the historical
+ * '/'-prefixed behavior below.
+ */
+const WEB_BASE = (process.env.EXPO_PUBLIC_WEB_BASE ?? '').replace(/\/+$/, '')
+
 let sqliteWasmPromise: Promise<any> | null = null;
 async function loadSqliteWasm() {
   if (!sqliteWasmPromise) {
@@ -8,7 +17,7 @@ async function loadSqliteWasm() {
     // actual runtime options we pass (documented in WEB-005 round).
     // eslint-disable-next-line no-restricted-syntax -- wasm init boundary
     sqliteWasmPromise = (sqlite3InitModule as any)({
-      locateFile: (file: any) => '/' + file,
+      locateFile: (file: any) => WEB_BASE + '/' + file,
       print: console.log,
       printErr: console.error,
     }).then((r: any) => {
@@ -260,7 +269,13 @@ async function loadStaticDb(assetId: any, dbName: string): Promise<DbAdapter> {
   } else {
     uri = String(assetId);
   }
-  
+
+  // Sub-path hosting safety net: asset resolution is root-absolute, so when
+  // the bundle was built for a sub-path home, prefix it exactly once.
+  if (WEB_BASE && uri.startsWith('/') && !uri.startsWith(WEB_BASE + '/')) {
+    uri = WEB_BASE + uri;
+  }
+
   console.log(`Fetching ${dbName} from ${uri}`);
   const resp = await fetch(uri);
   const buffer = await resp.arrayBuffer();
