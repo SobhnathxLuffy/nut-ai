@@ -29,6 +29,32 @@ export default function ProviderSettings() {
   const [baseUrlDraft, setBaseUrlDraft] = useState<string>('')
   const [customModelDraft, setCustomModelDraft] = useState<string>('')
 
+  // Persist the scan-model override. MUST be wired to onBlur as well as
+  // onEndEditing: react-native-web does not implement onEndEditing at all, so
+  // on the web build a blur-only save is the only hook that fires — without
+  // it the typed model was silently dropped and scans kept the previous
+  // catalogue model (gpt-4o / gpt-4o-mini).
+  const saveScanModel = useCallback(() => {
+    const v = customModelDraft.trim()
+    if (v) {
+      setModelId(v)
+      void putSetting('provider_model', v)
+    }
+  }, [customModelDraft])
+
+  // Same rule for the custom chatbot model, saving BOTH directions: a value
+  // replaces assistant_model, an empty field resets to "follow the scan
+  // model". Saving on blur (not per keystroke) also stops half-typed ids
+  // from landing in settings mid-typing.
+  const saveAssistantModel = useCallback(() => {
+    const v = assistantModelId.trim()
+    if (v) {
+      void putSetting('assistant_model', v)
+    } else {
+      void putSetting('assistant_model', '')
+    }
+  }, [assistantModelId])
+
   const refresh = useCallback(() => {
     void (async () => {
       const p = (await setting('provider')) as ProviderId | 'none' | ''
@@ -173,6 +199,11 @@ export default function ProviderSettings() {
                 )
               })}
             </View>
+            {modelId && !PROVIDER_MODELS[provider].some((m) => m.id === modelId) ? (
+              <Text style={[type.caption, { color: theme.text, marginTop: space.sm, fontWeight: '600' }]}>
+                Active scan model: {modelId}
+              </Text>
+            ) : null}
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
               The cheapest vision model is the honest default: frontier models are not measurably
               better at portion size, which is where nearly all the error lives.
@@ -206,13 +237,8 @@ export default function ProviderSettings() {
                 <TextInput
                   value={customModelDraft}
                   onChangeText={setCustomModelDraft}
-                  onEndEditing={() => {
-                    const v = customModelDraft.trim()
-                    if (v) {
-                      setModelId(v)
-                      void putSetting('provider_model', v)
-                    }
-                  }}
+                  onBlur={saveScanModel}
+                  onEndEditing={saveScanModel}
                   autoCapitalize="none"
                   autoCorrect={false}
                   placeholder="gpt-4o-mini"
@@ -263,13 +289,9 @@ export default function ProviderSettings() {
             </View>
             <TextInput
               value={assistantModelId && !PROVIDER_MODELS[provider].some((m) => m.id === assistantModelId) ? assistantModelId : ''}
-              onChangeText={(v) => {
-                setAssistantModelId(v.trim())
-                if (v.trim()) void putSetting('assistant_model', v.trim())
-              }}
-              onEndEditing={() => {
-                if (!assistantModelId.trim()) void putSetting('assistant_model', '')
-              }}
+              onChangeText={(v) => setAssistantModelId(v.trim())}
+              onBlur={saveAssistantModel}
+              onEndEditing={saveAssistantModel}
               autoCapitalize="none"
               autoCorrect={false}
               placeholder="Custom chatbot model ID (optional)"
