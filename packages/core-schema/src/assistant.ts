@@ -25,6 +25,25 @@ export const ProposeWorkoutRoutineArgsZ = z.object({
   })).describe('List of exercises in this routine'),
 })
 
+/**
+ * AIP-004 correction over ALREADY-LOGGED meals. The item ids are supplied by
+ * the app in the today-context block ("[ID m12i3] Roti, 120 g"); the model
+ * echoes them back exactly. Every operation requires user confirmation in the
+ * UI before it touches storage — the model proposes, it never writes.
+ */
+export const CorrectLoggedMealArgsZ = z.object({
+  // Deliberately unknown-per-item: one malformed operation must not invalidate
+  // the whole batch. Per-operation validation (CorrectionOperationZ) happens in
+  // the execution engine, which drops invalid ops instead of the entire call.
+  operations: z.array(z.unknown()).describe(
+    'Structured corrections against today\'s logged items, using the exact [ID m<meal>i<item>] values from the context block',
+  ),
+  clarification_needed: z
+    .string()
+    .nullable()
+    .describe('Short clarifying question when the request is ambiguous; null when the operations are unambiguous'),
+})
+
 export const AssistantToolCallZ = z.discriminatedUnion('tool_name', [
   z.object({
     tool_name: z.literal('get_last_workout'),
@@ -41,6 +60,10 @@ export const AssistantToolCallZ = z.discriminatedUnion('tool_name', [
   z.object({
     tool_name: z.literal('propose_workout_routine'),
     arguments: ProposeWorkoutRoutineArgsZ,
+  }),
+  z.object({
+    tool_name: z.literal('correct_logged_meal'),
+    arguments: CorrectLoggedMealArgsZ,
   }),
 ])
 

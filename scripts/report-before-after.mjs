@@ -8,7 +8,6 @@
  */
 import Database from 'better-sqlite3'
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

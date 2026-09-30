@@ -1,18 +1,25 @@
 import { AssistantToolCallZ, type AssistantToolCall } from '@nutai/core-schema'
-import { SetValues, TRACKING_FIELDS, type RoutineInput, type TrackingType } from '@nutai/core-schema'
+import { CorrectionOperationZ, SetValues, TRACKING_FIELDS, type RoutineInput, type TrackingType } from '@nutai/core-schema'
 import { ASSISTANT_SYSTEM_PROMPT } from '@nutai/prompt'
 import { listExercises, saveRoutine } from '@nutai/training'
-import { db, dayTotals, getDayStatus } from '../../data/repo'
+import { db, dayTotals, getDayStatus, mealsForDay, currentGoal } from '../../data/repo'
 import { localDate, getThisWeek, getLastWeek } from '../../data/date-utils'
 import { dateOffset } from '../../data/shortcuts'
+import type { ChatTurn } from './client'
 
 // A lightweight chat execution loop
 export async function runAssistantChat(
   text: string,
-  executeApi: (system: string, user: string) => Promise<string>
+  executeApi: (system: string, user: string, history?: ChatTurn[]) => Promise<string>,
+  history: ChatTurn[] = []
 ): Promise<{ text?: string, toolCard?: AssistantToolCall & { data: any } }> {
+  // Today's log/goals ride along with every message — the model must never
+  // answer "what did I eat" from memory when the app's own data is one block away.
+  const context = await buildTodayContext()
+  const userPrompt = context ? `${context}\n\n[USER MESSAGE]\n${text}` : text
+
   // First, we call the API to see if it wants to use a tool or answer text.
-  const responseText = await executeApi(ASSISTANT_SYSTEM_PROMPT, text)
+  const responseText = await executeApi(ASSISTANT_SYSTEM_PROMPT, userPrompt, history)
 
   try {
     const jsonStr = extractJson(responseText)
@@ -71,6 +78,26 @@ async function executeToolLocally(tool: AssistantToolCall): Promise<any> {
     }
   }
 
+  if (tool.tool_name === 'correct_logged_meal') {
+    // AIP-004: the model PROPOSES operations; only the user's confirmation
+    // applies them. Invalid-shaped operations are dropped here rather than at
+    // apply time, so the confirmation card never promises something the app
+    // cannot do.
+    const rawOps = Array.isArray(tool.arguments.operations) ? tool.arguments.operations : []
+    const operations = rawOps.filter((op: unknown) => CorrectionOperationZ.safeParse(op).success)
+    const clarification = typeof tool.arguments.clarification_needed === 'string'
+      ? tool.arguments.clarification_needed
+      : null
+    if (operations.length === 0 && !clarification) {
+      return {
+        type: 'logged_meal_correction',
+        operations: [],
+        clarification_needed: 'I could not match that to today\'s log. Try naming the food exactly as it appears in your log.',
+      }
+    }
+    return { type: 'logged_meal_correction', operations, clarification_needed: clarification }
+  }
+
   if (tool.tool_name === 'get_nutrition_summary') {
     const dates = resolveTimeframe(tool.arguments.timeframe)
     let protein = 0, carbs = 0, fat = 0, kcal = 0
@@ -107,6 +134,69 @@ function resolveTimeframe(timeframe: 'today' | 'yesterday' | 'this_week' | 'last
   if (timeframe === 'this_week') return getThisWeek(now)
   if (timeframe === 'last_week') return getLastWeek(now)
   return [today]
+}
+
+/** Tolerates both real rejections and bare-vi-fn mocks returning undefined. */
+async function safe<T>(fn: () => T | Promise<T> | undefined): Promise<T | null> {
+  try {
+    return ((await Promise.resolve(fn())) as T) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The today-context block appended to every user message: what is logged,
+ * against which targets, and the EXACT item ids the correct_logged_meal tool
+ * needs. Every read is individually guarded — a context failure degrades to
+ * "no context", never to a failed chat.
+ */
+export async function buildTodayContext(now: number = Date.now()): Promise<string> {
+  try {
+    const date = localDate(now)
+    const [totals, goal, meals, status] = await Promise.all([
+      safe(() => dayTotals(date)),
+      safe(() => currentGoal()),
+      safe(() => mealsForDay(date)),
+      safe(() => getDayStatus(date)),
+    ])
+
+    const lines: string[] = []
+    lines.push(`[TODAY IN THE USER'S APP — ${date}]`)
+    if (status?.completion === 'fasting') {
+      lines.push('Day status: fasting.')
+    } else if (totals && totals.mealCount > 0) {
+      lines.push(
+        `Logged so far: ${totals.mealCount} meal(s), ${Math.round(totals.kcal)} kcal, ` +
+        `protein ${Math.round(totals.protein_g)} g, carbs ${Math.round(totals.carbs_g)} g, fat ${Math.round(totals.fat_g)} g.`
+      )
+      const logged = (meals ?? []).filter((m) => m.items.length > 0)
+      if (logged.length > 0) {
+        lines.push(
+          'Logged items (use these EXACT ids with the correct_logged_meal tool if the user asks to change them):'
+        )
+        for (const meal of logged) {
+          for (const item of meal.items) {
+            lines.push(
+              `- [ID m${meal.id}i${item.id}] ${item.displayName}, ${Math.round(item.grams)} g, ~${item.energyKcal} kcal (${meal.slot ?? 'meal'})`
+            )
+          }
+        }
+      }
+    } else {
+      lines.push('Nothing logged yet today.')
+    }
+    if (goal) {
+      lines.push(
+        `Daily targets: ${Math.round(goal.targetKcal)} kcal, protein ${Math.round(goal.protein_g)} g, ` +
+        `carbs ${Math.round(goal.carbs_g)} g, fat ${Math.round(goal.fat_g)} g.`
+      )
+    }
+    lines.push('[END TODAY CONTEXT]')
+    return lines.join('\n')
+  } catch {
+    return ''
+  }
 }
 
 export interface ProposalApplyResult {

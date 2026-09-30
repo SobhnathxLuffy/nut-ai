@@ -26,6 +26,33 @@ import {
  * exactly one destination: the provider the user named.
  */
 
+/** One prior assistant-conversation turn, replayed to the provider in order. */
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+/**
+ * Providers differ on message-array constraints (Anthropic requires strictly
+ * alternating roles starting with 'user'), and a history assembled from UI
+ * state can contain consecutive same-role turns (e.g. a tool-card reply has no
+ * text turn). Merging consecutive same-role turns keeps every wire format
+ * legal without ever dropping content.
+ */
+export function normalizeHistory(turns: ChatTurn[]): ChatTurn[] {
+  const out: ChatTurn[] = []
+  for (const turn of turns) {
+    if (!turn.content?.trim()) continue
+    const last = out.length > 0 ? out[out.length - 1] : null
+    if (last && last.role === turn.role) {
+      out[out.length - 1] = { role: last.role, content: `${last.content}\n\n${turn.content}` }
+    } else {
+      out.push({ role: turn.role, content: turn.content })
+    }
+  }
+  return out
+}
+
 /**
  * Six distinct states, never a generic toast.
  *
@@ -499,7 +526,7 @@ export async function runCorrectionIntent(
 }
 
 export async function runAssistantChatApi(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[] },
   fetchImpl: typeof fetch = fetch
 ) {
   // WEB-007 fix: fallback models used to be hardcoded (`gpt-4o`,
@@ -544,7 +571,7 @@ export async function runAssistantChatApi(
 }
 
 export async function runAssistantChatApiSingle(
-  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number },
+  req: { provider: ProviderId; model: string; systemPrompt: string; userPrompt: string; timeoutMs?: number; history?: ChatTurn[] },
   fetchImpl: typeof fetch = fetch
 ): Promise<{ ok: true; text: string } | { ok: false; error: ScanFailure }> {
   try {
@@ -554,10 +581,21 @@ export async function runAssistantChatApiSingle(
     }
     const cred = credObj.value
 
+    // Multi-turn memory: prior turns are replayed before the current user
+    // message, normalized per provider. Empty history reproduces the old
+    // single-turn payloads byte-for-byte.
+    const history = normalizeHistory(req.history ?? [])
+    const historyMessages = history.map((t) => ({ role: t.role, content: t.content }))
+    const historyContents = history.map((t) => ({
+      role: t.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: t.content }],
+    }))
+
     const payload = {
       model: req.model,
       messages: [
         { role: 'system', content: req.systemPrompt },
+        ...historyMessages,
         { role: 'user', content: req.userPrompt }
       ],
     }
@@ -593,6 +631,7 @@ export async function runAssistantChatApiSingle(
       }
       bodyStr = JSON.stringify({
         contents: [
+          ...historyContents,
           { role: 'user', parts: [{ text: `${req.systemPrompt}\n\n${req.userPrompt}` }] }
         ]
       })

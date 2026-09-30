@@ -1,11 +1,12 @@
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { router } from 'expo-router'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../src/components/Icon'
 import { startBarcodeScan, startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
-import { setPhase } from '../src/scan/store'
+import { setPhase, setScanReviewMode, type ScanReviewMode } from '../src/scan/store'
+import { setting, putSetting } from '../src/data/repo'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -17,6 +18,69 @@ const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
   { id: 'label', label: 'Label', icon: 'nutritionLabel' },
   { id: 'receipt', label: 'Receipt', icon: 'receipt' },
 ]
+
+const SCAN_MODE_SETTING = 'scan_review_mode'
+
+/**
+ * Quick vs Advanced review preference. Quick shows a one-tap log for
+ * high-confidence scans and falls back to full review automatically when
+ * anything needs a check; Advanced always opens the full review. Persisted so
+ * the choice survives app restarts.
+ */
+function useScanReviewPref(): [ScanReviewMode, (m: ScanReviewMode) => void] {
+  const [pref, setPref] = useState<ScanReviewMode>('quick')
+  useEffect(() => {
+    let live = true
+    void setting(SCAN_MODE_SETTING).then((v) => {
+      if (live && (v === 'quick' || v === 'advanced')) setPref(v)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+  const update = (m: ScanReviewMode) => {
+    setPref(m)
+    void putSetting(SCAN_MODE_SETTING, m)
+  }
+  return [pref, update]
+}
+
+function ReviewModeToggle({
+  value,
+  onChange,
+  onDark,
+}: {
+  value: ScanReviewMode
+  onChange: (m: ScanReviewMode) => void
+  /** Camera overlay sits on the dark viewfinder; web fallback uses theme colors. */
+  onDark: boolean
+}) {
+  return (
+    <View style={styles.reviewRow} accessibilityRole="radiogroup" accessibilityLabel="Review mode">
+      {(['quick', 'advanced'] as const).map((m) => {
+        const active = value === m
+        return (
+          <Pressable
+            key={m}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={m === 'quick' ? 'Quick review' : 'Advanced review'}
+            onPress={() => onChange(m)}
+            style={[
+              styles.reviewPill,
+              active && styles.reviewPillActive,
+              !onDark && { backgroundColor: 'rgba(0,0,0,0.06)' },
+            ]}
+          >
+            <Text style={[type.label, { color: active ? '#000' : onDark ? '#fff' : '#000' }]}>
+              {m === 'quick' ? 'Quick' : 'Advanced'}
+            </Text>
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
 
 /**
  * Capture.
@@ -45,6 +109,7 @@ export default function Camera() {
   const cameraRef = useRef<CameraView>(null)
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<CameraMode>('food')
+  const [reviewPref, setReviewPref] = useScanReviewPref()
   // Barcode frames arrive continuously; only the FIRST detection may fire.
   const barcodeFired = useRef(false)
 
@@ -81,6 +146,7 @@ export default function Camera() {
 
       // The draft exists from this moment. Everything after can fail safely.
       setPhase({ kind: 'captured', photoUri: shot.uri })
+      setScanReviewMode(reviewPref)
 
       // Navigate NOW. Preprocessing, the model call and the pipeline all run
       // behind the result screen's progress states — the user never stares at
@@ -97,6 +163,7 @@ export default function Camera() {
   function onBarcode(data: string) {
     if (barcodeFired.current || !data) return
     barcodeFired.current = true
+    setScanReviewMode(reviewPref)
     router.replace('/result')
     void startBarcodeScan(data)
   }
@@ -112,6 +179,7 @@ export default function Camera() {
       />
 
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, space.xl) }]}>
+        <ReviewModeToggle value={reviewPref} onChange={setReviewPref} onDark />
         <View style={styles.modeRow}>
           {MODES.map((m) => {
             const active = mode === m.id
@@ -173,6 +241,7 @@ function WebCameraFallback() {
   const [gtin, setGtin] = useState('')
   const [busy, setBusy] = useState(false)
   const [gtinError, setGtinError] = useState('')
+  const [reviewPref, setReviewPref] = useScanReviewPref()
 
   async function pickImage() {
     if (busy) return
@@ -186,6 +255,7 @@ function WebCameraFallback() {
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri as string
         setPhase({ kind: 'captured', photoUri: uri })
+        setScanReviewMode(reviewPref)
         router.replace('/result')
         if (mode === 'label') void startLabelScan(uri)
         else if (mode === 'receipt') void startReceiptScan(uri)
@@ -203,6 +273,7 @@ function WebCameraFallback() {
       return
     }
     setGtinError('')
+    setScanReviewMode(reviewPref)
     router.replace('/result')
     void startBarcodeScan(value)
   }
@@ -232,6 +303,8 @@ function WebCameraFallback() {
           )
         })}
       </View>
+
+      <ReviewModeToggle value={reviewPref} onChange={setReviewPref} onDark={false} />
 
       {mode === 'barcode' ? (
         <View style={{ width: '100%', maxWidth: 420, gap: space.sm }}>
@@ -323,6 +396,16 @@ const styles = StyleSheet.create({
     minHeight: MIN_TAP_TARGET,
   },
   modePillActive: { backgroundColor: '#fff' },
+  reviewRow: { flexDirection: 'row', gap: space.xs, justifyContent: 'center' },
+  reviewPill: {
+    paddingHorizontal: space.lg,
+    paddingVertical: space.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    minHeight: 32,
+    justifyContent: 'center',
+  },
+  reviewPillActive: { backgroundColor: '#fff' },
   hint: { color: 'rgba(255,255,255,0.85)', paddingVertical: space.lg },
   shutter: {
     width: 74,

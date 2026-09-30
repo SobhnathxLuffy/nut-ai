@@ -205,3 +205,26 @@ export function reset(opts?: { retainPhoto?: boolean }) {
   }
   setPhase({ kind: 'idle' })
 }
+
+// ---------------------------------------------------------------------------
+// Review mode (quick vs advanced)
+// ---------------------------------------------------------------------------
+
+export type ScanReviewMode = 'quick' | 'advanced'
+
+/**
+ * How the user wants to review scans, chosen on the camera screen and honored
+ * by the result screen. Module-level like the phase itself: set once at
+ * capture time, read once at result-mount time. The camera persists the
+ * preference through settings; this carries the choice across the
+ * navigate-to-result hand-off without threading a param through the router.
+ */
+let reviewMode: ScanReviewMode = 'quick'
+
+export function setScanReviewMode(mode: ScanReviewMode) {
+  reviewMode = mode
+}
+
+export function getScanReviewMode(): ScanReviewMode {
+  return reviewMode
+}

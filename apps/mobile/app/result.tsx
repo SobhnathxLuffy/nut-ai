@@ -1,5 +1,5 @@
 import { router } from 'expo-router'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Image,
@@ -11,18 +11,30 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { WebLookupResult, MacroTotals } from '@nutai/core-schema'
+import type { WebLookupResult, MacroTotals, IngredientRow, CorrectionIntent } from '@nutai/core-schema'
+import { CorrectionIntentZ } from '@nutai/core-schema'
+import type { ScoredCandidate } from '@nutai/resolver'
+import { loadFood, resolveByText } from '@nutai/resolver'
+import { buildCorrectionPrompt, cheapestModel, type ProviderId } from '@nutai/prompt'
 import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
 import { Icon, type IconName } from '../src/components/Icon'
-import { logMeal } from '../src/data/repo'
+import { logMeal, setting, db as openUserDb } from '../src/data/repo'
+import { resolveSelection } from '../src/data/food-search-select'
+import type { ManualFoodSelection } from '../src/data/manual-food'
+import { runCorrectionIntent } from '../src/inference/pathA/client'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
+import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
+import { isQuickEligible } from '../src/scan/quick-mode'
 import {
+  addRow,
   answerQuestion,
   applyWebOption,
   editGrams,
+  getScanReviewMode,
   removeRow,
   reset,
   useScan,
+  type ScanReviewMode,
   type WebLookupState,
 } from '../src/scan/store'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -40,6 +52,21 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
  * it is what makes "re-analysis that deletes the ingredients you already
  * corrected" possible at all. THE REVIEW SCREEN IS THE FIX SCREEN. Every row is
  * editable in place, and every edit recomputes locally, instantly, for free.
+ *
+ * QUICK vs ADVANCED (review-mode batch): quick mode renders a compact one-tap
+ * "Log it" card ONLY when isQuickEligible() says nothing in the result needs
+ * attention — no highlighted questions, no AI-estimate rows, a tight meal band.
+ * Anything that deserves a look drops the user into the full review below,
+ * automatically. "Review ingredients" is always one tap away from the quick
+ * card, and the confidence chip and its reasons are shown in both views.
+ *
+ * FIX RESULT now runs the AIP-004 correction parser first: the typed note is
+ * parsed into structured operations against the current rows and shown as a
+ * confirmation card. Updates and removes apply locally and instantly (the same
+ * primitives as hand-editing); adds and swaps resolve against the bundled
+ * corpus. Anything the parser cannot do — ambiguity, a parse miss, a food the
+ * corpus does not know — falls back to the existing full re-analysis
+ * (fixScan), exactly as before.
  */
 export default function Result() {
   const theme = useTheme()
@@ -49,6 +76,15 @@ export default function Result() {
   const [logging, setLogging] = useState(false)
   const [fixOpen, setFixOpen] = useState(false)
   const [fixText, setFixText] = useState('')
+  const [fixBusy, setFixBusy] = useState(false)
+  const [fixStage, setFixStage] = useState<'input' | 'confirm'>('input')
+  const [fixMessage, setFixMessage] = useState('')
+  const [pendingIntent, setPendingIntent] = useState<CorrectionIntent | null>(null)
+  const [fixNotice, setFixNotice] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
+  // null = honor the camera's persisted choice; a tap overrides for this scan.
+  const [viewOverride, setViewOverride] = useState<ScanReviewMode | null>(null)
+  const initialReviewMode = getScanReviewMode()
 
   if (phase.kind === 'analyzing' || phase.kind === 'captured') {
     const stage = phase.kind === 'analyzing' ? phase.stage : 'preparing'
@@ -114,8 +150,87 @@ export default function Result() {
   }
 
   const { result } = phase
+  const reviewMode = viewOverride ?? initialReviewMode
+  const quickEligible = isQuickEligible(result)
   const highlighted = result.questions.filter((q) => q.state === 'highlighted')
   const preAnswered = result.questions.filter((q) => q.state === 'pre_answered')
+
+  function logNow() {
+    if (logging) return
+    setLogging(true)
+    void (async () => {
+      try {
+        await logMeal(result, phase.kind === 'ready' ? phase.meta : null, phase.kind === 'ready' ? phase.photoUri : null, Date.now())
+        reset({ retainPhoto: true })
+        router.dismissAll()
+      } catch {
+        setLogging(false)
+      }
+    })()
+  }
+
+  if (reviewMode === 'quick' && quickEligible) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.bg }}>
+        <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
+          <Text style={[type.title, { color: theme.text }]}>
+            {result.items[0]?.row.displayName ?? 'Your meal'}
+          </Text>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+            Quick result — every ingredient matched the database with high confidence, nothing needs a check.
+          </Text>
+
+          <View style={{ marginTop: space.lg }}>
+            <Text style={[type.hero, { color: theme.text }]}>{result.totals.kcal}</Text>
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
+
+            <View style={{ marginTop: space.md }}>
+              <ConfidenceChip
+                value={result.totals.kcal}
+                band={result.mealBand}
+                expanded={expandedBand}
+                onPress={() => setExpandedBand((v) => !v)}
+              />
+              {expandedBand && <ConfidenceReasons band={result.mealBand} />}
+            </View>
+          </View>
+
+          <MacroStats totals={result.totals} />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setViewOverride('advanced')}
+            hitSlop={space.sm}
+            style={{ marginTop: space.xl, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
+          >
+            <Text style={[type.body, { color: theme.uncertain }]}>Review ingredients before logging</Text>
+          </Pressable>
+        </ScrollView>
+
+        <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
+          <View style={{ flexDirection: 'row', gap: space.md }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setViewOverride('advanced')}
+              style={[styles.secondary, { borderColor: theme.border }]}
+            >
+              <Text style={[type.bodyStrong, { color: theme.text }]}>Review</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Log it"
+              disabled={logging}
+              onPress={logNow}
+              style={[styles.primary, { flex: 1, backgroundColor: theme.text }, logging && { opacity: 0.6 }]}
+            >
+              <Text style={[type.bodyStrong, { color: theme.bg }]}>{logging ? 'Logging…' : 'Log it'}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    )
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -123,6 +238,20 @@ export default function Result() {
         <Text style={[type.title, { color: theme.text }]}>
           {result.items[0]?.row.displayName ?? 'Your meal'}
         </Text>
+
+        {reviewMode === 'quick' && !quickEligible && (
+          <View style={[styles.quickNotice, { backgroundColor: theme.uncertainBg }]}>
+            <Text style={[type.caption, { color: theme.text, lineHeight: 19 }]}>
+              Some things here deserve a quick look — review before logging.
+            </Text>
+          </View>
+        )}
+
+        {fixNotice ? (
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
+            {fixNotice}
+          </Text>
+        ) : null}
 
         {/* The point estimate leads. The band qualifies it — it never replaces it. */}
         <View style={{ marginTop: space.lg }}>
@@ -221,13 +350,23 @@ export default function Result() {
             </View>
           )
         })}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add an ingredient"
+          onPress={() => setAddOpen(true)}
+          style={[styles.addRow, { borderColor: theme.border }]}
+        >
+          <Icon name="plus" size={16} color={theme.text} />
+          <Text style={[type.bodyStrong, { color: theme.text }]}>Add ingredient</Text>
+        </Pressable>
       </ScrollView>
 
       <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
         <View style={{ flexDirection: 'row', gap: space.md }}>
           <Pressable
             accessibilityRole="button"
-            onPress={() => setFixOpen(true)}
+            onPress={() => { setFixStage('input'); setFixMessage(''); setFixOpen(true) }}
             style={[styles.secondary, { borderColor: theme.border }]}
           >
             <Icon name="pencil" size={16} color={theme.text} />
@@ -236,20 +375,9 @@ export default function Result() {
 
           <Pressable
             accessibilityRole="button"
+            accessibilityLabel="Log it"
             disabled={logging}
-            onPress={() => {
-              if (logging) return
-              setLogging(true)
-              void (async () => {
-                try {
-                  await logMeal(result, phase.meta, phase.photoUri, Date.now())
-                  reset({ retainPhoto: true })
-                  router.dismissAll()
-                } catch {
-                  setLogging(false)
-                }
-              })()
-            }}
+            onPress={logNow}
             style={[styles.primary, { flex: 1, backgroundColor: theme.text }, logging && { opacity: 0.6 }]}
           >
             <Text style={[type.bodyStrong, { color: theme.bg }]}>{logging ? 'Logging…' : 'Log it'}</Text>
@@ -263,55 +391,432 @@ export default function Result() {
             <Icon name="pencil" size={20} color={theme.text} />
             <Text style={[type.title, { color: theme.text }]}>Fix result</Text>
           </View>
-          <TextInput
-            autoFocus
-            multiline
-            placeholder="Describe what needs to be fixed"
-            placeholderTextColor={theme.textFaint}
-            value={fixText}
-            onChangeText={setFixText}
-            style={[styles.fixInput, { color: theme.text, borderColor: theme.border }]}
-          />
-          <View style={[styles.fixExample, { backgroundColor: theme.bgSunken }]}>
-            <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
-              <Text style={{ fontWeight: '600' }}>Example:</Text> The wrap is missing the chicken and
-              avocado. Only what you mention gets changed — your other edits stay put.
-            </Text>
-          </View>
-          <View style={{ flex: 1 }} />
-          <Pressable
-            accessibilityRole="button"
-            disabled={!fixText.trim()}
-            onPress={() => {
-              const note = fixText.trim()
-              setFixOpen(false)
-              setFixText('')
-              if (note) void fixScan(note)
-            }}
-            style={[
-              styles.primary,
-              { backgroundColor: theme.text, marginBottom: Math.max(insets.bottom, space.lg) },
-              !fixText.trim() && { opacity: 0.4 },
-            ]}
-          >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>Update</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setFixOpen(false)}
-            hitSlop={space.md}
-            style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
-          >
-            <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
-          </Pressable>
+
+          {fixStage === 'input' ? (
+            <>
+              <TextInput
+                autoFocus
+                multiline
+                placeholder="Describe what needs to be fixed"
+                placeholderTextColor={theme.textFaint}
+                value={fixText}
+                onChangeText={setFixText}
+                style={[styles.fixInput, { color: theme.text, borderColor: theme.border }]}
+              />
+              <View style={[styles.fixExample, { backgroundColor: theme.bgSunken }]}>
+                <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
+                  <Text style={{ fontWeight: '600' }}>Example:</Text> The wrap is missing the chicken and
+                  avocado. Only what you mention gets changed — your other edits stay put.
+                </Text>
+              </View>
+              {fixMessage ? (
+                <Text style={[type.caption, { color: theme.uncertain, marginTop: space.lg, lineHeight: 19 }]}>
+                  {fixMessage}
+                </Text>
+              ) : null}
+              <View style={{ flex: 1 }} />
+              <Pressable
+                accessibilityRole="button"
+                disabled={!fixText.trim() || fixBusy}
+                onPress={() => void submitFix()}
+                style={[
+                  styles.primary,
+                  { backgroundColor: theme.text, marginBottom: Math.max(insets.bottom, space.lg) },
+                  (!fixText.trim() || fixBusy) && { opacity: 0.4 },
+                ]}
+              >
+                <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Checking…' : 'Update'}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setFixOpen(false); setFixStage('input'); setFixMessage('') }}
+                hitSlop={space.md}
+                style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
+              >
+                <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
+                Check each change before applying — nothing below is applied until you confirm.
+              </Text>
+              <ScrollView style={{ marginTop: space.lg }} contentContainerStyle={{ gap: space.sm }}>
+                {(pendingIntent?.operations ?? []).map((op, i) => (
+                  <View key={`${op.type}-${i}`} style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}>
+                    <Text style={[type.body, { color: theme.text, flex: 1 }]}>
+                      {describeOperation(op, result.meal.ingredients)}
+                    </Text>
+                  </View>
+                ))}
+                {fixMessage ? (
+                  <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{fixMessage}</Text>
+                ) : null}
+              </ScrollView>
+              <View style={{ flex: 1 }} />
+              <Pressable
+                accessibilityRole="button"
+                disabled={fixBusy}
+                onPress={() => void applyIntent()}
+                style={[styles.primary, { backgroundColor: theme.text, marginBottom: space.md }, fixBusy && { opacity: 0.4 }]}
+              >
+                <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Applying…' : 'Apply changes'}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={fixBusy}
+                onPress={() => {
+                  const note = fixText.trim()
+                  setFixOpen(false)
+                  setFixStage('input')
+                  setPendingIntent(null)
+                  setFixText('')
+                  setFixMessage('')
+                  if (note) void fixScan(note)
+                }}
+                style={[styles.primary, { backgroundColor: theme.bgSunken, marginBottom: space.md }]}
+              >
+                <Text style={[type.bodyStrong, { color: theme.text }]}>Re-analyze the photo instead</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setFixStage('input'); setPendingIntent(null); setFixMessage('') }}
+                hitSlop={space.md}
+                style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
+              >
+                <Text style={[type.body, { color: theme.textMuted }]}>Back</Text>
+              </Pressable>
+            </>
+          )}
         </View>
+      ) : null}
+
+      {addOpen ? (
+        <AddIngredientSheet
+          onClose={() => setAddOpen(false)}
+          onAdd={(row) => {
+            addRow(row)
+            setAddOpen(false)
+          }}
+        />
       ) : null}
     </View>
   )
+
+  /** AIP-004 fast path: parse the note into structured ops; fall back to full re-analysis when it cannot. */
+  async function submitFix() {
+    const note = fixText.trim()
+    if (!note || fixBusy || phase.kind !== 'ready') return
+    setFixBusy(true)
+    try {
+      const provider = (await setting('provider')) as ProviderId | 'none' | ''
+      if (provider && provider !== 'none') {
+        const model = (await setting('provider_model')) || cheapestModel(provider).id
+        const built = buildCorrectionPrompt(note, phase.result.meal.ingredients)
+        const res = await runCorrectionIntent({ provider, model, systemPrompt: built.system, userPrompt: built.user })
+        if (res.ok) {
+          const intent = CorrectionIntentZ.parse(res.intent)
+          if (intent.operations.length === 0 && intent.clarification_needed) {
+            setFixMessage(intent.clarification_needed)
+            setFixBusy(false)
+            return
+          }
+          if (intent.operations.length > 0) {
+            setPendingIntent(intent)
+            setFixStage('confirm')
+            setFixMessage('')
+            setFixBusy(false)
+            return
+          }
+        }
+      }
+    } catch {
+      // Parser unavailable (no key, malformed response) — the classic path below
+      // is exactly the behavior every earlier version shipped.
+    }
+    setFixBusy(false)
+    setFixOpen(false)
+    setFixStage('input')
+    setFixText('')
+    setFixMessage('')
+    void fixScan(note)
+  }
+
+  /** Apply the confirmed operations to the editable draft via the same primitives as hand-editing. */
+  async function applyIntent() {
+    if (phase.kind !== 'ready' || !pendingIntent || fixBusy) return
+    setFixBusy(true)
+    const rows = phase.result.meal.ingredients
+    const skipped: string[] = []
+    for (const op of pendingIntent.operations) {
+      try {
+        if (op.type === 'update_quantity') {
+          const row = rows.find((r) => r.id === op.id)
+          if (!row) {
+            skipped.push('One item to adjust is no longer in the list')
+            continue
+          }
+          if (op.grams == null) {
+            skipped.push(`Enter the grams for “${row.displayName}” — “${op.qualitative_size ?? 'that amount'}” could not be converted here`)
+            continue
+          }
+          editGrams(row.id, op.grams)
+        } else if (op.type === 'remove_item') {
+          removeRow(op.id)
+        } else if (op.type === 'add_item') {
+          const sel = await resolveCorpusSelection(op.canonical_food_key || op.name, op.grams ?? undefined)
+          if (!sel) {
+            skipped.push(`“${op.name}” is not in the nutrition database`)
+            continue
+          }
+          addRow(toIngredientRow(sel, op.name))
+        } else if (op.type === 'replace_item') {
+          const row = rows.find((r) => r.id === op.id)
+          const sel = await resolveCorpusSelection(op.canonical_food_key || op.name, row?.grams)
+          if (!sel) {
+            skipped.push(`“${op.name}” is not in the nutrition database`)
+            continue
+          }
+          if (row) removeRow(row.id)
+          addRow(toIngredientRow(sel, op.name))
+        }
+      } catch {
+        skipped.push('One change could not be applied')
+      }
+    }
+    setFixBusy(false)
+    setFixOpen(false)
+    setFixStage('input')
+    setPendingIntent(null)
+    setFixText('')
+    setFixMessage('')
+    if (skipped.length > 0) setFixNotice(skipped.join(' · '))
+  }
+}
+
+function describeOperation(
+  op: CorrectionIntent['operations'][number],
+  rows: IngredientRow[],
+): string {
+  const nameOf = (id: string) => rows.find((r) => r.id === id)?.displayName ?? 'that item'
+  switch (op.type) {
+    case 'update_quantity':
+      return op.grams != null
+        ? `Set “${nameOf(op.id)}” to ${Math.round(op.grams)} g`
+        : `Adjust “${nameOf(op.id)}” (${op.qualitative_size ?? 'amount'})`
+    case 'remove_item':
+      return `Remove “${nameOf(op.id)}”`
+    case 'add_item':
+      return `Add “${op.name}”${op.grams != null ? ` (~${Math.round(op.grams)} g)` : ''}`
+    case 'replace_item':
+      return `Swap “${nameOf(op.id)}” for “${op.name}”`
+  }
 }
 
 function domainOf(url: string): string {
   const m = url.match(/^https?:\/\/(?:www\.)?([^/]+)/i)
   return m?.[1] ?? url
+}
+
+// ---------------------------------------------------------------------------
+// Add-from-search (#2) — corpus helpers shared by the add sheet and the
+// AIP-004 add/replace operations.
+// ---------------------------------------------------------------------------
+
+async function openSourceContext() {
+  const [handle, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), openUserDb()])
+  return { handle, sourceContext: { ifctDb, userDb } }
+}
+
+async function searchCorpusCandidates(query: string): Promise<ScoredCandidate[]> {
+  const { handle, sourceContext } = await openSourceContext()
+  const r = await resolveByText(handle, {
+    canonicalFoodKey: query,
+    observedBrand: null,
+    prepFacet: null,
+    modelCategory: null,
+    estimatedGrams: 100,
+  }, sourceContext)
+  if (r.outcome.kind === 'auto_accept') return [r.outcome.match]
+  if (r.outcome.kind === 'disambiguate') return r.outcome.candidates.slice(0, 8)
+  return []
+}
+
+async function loadCorpusSelection(c: ScoredCandidate): Promise<ManualFoodSelection> {
+  const { handle, sourceContext } = await openSourceContext()
+  const resolved = await loadFood(handle, c.foodId, sourceContext)
+  if (!resolved) throw new Error('No nutrition available for that item')
+  return resolveSelection(handle, c, resolved)
+}
+
+/** Best single corpus match for a correction add/replace; null when the corpus does not know the food. */
+async function resolveCorpusSelection(query: string, gramsOverride?: number): Promise<ManualFoodSelection | null> {
+  const { handle, sourceContext } = await openSourceContext()
+  const r = await resolveByText(handle, {
+    canonicalFoodKey: query,
+    observedBrand: null,
+    prepFacet: null,
+    modelCategory: null,
+    estimatedGrams: gramsOverride ?? 100,
+  }, sourceContext)
+  const match = r.outcome.kind === 'auto_accept'
+    ? r.outcome.match
+    : r.outcome.kind === 'disambiguate'
+      ? r.outcome.candidates[0]
+      : null
+  if (!match) return null
+  const resolved = await loadFood(handle, match.foodId, sourceContext)
+  if (!resolved) return null
+  const sel = await resolveSelection(handle, match, resolved)
+  if (gramsOverride != null) sel.grams = gramsOverride
+  return sel
+}
+
+/**
+ * A user-added row carries a REAL per-100 g snapshot from the corpus — never a
+ * model guess — so it behaves exactly like every other row: editable grams,
+ * local recompute, honest band. bandHalfPct 0.375 is the shipped
+ * fndds_standard_portion baseline from @nutai/confidence, traceable like every
+ * other pathway number.
+ */
+function toIngredientRow(sel: ManualFoodSelection, displayName: string): IngredientRow {
+  return {
+    id: `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    displayName,
+    sourceFoodId: sel.foodId != null ? String(sel.foodId) : null,
+    grams: sel.grams,
+    nutrientSnapshot: sel.nutrientSnapshot,
+    origin: 'db_search',
+    sourceUrl: null,
+    sourceAttribution: null,
+    gramPathway: 'fndds_standard_portion',
+    bandHalfPct: 0.375,
+    isEstimate: false,
+    assumptions: [],
+  }
+}
+
+/**
+ * The add-from-search sheet. The search runs the SAME resolver the manual
+ * logging screen uses — one corpus, one ranking, no parallel lookup code to
+ * drift. Tap a result and it joins the ingredient list as a fully editable,
+ * DB-backed row.
+ */
+function AddIngredientSheet({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void
+  onAdd: (row: IngredientRow) => void
+}) {
+  const theme = useTheme()
+  const insets = useSafeAreaInsets()
+  const [query, setQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [candidates, setCandidates] = useState<ScoredCandidate[]>([])
+  const [searched, setSearched] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setCandidates([])
+      setSearched(false)
+      setError('')
+      return
+    }
+    let live = true
+    setSearching(true)
+    const timer = setTimeout(async () => {
+      try {
+        const found = await searchCorpusCandidates(q)
+        if (!live) return
+        setCandidates(found)
+        setSearched(true)
+        setError('')
+      } catch {
+        if (live) setError('Search failed — try again.')
+      } finally {
+        if (live) setSearching(false)
+      }
+    }, 250)
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [query])
+
+  async function addCandidate(c: ScoredCandidate) {
+    try {
+      const sel = await loadCorpusSelection(c)
+      onAdd(toIngredientRow(sel, sel.displayName))
+    } catch {
+      setError('Could not load nutrition for that item.')
+    }
+  }
+
+  return (
+    <View style={[styles.fixOverlay, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Icon name="search" size={20} color={theme.text} />
+        <Text style={[type.title, { color: theme.text }]}>Add ingredient</Text>
+      </View>
+      <TextInput
+        autoFocus
+        placeholder="Search foods and dishes"
+        placeholderTextColor={theme.textFaint}
+        value={query}
+        onChangeText={setQuery}
+        returnKeyType="search"
+        style={[styles.otherInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken, marginTop: space.lg }]}
+      />
+
+      {searching ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.lg }}>
+          <ActivityIndicator size="small" color={theme.textFaint} />
+          <Text style={[type.caption, { color: theme.textMuted }]}>Searching the database…</Text>
+        </View>
+      ) : null}
+
+      {error ? (
+        <Text style={[type.caption, { color: theme.uncertain, marginTop: space.lg }]}>{error}</Text>
+      ) : null}
+
+      <ScrollView style={{ marginTop: space.lg }} contentContainerStyle={{ gap: space.sm, paddingBottom: 120 }}>
+        {candidates.map((c) => (
+          <Pressable
+            key={c.foodId}
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${c.name}`}
+            onPress={() => void addCandidate(c)}
+            style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[type.body, { color: theme.text }]}>{c.name}</Text>
+              {c.brand ? (
+                <Text style={[type.micro, { color: theme.textMuted, marginTop: 1 }]}>{c.brand}</Text>
+              ) : null}
+            </View>
+            <Text style={[type.label, { color: theme.textMuted }]}>
+              {c.energyKcal != null ? `${Math.round(c.energyKcal)} kcal / 100 g` : ''}
+            </Text>
+          </Pressable>
+        ))}
+        {searched && !searching && candidates.length === 0 && !error ? (
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, lineHeight: 19 }]}>
+            Nothing matched “{query.trim()}”. Try plainer words, or use Fix result to describe it for re-analysis.
+          </Text>
+        ) : null}
+      </ScrollView>
+
+      <Pressable
+        accessibilityRole="button"
+        onPress={onClose}
+        hitSlop={space.md}
+        style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
+      >
+        <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+      </Pressable>
+    </View>
+  )
 }
 
 /**
@@ -525,6 +1030,22 @@ const styles = StyleSheet.create({
     minHeight: MIN_TAP_TARGET,
   },
   remove: { width: MIN_TAP_TARGET, height: MIN_TAP_TARGET, alignItems: 'center', justifyContent: 'center' },
+  addRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.xs,
+    minHeight: MIN_TAP_TARGET,
+    marginTop: space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderStyle: 'dashed',
+    borderRadius: radius.md,
+  },
+  quickNotice: {
+    marginTop: space.md,
+    padding: space.md,
+    borderRadius: radius.md,
+  },
   actions: {
     position: 'absolute',
     left: 0,
