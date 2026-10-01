@@ -84,7 +84,7 @@ silently change, and the two worst bugs in this product category become structur
 
 Chosen during onboarding, changeable any time, and presented neutrally:
 
-- **Bring your own key** — your own Anthropic / OpenAI / Google key. Your photo goes to the provider you
+- **Bring your own key** — your own Anthropic / OpenAI / Google key, or any OpenAI-compatible gateway (custom base URL + model id, so reseller keys work). Your photo goes to the provider you
   named and nowhere else. Typically well under a cent per scan.
 - **On-device** — free, private, works on a plane. Accuracy is **unproven** and will be measured and
   published before it ships as a default.
@@ -185,14 +185,23 @@ npm run check        # lint + typecheck + tests + node-purity + USDA/IFCT/dish-K
 and file export/import all require a compiled app — build with Xcode or `expo run:android` as shown
 above.
 
-**Web** runs from the same source, offline, with no build-time secrets:
+**Web** runs from the same source, offline, with no build-time secrets — and the same bundle hosts the live deployment:
 
 ```bash
 cd apps/mobile
 npx expo export --platform web   # bundle into dist/
-python3 serve-coop.py            # serve it with COOP/COEP headers + SPA fallback
+python3 scripts/serve-3000.py    # local: COOP/COEP headers + SPA fallback + .wasm/.db MIME on :3000
 npx playwright test              # 17-journey e2e suite against the exported bundle
 ```
+
+For static hosts that cannot set COOP/COEP headers (GitHub Pages), use the sub-path build:
+
+```bash
+EXPO_PUBLIC_WEB_BASE=/nut-ai scripts/build-ghpages.sh   # export + coi-serviceworker shim + SPA 404 fallback + .nojekyll
+# then push apps/mobile/dist to the gh-pages branch root
+```
+
+The live deployment is **https://sobhnathxluffy.github.io/nut-ai/** — on the first visit the isolation shim may reload the page once; after that SQLite runs on OPFS with a localStorage fallback on older browsers.
 
 ## Planning and Agent Workflow
 
@@ -206,6 +215,7 @@ npx playwright test              # 17-journey e2e suite against the exported bun
 - [docs/qa/product-round-search-decompose-fixes.md](docs/qa/product-round-search-decompose-fixes.md) records the multi-source search + decomposer round: search now merges every database in one ranked list, the decomposer takes unlimited ingredients with grams/oil/breakdown and cross-DB ingredient picking, saved "My Version" dishes became searchable (`HouseholdDishSource`), and all mapped dish slots verify against the shipped corpora.
 - [docs/qa/draft-graduation-round.md](docs/qa/draft-graduation-round.md) records the draft-recipe graduation round: every one of the 362 dish-KB recipes is now CURATED with verified ingredient mappings (1,444/1,444 slots resolve in the shipped corpora; cooked yields re-based to physically coherent evaporation factors), ingredient search resolves synonyms across databases (methi → fenugreek, curd → yogurt, besan → chickpea flour), and genuinely-missing ingredients (plain tea, brewed coffee) ship as USDA reference rows.
 - [docs/qa/scan-reliability-round.md](docs/qa/scan-reliability-round.md) records the scan-reliability round: two live-reproduced fatal scan defects fixed — the wire/validator contract gap that killed every reseller scan on a descriptive `qualitative_size` (fixed by official-endpoint pattern enforcement + a pure payload-repair layer + a one-shot instruction-schema retry) and a `mergeScanMeta` null-prior TypeError that crashed every first scan with a catalogue-priced model.
+- [docs/qa/honesty-contract-round.md](docs/qa/honesty-contract-round.md) records the honesty-contract round: the owner's live-tested perception prompt adopted as the v1.3.0 vision-stage contract (scene-first meal identity, absolute-scale honesty with gram RANGES instead of fake-precise points, one highest-impact clarifying question), reseller gateway routing for every provider, thinking-model truncation self-heal, and the sub-path GitHub Pages deployment.
 
 ## Licensing
 

@@ -763,3 +763,64 @@ reseller base URL, for thali and pizza fixtures.
 
 Gate status after the round: `npm run check` EXIT 0 (869/869 tests),
 `npx playwright test` 24 passed / 2 ticketed skips.
+
+---
+
+## Honesty-contract round — prompt v1.3.0, gateway routing, truncation self-heal, web hosting (2026-09-30)
+
+The owner's live-tested perception prompt was adopted as the vision-stage
+contract end-to-end at commit `2032fb1` (24 files, +2,786/−92); sub-path web
+hosting landed at `58cefb2`. Full round record:
+[docs/qa/honesty-contract-round.md](docs/qa/honesty-contract-round.md).
+Evidence classes: suite gates are AUTOMATICALLY VERIFIED; model behavior is
+live-probed against the owner's real reseller gateway with the key held
+transiently in env only (never written to disk); deployment checks are
+AUTOMATICALLY VERIFIED by HTTP probing.
+
+- **Gates at `2032fb1`:** vitest **1,077 passed / 8 skipped / 0 failed**,
+  `npm run lint` clean, `npm run typecheck` clean (root + app),
+  `check:node-purity` **19/19** packages.
+- **Scene-first classification (live probe, gpt-4o-mini):** a North-Indian
+  thali photo returns meal identity "Indian mixed thali" (`indian_thali`) —
+  not a single-dish title; a supreme-pizza photo returns "Supreme pizza" with
+  an absolute-scale-honest 700–800 g RANGE and a highest-impact clarifying
+  question ("What size is the pizza?") instead of the earlier fake-precise
+  ~500 g point. Intrinsic-vs-added cooking-fat semantics verified
+  (`added_cooking_fat: none` on a dry pan).
+- **Truncation self-heal (live-reproduced + fixed):** gemini-2.5-flash on the
+  hard pizza image died with HTTP 200 `finish_reason=length` — thinking models
+  burn the 8192-token output budget and emit half a JSON with zero retries.
+  Fixed by threading `maxTokens` through the scan path, firing ONE escalated
+  retry at min(base×2, 16384) on kind `'truncated'`, and teaching the
+  orchestrator rescue to cover truncation; 8 new tests pin the behavior.
+- **Reseller gateway routing:** every provider rides an OpenAI-compatible
+  `/chat/completions` with the model id passed verbatim; non-auth failures
+  surface honest, key-redacted error snippets; empty/prose 200s are fished
+  from any envelope slot. `google/gemini-2.5-flash` returned HTTP 402 "API Key
+  Budget Exceeded" — user-side quota, with verbatim passthrough confirmed by
+  wire evidence; unverified until the owner topped up.
+- **Honesty UI:** result screen ships HonestySummaryCard, model-question card,
+  top-uncertainty line and portion-context chip; `repair` re-stamps
+  schema_version drift; the new `packages/pipeline/src/scan-contract.ts`
+  maps wire→domain with closed-set enum re-validation and snake_case
+  `added_cooking_fat` handling.
+- **Web hosting (`58cefb2`):** the web DB adapter and app config are
+  sub-path aware via `EXPO_PUBLIC_WEB_BASE` (unset = byte-identical
+  root-anchored hosting); `scripts/build-ghpages.sh` exports with
+  `experiments.baseUrl`, injects the canonical coi-serviceworker shim (GitHub
+  Pages cannot set COOP/COEP), and ships `404.html` SPA fallback + `.nojekyll`.
+- **Deployment checks:** 8/8 critical paths 200 under the `/nut-ai/` prefix
+  against a local prefix-simulating server (index, entry bundle,
+  sqlite3.wasm, nutrition.db, ifct.db, shim, 404.html, deep link); production
+  https://sobhnathxluffy.github.io/nut-ai/ live with shim, entry bundle and
+  sqlite3.wasm all HTTP 200.
+- **Incident (recorded for honesty):** a 2026-09-30 sandbox rebuild restored a
+  stale pre-`2032fb1` snapshot (HEAD `3b4d1cd`, no `node_modules`, no
+  `.zscripts`). Recovery fast-forwarded from `origin/main` — the 514 dirty
+  files were mode-only churn from the platform's `chmod -R 755` restore
+  (`core.filemode false`; content diffs = 0) — and dist was re-materialized
+  from the `gh-pages` branch. No work lost; remote-first discipline held.
+- **Open follow-ups:** browser-side scan smoke (gateway CORS from https
+  origins) NOT TESTED; full `npm run check` re-run pending a fresh
+  `node_modules` install in the rebuilt sandbox; per-row quality columns and
+  meal-level honesty persistence deferred (repo.ts log_items).

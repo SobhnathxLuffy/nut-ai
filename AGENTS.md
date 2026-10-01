@@ -14,7 +14,7 @@ This section is the current operational snapshot and must be kept honest. It is 
 ### 0.1 What is currently strong
 
 - The monorepo, strict TypeScript, SQLite foundation, migrations, operations/undo foundation, deterministic nutrition engine, IFCT/USDA integration, custom foods, recipes, and core food logging architecture are substantial.
-- The latest verified automated baseline is **680 tests across 83 files**, with lint, strict typecheck, node-purity (18/18), USDA data verification (26/26 golden queries, 7,930 foods including 2 supplemental USDA reference rows), IFCT verification (542 rows), Indian-dish verification (362 dishes, ALL CURATED), dish-mapping verification (1,444/1,444 mapped slots resolve in the shipped corpus), and the Playwright web e2e suite (**20 passed + 2 documented `fixme`**) all passing.
+- The latest fully-gated automated baseline is **1,077 tests passing (8 skipped, 0 failed)** at commit `2032fb1` (2026-09-30), with lint, strict typecheck, node-purity (**19/19**), and the data-verification gates all green at that commit. A 2026-09-30 sandbox rebuild restored a stale pre-`2032fb1` snapshot and wiped the local `node_modules`; re-run `npm run check` after reinstalling before quoting the number for new work.
 - The full loop — scan, review, correct, log, track — ships on **Android, iPhone, and the web**. The web build runs the same Expo Router screens and the same deterministic engine: the user DB lives on the OPFS VFS (WASM SQLite) with a guarded one-time migration, provider keys live in `localStorage`, `Alert.alert` has a DOM shim, the camera fallback exposes all four capture modes plus a manual-GTIN path, and the Playwright suite runs against the real exported bundle on every push via `.github/workflows/web-e2e.yml`.
 - The Indian Dish KB pipeline is part of the shipped artifact: `npm run data:build` bundles the 362-dish KB into `nutrition.db`, the verify gate asserts the row count plus a CURATED FTS probe, the resolver ranks the dish KB (priority 75) above generic corpora with a literal-first alias ladder, and the dish browser reaches all 362 identities.
 - **Search is genuinely multi-source.** `RouterSource.search` fans out to EVERY registered source (user foods, household recipes, saved "My Version" dishes, dish KB, IFCT, USDA, Open Food Facts), caps each corpus at 15 rows, and `normalizeBm25` normalizes per source cohort so cross-corpus BM25 scales stay incomparable-but-fair. A single query surfaces IFCT and USDA rows side by side with source labels. The auto-accept DECISION is still tier-gated to the highest-priority source present, preserving the P0-2 guarantee that a dish-KB identity or IFCT row out-decides a generic USDA row.
@@ -34,6 +34,9 @@ This section is the current operational snapshot and must be kept honest. It is 
 - Four QA rounds are closed with per-bug evidence: web P0 (WEB-001…011), product Section-B P0 (P0-1…6), Section-C P1 (P1-1…12), Section-D P2 (P2-1…18) — see `docs/qa/` and `VERIFICATION.md`. Do not re-report those findings as open without fresh evidence.
 - The **Reliable Food Logging + Personal Food/Recipe Management** slice has been physically exercised on Android for review-before-save, historical dates, edit/delete/undo, repeats, custom foods, recipe logging/versioning, dirty-form protection, rapid-save protection, keyboard handling, and process-level persistence.
 - Core nutrition writes use immutable snapshots and deterministic arithmetic rather than trusting model-generated calories/macros.
+- The photo-scan perception stage runs the **prompt v1.3.0 honesty contract** end-to-end (scene-first meal identity, qualitative amounts, portion context, ranked uncertainties, one highest-impact clarifying question; the model never emits calories/grams as facts — ranges only), with live-probed behavior on thali and pizza fixtures against the owner's real reseller gateway.
+- Any OpenAI-compatible reseller gateway works for every provider (model ids passed verbatim, honest key-redacted error snippets, empty/prose-200 fishing), and thinking-model output truncation self-heals via an output-budget escalation retry.
+- The web export is sub-path aware (`EXPO_PUBLIC_WEB_BASE`) and deploys to GitHub Pages via `scripts/build-ghpages.sh` with the coi-serviceworker isolation shim; the live deployment is https://sobhnathxluffy.github.io/nut-ai/.
 
 ### 0.2 Known current shortcomings — do not silently relabel these as complete
 
@@ -71,9 +74,9 @@ Fixed by recent rounds — do not re-report without fresh evidence: repeat-meal 
 - The Apple Health row is hidden on web (iOS-only); do not reintroduce platform-dead controls.
 
 #### AI / Photo
-- The user has not yet configured AI provider credentials for current QA.
-- Cloud AI behavior, assistant writes, semantic text decomposition, and photo recognition must therefore be treated as **NOT TESTED**, not failed and not complete.
-- Structural persistence for assistant routine proposals is now real and test-locked (`saveRoutine` throws on failure), so a fake "SAVED" can no longer occur on web; end-to-end cloud behavior still awaits credentials.
+- Provider credentials ARE configured for current QA: the owner uses an OpenAI-compatible reseller gateway (custom base URL + key), live-verified server-side on 2026-09-30.
+- Photo recognition under the v1.3.0 honesty contract is **AUTOMATICALLY VERIFIED** in suites and **live-probed** against the real gateway (thali scene identity, pizza gram RANGE + highest-impact question, intrinsic-vs-added fat semantics). Browser-side scan behavior (gateway CORS from web origins) is **NOT TESTED**.
+- Structural persistence for assistant routine proposals is now real and test-locked (`saveRoutine` throws on failure), so a fake "SAVED" can no longer occur on web; assistant chat/write flows remain **NOT TESTED** end-to-end.
 - AI features must route through the same reviewed deterministic logging path as manual food entry.
 
 #### Deferred physical checks
@@ -89,7 +92,7 @@ Unless the owner explicitly changes priority, prefer this order:
 3. **Progress, analytics, reports, check-ins** with real data verification (report arithmetic/copy fixed in the P2 round; chart axes/touch still need device QA).
 4. **Real Indian-dish workflow** — dish-specific ingredient/quantity editor with yield, fat, portions, provenance; the KB browse/compose path is shipped, semantic decomposition is not. Do not fake it.
 5. **Settings, onboarding, backup/restore UX, global navigation, cross-app visual hierarchy**.
-6. **AI assistant/text interpretation/photo integration** after provider credentials are configured and the deterministic review pipeline is ready.
+6. **AI assistant/text interpretation/photo integration** — provider credentials are configured and the v1.3.0 honesty contract is live-probed; the active task is browser-side scan validation (gateway CORS from web origins), then assistant read/write flows (AIP-005/006).
 7. **Release-gate physical tests** — hardware network isolation, reboot persistence, golden-set accuracy, store submission (see VERIFICATION.md "What is NOT built").
 
 Do not work from stale phase labels alone. Current user-visible evidence outranks an old “COMPLETE” row.
@@ -718,7 +721,7 @@ npx expo run:android --variant release
 # Web + e2e (from apps/mobile)
 cd apps/mobile
 npx expo export --platform web      # production web bundle into dist/
-python3 serve-coop.py               # serve dist/ with COOP/COEP headers + SPA fallback
+python3 scripts/serve-3000.py       # serve dist/ with COOP/COEP headers + SPA fallback
 npx playwright test                 # e2e suite (serves dist/ via serve-3000.py)
 
 # Existing native release build path may also use Gradle directly
