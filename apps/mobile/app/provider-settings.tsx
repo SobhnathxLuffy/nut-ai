@@ -1,10 +1,11 @@
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PROVIDER_MODELS, providersByPrice, type ProviderId } from '@nutai/prompt'
 import { CredentialForm, PROVIDER_NAME } from '../src/components/CredentialForm'
 import { Icon } from '../src/components/Icon'
+import { showToast } from '../src/components/toast-store'
 import { putSetting, setting } from '../src/data/repo'
 import { baseUrlWarning } from '../src/inference/base-url'
 import { clearCredential, loadCredential, maskCredential } from '../src/inference/credentials'
@@ -140,25 +141,21 @@ export default function ProviderSettings() {
                 <Text style={[type.label, { color: theme.protein }]}>Replace key</Text>
               </Pressable>
               <Pressable
-                onPress={() =>
-                  Alert.alert(
-                    'Remove this key?',
-                    `Photo scans stop working until you add a ${PROVIDER_NAME[provider]} key again. Your logged data is not touched.`,
-                    [
-                      { text: 'Cancel', style: 'cancel' },
-                      {
-                        text: 'Remove',
-                        style: 'destructive',
-                        onPress: () => {
-                          void (async () => {
-                            await clearCredential(provider)
-                            await putSetting('provider', 'none')
-                            refresh()
-                          })()
-                        },
-                      },
-                    ],
-                  )
+                onPress={() => {
+                  // UI/UX report §10.1 (Wave 1b): removing the key is
+                  // reversible — re-pasting it restores everything, and logged
+                  // data is untouched — so it is one tap plus a toast that
+                  // offers the way back, not a destructive confirmation.
+                  void (async () => {
+                    await clearCredential(provider)
+                    await putSetting('provider', 'none')
+                    refresh()
+                    showToast({
+                      message: 'Key removed — photo scans stop working until you add one again.',
+                      action: { label: 'Add key', onPress: () => setShowForm(true) },
+                    })
+                  })()
+                }
                 }
                 hitSlop={space.sm}
               >
@@ -208,9 +205,11 @@ export default function ProviderSettings() {
               })}
             </View>
             {modelId && !PROVIDER_MODELS[provider].some((m) => m.id === modelId) ? (
-              <Text style={[type.caption, { color: theme.text, marginTop: space.sm, fontWeight: '600' }]}>
-                Active scan model: {modelId}
-              </Text>
+              // UI/UX report Table 12.1/12.3 (Wave 1b): the raw model id is
+              // debug-class information — folded behind a diagnostics
+              // disclosure instead of sitting in the user-facing model list.
+              // Nothing is deleted: one tap reveals it, and it stays revealed.
+              <ModelDiagnosticsDisclosure modelId={modelId} />
             ) : null}
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
               The cheapest vision model is the honest default: frontier models are not measurably
@@ -364,6 +363,36 @@ export default function ProviderSettings() {
           </>
         ) : null}
       </ScrollView>
+    </View>
+  )
+}
+
+/**
+ * Table 12.1/12.3 diagnostics disclosure: collapsed by default, expands on
+ * tap and stays open (the information is one tap away, never deleted).
+ */
+function ModelDiagnosticsDisclosure({ modelId }: { modelId: string }) {
+  const theme = useTheme()
+  const [open, setOpen] = useState(false)
+  return (
+    <View style={{ marginTop: space.sm }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Hide active model details' : 'Show active model details'}
+        onPress={() => setOpen((v) => !v)}
+        hitSlop={space.sm}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: MIN_TAP_TARGET }}
+      >
+        <Text style={[type.caption, { color: theme.textMuted }]}>Active model details</Text>
+        <View style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}>
+          <Icon name="chevron" size={14} color={theme.textFaint} />
+        </View>
+      </Pressable>
+      {open ? (
+        <Text style={[type.caption, { color: theme.text, fontWeight: '600', lineHeight: 18 }]}>
+          Active scan model: {modelId}
+        </Text>
+      ) : null}
     </View>
   )
 }

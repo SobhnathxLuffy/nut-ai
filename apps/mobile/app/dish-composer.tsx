@@ -1,10 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { Alert, StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
+import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 import { openNutritionDb, openIfctDb, openUserDb } from '../src/db/expo-adapter'
+import { showToast } from '../src/components/toast-store'
 
 import type { DbAdapter } from '@nutai/db-adapter'
 import { COOKING_FAT_OPTIONS, COOKING_METHOD_OPTIONS, resolveCookedYieldGrams } from '@nutai/indian-dishes'
@@ -19,6 +20,7 @@ import { per100Snapshot } from '../src/data/dish-snapshot'
 import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 import { ChipRow } from '../src/components/ChipRow'
 import { NewIngredientForm } from '../src/components/NewIngredientForm'
+import { Icon } from '../src/components/Icon'
 
 type DishDef = any
 interface Component { id: string, name: string, foodId: string | null, resolvedName: string | null, source: string, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null }
@@ -358,8 +360,10 @@ export default function DishComposerScreen() {
   const portionF = hasUnknowns ? null : totalF * multiplier
 
     const logDish = async () => {
-    if (hasUnknowns) return Alert.alert('Resolve all ingredients first', 'Every component needs a nutrition match before the dish can be logged.')
-    if (!(portionG > 0)) return Alert.alert('Enter a valid portion weight', 'The final portion must be a number greater than zero grams.')
+    // UI/UX report §10.1 (Wave 1b): reversible validation and save failures
+    // are toasts — the review data is untouched and the user simply retries.
+    if (hasUnknowns) return showToast({ message: 'Resolve all ingredients first — every component needs a nutrition match before the dish can be logged.', tone: 'error' })
+    if (!(portionG > 0)) return showToast({ message: 'Enter a valid portion weight — the final portion must be greater than zero grams.', tone: 'error' })
 
     // Create/update the Household Variant in dish_definitions
     const isEditingHousehold = dish?.recordStatus === 'HOUSEHOLD'
@@ -387,7 +391,7 @@ export default function DishComposerScreen() {
     // SQLITE_DESERIALIZE_READONLY, so every save used to fail silently and the
     // user's "My Version" dish was never persisted.
     if (!userDb) {
-      Alert.alert('Database is still loading', 'Please try again in a moment.')
+      showToast({ message: 'Database is still loading — try again in a moment.', tone: 'error' })
       return
     }
     try {
@@ -398,7 +402,7 @@ export default function DishComposerScreen() {
       )
     } catch (e) {
       console.error('Failed to save household variant:', e)
-      Alert.alert('Could not save your version of this dish', String(e))
+      showToast({ message: `Could not save your version of this dish: ${String(e)}`, tone: 'error' })
       return
     }
 
@@ -459,7 +463,9 @@ export default function DishComposerScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={String(c.grams)} onChangeText={t => updateGrams(c.id, t)} keyboardType="numeric" accessibilityLabel={`Grams of ${c.name}`} />
               <Text style={{ color: t.text, marginLeft: 4 }}>g</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${c.name}`} onPress={() => removeComponent(c.id)} style={{ marginLeft: space.md }}><Text style={{ color: t.safety }}>✕</Text></Pressable>
+              {/* UI/UX report Table 12.1 (Wave 1b): the unicode ✕ remove glyph
+                  joins the icon set — one close affordance across the app. */}
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${c.name}`} onPress={() => removeComponent(c.id)} style={{ marginLeft: space.md }}><Icon name="close" size={18} color={t.safety}/></Pressable>
             </View>
           </View>
 
@@ -623,7 +629,7 @@ function IngredientResolver({
     const carbs = parseFloat(newIngredient.carbs) || 0
     const fat = parseFloat(newIngredient.fat) || 0
     if (!name || !Number.isFinite(kcal) || kcal < 0) {
-      Alert.alert('Missing values', 'Give the ingredient a name and its kcal per 100 g.')
+      showToast({ message: 'Give the ingredient a name and its kcal per 100 g.', tone: 'error' })
       return
     }
     setCreating(true)
@@ -638,7 +644,7 @@ function IngredientResolver({
       setQuery('')
       setResults([])
     } catch (e) {
-      Alert.alert('Could not save the ingredient', String(e))
+      showToast({ message: `Could not save the ingredient: ${String(e)}`, tone: 'error' })
     } finally {
       setCreating(false)
     }

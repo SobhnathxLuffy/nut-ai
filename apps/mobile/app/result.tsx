@@ -19,7 +19,7 @@ import { loadFood, resolveByText } from '@nutai/resolver'
 import { buildCorrectionPrompt, cheapestModel, type ProviderId } from '@nutai/prompt'
 import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
 import { Icon, type IconName } from '../src/components/Icon'
-import { customProviderBaseUrl, logMeal, setting, db as openUserDb } from '../src/data/repo'
+import { customProviderBaseUrl, logMeal, setting, db as openUserDb, undoLastOperation } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
@@ -62,15 +62,23 @@ import {
 } from '../src/scan/store'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { showToast } from '../src/components/toast-store'
 
 /**
  * The small "which model is reading this photo" line. BYO-key means the user
  * chose (and pays) a specific model — the scan screen should show exactly what
  * runs, the same way the assistant header does.
+ *
+ * UI/UX report Table 12.1 (Wave 1b): vendor model names mid-scan are
+ * debug-class information — "users need confidence, not vendor names,
+ * mid-scan" (§8.4). The caption is now folded behind a diagnostics disclosure:
+ * collapsed while scanning, one tap reveals the exact model + provider, and
+ * the information stays visible after the tap (nothing is deleted).
  */
 function ScanModelCaption() {
   const theme = useTheme()
   const [line, setLine] = useState('')
+  const [open, setOpen] = useState(false)
   useEffect(() => {
     let live = true
     void describeActiveModel('scan').then((m) => {
@@ -82,9 +90,25 @@ function ScanModelCaption() {
   }, [])
   if (!line) return null
   return (
-    <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xs, textAlign: 'center' }]}>
-      Scanning with {line}
-    </Text>
+    <View style={{ marginTop: space.sm, alignItems: 'center' }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Hide scan details' : 'Show scan details'}
+        onPress={() => setOpen((v) => !v)}
+        hitSlop={space.sm}
+        style={{ minHeight: MIN_TAP_TARGET, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: space.xs }}
+      >
+        <Text style={[type.caption, { color: theme.textFaint }]}>Scan details</Text>
+        <View style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}>
+          <Icon name="chevron" size={12} color={theme.textFaint} />
+        </View>
+      </Pressable>
+      {open ? (
+        <Text style={[type.caption, { color: theme.textFaint, textAlign: 'center' }]}>
+          Scanning with {line}
+        </Text>
+      ) : null}
+    </View>
   )
 }
 
@@ -286,9 +310,40 @@ export default function Result() {
         await logMeal(result, phase.kind === 'ready' ? phase.meta : null, phase.kind === 'ready' ? phase.photoUri : null, Date.now())
         reset({ retainPhoto: true })
         router.dismissAll()
+        // UI/UX report §10.1 (Wave 1b): "meal logged with an Undo action" —
+        // THE flagship toast. The host is mounted at the app root, so it
+        // outlives dismissAll; undoLastOperation emits the food-mutation event,
+        // which refreshes the Home/Food timelines without any wiring here.
+        // 6s window: enough to reconsider without camping on screen.
+        showToast({
+          message: 'Meal logged.',
+          tone: 'success',
+          durationMs: 6000,
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void undoLastOperation().then((r) => {
+                if (!r.success) {
+                  showToast({ message: 'Could not undo — the log changed since this meal was added.', tone: 'error' })
+                }
+              })
+            },
+          },
+        })
       } catch (caught) {
-        setLogError(caught instanceof Error && caught.message ? caught.message : 'Could not log this meal. Your data is unchanged.')
+        const message = caught instanceof Error && caught.message ? caught.message : 'Could not log this meal. Your data is unchanged.'
+        setLogError(message)
         setLogging(false)
+        // QA P1-8 / UI/UX report §10.1 (Wave 1b): a failed DB write is never
+        // silently swallowed. Two layers: the immediate error toast with Retry
+        // (the task's fix), and the persistent inline banner with its own
+        // Retry above the action bar (the report's "inline error plus retry")
+        // for anyone who looks away for the toast's lifetime.
+        showToast({
+          message,
+          tone: 'error',
+          action: { label: 'Retry', onPress: logNow },
+        })
       }
     })()
   }
@@ -664,10 +719,9 @@ export default function Result() {
                   hitSlop={space.md}
                   style={styles.remove}
                 >
-                {/* Wave 1a: 20px ad-hoc close glyph joins type.heading
-                    (Table 3.1 — the size already matched, now it references the
-                    token programmatically). */}
-                <Text style={[type.heading, { color: theme.textFaint }]}>×</Text>
+                {/* UI/UX report Table 12.1 (Wave 1b): the unicode × remove glyph
+                    joins the icon set — one close affordance across the app. */}
+                <Icon name="close" size={20} color={theme.textFaint} />
                 </Pressable>
               </View>
 

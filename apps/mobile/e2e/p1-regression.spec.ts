@@ -83,7 +83,13 @@ test.describe('P1-6: review date is recoverable, never hostile', () => {
 })
 
 test.describe('P1-2: custom-food failures and duplicates are visible', () => {
-  test('duplicate name save shows a real dialog instead of failing silently', async ({ page }) => {
+  // Wave 1b (UI/UX report §10.1): reversible save failures no longer open a
+  // blocking alert dialog — they surface as an error TOAST rendered by the
+  // root-mounted toast host (accessibilityRole="alert", visible for 8s).
+  // The tests below were minimally adapted from [role="alertdialog"] to the
+  // toast element; the behaviour contract ("the failure is visible, not
+  // silent") is unchanged.
+  test('duplicate name save shows a real toast instead of failing silently', async ({ page }) => {
     await restoreOnboarding(page)
     const fillForm = async () => {
       await page.getByLabel('Food name').fill('QA Duplicate Ladoo')
@@ -96,27 +102,27 @@ test.describe('P1-2: custom-food failures and duplicates are visible', () => {
     await page.goto('/custom-food')
     await fillForm()
     await page.getByRole('button', { name: 'Save custom food' }).click()
-    // First save must succeed (no error dialog appears; the screen calls
+    // First save must succeed (no error toast appears; the screen calls
     // router.back(), which is a no-op on a deep link with no history).
     await page.waitForTimeout(1_500)
-    await expect(page.locator('[role="alertdialog"]')).toHaveCount(0)
+    await expect(page.getByRole('alert')).toHaveCount(0)
 
     // Second save with the same name must SAY the name already exists.
     await page.goto('/custom-food')
     await fillForm()
     await page.getByRole('button', { name: 'Save custom food' }).click()
-    await expect(page.locator('[role="alertdialog"]')).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByText(/already exists/i)).toBeVisible()
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('alert')).toContainText(/already exists/i)
   })
 
-  test('missing calories shows a validation dialog instead of nothing', async ({ page }) => {
+  test('missing calories shows a validation toast instead of nothing', async ({ page }) => {
     await restoreOnboarding(page)
     await page.goto('/custom-food')
     await page.getByLabel('Food name').fill('QA No Calories')
     await page.getByLabel('Serving amount').fill('50')
     await page.getByLabel('Protein (g)').fill('10')
     await page.getByRole('button', { name: 'Save custom food' }).click()
-    await expect(page.locator('[role="alertdialog"]')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('alert')).toBeVisible({ timeout: 10_000 })
   })
 })
 

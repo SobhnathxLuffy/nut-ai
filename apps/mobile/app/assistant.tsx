@@ -10,6 +10,7 @@ import {
 } from '../src/inference/pathA/assistant'
 import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
 import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard } from '../src/components/assistant/AssistantCards'
+import { Icon } from '../src/components/Icon'
 import { useTheme, useMotionScale } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
 import { router, useFocusEffect } from 'expo-router'
@@ -504,8 +505,9 @@ export default function AssistantScreen() {
           hitSlop={space.sm}
           style={[s.closeBtn, { borderColor: t.border }]}
         >
-          {/* Wave 1a: 18px ad-hoc close glyph joins type.body (Table 3.1). */}
-          <Text style={[type.body, { color: t.textMuted }]}>×</Text>
+          {/* UI/UX report Table 12.1 (Wave 1b): the unicode × close glyph joins
+              the icon set's close glyph — one close affordance across the app. */}
+          <Icon name="close" size={18} color={t.textMuted} />
         </Pressable>
         <View style={s.headerCenter}>
           <Text style={[s.header, { color: t.text }]}>AI Assistant</Text>

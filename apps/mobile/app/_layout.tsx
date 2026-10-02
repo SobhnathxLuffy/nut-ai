@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeProvider'
 import { space, type as typeScale } from '../src/theme/tokens'
 import { Button } from '../src/components/Screen'
+import { Toast } from '../src/components/Toast'
 
 // WEB-001: patches Alert.alert with a real dialog on web. Must be imported
 // before any screen module so every Alert.alert call site gets the patch.
@@ -122,6 +123,10 @@ function Root() {
         <Stack.Screen name="monthly-report" options={{ presentation: 'modal' }} />
         <Stack.Screen name="custom-food" options={{ presentation: 'modal' }} />
       </Stack>
+      {/* UI/UX report §10.1 (Wave 1b): the ONE toast host, mounted at the root
+          so a toast survives any navigation — the meal-logged Undo must stay
+          tappable after the result screen dismisses itself. */}
+      <Toast />
     </>
   )
 }

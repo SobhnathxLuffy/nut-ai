@@ -39,8 +39,11 @@ describe('DayTimeline web-alert shim is gone for good (P2-16)', () => {
   it('no local window.confirm shim and no positional button mapping left', () => {
     expect(source).not.toContain('window.confirm')
     expect(source).not.toContain('showAlert')
-    // Confirmations go through Alert.alert, which the global styled shim
-    // (src/ui/alert-web.ts) renders on web via app/_layout.tsx.
-    expect(source).toContain('Alert.alert(')
+    // Wave 1b (UI/UX report §10.1): confirmations now go through the ONE
+    // shared helper (confirmDialog, which the global styled shim in
+    // src/ui/alert-web.ts renders on web); failures surface as toasts.
+    // The raw Alert.alert dependency is gone with the 2026 collapse.
+    expect(source).toContain('confirmDialog(')
+    expect(source).not.toContain('Alert.alert(')
   })
 })

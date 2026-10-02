@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
+import { BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   createCustomFood,
@@ -19,6 +19,8 @@ import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { showToast } from '../src/components/toast-store'
+import { confirmDialog } from '../src/ui/alert-web'
 
 interface FormState {
   name: string
@@ -123,9 +125,13 @@ export default function CustomFoodScreen() {
       const food = await getCustomFood(handle, editId)
       if (!alive) return
       if (!food) {
-        Alert.alert('Food not found', 'This custom food may have been removed.', [
-          { text: 'Close', onPress: () => router.back() },
-        ])
+        // UI/UX report §10.1 (Wave 1b): the row is gone but the screen still
+        // renders — the toast states the fact and offers the way out.
+        showToast({
+          message: 'This custom food may have been removed.',
+          tone: 'error',
+          action: { label: 'Go back', onPress: () => router.back() },
+        })
         return
       }
       setForm({
@@ -149,7 +155,7 @@ export default function CustomFoodScreen() {
       setLoading(false)
     })().catch((error) => {
       setLoading(false)
-      Alert.alert('Could not load food', error instanceof Error ? error.message : String(error))
+      showToast({ message: error instanceof Error ? error.message : String(error), tone: 'error' })
     })
     return () => { alive = false }
   }, [editId])
@@ -164,7 +170,15 @@ export default function CustomFoodScreen() {
   // a browser back loses nothing.
   useWebDirtyGuard(dirty)
   const cancel = () => dirty
-    ? Alert.alert('Discard changes?', 'Your unsaved food changes will be lost.', [{ text: 'Keep editing', style: 'cancel' }, { text: 'Discard', style: 'destructive', onPress: () => { clearDraft(); router.back() } }])
+    // Losing unsaved edits is irreversible — the one destructive confirm on
+    // this screen (UI/UX report §10.1 rule two).
+    ? confirmDialog({
+        title: 'Discard changes?',
+        message: 'Your unsaved food changes will be lost.',
+        confirmLabel: 'Discard',
+        destructive: true,
+        onConfirm: () => { clearDraft(); router.back() },
+      })
     : router.back()
 
   useEffect(() => {
@@ -187,7 +201,9 @@ export default function CustomFoodScreen() {
       input = inputFromForm(form)
     } catch (error) {
       isSavingRef.current = false
-      Alert.alert('Check this food', error instanceof Error ? error.message : String(error))
+      // Reversible validation/save failures are toasts (§10.1); an inline
+      // Field error slot is the Wave 2 Field primitive's job.
+      showToast({ message: error instanceof Error ? error.message : String(error), tone: 'error' })
       return
     }
 
@@ -206,7 +222,7 @@ export default function CustomFoodScreen() {
       } else { clearDraft(); router.back() }
     } catch (error) {
       isSavingRef.current = false
-      Alert.alert('Could not save food', error instanceof Error ? error.message : String(error))
+      showToast({ message: error instanceof Error ? error.message : String(error), tone: 'error' })
     } finally {
       setSaving(false)
     }
@@ -298,7 +314,7 @@ export default function CustomFoodScreen() {
               style={[styles.secondary, { borderColor: theme.border }]}
             ><Text style={[type.bodyStrong, { color: theme.text }]}>Save &amp; review log</Text></Pressable>
 
-            {editId !== null ? <Pressable accessibilityRole="button" onPress={() => Alert.alert('Delete this food?', 'Existing diary entries keep their saved nutrition.', [{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void (async()=>{await deleteCustomFood(await db(),editId,Date.now());clearDraft();router.back()})()}])} style={[styles.secondary,{borderColor:theme.safety}]}><Text style={[type.bodyStrong,{color:theme.safety}]}>Delete food</Text></Pressable> : null}
+            {editId !== null ? <Pressable accessibilityRole="button" onPress={() => confirmDialog({title:'Delete this food?',message:'Existing diary entries keep their saved nutrition.',confirmLabel:'Delete',destructive:true,onConfirm:()=>void (async()=>{await deleteCustomFood(await db(),editId,Date.now());clearDraft();router.back()})()})} style={[styles.secondary,{borderColor:theme.safety}]}><Text style={[type.bodyStrong,{color:theme.safety}]}>Delete food</Text></Pressable> : null}
 
             {editId === null && existing.length > 0 ? (
               <View style={{ gap: space.sm, marginTop: space.lg }}>

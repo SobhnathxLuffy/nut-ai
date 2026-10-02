@@ -15,6 +15,15 @@
  * behaviour users expect from native dialogs.
  *
  * No-op on native: native keeps the platform dialog untouched.
+ *
+ * UI/UX report §10.1 / Table 12.2 (Wave 1b): the alert/confirm family merges
+ * onto TWO primitives — toasts (src/components/toast-store.ts + Toast.tsx) for
+ * reversible outcomes, and ONE confirm helper for destructive/irreversible
+ * actions. That helper is `confirmDialog` below: it is the only sanctioned way
+ * to ask for a confirmation. It routes through Alert.alert, so native keeps
+ * the OS dialog and web gets this styled shim — one code path, two platform
+ * renderers. Screens import it from this module, which the app root already
+ * loads before any screen (see app/_layout.tsx).
  */
 
 import { Alert, Platform } from 'react-native'
@@ -253,4 +262,36 @@ if (Platform.OS === 'web') {
   alertHost.alert = patchedAlert
 }
 
-export {}
+// ---------------------------------------------------------------------------
+// confirmDialog — the ONE confirm helper (UI/UX report §10.1, Wave 1b)
+// ---------------------------------------------------------------------------
+
+export interface ConfirmDialogOptions {
+  title: string
+  message: string
+  /** Verb for the primary action, e.g. "Delete", "Restore", "Discard". */
+  confirmLabel: string
+  cancelLabel?: string
+  /** Renders the confirm action destructive (red + OS destructive style). */
+  destructive?: boolean
+  onConfirm?: () => void
+  onCancel?: () => void
+}
+
+/**
+ * Report §10.1 rule two: "alerts are reserved for destructive or irreversible
+ * confirmations". If the action is reversible, prefer showToast — this helper
+ * is for the ~10 destructive sites only. Both buttons are always offered so
+ * the dialog can never trap the user; Escape/backdrop press maps to cancel,
+ * exactly like the shim contract above.
+ */
+export function confirmDialog(options: ConfirmDialogOptions): void {
+  Alert.alert(options.title, options.message, [
+    { text: options.cancelLabel ?? 'Cancel', style: 'cancel', onPress: options.onCancel },
+    {
+      text: options.confirmLabel,
+      style: options.destructive ? 'destructive' : 'default',
+      onPress: options.onConfirm,
+    },
+  ])
+}

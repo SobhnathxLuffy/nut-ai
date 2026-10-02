@@ -25,6 +25,7 @@ import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { ChipRow } from '../src/components/ChipRow'
 import { NewIngredientForm } from '../src/components/NewIngredientForm'
+import { Icon } from '../src/components/Icon'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 interface CompositeMealMatch {
@@ -755,8 +756,10 @@ export default function FoodSearch() {
             <Text style={[type.body, { color: theme.text, fontWeight: '700' }]}>
               Dish Recipe Decomposition
             </Text>
-            <Pressable accessibilityRole="button" onPress={() => setShowDecompose(false)} hitSlop={space.sm}>
-              <Text style={[type.caption, { color: theme.textMuted }]}>✕ Close</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close dish decomposition" onPress={() => setShowDecompose(false)} hitSlop={space.sm}>
+              {/* UI/UX report Table 12.1 (Wave 1b): the unicode ✕ close glyph
+                  joins the icon set — one close affordance across the app. */}
+              <Icon name="close" size={16} color={theme.textMuted} />
             </Pressable>
           </View>
 
@@ -796,7 +799,7 @@ export default function FoodSearch() {
                 onPress={() => setDecompItems((prev) => prev.filter((row) => row.key !== item.key))}
                 hitSlop={space.sm}
               >
-                <Text style={[type.caption, { color: theme.safety }]}>✕</Text>
+                <Icon name="close" size={16} color={theme.safety} />
               </Pressable>
             </View>
           ))}

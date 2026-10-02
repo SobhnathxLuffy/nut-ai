@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, View } from 'react-native'
+import { View } from 'react-native'
 import { SetKind, SetValues, TRACKING_FIELDS } from '@nutai/core-schema'
 import { workoutDetail, saveSet, finishWorkout, reopenWorkout, discardWorkout, updateWorkout, editWorkoutExercise, groupExercises, removeSet, saveRoutine, type WorkoutExercise, type WorkoutSet } from '@nutai/training'
 import { type WeightUnit } from '@nutai/analytics'
@@ -9,6 +9,8 @@ import { readWeightUnit } from '../src/data/weight-units'
 import { Screen, Button, Card, Field, Label, Row, useAction } from '../src/components/Screen'
 import { canonicalizeFieldValue, describeSet, getFieldLabels, setValuesToDisplay } from '../src/data/workout-load'
 import { friendlySetValueError } from '../src/data/workout-errors'
+import { showToast } from '../src/components/toast-store'
+import { confirmDialog } from '../src/ui/alert-web'
 
 export default function WorkoutScreen(){const {id}=useLocalSearchParams<{id:string}>();const [detail,setDetail]=useState<Awaited<ReturnType<typeof workoutDetail>>|null>(null);const [advanced,setAdvanced]=useState(false);const [unit,setUnit]=useState<WeightUnit>('kg');const [group,setGroup]=useState<number[]>([]);const [clock,setClock]=useState(Date.now());const [restPref,setRestPref]=useState(90)
  const refresh=useCallback(async()=>{const h=await db();const [nextDetail,nextAdvanced,nextUnit,nextRestPref]=await Promise.all([workoutDetail(h,Number(id)),setting('training.advanced','false'),readWeightUnit(h),setting('training.rest_seconds','90')]);setDetail(nextDetail);setAdvanced(nextAdvanced==='true');setUnit(nextUnit);const parsed=Number(nextRestPref);setRestPref(Number.isFinite(parsed)?Math.min(600,Math.max(15,Math.round(parsed))):90)},[id]);const action=useAction(refresh)
@@ -38,8 +40,10 @@ export default function WorkoutScreen(){const {id}=useLocalSearchParams<{id:stri
   </Card>)}
   {group.length>=2&&<Button label="Group selected exercises into circuit" onPress={()=>run(async()=>{await groupExercises(await db(),w.id,group);setGroup([])})}/>}
   <Row><Button label="Undo workout action" onPress={()=>run(async()=>{const r=await undoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to undo')})}/><Button label="Redo workout action" onPress={()=>run(async()=>{const r=await redoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to redo')})}/></Row>
-  {active?<><Button label="Finish workout" selected disabled={action.busy} onPress={()=>run(async()=>finishWorkout(await db(),w.id))}/><Button label="Discard workout" onPress={()=>Alert.alert('Discard workout?','The saved workout can be restored with Undo.',[{text:'Cancel',style:'cancel'},{text:'Discard',onPress:()=>run(async()=>{await discardWorkout(await db(),w.id);router.back()})}])}/></>:<Button label="Reopen workout to edit" onPress={()=>run(async()=>reopenWorkout(await db(),w.id))}/>}
-  <Button label="Save as routine" onPress={()=>run(async()=>{await saveRoutine(await db(),{name:`${w.name} routine`,exercises:exercises.filter(e=>e.sets.some(s=>s.completed_at)).map(e=>({exercise_id:e.exercise_id,group:e.superset_group_id,sets:e.sets.filter(s=>s.completed_at).map(s=>SetValues.parse(s)),rule:{kind:'manual'}}))});Alert.alert('Routine saved','Open Train to launch or edit it.')})}/>
+  {active?<><Button label="Finish workout" selected disabled={action.busy} onPress={()=>run(async()=>finishWorkout(await db(),w.id))}/><Button label="Discard workout" onPress={()=>confirmDialog({title:'Discard workout?',message:'The saved workout can be restored with Undo.',confirmLabel:'Discard',destructive:true,onConfirm:()=>run(async()=>{await discardWorkout(await db(),w.id);router.back()})})}/></>:<Button label="Reopen workout to edit" onPress={()=>run(async()=>reopenWorkout(await db(),w.id))}/>}
+  {/* UI/UX report §10.1 (Wave 1b): a successful save confirms itself with a
+      toast that offers the next action — not a blocking dialog. */}
+  <Button label="Save as routine" onPress={()=>run(async()=>{await saveRoutine(await db(),{name:`${w.name} routine`,exercises:exercises.filter(e=>e.sets.some(s=>s.completed_at)).map(e=>({exercise_id:e.exercise_id,group:e.superset_group_id,sets:e.sets.filter(s=>s.completed_at).map(s=>SetValues.parse(s)),rule:{kind:'manual'}}))});showToast({message:'Routine saved.',tone:'success',action:{label:'Open Train',onPress:()=>router.push('/(tabs)/train' as never)}})})}/>
  </Screen>
 }
 function SavedText({label,initial,save}:{label:string;initial:string;save:(v:string)=>Promise<void>}){const [value,setValue]=useState(initial);const [error,setError]=useState('');const queue=useRef(Promise.resolve())

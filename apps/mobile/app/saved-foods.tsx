@@ -4,8 +4,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { IngredientRow } from '@nutai/core-schema'
 import { db } from '../src/data/repo'
-import { logManualMealWithItems, type ManualFoodSelection } from '../src/data/manual-food'
-import { localDate, slotFor } from '../src/data/date-utils'
+import { encodeFoodReview } from '../src/data/food-review'
+import { localDate } from '../src/data/date-utils'
+import type { ManualFoodSelection } from '../src/data/manual-food'
+import { Button } from '../src/components/Screen'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
 
@@ -39,7 +41,6 @@ function toSelection(row: IngredientRow): ManualFoodSelection {
     nutrientSnapshot: row.nutrientSnapshot,
   }
 }
-
 /** Minimal shape guard so one corrupt row surfaces a message, not a crash. */
 function parseSavedItems(itemsJson: string): IngredientRow[] {
   const rows: unknown = JSON.parse(itemsJson)
@@ -53,12 +54,29 @@ function parseSavedItems(itemsJson: string): IngredientRow[] {
   return rows as IngredientRow[]
 }
 
+/**
+ * Fold multi-row totals into the per-100 g snapshot the review payload's base
+ * selection carries (same basis as app/assistant.tsx's meal proposals).
+ */
+function per100For(selections: ManualFoodSelection[], totalGrams: number): ManualFoodSelection['nutrientSnapshot'] {
+  const total = (field: 'kcal' | 'protein_g' | 'carbs_g' | 'fat_g') =>
+    selections.reduce((sum, s) => sum + ((s.nutrientSnapshot[field] ?? 0) * s.grams) / 100, 0)
+  const per100 = (v: number) => Math.round((v * 100) / totalGrams * 10) / 10
+  return {
+    kcal: per100(total('kcal')),
+    protein_g: per100(total('protein_g')),
+    carbs_g: per100(total('carbs_g')),
+    fat_g: per100(total('fat_g')),
+    fiber_g: null,
+    sugar_g: null,
+    sodium_mg: null,
+  }
+}
+
 export default function SavedFoods() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const [meals, setMeals] = useState<SavedMeal[]>([])
-  const [loggingId, setLoggingId] = useState<number | null>(null)
-  const [loggedIds, setLoggedIds] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useFocusEffect(
@@ -75,30 +93,57 @@ export default function SavedFoods() {
     }, []),
   )
 
-  /** One-tap relog: writes the stored corrected array to today, zero network. */
+  /**
+   * UI/UX report §8.3 / Table 11.1 (Wave 1b): the "Log again" control is now a
+   * WORKING primary button. It opens the stored, corrected rows in /food-review
+   * — the same surface recipes, the dish composer, custom foods and the
+   * assistant log through (mirrors those screens' payload contract: the rows
+   * travel as `selections`, scaled when the total weight is edited on the
+   * review screen, and the write itself is the same logManualMealWithItems
+   * call the old direct-log path used).
+   *
+   * use_count/last_used_at bump on press: they feed the sort order and the
+   * "Logged N times" caption, not a save claim — the actual write (and its
+   * Undo toast) happens on the review screen's Save.
+   */
   const logAgain = useCallback(async (meal: SavedMeal) => {
-    if (loggingId !== null) return
-    setLoggingId(meal.id)
     setError(null)
     try {
       const rows = parseSavedItems(meal.items_json)
+      const selections = rows.map(toSelection)
+      const totalGrams = selections.reduce((sum, s) => sum + s.grams, 0)
+      if (!Number.isFinite(totalGrams) || totalGrams <= 0) throw new Error('not items')
+      // Single-row meals keep the row itself as the base selection so the
+      // review screen writes it with its original food id and provenance —
+      // byte-identical to the old direct-log write. Multi-row meals get the
+      // assistant-proposal composite (totals folded to a per-100 g snapshot,
+      // see app/assistant.tsx resolveMealProposal).
+      const base: ManualFoodSelection =
+        selections.length === 1
+          ? selections[0]!
+          : {
+              foodId: null,
+              matchedFoodSource: 'ingredient_decomposition',
+              displayName: meal.name,
+              grams: totalGrams,
+              gramPathway: 'decomposed_recipe',
+              portionSource: 'user_decomposition',
+              nutrientSnapshot: per100For(selections, totalGrams),
+            }
       const h = await db()
-      await logManualMealWithItems(h, rows.map(toSelection), Date.now(), {
-        localDate: localDate(Date.now()),
-        mealSlot: slotFor(Date.now()),
-      })
       await h.run(
         'UPDATE saved_meals SET use_count = use_count + 1, last_used_at = ? WHERE id = ?',
         [Date.now(), meal.id],
       )
       setMeals(prev => prev.map(x => (x.id === meal.id ? { ...x, use_count: x.use_count + 1 } : x)))
-      setLoggedIds(prev => (prev.includes(meal.id) ? prev : [...prev, meal.id]))
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not log this food — tap to try again.')
-    } finally {
-      setLoggingId(null)
+      router.push({
+        pathname: '/food-review',
+        params: { payload: encodeFoodReview({ selection: base, selections, date: localDate(Date.now()) }) },
+      } as never)
+    } catch {
+      setError('This saved meal could not be opened — its data may be damaged.')
     }
-  }, [loggingId])
+  }, [])
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: insets.top + space.lg }}>
@@ -125,34 +170,17 @@ export default function SavedFoods() {
             </Text>
           </View>
         ) : (
-          meals.map((m) => {
-            const logged = loggedIds.includes(m.id)
-            const busy = loggingId === m.id
-            return (
-              <Pressable
-                key={m.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Log again: ${m.name}`}
-                accessibilityState={{ disabled: busy || logged, busy }}
-                disabled={busy}
-                onPress={() => void logAgain(m)}
-                style={({ pressed }) => [
-                  styles.row,
-                  { backgroundColor: theme.bgSunken, opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[type.bodyStrong, { color: theme.text }]}>{m.name}</Text>
-                  <Text style={[type.caption, { color: theme.textMuted }]}>
-                    Logged {m.use_count} {m.use_count === 1 ? 'time' : 'times'}
-                  </Text>
-                </View>
-                <Text style={[type.label, { color: logged ? theme.affirm : theme.protein }]}>
-                  {busy ? 'Logging…' : logged ? 'Logged today' : 'Log again'}
+          meals.map((m) => (
+            <View key={m.id} style={[styles.row, { backgroundColor: theme.bgSunken }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[type.bodyStrong, { color: theme.text }]}>{m.name}</Text>
+                <Text style={[type.caption, { color: theme.textMuted }]}>
+                  Logged {m.use_count} {m.use_count === 1 ? 'time' : 'times'}
                 </Text>
-              </Pressable>
-            )
-          })
+              </View>
+              <Button label="Log again" selected onPress={() => void logAgain(m)} />
+            </View>
+          ))
         )}
       </ScrollView>
     </View>

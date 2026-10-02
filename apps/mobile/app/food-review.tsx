@@ -5,10 +5,11 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { decodeFoodReview } from '../src/data/food-review'
 import { logManualFood, logManualMealWithItems } from '../src/data/manual-food'
-import { db } from '../src/data/repo'
+import { db, undoLastOperation } from '../src/data/repo'
 import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
+import { showToast } from '../src/components/toast-store'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -113,6 +114,27 @@ export default function FoodReview() {
       if (params.assistantMsgId) {
         assistantGlobalStatus[params.assistantMsgId] = 'SAVED';
       }
+      // UI/UX report §10.1 (Wave 1b): every logging path through this screen
+      // (food-search, custom food, dish composer, recipes, assistant, saved
+      // foods) confirms with the same Undo toast the scan result screen uses.
+      // The toast host is mounted at the app root, so it outlives the dismiss;
+      // undoLastOperation emits the food-mutation event that refreshes the
+      // Home/Food timelines.
+      showToast({
+        message: 'Meal logged.',
+        tone: 'success',
+        durationMs: 6000,
+        action: {
+          label: 'Undo',
+          onPress: () => {
+            void undoLastOperation().then((r) => {
+              if (!r.success) {
+                showToast({ message: 'Could not undo — the log changed since this meal was added.', tone: 'error' })
+              }
+            })
+          },
+        },
+      })
       if (router.canDismiss?.()) {
         router.dismissAll()
       } else {

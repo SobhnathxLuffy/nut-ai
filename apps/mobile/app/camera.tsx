@@ -236,9 +236,11 @@ export default function Camera() {
         hitSlop={space.md}
         style={[styles.close, { top: insets.top + space.md }]}
       >
-        {/* Wave 1a: 22px ad-hoc close glyph joins type.heading (Table 3.1);
-            camera chrome stays theme-independent white for live-feed contrast. */}
-        <Text style={[type.heading, { color: '#fff' }]}>×</Text>
+        {/* UI/UX report Table 12.1 (Wave 1b): the unicode × close glyph joins
+            the icon set's close glyph — one close affordance across the app.
+            Camera chrome stays theme-independent white for live-feed contrast
+            (the eslint camera exemption documents this). */}
+        <Icon name="close" size={22} color="#fff" weight={2.2} />
       </Pressable>
     </View>
   )

@@ -14,11 +14,21 @@ export function ActiveWorkoutCard(){const path=usePathname();const [workout,setW
   // the app. The 1s tick now only advances the display clock (a pure state
   // update); the DB is re-read ONLY while a rest timer is actually running
   // (rest_until decides the card's own countdown) or on app foreground.
+  //
+  // UI/UX report Table 12.1 (Wave 1b): "1s polling in ActiveWorkout — battery
+  // cost for a static pill; event-driven". The rest countdown itself needs no
+  // DB at all (it is computed from rest_until − now on every clock tick), so
+  // the DB re-read interval drops to 5s: fresh enough to catch a rest timer
+  // extended or a workout finished from the workout screen, at a fifth of the
+  // queries. Full event-driven refresh would need a pub/sub in
+  // @nutai/training (packages are out of scope for this wave); the foreground
+  // listener + path-change effect already cover the "on state change" cases
+  // that matter.
   const timer=setInterval(()=>setNow(Date.now()),1000)
   let dbTimer: ReturnType<typeof setInterval>|null=null
   const armDbPolling=()=>{
     const resting=!!workout&&(workout.rest_until??0)>Date.now()
-    if(resting&&!dbTimer){dbTimer=setInterval(readDb,1000)}
+    if(resting&&!dbTimer){dbTimer=setInterval(readDb,5000)}
     else if(!resting&&dbTimer){clearInterval(dbTimer);dbTimer=null}
   }
   armDbPolling()

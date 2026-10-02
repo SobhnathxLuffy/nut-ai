@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, BackHandler, View } from 'react-native'
+import { BackHandler, View } from 'react-native'
 import { TrackingType } from '@nutai/core-schema'
 import { addExercise, createExercise, isExerciseInWorkout, listEquipment, listExercises, replaceExercise } from '@nutai/training'
 import { rankSearch, type SearchEntity } from '@nutai/search'
@@ -8,6 +8,7 @@ import { db } from '../src/data/repo'
 import { setPendingRoutineExercises } from '../src/data/routine-draft'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Button, Card, Field, Label, Row, useAction } from '../src/components/Screen'
+import { showToast } from '../src/components/toast-store'
 
 let cachedBuiltinDocs: SearchEntity[] | null = null
 let cachedOwned: string[] | null = null
@@ -147,24 +148,22 @@ export default function SearchScreen(){
     } else if(params.workoutId){
       const isDup = await isExerciseInWorkout(h, Number(params.workoutId), id)
       if(isDup){
+        // UI/UX report §10.1 (Wave 1b): duplicate adds are reversible, so a
+        // toast states the fact and offers the action — not an alert dialog.
         const exerciseName = searchDocs.find(d => Number(d.id) === id)?.label ?? 'This exercise'
-        Alert.alert(
-          'Exercise Already Added',
-          `"${exerciseName}" is already in this workout. Would you like to add it again?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Add Again',
-              onPress: () => {
-                void action.run(async () => {
-                  const dbHandle = await db()
-                  await addExercise(dbHandle, Number(params.workoutId), id)
-                  router.back()
-                })
-              },
+        showToast({
+          message: `"${exerciseName}" is already in this workout.`,
+          action: {
+            label: 'Add again',
+            onPress: () => {
+              void action.run(async () => {
+                const dbHandle = await db()
+                await addExercise(dbHandle, Number(params.workoutId), id)
+                router.back()
+              })
             },
-          ],
-        )
+          },
+        })
         return
       }
       await addExercise(h, Number(params.workoutId), id)

@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Alert, Linking, Platform } from 'react-native'
+import { Linking, Platform } from 'react-native'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WeightUnit } from '@nutai/analytics'
@@ -14,6 +14,8 @@ import { PROVIDER_NAME } from '../../src/components/CredentialForm'
 import { Icon } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
+import { showToast } from '../../src/components/toast-store'
+import { confirmDialog } from '../../src/ui/alert-web'
 
 /**
  * Profile.
@@ -93,13 +95,17 @@ export default function Profile() {
       setHealthBusy(false)
       // iOS never reports whether READ access was granted — claiming success
       // here would be a lie. Say what actually happened and point at Settings.
+      // (UI/UX report §10.1, Wave 1b: neutral info → toast, not a dialog.)
       if (res.prompted) {
-        Alert.alert('Done', 'If you allowed access, steps and workouts will appear as they sync.')
+        showToast({ message: 'If you allowed access, steps and workouts will appear as they sync.' })
       } else {
-        Alert.alert(
-          'Health did not respond',
-          'Manage access under Settings → Privacy & Security → Health, or from the button below.',
-        )
+        // The original dialog pointed at "the button below" — a toast can do
+        // one better and BE the button (report §10.1: offer the next action).
+        showToast({
+          message: 'Health did not respond.',
+          tone: 'error',
+          action: { label: 'Open Settings', onPress: () => void Linking.openSettings() },
+        })
       }
     })()
   }
@@ -110,9 +116,9 @@ export default function Profile() {
     void (async () => {
       try {
         const res = await exportAndShareBackup()
-        if (!res.shared) Alert.alert('Exported', `Saved to ${res.name}. Sharing is unavailable on this device.`)
+        if (!res.shared) showToast({ message: `Exported — saved to ${res.name}.`, tone: 'success' })
       } catch {
-        Alert.alert('Export failed', 'Could not write the backup file. Try again.')
+        showToast({ message: 'Could not write the backup file. Try again.', tone: 'error' })
       } finally {
         setDataBusy(false)
       }
@@ -125,42 +131,42 @@ export default function Profile() {
       const picked = await pickBackupFile()
       if (!picked.ok) {
         if (picked.reason !== 'cancelled') {
-          Alert.alert('Not a backup', "That doesn't look like a Nut AI backup file.")
+          showToast({ message: "That doesn't look like a Nut AI backup file.", tone: 'error' })
         }
         return
       }
-      Alert.alert(
-        'Restore this backup?',
-        'This replaces ALL data currently on this device and cannot be undone.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Restore',
-            style: 'destructive',
-            onPress: () => {
-              setDataBusy(true)
-              void (async () => {
-                try {
-                  const outcome = await importBackup(picked.payload)
-                  if (!outcome.ok) {
-                    Alert.alert('Cannot restore', 'This backup is from a newer version of Nut AI — update the app first.')
-                    return
-                  }
-                  await finishRestore()
-                  router.replace('/(tabs)' as never)
-                } catch (e) {
-                  // A restore that fails must SAY SO — the transaction rolled
-                  // back, nothing was lost, and silence here cost us a real
-                  // debugging session once already.
-                  Alert.alert('Restore failed', `Nothing was changed. ${String((e as Error)?.message ?? e)}`)
-                } finally {
-                  setDataBusy(false)
-                }
-              })()
-            },
-          },
-        ],
-      )
+      // UI/UX report §10.1 rule two: a restore REPLACES all device data and
+      // cannot be undone — this stays a destructive confirmation.
+      confirmDialog({
+        title: 'Restore this backup?',
+        message: 'This replaces ALL data currently on this device and cannot be undone.',
+        confirmLabel: 'Restore',
+        destructive: true,
+        onConfirm: () => {
+          setDataBusy(true)
+          void (async () => {
+            try {
+              const outcome = await importBackup(picked.payload)
+              if (!outcome.ok) {
+                showToast({
+                  message: 'Cannot restore — this backup is from a newer version of Nut AI. Update the app first.',
+                  tone: 'error',
+                })
+                return
+              }
+              await finishRestore()
+              router.replace('/(tabs)' as never)
+            } catch (e) {
+              // A restore that fails must SAY SO — the transaction rolled
+              // back, nothing was lost, and silence here cost us a real
+              // debugging session once already.
+              showToast({ message: `Nothing was changed. ${String((e as Error)?.message ?? e)}`, tone: 'error' })
+            } finally {
+              setDataBusy(false)
+            }
+          })()
+        },
+      })
     })()
   }
 
@@ -172,7 +178,7 @@ export default function Profile() {
       .then((handle) => writeWeightUnit(handle, unit))
       .catch(() => {
         setWeightUnit(previous)
-        Alert.alert('Could not save preference', 'Your weight display unit was not changed.')
+        showToast({ message: 'Could not save the preference — your weight display unit was not changed.', tone: 'error' })
       })
   }
 
@@ -314,26 +320,24 @@ export default function Profile() {
           label="Redo onboarding"
           value=""
           onPress={() => {
-            Alert.alert(
-              'Erase everything and start over?',
-              'Deletes your profile, goals, weight history, logged meals and saved API keys from this device. It cannot be undone, and there is no backup on a server because there is no server.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Erase and restart',
-                  style: 'destructive',
-                  onPress: () => {
-                    void resetEverything()
-                      .then(() => router.replace('/onboarding' as never))
-                      .catch((error: unknown) => {
-                        // A half-completed wipe must not strand the user on a
-                        // broken profile screen; surface it and keep them here.
-                        console.error('[profile] resetEverything failed', error)
-                      })
-                  },
-                },
-              ],
-            )
+            // UI/UX report §10.1 rule two: erasing everything is THE
+            // destructive confirmation — it stays a dialog.
+            confirmDialog({
+              title: 'Erase everything and start over?',
+              message:
+                'Deletes your profile, goals, weight history, logged meals and saved API keys from this device. It cannot be undone, and there is no backup on a server because there is no server.',
+              confirmLabel: 'Erase and restart',
+              destructive: true,
+              onConfirm: () => {
+                void resetEverything()
+                  .then(() => router.replace('/onboarding' as never))
+                  .catch((error: unknown) => {
+                    // A half-completed wipe must not strand the user on a
+                    // broken profile screen; surface it and keep them here.
+                    console.error('[profile] resetEverything failed', error)
+                  })
+              },
+            })
           }}
         />
       </Section>

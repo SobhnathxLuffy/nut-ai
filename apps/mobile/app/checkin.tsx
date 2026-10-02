@@ -1,8 +1,9 @@
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../src/components/Icon'
+import { showToast } from '../src/components/toast-store'
 import {
   acceptCheckin,
   readSafety,
@@ -38,7 +39,9 @@ export default function CheckinScreen() {
       setSafety(safe)
       setWeightUnit(unit)
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : String(err))
+      // UI/UX report §10.1 (Wave 1b): reversible load failures are error
+      // toasts, not blocking dialogs.
+      showToast({ message: err instanceof Error ? err.message : String(err), tone: 'error' })
     } finally {
       setLoading(false)
     }
@@ -72,7 +75,7 @@ export default function CheckinScreen() {
       await loadReview()
     } catch (err) {
       setSafety(previous)
-      Alert.alert('Could not save setting', err instanceof Error ? err.message : String(err))
+      showToast({ message: err instanceof Error ? err.message : String(err), tone: 'error' })
     }
   }
 
@@ -115,7 +118,7 @@ export default function CheckinScreen() {
       )
       await loadReview()
     } catch (err) {
-      Alert.alert('Unable to apply suggestion', err instanceof Error ? err.message : String(err))
+      showToast({ message: err instanceof Error ? err.message : String(err), tone: 'error' })
     } finally {
       setBusy(false)
     }

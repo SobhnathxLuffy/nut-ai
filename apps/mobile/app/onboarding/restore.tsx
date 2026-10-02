@@ -1,6 +1,6 @@
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { BackupPayload } from '../../src/data/backup-core'
 import { describeBackup } from '../../src/data/backup-core'
@@ -8,6 +8,7 @@ import { finishRestore, importBackup, pickBackupFile } from '../../src/data/back
 import { Icon } from '../../src/components/Icon'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
+import { confirmDialog } from '../../src/ui/alert-web'
 
 /**
  * Restore from a backup — the escape hatch from re-doing onboarding on a new
@@ -42,36 +43,34 @@ export default function RestoreScreen() {
 
   function confirmRestore() {
     if (!payload || busy) return
-    Alert.alert(
-      'Restore this backup?',
-      'This replaces any data currently on this device and cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setBusy(true)
-              try {
-                const outcome = await importBackup(payload)
-                if (!outcome.ok) {
-                  setError('This backup was made with a newer version of Nut AI — update the app first.')
-                  return
-                }
-                await finishRestore()
-                router.replace('/(tabs)' as never)
-              } catch (e) {
-                // Rolled back; nothing was changed. Say so, never fail silently.
-                setError(`Restore failed and nothing was changed: ${String((e as Error)?.message ?? e)}`)
-              } finally {
-                setBusy(false)
-              }
-            })()
-          },
-        },
-      ],
-    )
+    // UI/UX report §10.1 rule two (Wave 1b): a restore REPLACES device data
+    // and cannot be undone — this stays a destructive confirmation, now via
+    // the ONE shared helper (native OS dialog / styled web dialog).
+    confirmDialog({
+      title: 'Restore this backup?',
+      message: 'This replaces any data currently on this device and cannot be undone.',
+      confirmLabel: 'Restore',
+      destructive: true,
+      onConfirm: () => {
+        void (async () => {
+          setBusy(true)
+          try {
+            const outcome = await importBackup(payload)
+            if (!outcome.ok) {
+              setError('This backup was made with a newer version of Nut AI — update the app first.')
+              return
+            }
+            await finishRestore()
+            router.replace('/(tabs)' as never)
+          } catch (e) {
+            // Rolled back; nothing was changed. Say so, never fail silently.
+            setError(`Restore failed and nothing was changed: ${String((e as Error)?.message ?? e)}`)
+          } finally {
+            setBusy(false)
+          }
+        })()
+      },
+    })
   }
 
   return (

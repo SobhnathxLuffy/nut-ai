@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, BackHandler, View } from 'react-native'
+import { BackHandler, View } from 'react-native'
 import { RoutineInput } from '@nutai/core-schema'
 import {
   activeWorkout,
@@ -18,6 +18,7 @@ import {
 import { db, localDate } from '../src/data/repo'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Button, Card, Label, Row, useAction } from '../src/components/Screen'
+import { showToast } from '../src/components/toast-store'
 
 export default function ExerciseDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>()
@@ -79,23 +80,23 @@ export default function ExerciseDetailScreen() {
     const h = await db()
     const isDup = await isExerciseInWorkout(h, active.id, exercise.id)
     if (isDup) {
-      Alert.alert(
-        'Exercise Already Added',
-        `"${exercise.name}" is already in this workout. Would you like to add it again?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Add Again',
-            onPress: () => {
-              void action.run(async () => {
-                const dbHandle = await db()
-                await addExercise(dbHandle, active.id, exercise.id)
-                router.push({ pathname: '/workout', params: { id: active.id } } as never)
-              })
-            },
+      // UI/UX report §10.1 (Wave 1b): adding a duplicate is reversible
+      // (Remove exercise exists), so this is NOT alert territory, and a toast
+      // must not ask a question — it states the fact and offers the action.
+      // Doing nothing is the safe default if the toast is missed.
+      showToast({
+        message: `"${exercise.name}" is already in this workout.`,
+        action: {
+          label: 'Add again',
+          onPress: () => {
+            void action.run(async () => {
+              const dbHandle = await db()
+              await addExercise(dbHandle, active.id, exercise.id)
+              router.push({ pathname: '/workout', params: { id: active.id } } as never)
+            })
           },
-        ],
-      )
+        },
+      })
       return
     }
     await addExercise(h, active.id, exercise.id)
@@ -123,14 +124,12 @@ export default function ExerciseDetailScreen() {
     }
 
     if (isDup) {
-      Alert.alert(
-        'Exercise Already in Routine',
-        `"${exercise.name}" is already in "${r.name}". Would you like to add it again?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Add Again', onPress: () => void executeAdd() },
-        ],
-      )
+      // Same §10.1 treatment as the workout duplicate above: reversible, so a
+      // toast states the fact and offers the add-again action.
+      showToast({
+        message: `"${exercise.name}" is already in "${r.name}".`,
+        action: { label: 'Add again', onPress: () => void executeAdd() },
+      })
       return
     }
 

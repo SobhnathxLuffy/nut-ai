@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { db, deleteMeal } from '../src/data/repo'
@@ -9,6 +9,7 @@ import { getLoggedMeal, updateLoggedMeal, type LoggedMealDetail } from '../src/d
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { confirmDialog } from '../src/ui/alert-web'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 
@@ -260,20 +261,21 @@ export default function MealDetail() {
           accessibilityRole="button"
           accessibilityLabel="Delete meal"
           onPress={() =>
-            Alert.alert('Delete this meal?', 'You can restore it with Undo.', [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete',
-                style: 'destructive',
-                onPress: () =>
-                  void (async () => {
-                    const op = await deleteMeal(meal.id)
-                    if (op) {
-                      router.back()
-                    }
-                  })(),
-              },
-            ])
+            // UI/UX report §10.1 rule two (Wave 1b): deleting a logged meal is
+            // the destructive confirmation — kept, via the ONE shared helper.
+            confirmDialog({
+              title: 'Delete this meal?',
+              message: 'You can restore it with Undo.',
+              confirmLabel: 'Delete',
+              destructive: true,
+              onConfirm: () =>
+                void (async () => {
+                  const op = await deleteMeal(meal.id)
+                  if (op) {
+                    router.back()
+                  }
+                })(),
+            })
           }
           style={[styles.secondary, { borderColor: theme.safety }]}
         >

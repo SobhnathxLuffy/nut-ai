@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
+import { BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { loadFood, resolveByText, type ScoredCandidate } from '@nutai/resolver'
@@ -21,6 +21,7 @@ import {
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
+import { confirmDialog } from '../src/ui/alert-web'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
 
@@ -166,14 +167,15 @@ export default function Recipes() {
 
   const handleCancel = useCallback(() => {
     if (isDirty) {
-      Alert.alert(
-        'Discard recipe changes?',
-        'Your unsaved recipe changes will be lost.',
-        [
-          { text: 'Keep editing', style: 'cancel' },
-          { text: 'Discard', style: 'destructive', onPress: resetEditor },
-        ],
-      )
+      // Losing unsaved edits is irreversible — the destructive confirm
+      // (UI/UX report §10.1 rule two, Wave 1b).
+      confirmDialog({
+        title: 'Discard recipe changes?',
+        message: 'Your unsaved recipe changes will be lost.',
+        confirmLabel: 'Discard',
+        destructive: true,
+        onConfirm: resetEditor,
+      })
     } else {
       resetEditor()
     }
@@ -502,7 +504,7 @@ export default function Recipes() {
             >
               <Text style={[type.label, { color: theme.text }]}>Log</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${recipe.name}`} onPress={()=>Alert.alert('Delete this recipe?','Existing diary entries keep their saved nutrition.',[{text:'Cancel',style:'cancel'},{text:'Delete',style:'destructive',onPress:()=>void (async()=>{const uuid=await deleteRecipe(await db(),recipe.id,Date.now());setUndoUuid(uuid);await reload()})()}])} style={styles.rowCommand}><Icon name="close" size={18} color={theme.safety}/></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${recipe.name}`} onPress={()=>confirmDialog({title:'Delete this recipe?',message:'Existing diary entries keep their saved nutrition.',confirmLabel:'Delete',destructive:true,onConfirm:()=>void (async()=>{const uuid=await deleteRecipe(await db(),recipe.id,Date.now());setUndoUuid(uuid);await reload()})()})} style={styles.rowCommand}><Icon name="close" size={18} color={theme.safety}/></Pressable>
           </View>
         ))}
       </ScrollView>
