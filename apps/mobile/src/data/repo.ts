@@ -27,6 +27,7 @@ import Storage from 'expo-sqlite/kv-store'
 import { seedExercises } from '@nutai/training'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
+import { parseCheckinAcceptedAt } from './home-instrument'
 import { localDate, slotFor } from './date-utils'
 import { emitFoodMutation, getLastDeletedMealUndoUuid, setLastDeletedMealUndoUuid } from './food-mutations'
 import { clearCredential } from '../inference/credentials'
@@ -114,6 +115,14 @@ export interface CurrentGoal {
   tdee: number
   adaptive: boolean
   effectiveFrom: number
+  /**
+   * When the CURRENT goal row was written by an ACCEPTED weekly check-in
+   * (`accepted_at` inside adaptive_evidence_json), in ms — null for every
+   * other writer (onboarding, hand override, backup import). Home's
+   * adaptive-target state machine (§8.2) derives its "locked" state from
+   * this; no other reader depends on it yet.
+   */
+  checkinAcceptedAt?: number | null
 }
 
 /**
@@ -138,6 +147,7 @@ export async function currentGoal(): Promise<CurrentGoal | null> {
     tdee: number
     adaptive: number
     effective_from: number
+    adaptive_evidence_json?: string | null
   }>('SELECT * FROM goals ORDER BY effective_from DESC, id DESC LIMIT 1')
 
   if (!row) return null
@@ -153,6 +163,7 @@ export async function currentGoal(): Promise<CurrentGoal | null> {
     tdee: row.tdee,
     adaptive: row.adaptive === 1,
     effectiveFrom: row.effective_from,
+    checkinAcceptedAt: parseCheckinAcceptedAt(row.adaptive_evidence_json),
   }
 }
 
@@ -270,6 +281,31 @@ export async function dayTotals(date: string): Promise<DayTotals> {
     // is worse than a number that is visibly incomplete.
     pendingCount: pending?.c ?? 0,
   }
+}
+
+/**
+ * kcal actually logged per meal slot for one day (UI/UX report §8.2 — the
+ * hero ring's press-for-detail expansion). The SAME arithmetic and WHERE
+ * clause as dayTotals — only the GROUP BY differs — so the slot rows always
+ * add up to exactly the number the ring shows. Meals with a NULL slot are
+ * returned under the `'unslotted'` key (real data; the caller surfaces it
+ * honestly instead of silently folding it into a slot).
+ */
+export async function slotKcalForDay(date: string): Promise<Record<string, number>> {
+  const h = await db()
+  const rows = await h.all<{ slot: string | null; kcal: number | null }>(
+    `SELECT m.meal_slot AS slot,
+            SUM(li.snap_energy_kcal * li.grams / 100.0 * m.portion_eaten_fraction) AS kcal
+     FROM meals m
+     JOIN log_items li ON li.meal_id = m.id
+     WHERE m.local_date = ? AND m.deleted_at IS NULL AND li.deleted_at IS NULL
+       AND m.analysis_status IN ('complete','manual')
+     GROUP BY m.meal_slot`,
+    [date],
+  )
+  const bySlot: Record<string, number> = {}
+  for (const r of rows) bySlot[r.slot ?? 'unslotted'] = r.kcal ?? 0
+  return bySlot
 }
 
 // ---------------------------------------------------------------------------

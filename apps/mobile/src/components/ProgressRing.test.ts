@@ -113,9 +113,14 @@ describe('the Home migration (highest-traffic ring)', () => {
   it('Home renders the primitive for the hero ring, the count-up and the macro rings', () => {
     const home = readFileSync(join(here, '../../app/(tabs)/index.tsx'), 'utf8')
     expect(home).toContain("from '../../src/components/ProgressRing'")
-    expect(home).toMatch(/<ProgressRing value=\{pct\} overflow=\{over \? pct - 1 : 0\} size=\{128\} stroke=\{12\}/)
-    expect(home).toMatch(/<CountUp value=\{Math\.abs\(Math\.round\(remaining\)\)\}/)
-    expect(home).toMatch(/<ProgressRing value=\{pct\} size=\{74\} stroke=\{5\} color=\{color\}/)
+    // Wave 3 (§8.2): the hero ring still carries the honest overflow arc; the
+    // markup now splits across lines (focus-tick key + ring-center CountUp).
+    expect(home).toMatch(/overflow=\{over \? pct - 1 : 0\}/)
+    expect(home).toMatch(/size=\{128\}/)
+    expect(home).toMatch(/stroke=\{12\}/)
+    expect(home).toMatch(/<CountUp\s+key=\{`hero-\$\{focusTick\}`\}\s+value=\{Math\.abs\(Math\.round\(remaining\)\)\}/)
+    // The macro stat rows carry inline 36pt mini-rings (was: 74/5 cards).
+    expect(home).toMatch(/<ProgressRing value=\{pct\} size=\{36\} stroke=\{4\} color=\{color\}>/)
   })
 
   it('the hand-rolled Ring component is gone from Home', () => {
