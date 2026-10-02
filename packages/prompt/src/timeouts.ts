@@ -33,3 +33,14 @@ export const OFFSOURCE_REQUEST_TIMEOUT_MS = 8_000
 
 /** Streaming stall guard: no bytes for this long aborts the stream. */
 export const STREAM_STALL_TIMEOUT_MS = 45_000
+
+/**
+ * Total wall-clock budget for a scan streamed through an OpenAI-compatible
+ * reseller gateway. Non-streaming gateway requests are killed by the gateway
+ * itself around 30s (aicredits.in returns a bare 500), which is inside the
+ * generation time of a real structured scan (40-90s measured on Gemma vision
+ * models), so gateway scans MUST ship `stream: true`. Streaming removes the
+ * 30s wall but exposes the full generation time, so the client-side ceiling
+ * has to cover it. Official endpoints keep SCAN_TIMEOUT_MS.
+ */
+export const GATEWAY_SCAN_TIMEOUT_MS = 180_000

@@ -4,6 +4,7 @@ import {
   buildOpenAIRequest,
   computeScanCost,
   DEFAULT_SCAN_MAX_TOKENS,
+  GATEWAY_SCAN_TIMEOUT_MS,
   type ProviderId,
 } from '@nutai/prompt'
 import { withBaseUrl } from '../../base-url'
@@ -73,6 +74,22 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
     maxTokens: req.maxTokens,
   }
 
+  // GATEWAY WIRE MODE (aicredits.in measured behaviour, October 2026):
+  // OpenAI-compatible resellers break on BOTH halves of the strict schema
+  // route — `response_format: {type:'json_schema'}` hangs the model adapter
+  // server-side until the connection is dropped (no tokens, ~120s kill), and
+  // non-streaming completions are cut by a ~30s gateway wall that a real
+  // structured scan (40-90s of generation) can never fit inside. So gateway
+  // scans ALWAYS: (1) ship the schema as instruction TEXT with plain
+  // `response_format: {type:'json_object'}` — buildOpenAIRequest's
+  // instructionSchema route — and (2) send `stream: true` so the request
+  // escapes the 30s non-streaming wall. Official endpoints keep the strict
+  // json_schema route, which they implement correctly.
+  if (viaGateway) {
+    input.jsonSchema = null
+    if (input.instructionSchema == null) input.instructionSchema = req.jsonSchema ?? null
+  }
+
   // ROUTING: on a custom base URL every provider rides the OpenAI builder —
   // model id verbatim, Bearer auth — and the answer is read from the
   // chat-completions envelope. buildOpenAIRequest produces an
@@ -91,11 +108,19 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
   const classifyOpts = { secret: req.credential.value, model: req.model }
 
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), req.timeoutMs ?? DEFAULT_TIMEOUT_MS)
+  // Gateway scans run streamed with the raised ceiling (see GATEWAY WIRE MODE
+  // above): the abort is the only hang guard a buffered-SSE gateway needs,
+  // and classifyTransportError turns it into a retryable timeout as usual.
+  const timeoutMs = req.timeoutMs ?? (viaGateway ? GATEWAY_SCAN_TIMEOUT_MS : DEFAULT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   const started = Date.now()
   const url = withBaseUrl(built.url, req.baseUrl)
-  // P2-1: serialization lives OUTSIDE the transport try — an un-stringifiable
-  // body is an internal error, not a network outage.
+  // The stream flag rides the body for gateway scans only (see GATEWAY WIRE
+  // MODE). It mutates the body object BEFORE serialization — P2-1 keeps
+  // serialization itself OUTSIDE the transport try.
+  if (viaGateway && built.body && typeof built.body === 'object') {
+    ;(built.body as Record<string, unknown>)['stream'] = true
+  }
   const serialized = serializeBody(built.body)
   if (!serialized.ok) return { outcome: { ok: false, error: serialized.error }, responseText: null }
 
@@ -110,11 +135,24 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
     const text = await res.text()
     if (!res.ok) return { outcome: { ok: false, error: classify(res.status, text, classifyOpts) }, responseText: text }
 
+    // GATEWAY SSE FOLD: a stream:true response arrives as Server-Sent Events.
+    // RN fetch cannot read a body incrementally — and the measured gateways
+    // buffer the whole completion anyway — so the SSE text is read to
+    // completion and folded into the same chat-completions envelope every
+    // downstream parser already understands. Non-SSE bodies (a gateway that
+    // ignores stream:true and answers plain JSON) fall through to the normal
+    // JSON.parse route untouched. The fishing body becomes the accumulated
+    // MODEL content, not the raw SSE wire text.
+    const folded = viaGateway ? foldSseToEnvelope(text) : null
     let json: unknown
-    try {
-      json = JSON.parse(text)
-    } catch {
-      return { outcome: { ok: false, error: SCHEMA_MALFORMED_JSON }, responseText: text }
+    if (folded) {
+      json = folded.envelope
+    } else {
+      try {
+        json = JSON.parse(text)
+      } catch {
+        return { outcome: { ok: false, error: SCHEMA_MALFORMED_JSON }, responseText: text }
+      }
     }
 
     // HONEST TRUNCATION, checked BEFORE anything parses or fishes: the
@@ -130,7 +168,7 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
     // behind that.
     const finishReason = finishReasonFromEnvelope(json)
     if (isLengthTruncated(finishReason)) {
-      return { outcome: { ok: false, error: TRUNCATION_FAILURE }, responseText: text }
+      return { outcome: { ok: false, error: TRUNCATION_FAILURE }, responseText: folded ? folded.content : text }
     }
 
     const extracted = extractScanPayload(envelope, json, scanPayloadExtractors)
@@ -150,7 +188,7 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
             finishReason,
           },
         },
-        responseText: text,
+        responseText: folded ? folded.content : text,
       }
     }
 
@@ -175,13 +213,13 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
             finishReason,
           },
         },
-        responseText: text,
+        responseText: folded ? folded.content : text,
       }
     }
 
     return {
       outcome: { ok: false, error: { kind: 'schema-violation', message: 'The provider returned an unexpected shape.', retryable: false } },
-      responseText: text,
+      responseText: folded ? folded.content : text,
     }
   } catch (err) {
     // P2-1: the try block contains ONLY fetch and response reads, so anything
@@ -194,6 +232,48 @@ async function runScanAttempt(req: ScanRequest, fetchImpl: typeof fetch): Promis
 
 export async function runScan(req: ScanRequest, fetchImpl: typeof fetch = fetch): Promise<ScanOutcome> {
   return (await runScanAttempt(req, fetchImpl)).outcome
+}
+
+/**
+ * Fold a buffered SSE stream body into the chat-completions envelope the scan
+ * parsers already consume. Pure string logic, no I/O — directly unit-testable.
+ * Returns null when the body is not SSE (plain JSON gateway answers fall back
+ * to the JSON.parse route). Reasoning-only streams (a thinking model that
+ * burned the whole budget on `reasoning_content`) surface their reasoning as
+ * the fishing content — the one place a JSON object could still hide.
+ */
+export function foldSseToEnvelope(text: string): { envelope: Record<string, unknown>; content: string } | null {
+  if (!/^data:/m.test(text)) return null
+  let content = ''
+  let reasoning = ''
+  let finishReason: unknown = null
+  let usage: Record<string, unknown> | null = null
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.replace(/\r$/, '')
+    if (!line.startsWith('data:')) continue
+    const payload = line.slice(5).trim()
+    if (!payload || payload === '[DONE]') continue
+    let obj: any
+    try {
+      obj = JSON.parse(payload)
+    } catch {
+      continue
+    }
+    const choice = obj?.choices?.[0]
+    const d = choice?.delta ?? choice?.message
+    if (d) {
+      if (typeof d.content === 'string') content += d.content
+      const r = d.reasoning_content ?? d.reasoning
+      if (typeof r === 'string') reasoning += r
+    }
+    if (choice?.finish_reason) finishReason = choice.finish_reason
+    if (obj?.usage && typeof obj.usage === 'object') usage = obj.usage
+  }
+  const envelope: Record<string, unknown> = {
+    choices: [{ message: { content: content.length > 0 ? content : null }, finish_reason: finishReason }],
+    usage: usage ?? { prompt_tokens: 0, completion_tokens: 0 },
+  }
+  return { envelope, content: content.length > 0 ? content : reasoning }
 }
 
 // Local import indirection kept minimal for the barrel's test mocking story.

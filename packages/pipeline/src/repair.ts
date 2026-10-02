@@ -169,6 +169,49 @@ function repairItem(v: unknown): unknown {
   const out: Record<string, unknown> = { ...v }
 
   if (typeof out['qualitative_size'] !== 'undefined') out['qualitative_size'] = repairQualitativeSize(out['qualitative_size'])
+  // RESUMED-SCAN DRIFT (Gemma via OpenAI-compatible resellers): the wire
+  // schema is sanitized non-nullable, but instruction-schema scans (schema as
+  // text) let the model answer null anyway. Null/undefined here lands on the
+  // neutral enum member — 'none' means "no single dominant reason", which is
+  // the least-false reading of a model that declined to pick one.
+  if (out['uncertainty_reason'] == null) out['uncertainty_reason'] = 'none'
+
+  // Preparation-block drift: 'none' is a legal added_cooking_fat value but an
+  // ILLEGAL intrinsic_fat one (the food's own fat is never 'none' until
+  // measured). A model writing intrinsic_fat:'none' is answering the wrong
+  // question — the honest landing spot is 'unknown', not a fabricated level.
+  if (isObj(out['preparation'])) {
+    const prep: Record<string, unknown> = { ...out['preparation'] }
+    if (typeof prep['intrinsic_fat'] === 'string' && !/^(low|moderate|high|unknown)$/.test(prep['intrinsic_fat'])) {
+      prep['intrinsic_fat'] = 'unknown'
+    }
+    if (
+      typeof prep['added_cooking_fat'] === 'string' &&
+      !/^(none|light|moderate|heavy|unknown)$/.test(prep['added_cooking_fat'])
+    ) {
+      prep['added_cooking_fat'] = 'unknown'
+    }
+    out['preparation'] = prep
+  }
+
+  // fallback_macros_at_estimate is REQUIRED by the contract but is the one
+  // field the honesty prompt tells the model NOT to invent ("never as the
+  // answer"). Instruction-schema scans from rule-following models therefore
+  // return null for it exactly as often as they return real values. The
+  // deterministic neutral is a zeroed Macros object: on the hit path (the
+  // overwhelming majority) the field is ignored entirely, and on the miss path
+  // it produces a visible 0-kcal "AI ESTIMATE" row the review UI already
+  // flags for manual correction — honest, never a fabricated number.
+  if (out['fallback_macros_at_estimate'] == null) {
+    out['fallback_macros_at_estimate'] = {
+      calories_kcal: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: null,
+      sodium_mg: null,
+    }
+  }
   if (typeof out['weight_basis'] === 'string' && !/^(cooked|raw|as_served)$/.test(out['weight_basis'])) {
     out['weight_basis'] = 'as_served'
   }
