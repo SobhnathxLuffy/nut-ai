@@ -80,12 +80,17 @@ test.describe('P2-15: web dirty-guard on custom-food', () => {
 })
 
 test.describe('P2-17..19 smoke: onboarding chrome still works after tokenization', () => {
-  test('option screen renders, gates its CTA, and advances on selection', async ({ page }) => {
-    await page.goto('/onboarding/sex')
+  test('merged activity screen renders, gates its CTA, and unlocks only when every group is answered', async ({ page }) => {
+    // Wave 3 (Ch 8.1): the old sex screen merged into the activity screen.
+    await page.goto('/onboarding/activity')
     const continueBtn = page.getByRole('button', { name: 'Continue' })
     await expect(continueBtn).toBeDisabled()
-    await expect(page.getByText('Select an option to continue')).toBeVisible()
+    await expect(page.getByText('Answer every question to continue')).toBeVisible()
     await page.getByRole('radio', { name: 'Female' }).click()
+    await expect(continueBtn).toBeDisabled()
+    await page.getByRole('radio', { name: '3-5' }).click()
+    await expect(continueBtn).toBeDisabled()
+    await page.getByRole('radio', { name: 'No', exact: true }).click()
     await expect(continueBtn).toBeEnabled()
   })
 })

@@ -1,6 +1,6 @@
 import { router } from 'expo-router'
-import { useMemo } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useRef } from 'react'
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   computeCalorieTarget,
@@ -10,6 +10,8 @@ import {
 } from '@nutai/goals'
 import { Icon, type IconName } from '../../src/components/Icon'
 import { ProgressChart } from '../../src/components/onboarding/Charts'
+import { CountUp } from '../../src/components/ProgressRing'
+import { useReducedMotion } from '../../src/components/PressableFX'
 import { persistOnboarding } from '../../src/onboarding/persist'
 import {
   activityFor,
@@ -21,17 +23,35 @@ import {
   todayEmphasisFor,
   useAnswers,
 } from '../../src/onboarding/store'
+import { success } from '../../src/utils/haptics'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
 /**
- * The plan reveal.
+ * The plan reveal — the HERO moment (UI/UX report Ch. 8.1: "The plan reveal …
+ * becomes the hero moment: numbers count up, the breakdown expands with a
+ * spring, and a success haptic marks the finish").
  *
- * This is where every earlier answer cashes out, and where we diverge hardest
- * from the reference — not in layout, but in what the screen is willing to claim.
+ *   - Numbers count up: the calorie and macro figures ride CountUp — the
+ *     ProgressRing twin with the SAME 600ms ease-out (Table 9.1 "Ring /
+ *     count-up"), set in monoData tabular figures so the digits align while
+ *     they count (report §4.2). The scale rides the token steps (display for
+ *     the calorie hero, heading for the macros); only the movement is new.
+ *   - The breakdown expands with a spring: "How we got there" opens with
+ *     Animated.spring — position-based motion is a spring per report §9, never
+ *     a duration.
+ *   - A success haptic marks the finish (Table 9.2: milestone → Success).
  *
- * KEPT: the estimated-progress chart, the editable calorie and macro cards, the
- * "Your info" recap, and "How to reach your goals". Those are genuinely useful.
+ * All three respect motionScale: under reduce-motion the numbers render
+ * instantly (CountUp's own gate), the breakdown renders fully open, and the
+ * haptic fires immediately — the information arrives without the movement.
+ *
+ * This is also where every earlier answer cashes out, and where we diverge
+ * hardest from the reference — not in layout, but in what the screen is
+ * willing to claim.
+ *
+ * KEPT: the estimated-progress chart, the "Your info" recap, and "How to reach
+ * your goals". Those are genuinely useful.
  *
  * CUT, deliberately:
  *   - "Trusted by millions: 10M+ users, 4.8 stars". We have no users. Inventing
@@ -44,10 +64,19 @@ import { radius, space, type } from '../../src/theme/tokens'
  * it came from. Every number here can be traced, and the safety floor explains
  * itself in words whenever it fires.
  */
+
+/** Ch 8.1: the breakdown springs open just after the count-up begins. */
+const PLAN_SPRING_DELAY_MS = 400
+/** Ch 8.1: the success haptic lands once the reveal has finished. */
+const PLAN_FINISH_HAPTIC_MS = 1200
+/** Spring character for the breakdown expansion (report §9: springs for position). */
+const PLAN_SPRING = { friction: 8, tension: 64 } as const
+
 export default function PlanScreen() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const a = useAnswers()
+  const reduced = useReducedMotion()
 
   const derivedGoal = inferredGoal(a)
 
@@ -81,6 +110,34 @@ export default function PlanScreen() {
 
     return { target, macros, deltaLb, dateLabel, rate }
   }, [a, derivedGoal])
+
+  // ---------------------------------------------------------------------
+  // The hero choreography (Ch 8.1). One Animated.Value drives the breakdown
+  // expansion; the count-ups run inside CountUp with the same 600ms ease-out.
+  // ---------------------------------------------------------------------
+  const reveal = useRef(new Animated.Value(reduced ? 1 : 0)).current
+
+  useEffect(() => {
+    if (reduced) return
+    const t = setTimeout(() => {
+      Animated.spring(reveal, { toValue: 1, ...PLAN_SPRING, useNativeDriver: false }).start()
+    }, PLAN_SPRING_DELAY_MS)
+    return () => clearTimeout(t)
+  }, [reduced, reveal])
+
+  // A success haptic marks the finish — after the count-up and the spring have
+  // landed; instantly under reduce-motion (the finish is no less real there).
+  useEffect(() => {
+    const t = setTimeout(() => void success(), reduced ? 0 : PLAN_FINISH_HAPTIC_MS)
+    return () => clearTimeout(t)
+  }, [reduced])
+
+  const breakdownStyle = reduced
+    ? undefined
+    : {
+        maxHeight: reveal.interpolate({ inputRange: [0, 1], outputRange: [0, 700] }),
+        opacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
+      }
 
   const gaining = derivedGoal === 'gain'
   const imperial = a.units === 'imperial'
@@ -133,9 +190,12 @@ export default function PlanScreen() {
               <Icon name="flame" size={20} color={theme.text} />
             </View>
             <View>
-              <Text style={[styles.bigNum, { color: theme.text }]}>
-                {Math.round(plan.target.target)}
-              </Text>
+              {/* Ch 8.1 hero: the number COUNTS UP in monoData tabular figures
+                  (CountUp, Table 9.1's 600ms ease-out) at the display scale. */}
+              <CountUp
+                value={plan.target.target}
+                style={[styles.bigNum, { color: theme.text }]}
+              />
               <Text style={[type.caption, { color: theme.textMuted }]}>Calories</Text>
             </View>
           </View>
@@ -164,8 +224,9 @@ export default function PlanScreen() {
           </View>
         ))}
 
-        {/* Where the number came from. The reference shows none of this. */}
-        <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
+        {/* Where the number came from. The reference shows none of this — and
+            the whole section EXPANDS WITH A SPRING (Ch 8.1). */}
+        <Animated.View style={[styles.section, { backgroundColor: theme.bgSunken }, breakdownStyle]}>
           <Text style={[type.heading, { color: theme.text }]}>How we got there</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
             No black box. Check our arithmetic.
@@ -184,7 +245,7 @@ export default function PlanScreen() {
             ) : null}
             <MathRow label="Your daily target" value={`${Math.round(plan.target.target)} kcal`} strong />
           </View>
-        </View>
+        </Animated.View>
 
         {/* Your info */}
         <View style={[styles.section, { backgroundColor: theme.bgSunken }]}>
@@ -273,7 +334,9 @@ function MacroCard({ label, value, icon, color }: { label: string; value: number
       <View style={[styles.iconSq, { backgroundColor: theme.bgSunken, width: 34, height: 34 }]}>
         <Icon name={icon} size={18} color={color} />
       </View>
-      <Text style={[styles.macroNum, { color: theme.text }]}>{Math.round(value)}g</Text>
+      {/* Ch 8.1 hero: macros count up too — monoData tabular figures at the
+          heading scale. */}
+      <CountUp value={value} format={(n) => `${Math.round(n)}g`} style={[styles.macroNum, { color: theme.text }]} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
         <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} />
         <Text style={[type.caption, { color: theme.textMuted }]}>{label}</Text>
@@ -342,10 +405,12 @@ const styles = StyleSheet.create({
     marginTop: space.md, padding: space.lg, borderRadius: radius.lg,
   },
   iconSq: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  bigNum: { ...type.display },
+  // The count-up hero numbers ride monoData (tabular figures, report §4.2) at
+  // the display / heading scales — every size still a token reference.
+  bigNum: { ...type.monoData, fontSize: type.display.fontSize, lineHeight: type.display.lineHeight },
   macroRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
   macroCard: { flex: 1, padding: space.md, borderRadius: radius.lg, gap: space.xs },
-  macroNum: { ...type.heading },
+  macroNum: { ...type.monoData, fontSize: type.heading.fontSize, lineHeight: type.heading.lineHeight },
   mathCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg, gap: space.md },
   mathRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   notice: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },

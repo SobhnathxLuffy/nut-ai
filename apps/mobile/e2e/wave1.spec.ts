@@ -5,21 +5,32 @@ import { test, expect } from '@playwright/test';
 // ==================================================
 
 test.describe('BUG-002: Onboarding Dead End', () => {
-  test('Continue button has a hint label when disabled on OptionScreen', async ({ page }) => {
-    // Navigate to a single-option screen like /onboarding/sex
-    await page.goto('/onboarding/sex');
+  test('Continue button has a hint label when disabled on the merged activity screen', async ({ page }) => {
+    // Wave 3 (Ch 8.1): the old sex + workouts (+ professional) screens merged
+    // into the single activity screen — three card groups, one Continue.
+    await page.goto('/onboarding/activity');
 
     // Button should be visible but disabled initially
     const continueBtn = page.getByRole('button', { name: 'Continue' });
     await expect(continueBtn).toBeDisabled();
 
-    // Explicitly check for the new hint label
-    const hintLabel = page.getByText('Select an option to continue');
+    // Explicitly check for the new hint label (every group must be answered)
+    const hintLabel = page.getByText('Answer every question to continue');
     await expect(hintLabel).toBeVisible();
 
-    // Selecting an option should enable the CTA. OptionScreen renders options
-    // with accessibilityRole="radio", not "button".
+    // Selecting one option is not enough on a merged screen: the button stays
+    // disabled until every group has an answer.
     await page.getByRole('radio', { name: 'Female' }).click();
+    await expect(continueBtn).toBeDisabled();
+
+    await page.getByRole('radio', { name: '3-5' }).click();
+    await expect(continueBtn).toBeDisabled();
+
+    // Options render with accessibilityRole="radio", not "button". NOTE
+    // exact: 'No' is a substring of "Workouts now and then" under Playwright's
+    // default case-insensitive partial match, which would click the wrong
+    // radio and leave the professional group unanswered.
+    await page.getByRole('radio', { name: 'No', exact: true }).click();
     await expect(continueBtn).toBeEnabled();
   });
 });

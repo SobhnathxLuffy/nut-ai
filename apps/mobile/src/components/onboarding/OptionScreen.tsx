@@ -1,20 +1,28 @@
 import { router } from 'expo-router'
-import { ScrollView } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { nextRoute, stepIndex, TOTAL_STEPS, type Step } from '../../onboarding/flow'
 import { setAnswer, useAnswers, type OnboardingAnswers } from '../../onboarding/store'
 import { OnboardingScreen } from './Chrome'
+import { useTheme } from '../../theme/ThemeProvider'
+import { space, type } from '../../theme/tokens'
 import type { IconName } from '../Icon'
 import { OptionCard } from './Controls'
 
 /**
  * Every single-choice screen in the flow.
  *
- * Thirteen of the twenty onboarding screens are the same object: a question, a
- * list of glyph-and-label cards, one selection, one Continue. Writing them
- * thirteen times would guarantee they drift apart — a padding here, a disabled
- * rule there — which is exactly the inconsistency that makes a flow feel cheap.
+ * Wave 3 (UI/UX report Ch. 8.1) collapsed twenty steps into twelve, and most
+ * of the collapse is MERGED screens: one screen, several card-group questions.
+ * Writing each group by hand would guarantee they drift apart — a padding
+ * here, a disabled rule there — which is exactly the inconsistency that makes
+ * a flow feel cheap. So this file now owns two shapes:
+ *
+ *   OptionScreen         one question, one field (the original)
+ *   GroupedOptionScreen  several labeled card groups, Continue gated until
+ *                        every group has an answer
  */
-export interface Option<V extends string> {
+
+export interface Option<V extends string | boolean> {
   value: V
   label: string
   sublabel?: string
@@ -68,3 +76,113 @@ export function OptionScreen<K extends keyof OnboardingAnswers>({
     </OnboardingScreen>
   )
 }
+
+// ---------------------------------------------------------------------------
+
+/** The type-erased group shape GroupedOptionScreen renders. */
+export interface QuestionGroup {
+  label: string
+  hint?: string
+  field: keyof OnboardingAnswers
+  options: ReadonlyArray<Option<string | boolean>>
+}
+
+/**
+ * Build a card group whose options are string values (sex, workouts, diet…).
+ * The generic keeps the option values pinned to the field's own union, so a
+ * `value: 'vegan'` in the `blocker` group is a compile error, not a runtime
+ * answer the store silently keeps.
+ */
+export function questionGroup<K extends keyof OnboardingAnswers>(
+  spec: {
+    field: K
+    label: string
+    hint?: string
+    options: ReadonlyArray<Option<Extract<OnboardingAnswers[K], string>>>
+  },
+): QuestionGroup {
+  return spec
+}
+
+/**
+ * Build a Yes/No card group for a boolean field (worksWithProfessional).
+ * Same guarantee as questionGroup, for the one boolean question in the flow.
+ */
+export function yesNoGroup<K extends keyof OnboardingAnswers>(
+  spec: {
+    field: K
+    label: string
+    hint?: string
+  },
+): QuestionGroup {
+  const opts: ReadonlyArray<Option<boolean>> = [
+    { value: true, label: 'Yes', glyph: 'thumbUp' },
+    { value: false, label: 'No', glyph: 'thumbDown' },
+  ]
+  return { field: spec.field, label: spec.label, hint: spec.hint, options: opts }
+}
+
+export function GroupedOptionScreen({
+  step,
+  title,
+  subtitle,
+  groups,
+  scroll = false,
+}: {
+  step: Step
+  title: string
+  subtitle?: string
+  groups: ReadonlyArray<QuestionGroup>
+  scroll?: boolean
+}) {
+  const theme = useTheme()
+  const answers = useAnswers()
+  // Every question must be answered before Continue unlocks — a merged screen
+  // that lets one of its fields through unset would silently feed the plan
+  // generator a default. The gate is the whole point of the merge.
+  const allAnswered = groups.every((g) => answers[g.field] != null)
+
+  return (
+    <OnboardingScreen
+      step={stepIndex(step)}
+      total={TOTAL_STEPS}
+      title={title}
+      {...(subtitle ? { subtitle } : {})}
+      scroll={scroll}
+      ctaDisabled={!allAnswered}
+      disabledHint="Answer every question to continue"
+      onCta={() => router.push(nextRoute(step) as never)}
+    >
+      <ScrollView scrollEnabled={false} contentContainerStyle={{ paddingBottom: 8 }}>
+        {groups.map((g, gi) => (
+          <View key={String(g.field)} style={gi > 0 ? styles.groupGap : undefined}>
+            <Text style={[type.heading, { color: theme.text }]}>{g.label}</Text>
+            {g.hint ? (
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
+                {g.hint}
+              </Text>
+            ) : (
+              <View style={{ height: space.md }} />
+            )}
+            {g.options.map((o) => (
+              <OptionCard
+                key={String(o.value)}
+                label={o.label}
+                {...(o.sublabel ? { sublabel: o.sublabel } : {})}
+                glyph={o.glyph}
+                selected={answers[g.field] === o.value}
+                // The one type-erasure point: the builders above already pinned
+                // each option set to its field's union at compile time.
+                onPress={() => setAnswer(g.field, o.value as OnboardingAnswers[keyof OnboardingAnswers])}
+              />
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+    </OnboardingScreen>
+  )
+}
+
+const styles = StyleSheet.create({
+  groupGap: { marginTop: space.xxl },
+})

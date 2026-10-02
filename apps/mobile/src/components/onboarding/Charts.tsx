@@ -1,17 +1,23 @@
-import Svg, { Circle, Defs, LinearGradient, Path, Stop, Line as SvgLine } from 'react-native-svg'
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop, Line as SvgLine } from 'react-native-svg'
 import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../../theme/ThemeProvider'
 import { radius, space, type } from '../../theme/tokens'
 
 /**
- * The three onboarding charts, hand-rolled in react-native-svg.
+ * The onboarding charts, hand-rolled in react-native-svg.
  *
- * No chart library: these are three fixed shapes with no axes, legends or
+ * No chart library: these are fixed shapes with no axes, legends or
  * interaction, and a library would import an opinionated axis/legend system to
  * fight. A cubic path plus a gradient fill is about forty lines.
+ *
+ * Wave 3 (UI/UX report Ch. 8.1): trend and potential are now ONE chart —
+ * ProjectionChart fuses the with/without-plan comparison (the old trend
+ * screen) and the early-consistency milestones (the old potential screen) into
+ * a single moment. The two dead chart components were deleted with their
+ * screens.
  */
 
-/** Smooth cubic through points, used by all three charts. */
+/** Smooth cubic through points, used by both charts. */
 function smoothPath(pts: ReadonlyArray<{ x: number; y: number }>): string {
   if (pts.length < 2) return ''
   let d = `M ${pts[0]!.x} ${pts[0]!.y}`
@@ -28,54 +34,78 @@ const W = 300
 const H = 170
 
 /**
- * "Designed to help you stay on track" — us versus no plan.
+ * "Where this goes" — the fused projection (report Ch. 8.1: trend + potential
+ * as ONE chart moment).
  *
- * The reference chart is pure marketing, but the shape it draws is a real,
- * well-documented phenomenon: unstructured dieting tends to produce early loss
- * followed by regain. We keep the comparison and label the y-axis honestly as a
- * trend rather than implying guaranteed numbers.
+ * What survives from the two old charts, and why:
+ *   - the with-plan vs without-plan comparison (old 'trend'): the shape it
+ *     draws is a real, documented phenomenon — unstructured dieting tends to
+ *     produce early change followed by regression to baseline.
+ *   - the early milestones (old 'potential'): 3 days, a week, a month — the
+ *     window where consistency actually decides the curve.
+ * The y-axis is labelled as a trend, never a promise.
  */
-export function TrendComparisonChart({ gaining }: { gaining: boolean }) {
+export function ProjectionChart({ gaining }: { gaining: boolean }) {
   const theme = useTheme()
 
   // SVG y grows downward, so a GAINING plan line must travel to a smaller y.
   // The "without a plan" line always ends back near the start: the documented
   // pattern is regression to baseline, in either direction.
-  const withPlan = gaining
-    ? smoothPath([
-        { x: 10, y: 138 }, { x: 90, y: 126 }, { x: 170, y: 63 }, { x: 250, y: 33 }, { x: 290, y: 30 },
-      ])
-    : smoothPath([
-        { x: 10, y: 30 }, { x: 90, y: 42 }, { x: 170, y: 105 }, { x: 250, y: 135 }, { x: 290, y: 138 },
-      ])
   const without = gaining
     ? smoothPath([
-        { x: 10, y: 138 }, { x: 80, y: 76 }, { x: 140, y: 68 }, { x: 220, y: 120 }, { x: 290, y: 144 },
+        { x: 12, y: 138 }, { x: 80, y: 76 }, { x: 140, y: 68 }, { x: 220, y: 120 }, { x: 290, y: 144 },
       ])
     : smoothPath([
-        { x: 10, y: 30 }, { x: 80, y: 92 }, { x: 140, y: 100 }, { x: 220, y: 45 }, { x: 290, y: 22 },
+        { x: 12, y: 30 }, { x: 80, y: 92 }, { x: 140, y: 100 }, { x: 220, y: 45 }, { x: 290, y: 22 },
       ])
+
+  // The plan line passes through explicit milestone points so the 3-day /
+  // 7-day / 30-day dots sit exactly ON the curve — a dot floating off the line
+  // reads as a data point the chart does not actually have.
+  const planPts = gaining
+    ? [
+        { x: 12, y: 138 }, { x: 18, y: 135 }, { x: 32, y: 128 }, { x: 62, y: 110 },
+        { x: 170, y: 63 }, { x: 250, y: 33 }, { x: 290, y: 30 },
+      ]
+    : [
+        { x: 12, y: 30 }, { x: 18, y: 33 }, { x: 32, y: 40 }, { x: 62, y: 58 },
+        { x: 170, y: 105 }, { x: 250, y: 135 }, { x: 290, y: 138 },
+      ]
+  const withPlan = smoothPath(planPts)
+  const milestone = (x: number) => planPts.find((p) => p.x === x)!
+
+  // The first-30-days emphasis band: the window the old 'potential' chart was
+  // about, drawn exactly where it lives on the timeline.
+  const BAND_X = 12
+  const BAND_W = milestone(62).x - BAND_X
 
   return (
     <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-      <Text style={[type.heading, { color: theme.text }]}>Weight trend</Text>
+      <Text style={[type.heading, { color: theme.text }]}>Your projection</Text>
 
       <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop: space.md }}>
         <Defs>
-          <LinearGradient id="planFill" x1="0" y1="0" x2="0" y2="1">
+          <LinearGradient id="projFill" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={theme.text} stopOpacity="0.10" />
             <Stop offset="1" stopColor={theme.text} stopOpacity="0" />
           </LinearGradient>
         </Defs>
 
-        <SvgLine x1="10" y1="30" x2="290" y2="30" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
-        <SvgLine x1="10" y1="95" x2="290" y2="95" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
+        <Rect x={BAND_X} y={16} width={BAND_W} height={136} fill={theme.uncertain} fillOpacity={0.08} rx={6} />
 
-        <Path d={`${withPlan} L 290 150 L 10 150 Z`} fill="url(#planFill)" />
+        <SvgLine x1="12" y1="30" x2="290" y2="30" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
+        <SvgLine x1="12" y1="95" x2="290" y2="95" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
+
+        <Path d={`${withPlan} L 290 150 L 12 150 Z`} fill="url(#projFill)" />
         <Path d={without} stroke="#E8615A" strokeWidth="3" fill="none" strokeLinecap="round" />
         <Path d={withPlan} stroke={theme.text} strokeWidth="3.5" fill="none" strokeLinecap="round" />
 
-        <Circle cx="10" cy={gaining ? 138 : 30} r="6" fill={theme.bg} stroke={theme.text} strokeWidth="3" />
+        <Circle cx={milestone(18).x} cy={milestone(18).y} r="5" fill={theme.bg} stroke={theme.text} strokeWidth="2.5" />
+        <Circle cx={milestone(32).x} cy={milestone(32).y} r="5" fill={theme.bg} stroke={theme.text} strokeWidth="2.5" />
+        <Circle cx={milestone(62).x} cy={milestone(62).y} r="12" fill="#C88A4B" />
+        <Circle cx={milestone(62).x} cy={milestone(62).y} r="12" fill="none" stroke={theme.bg} strokeWidth="2" />
+
+        <Circle cx="12" cy={gaining ? 138 : 30} r="6" fill={theme.bg} stroke={theme.text} strokeWidth="3" />
         <Circle cx="290" cy={gaining ? 30 : 138} r="6" fill={theme.bg} stroke={theme.text} strokeWidth="3" />
       </Svg>
 
@@ -84,60 +114,20 @@ export function TrendComparisonChart({ gaining }: { gaining: boolean }) {
           <Text style={[type.caption, { color: theme.bg }]}>Nut AI</Text>
         </View>
         <Text style={[type.caption, { color: '#E8615A' }]}>Without a plan</Text>
+        <View style={[styles.bandChip, { backgroundColor: theme.uncertainBg }]}>
+          <Text style={[type.caption, { color: theme.text }]}>First 30 days</Text>
+        </View>
       </View>
 
       <View style={styles.axisRow}>
-        <Text style={[type.caption, { color: theme.textMuted }]}>Month 1</Text>
+        <Text style={[type.caption, { color: theme.textMuted }]}>Now</Text>
         <Text style={[type.caption, { color: theme.textMuted }]}>Month 6</Text>
       </View>
 
       <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.md }]}>
-        Track your habits and stay consistent over time.
-      </Text>
-    </View>
-  )
-}
-
-/** "You have great potential" — the 3 / 7 / 30 day consistency curve. */
-export function TransitionChart({ gaining }: { gaining: boolean }) {
-  const theme = useTheme()
-  const pts = gaining
-    ? [{ x: 12, y: 130 }, { x: 90, y: 118 }, { x: 175, y: 62 }, { x: 285, y: 28 }]
-    : [{ x: 12, y: 30 }, { x: 90, y: 44 }, { x: 175, y: 100 }, { x: 285, y: 132 }]
-  const d = smoothPath(pts)
-
-  return (
-    <View style={[styles.card, { backgroundColor: theme.bgSunken }]}>
-      <Text style={[type.heading, { color: theme.text }]}>Your weight transition</Text>
-
-      <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} style={{ marginTop: space.md }}>
-        <Defs>
-          <LinearGradient id="transFill" x1="0" y1="0" x2="1" y2="0">
-            <Stop offset="0" stopColor="#C08A5A" stopOpacity="0.05" />
-            <Stop offset="1" stopColor="#C08A5A" stopOpacity="0.22" />
-          </LinearGradient>
-        </Defs>
-
-        <SvgLine x1="12" y1="62" x2="285" y2="62" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
-        <SvgLine x1="12" y1="118" x2="285" y2="118" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
-
-        <Path d={`${d} L 285 150 L 12 150 Z`} fill="url(#transFill)" />
-        <Path d={d} stroke="#8C6239" strokeWidth="3.5" fill="none" strokeLinecap="round" />
-
-        {pts.slice(0, 3).map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r="6" fill={theme.bg} stroke={theme.text} strokeWidth="3" />
-        ))}
-        <Circle cx={pts[3]!.x} cy={pts[3]!.y} r="15" fill="#C88A4B" />
-      </Svg>
-
-      <View style={styles.axisRow}>
-        <Text style={[type.caption, { color: theme.textMuted }]}>3 Days</Text>
-        <Text style={[type.caption, { color: theme.textMuted }]}>7 Days</Text>
-        <Text style={[type.caption, { color: theme.textMuted }]}>30 Days</Text>
-      </View>
-
-      <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.md }]}>
-        Weight change takes time. Consistency in the early weeks matters most.
+        The dots mark 3 days, a week and a month — the window where consistency decides the curve.
+        Unstructured dieting tends to drift back to baseline; tracking holds the line. This is the
+        documented pattern, not a forecast of your weight.
       </Text>
     </View>
   )
@@ -199,8 +189,9 @@ export function ProgressChart({
 const styles = StyleSheet.create({
   card: { padding: space.lg, borderRadius: radius.xl },
   axisRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: space.sm },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.xs },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.xs, flexWrap: 'wrap' },
   pill: { paddingHorizontal: space.md, paddingVertical: 4, borderRadius: radius.pill },
+  bandChip: { paddingHorizontal: space.md, paddingVertical: 4, borderRadius: radius.pill },
   callout: {
     alignSelf: 'flex-end',
     marginTop: -space.xxl,
