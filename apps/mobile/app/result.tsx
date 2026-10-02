@@ -239,6 +239,14 @@ export default function Result() {
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center', lineHeight: 19 }]}>
           {phase.message}
         </Text>
+        {/* P1-2 (QA report Cycle 2): honest model guidance under the failure
+            copy — present ONLY after the same model failed with gateway server
+            errors twice in a row (the Ling-3.0-VL retry loop's way out). */}
+        {phase.modelHint ? (
+          <Text style={[type.caption, { color: theme.textFaint, marginTop: space.sm, textAlign: 'center', lineHeight: 19 }]}>
+            {phase.modelHint}
+          </Text>
+        ) : null}
         {phase.canRetry ? (
           <Pressable
             onPress={() => void retryScan()}

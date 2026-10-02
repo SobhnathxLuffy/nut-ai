@@ -3,7 +3,6 @@ import { preprocess, startScan } from './orchestrator'
 import { reset } from './store'
 import { stripJpegMetadataBase64 } from './jpeg-privacy'
 import * as ImageManipulator from 'expo-image-manipulator'
-import * as FileSystem from 'expo-file-system'
 
 vi.mock('expo-image-manipulator', () => {
   const saveAsync = vi.fn().mockResolvedValue({ base64: '/9j/2Q==', uri: 'file:///tmp/cache/fake.jpg' })
@@ -25,8 +24,20 @@ vi.mock("../db/portions", () => ({
   loadFoodDb: vi.fn().mockResolvedValue({})
 }))
 
+// P2-6 (QA report Cycle 2): preprocess() cleans up its temp file through the
+// modern File class — deleteAsync is deprecated (warns AND throws in v57).
+const fsState = vi.hoisted(() => ({ deleted: [] as string[] }))
 vi.mock('expo-file-system', () => ({
-  deleteAsync: vi.fn(() => Promise.resolve()),
+  File: class {
+    uri: string
+    exists = true
+    constructor(uri: string) {
+      this.uri = uri
+    }
+    delete() {
+      fsState.deleted.push(this.uri)
+    }
+  },
 }))
 
 // Mock API call to prevent real network requests
@@ -46,6 +57,7 @@ vi.mock('../inference/pathA/client', () => ({
 describe('AIP-002: Photo Privacy & Preprocessing', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    fsState.deleted.length = 0
     reset()
   })
 
@@ -117,10 +129,10 @@ describe('AIP-002: Photo Privacy & Preprocessing', () => {
 
   it('cleans up temporary processed file immediately after extracting base64 payload', async () => {
     await startScan('file:///tmp/raw-camera-photo.jpg')
-    
+
     // The orchestrator creates a temporary resized file, we must delete it
-    // since we only needed the base64 string
-    await new Promise(r => setTimeout(r, 0)) // wait for async FileSystem.deleteAsync
-    expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///tmp/cache/fake.jpg', { idempotent: true })
+    // since we only needed the base64 string (P2-6: via the File class)
+    await new Promise(r => setTimeout(r, 0)) // wait for the async dynamic FS import
+    expect(fsState.deleted).toEqual(['file:///tmp/cache/fake.jpg'])
   })
 })

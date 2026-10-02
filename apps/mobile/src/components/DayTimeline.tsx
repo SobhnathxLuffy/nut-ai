@@ -8,6 +8,7 @@ import { db, localDate, dayTotals, currentGoal, deleteMeal, undoLastOperation, u
 import { subscribeFoodMutations } from '../data/food-mutations'
 import { changeDayStatus } from '../data/checkin'
 import { copyYesterday, dateOffset, mealSnapshot, repeatSnapshots, saveShortcut } from '../data/shortcuts'
+import { insertSavedMeal } from '../data/saved-meals'
 import { Button, Card, Field, Label, Row, useAction } from './Screen'
 import { PressableFX } from './PressableFX'
 import { DayStatusControl } from './DayStatusControl'
@@ -160,7 +161,13 @@ export function DayTimeline({
     )}
     {loaded&&events.length===0&&<Card><Label>No entries for this day yet.</Label><Label muted>Use the logging actions above whenever you’re ready.</Label></Card>}
     {events.map(e=><Card key={e.id}><PressableMeal enabled={e.type==='meal'} onPress={()=>router.push({pathname:'/meal-detail',params:{id:e.entity_id}} as never)}><Label>{new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · {e.label}</Label><Label muted>{e.type === 'weight' && e.weight_kg != null ? formatWeightKg(e.weight_kg, weightUnit) : e.detail}</Label></PressableMeal>
-      {e.type==='meal'&&<Row><Button label="Repeat meal" disabled={action.busy} onPress={()=>repeat(e.entity_id)}/><Button label="Favorite" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'favorite',e.detail))}/><Button label="Save usual meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'usual',e.detail))}/><Button label="Save meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'saved',e.detail))}/><Button label="Delete meal" onPress={()=>confirmDialog({title:'Delete this meal?',message:'You can restore it with Undo.',confirmLabel:'Delete',destructive:true,onConfirm:()=>perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid)})})}/></Row>}
+      {e.type==='meal'&&<Row><Button label="Repeat meal" disabled={action.busy} onPress={()=>repeat(e.entity_id)}/><Button label="Favorite" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'favorite',e.detail))}/><Button label="Save usual meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'usual',e.detail))}/>
+        {/* P1-3 (QA report Cycle 2): "Save meal" now feeds saved_meals TOO — the
+            table the Saved Foods screen reads had no in-app writer, so that
+            screen stayed empty for every user who never restored a backup. The
+            logging_shortcuts write stays (the two tables serve different
+            surfaces); on failure the honest error surfaces via useAction. */}
+        <Button label="Save meal" onPress={()=>perform(async()=>{const h=await db();await saveShortcut(h,e.entity_id,'saved',e.detail);await insertSavedMeal(h,e.entity_id,e.detail)})}/><Button label="Delete meal" onPress={()=>confirmDialog({title:'Delete this meal?',message:'You can restore it with Undo.',confirmLabel:'Delete',destructive:true,onConfirm:()=>perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid)})})}/></Row>}
       {(e.type==='workout'||e.type==='pr')&&<Button label="Open workout" onPress={()=>router.push({pathname:'/workout',params:{id:e.entity_id}} as never)}/>}</Card>)}
   </>
 }

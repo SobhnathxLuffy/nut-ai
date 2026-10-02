@@ -1,11 +1,12 @@
 vi.mock('../credentials', () => ({ loadCredential: vi.fn(() => 'fake-key') }))
 import { describe, expect, it, vi } from 'vitest'
-import { buildOpenAIRequest } from '@nutai/prompt'
+import { GATEWAY_SCAN_TIMEOUT_MS, buildOpenAIRequest, LOOKUP_TIMEOUT_MS } from '@nutai/prompt'
 import {
   createSseDeltaParser,
   extractFullCompletion,
   runAssistantChatApiStream,
   runLabelScan,
+  runReceiptScan,
   runScan,
   runScanWithFallback,
   runWebLookup,
@@ -307,6 +308,95 @@ describe('runLabelScan', () => {
     const r = await runLabelScan('openai', { model: 'm', imageBase64: 'AAAA' }, { kind: 'api_key', value: 'k' }, impl)
     expect(r.ok).toBe(true)
     expect(calls[0]!.url).toContain('/v1/chat/completions')
+  })
+})
+
+describe('vision one-shots — gateway wire mode (P1-4, QA report Cycle 2)', () => {
+  // The label/receipt/estimate one-shots used to travel NON-streaming with the
+  // 30s LOOKUP budget: on the slower Gemma vision models (108-114s measured
+  // generation) the reseller's ~30s non-streaming wall 500s them exactly like
+  // it 500'd scans before the Task-2 fix. Gateway one-shots now mirror the
+  // scan path: stream:true + SSE fold + GATEWAY_SCAN_TIMEOUT_MS.
+  const BASE = 'https://aicredits.in/v1'
+  const CRED = { kind: 'api_key' as const, value: 'k' }
+
+  /** An SSE body whose deltas reassemble `json` as the model content. */
+  const sseOf = (json: string) =>
+    json
+      .match(/[\s\S]{1,24}/g)!
+      .map((chunk) => `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`)
+      .join('') + 'data: [DONE]\n\n'
+
+  it('gateway label scan: stream:true on the wire, SSE folded to the payload', async () => {
+    const { calls, impl } = scripted([{ status: 200, body: sseOf('{"product_name":"Rolled oats","serving_g":40}') }])
+    const r = await runLabelScan('openai', { model: 'google/gemma-3-12b-it', imageBase64: 'AAAA' }, CRED, impl, LOOKUP_TIMEOUT_MS, BASE)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.raw).toEqual({ product_name: 'Rolled oats', serving_g: 40 })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe(`${BASE}/chat/completions`)
+    // The request escapes the ~30s non-streaming gateway wall.
+    expect(calls[0]!.body.stream).toBe(true)
+    // The one-shot builders emit json_object (never json_schema), so nothing
+    // needs stripping for gateways — pinned here so a builder regression to
+    // json_schema cannot silently hang a reseller one-shot again.
+    expect(calls[0]!.body.response_format).toEqual({ type: 'json_object' })
+  })
+
+  it('gateway receipt scan: the same fold assembles the receipt payload', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: sseOf('{"merchant":"Saravana Bhavan","items":[{"name":"Masala Dosa","quantity":2}]}') },
+    ])
+    const r = await runReceiptScan('openai', { model: 'google/gemma-3-12b-it', imageBase64: 'AAAA' }, CRED, impl, LOOKUP_TIMEOUT_MS, BASE)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.raw).toEqual({ merchant: 'Saravana Bhavan', items: [{ name: 'Masala Dosa', quantity: 2 }] })
+    expect(calls[0]!.url).toBe(`${BASE}/chat/completions`)
+    expect(calls[0]!.body.stream).toBe(true)
+  })
+
+  it('a gateway that ignores stream:true answers plain JSON — fold falls through, payload still extracts', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"product_name":null,"serving_g":30}' } }] }) },
+    ])
+    const r = await runLabelScan('openai', { model: 'm', imageBase64: 'AAAA' }, CRED, impl, LOOKUP_TIMEOUT_MS, BASE)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((r.raw as Record<string, unknown>)['serving_g']).toBe(30)
+    // The request still ASKED to stream; only the answer came back buffered.
+    expect(calls[0]!.body.stream).toBe(true)
+  })
+
+  it('official endpoint (no base URL): no stream flag, plain JSON envelope, official URL', async () => {
+    const { calls, impl } = scripted([
+      { status: 200, body: JSON.stringify({ choices: [{ message: { content: '{"product_name":"Oats"}' } }] }) },
+    ])
+    const r = await runLabelScan('openai', { model: 'gpt-4o-mini', imageBase64: 'AAAA' }, CRED, impl)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect((r.raw as Record<string, unknown>)['product_name']).toBe('Oats')
+    expect(calls[0]!.url).toContain('https://api.openai.com/v1/chat/completions')
+    expect(calls[0]!.body.stream).toBeUndefined()
+  })
+
+  it('gateway one-shots wait out GATEWAY_SCAN_TIMEOUT_MS, not the caller\u2019s 30s LOOKUP budget', async () => {
+    vi.useFakeTimers()
+    try {
+      // A gateway that never answers: the fetch only settles when the abort
+      // signal fires — which is exactly the behaviour under test.
+      const hanging = (async (_url: any, init: any) => {
+        await new Promise<never>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        })
+      }) as unknown as typeof fetch
+      const pending = runLabelScan('openai', { model: 'm', imageBase64: 'AAAA' }, CRED, hanging, LOOKUP_TIMEOUT_MS, BASE)
+      // At the OLD budget (the 30s lookup wall) the request must still be
+      // alive — aborting there is the P1-4 failure mode.
+      await vi.advanceTimersByTimeAsync(LOOKUP_TIMEOUT_MS)
+      // The shared gateway ceiling is the abort point.
+      await vi.advanceTimersByTimeAsync(GATEWAY_SCAN_TIMEOUT_MS - LOOKUP_TIMEOUT_MS)
+      const r = await pending
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.error?.kind).toBe('timeout-ambiguous')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

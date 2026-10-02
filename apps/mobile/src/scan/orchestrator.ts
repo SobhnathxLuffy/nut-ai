@@ -24,8 +24,9 @@ import { openIfctDb, openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
 import { db, customProviderBaseUrl, setting } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
-import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup } from '../inference/pathA/client'
-import { applyWebOption, beginScan, currentScanEpoch, getPhase, setPhase, setWebLookup } from './store'
+import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure } from '../inference/pathA/client'
+import { applyWebOption, beginScan, currentScanEpoch, getPhase, recordScanModelServerFailure, resetScanModelFailures, setPhase, setWebLookup } from './store'
+import { deleteLocalFile } from './file-cleanup'
 import {
   BARCODE_NOT_FOUND_FAILURE,
   BARCODE_NO_KEY_FAILURE,
@@ -65,6 +66,36 @@ const EMPTY_PRIORS: PersonalPriors = { get: () => null, containers: new Map() }
 /** Kept for retry, so a network blip does not re-run image preprocessing. */
 let lastCapture: { photoUri: string; base64: string } | null = null
 
+/**
+ * P1-2 (QA report Cycle 2): the copy shown when a model has failed with
+ * gateway server errors twice in a row. Names the honest escape route — a
+ * vision-capable Gemma model — without claiming the app can SEE which models
+ * a gateway breaks (only the gateway's own repeated 500s say that).
+ */
+const VISION_MODEL_HINT =
+  'This model may not process photos through your gateway. Try a Gemma vision model like google/gemma-3-12b-it.'
+
+/**
+ * P1-2: record a scan failure against its model and decide whether the
+ * failure phase should carry model guidance. Only 500-class errors count
+ * (auth/quota/offline failures say nothing about vision capability), only
+ * through a custom base URL (official endpoints fix their own 500s), and only
+ * from the SECOND consecutive failure of the SAME model — one 500 is noise,
+ * two is a broken vision path. Retry stays available either way: the user
+ * decides.
+ */
+function modelHintFor(
+  error: ScanFailure,
+  model: string,
+  baseUrl: string | null | undefined,
+): string | undefined {
+  const isServerError = error.kind === 'error-retryable' && (error.httpStatus ?? 0) >= 500
+  if (!isServerError) return undefined
+  const streak = recordScanModelServerFailure(model)
+  if (!baseUrl || streak < 2) return undefined
+  return VISION_MODEL_HINT
+}
+
 function wireSchemaFor(provider: ProviderId, keepPatterns: boolean): Record<string, unknown> {
   if (provider === 'anthropic') return anthropicWireSchema(VISION_WIRE_SCHEMA)
   // The official OpenAI endpoint enforces `pattern` in strict mode; unknown
@@ -90,10 +121,11 @@ export async function preprocess(photoUri: string): Promise<string> {
   // every JPEG application metadata segment explicitly and validate the output
   // before this payload can enter any cloud-provider request.
   const sanitizedBase64 = stripJpegMetadataBase64(saved.base64)
-  
+
   // Clean up the resized temporary file since we only need the base64 payload
-  import('expo-file-system').then((fs) => fs.deleteAsync(saved.uri, { idempotent: true }).catch(() => {}))
-  
+  // (P2-6: modern File API — see file-cleanup.ts).
+  void deleteLocalFile(saved.uri)
+
   return sanitizedBase64
 }
 
@@ -267,9 +299,16 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
         message: outcome.error.message,
         canRetry: outcome.error.retryable,
         failureKind: outcome.error.kind,
+        // P1-2 (QA report Cycle 2): honest model guidance once the same model
+        // has failed with gateway server errors twice in a row.
+        modelHint: modelHintFor(outcome.error, model, baseUrl),
       })
       return
     }
+    // The model answered — its vision path works through this gateway, so
+    // any P1-2 failure streak it had is over (even if validation below
+    // still rejects the payload: a broken ANSWER is not a broken model).
+    resetScanModelFailures(model)
 
     setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
 

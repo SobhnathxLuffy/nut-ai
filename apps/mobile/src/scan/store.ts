@@ -6,6 +6,7 @@ import { recomputeAfterEdit } from '@nutai/pipeline'
 import type { SelectedQuestion } from '@nutai/repair'
 import { ADDED_FAT_MULTIPLIERS, addedFatMultiplier, wholeDishSizeMultiplier } from '@nutai/repair'
 import { countAnswerValue, countMultiplierFor, rowIdForNamedQuestion } from './review'
+import { deleteLocalFile } from './file-cleanup'
 import { useSyncExternalStore } from 'react'
 import type { ScanFailureKind } from '../inference/pathA/client'
 
@@ -66,10 +67,49 @@ export type ScanPhase =
       message: string
       canRetry: boolean
       failureKind?: ScanFailureKind | 'no-key'
+      /**
+       * P1-2 (QA report Cycle 2): honest model guidance, present ONLY after
+       * the same model failed with gateway server (500-class) errors twice in
+       * a row through a custom base URL. The retry loop's dead end gets a way
+       * out instead of sending the user back into the same 30s failure.
+       * Rendered by the result screen below the failure copy in textFaint.
+       */
+      modelHint?: string
     }
 
 let phase: ScanPhase = { kind: 'idle' }
 const listeners = new Set<() => void>()
+
+// --- Per-model consecutive gateway failures (P1-2, QA report Cycle 2) ----
+//
+// The live case: inclusionai/ling-3.0-flash-vl's vision path is broken
+// GATEWAY-SIDE (any image payload → HTTP 500 at the 30s wall; text-only
+// completes fine), so a user who picked it retries into the identical
+// failure forever and concludes the app is broken. The counter records
+// consecutive 500-class scan failures PER MODEL — module-level like the
+// phase itself so it survives screen unmounts and scan resets — and any
+// successful call with that model clears its streak. Non-500 failures
+// (auth, quota, offline) never count: they say nothing about the model's
+// vision capability.
+
+const consecutiveServerFailuresByModel = new Map<string, number>()
+
+/** Record one 500-class scan failure for a model; returns the new consecutive count. */
+export function recordScanModelServerFailure(model: string): number {
+  const next = (consecutiveServerFailuresByModel.get(model) ?? 0) + 1
+  consecutiveServerFailuresByModel.set(model, next)
+  return next
+}
+
+/** A successful call with this model clears its streak — the model CAN see. */
+export function resetScanModelFailures(model: string): void {
+  consecutiveServerFailuresByModel.delete(model)
+}
+
+/** The current consecutive 500-class failure count for a model (0 = healthy). */
+export function consecutiveScanModelFailures(model: string): number {
+  return consecutiveServerFailuresByModel.get(model) ?? 0
+}
 
 /**
  * Grams per row id as the last scan result landed (see setPhase). Kept next to
@@ -367,9 +407,9 @@ export function applyWebOption(rowId: string, option: WebLookupOption, sourceUrl
 export function reset(opts?: { retainPhoto?: boolean }) {
   const phase = getPhase()
   if (!opts?.retainPhoto && 'photoUri' in phase && phase.photoUri) {
-    import('expo-file-system').then((fs) => {
-      fs.deleteAsync(phase.photoUri!, { idempotent: true }).catch(() => {})
-    })
+    // P2-6: modern expo-file-system API (File.exists + File.delete) — see
+    // file-cleanup.ts for why the legacy deleteAsync call had to go.
+    void deleteLocalFile(phase.photoUri)
   }
   setPhase({ kind: 'idle' })
 }

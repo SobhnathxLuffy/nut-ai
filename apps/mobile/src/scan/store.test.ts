@@ -7,20 +7,35 @@ import {
   applyWebOption,
   answerQuestion,
   beginScan,
+  consecutiveScanModelFailures,
   currentScanEpoch,
   addRow,
   editGrams,
   getPhase,
+  recordScanModelServerFailure,
   removeRow,
   reset,
+  resetScanModelFailures,
   setPhase,
   setPortionEaten,
   setWebLookup,
 } from './store'
 import { QUESTION_BANK, type SelectedQuestion } from '@nutai/repair'
 
+// P2-6 (QA report Cycle 2): reset() deletes through the modern File class —
+// the legacy deleteAsync mock is gone with the migration.
+const fsState = vi.hoisted(() => ({ deleted: [] as string[] }))
 vi.mock('expo-file-system', () => ({
-  deleteAsync: vi.fn(() => Promise.resolve()),
+  File: class {
+    uri: string
+    exists = true
+    constructor(uri: string) {
+      this.uri = uri
+    }
+    delete() {
+      fsState.deleted.push(this.uri)
+    }
+  },
 }))
 
 /**
@@ -233,29 +248,75 @@ describe('setWebLookup', () => {
   })
 })
 
-describe('reset cleanup', () => {
+describe('reset cleanup (P2-6: modern File API)', () => {
   it('deletes temporary photo by default on cancel or failure', async () => {
-    const fs = await import('expo-file-system')
-    vi.mocked(fs.deleteAsync).mockClear()
+    fsState.deleted.length = 0
 
     setPhase({ kind: 'failed', photoUri: 'file:///tmp/cache/test.jpg', message: 'Fail', canRetry: true })
     reset()
-    
+
     // wait a tick since import('expo-file-system') is async inside reset
     await new Promise(r => setTimeout(r, 0))
-    expect(fs.deleteAsync).toHaveBeenCalledWith('file:///tmp/cache/test.jpg', { idempotent: true })
+    expect(fsState.deleted).toEqual(['file:///tmp/cache/test.jpg'])
     expect(getPhase().kind).toBe('idle')
   })
 
   it('skips deleting if explicitly retained', async () => {
-    const fs = await import('expo-file-system')
-    vi.mocked(fs.deleteAsync).mockClear()
+    fsState.deleted.length = 0
 
     setPhase({ kind: 'failed', photoUri: 'file:///tmp/cache/test.jpg', message: 'Fail', canRetry: true })
     reset({ retainPhoto: true })
-    
+
     await new Promise(r => setTimeout(r, 0))
-    expect(fs.deleteAsync).not.toHaveBeenCalled()
+    expect(fsState.deleted).toEqual([])
+  })
+
+  it('web capture URIs (blob:) never reach the file API', async () => {
+    fsState.deleted.length = 0
+
+    setPhase({ kind: 'failed', photoUri: 'blob:8c1a-ccd0-4f6a', message: 'Fail', canRetry: true })
+    reset()
+
+    await new Promise(r => setTimeout(r, 0))
+    expect(fsState.deleted).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P1-2 (QA report Cycle 2) — per-model consecutive gateway-failure tracking.
+// The orchestrator feeds this counter; the hint it unlocks renders on the
+// result screen.
+// ---------------------------------------------------------------------------
+
+describe('per-model consecutive gateway failures (P1-2)', () => {
+  it('counts consecutive failures per model and resets on that model\u2019s success', () => {
+    const model = 'p1-2-counter-model-a'
+    expect(consecutiveScanModelFailures(model)).toBe(0)
+    expect(recordScanModelServerFailure(model)).toBe(1)
+    expect(recordScanModelServerFailure(model)).toBe(2)
+    resetScanModelFailures(model)
+    expect(consecutiveScanModelFailures(model)).toBe(0)
+  })
+
+  it('streaks are per-model: failures of one model never count against another', () => {
+    const a = 'p1-2-counter-model-a2'
+    const b = 'p1-2-counter-model-b2'
+    recordScanModelServerFailure(a)
+    recordScanModelServerFailure(a)
+    recordScanModelServerFailure(b)
+    expect(consecutiveScanModelFailures(a)).toBe(2)
+    expect(consecutiveScanModelFailures(b)).toBe(1)
+  })
+
+  it('a scan reset (camera back-out) does NOT clear a streak — the next failure is still consecutive', () => {
+    const model = 'p1-2-counter-model-c'
+    recordScanModelServerFailure(model)
+    reset()
+    expect(consecutiveScanModelFailures(model)).toBe(1)
+    // The second consecutive failure is exactly when the orchestrator shows
+    // the P1-2 model hint.
+    expect(recordScanModelServerFailure(model)).toBe(2)
+    resetScanModelFailures(model)
   })
 })
 
