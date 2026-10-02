@@ -73,7 +73,7 @@ export default function TabLayout() {
                     hitSlop={space.sm}
                   >
                     <Icon name={tab.icon} size={21} color={focused ? theme.text : theme.textFaint} />
-                    <Text style={[type.micro, { color: focused ? theme.text : theme.textFaint, marginTop: 1 }]}>
+                    <Text style={[type.caption, { color: focused ? theme.text : theme.textFaint, marginTop: 1 }]}>
                       {tab.label}
                     </Text>
                   </Pressable>

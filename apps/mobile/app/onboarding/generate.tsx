@@ -40,7 +40,9 @@ const styles = StyleSheet.create({
   },
   doneRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xl },
   heading: {
-    fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1,
-    textAlign: 'center', marginTop: space.md,
+    // Wave 1a: welcome-heading hero moment → type.display (report Table 3.1).
+    ...type.display,
+    textAlign: 'center',
+    marginTop: space.md,
   },
 })

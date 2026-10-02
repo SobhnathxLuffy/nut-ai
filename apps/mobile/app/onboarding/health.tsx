@@ -155,6 +155,6 @@ const styles = StyleSheet.create({
   },
   wordRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.sm, marginTop: space.lg },
   word: { paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.pill },
-  heading: { fontSize: 34, lineHeight: 40, fontWeight: '800', letterSpacing: -1, marginTop: space.xl },
+  heading: { ...type.display, marginTop: space.xl },
   note: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
 })

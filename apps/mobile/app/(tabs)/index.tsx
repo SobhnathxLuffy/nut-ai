@@ -136,7 +136,9 @@ export default function Home() {
         </View>
 
         <View style={{ paddingHorizontal: space.lg, marginTop: space.xl, gap: space.md }}>
-          <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Daily timeline</Text>
+          {/* Wave 1a: Home's private 24px header override joins the unified
+              type.title (28/32) — one header voice (report §3.3). */}
+          <Text style={[type.title, { color: theme.text }]}>Daily timeline</Text>
           <SkeletonBlock width="100%" height={120} theme={theme} radius={radius.xl} />
         </View>
       </ScrollView>
@@ -214,7 +216,7 @@ export default function Home() {
 
       {/* Daily Timeline */}
       <View style={{ paddingHorizontal: space.lg, marginTop: space.xl, gap: space.md }}>
-        <Text style={[type.title, { color: theme.text, fontSize: 24 }]}>Daily timeline</Text>
+        <Text style={[type.title, { color: theme.text }]}>Daily timeline</Text>
         <DayTimeline selectedDate={localDate(selected)} hideDateControls hideTotals />
       </View>
     </ScrollView>
@@ -421,7 +423,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: space.lg,
   },
-  wordmark: { fontSize: 30, fontWeight: '800', letterSpacing: -1.2 },
+  wordmark: { ...type.title },
   streakPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -443,7 +445,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  hero: { fontSize: 46, fontWeight: '800', letterSpacing: -1.8 },
+  hero: {
+    // Wave 1a: the calories-left hero is THE display moment of the Home
+    // screen (report Table 3.1 — "display 56/60 replaces hero one-offs").
+    ...type.display,
+  },
   macroRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
   macroCard: {
     flex: 1,
@@ -451,7 +457,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  macroNum: { fontSize: 22, fontWeight: '800', letterSpacing: -0.6 },
+  macroNum: { ...type.heading },
   card: { padding: space.lg, borderRadius: radius.xl, borderWidth: StyleSheet.hairlineWidth },
   spread: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 })

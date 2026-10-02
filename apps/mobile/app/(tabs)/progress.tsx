@@ -161,7 +161,7 @@ function Training({ report }: { report: PeriodReport }) {
 
 function Warnings({ report }: { report: PeriodReport }) { return report.data_quality.warnings.length > 0 ? <Card title="Data quality">{report.data_quality.warnings.map((warning) => <Muted key={warning}>{warning}</Muted>)}</Card> : null }
 function Card({ title, children }: { title: string; children: React.ReactNode }) { const t = useTheme(); return <View style={[styles.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}><Text style={[type.heading, { color: t.text }]}>{title}</Text>{children}</View> }
-function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) { const t = useTheme(); return <View style={[styles.metricCard, { backgroundColor: t.bgSunken }]}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[styles.metricValue, { color: t.text }]}>{value}</Text><Text style={[type.micro, { color: t.textFaint }]}>{detail}</Text></View> }
+function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) { const t = useTheme(); return <View style={[styles.metricCard, { backgroundColor: t.bgSunken }]}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[styles.metricValue, { color: t.text }]}>{value}</Text><Text style={[type.caption, { color: t.textFaint }]}>{detail}</Text></View> }
 function SmallMetric({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={{ minWidth: '44%' }}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[type.bodyStrong, { color: t.text }]}>{value}</Text></View> }
 function DataRow({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={styles.dataRow}><Text style={[type.body, { color: t.text, flex: 1 }]}>{label}</Text><Text style={[type.bodyStrong, { color: t.text }]}>{value}</Text></View> }
 function Muted({ children }: { children: React.ReactNode }) { const t = useTheme(); return <Text style={[type.caption, { color: t.textMuted, lineHeight: 19 }]}>{children}</Text> }
@@ -176,6 +176,6 @@ const styles = StyleSheet.create({
   tabs: { gap: space.sm, paddingRight: space.lg }, windows: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.pill }, compactChip: { minHeight: 44, paddingHorizontal: 11 },
   card: { borderWidth: 1, borderRadius: radius.xl, padding: space.lg, gap: space.md }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  metricCard: { width: '48%', minHeight: 120, borderRadius: radius.lg, padding: space.md, gap: space.xs }, metricValue: { fontSize: 23, fontWeight: '700' },
+  metricCard: { width: '48%', minHeight: 120, borderRadius: radius.lg, padding: space.md, gap: space.xs }, metricValue: { ...type.title },
   dataRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }, reportRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
 })

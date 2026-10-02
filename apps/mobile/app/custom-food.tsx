@@ -347,7 +347,8 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
-    fontSize: 17,
+    // Wave 1a: 17px ad-hoc input joins type.body (Table 3.1).
+    fontSize: type.body.fontSize,
   },
   save: {
     minHeight: 54,

@@ -5,6 +5,10 @@
  * colour — an ESLint rule enforces it. That is not tidiness: a hardcoded colour
  * is a colour that silently ignores dark mode and never gets contrast-checked.
  *
+ * UI/UX Transformation Report (Wave 1): this file carries the canonical
+ * seven-step type scale (report Table 3.1), the elevation + state-layer tokens
+ * (report §4.3), and the caption contrast fix (report §11 / Table 11.1).
+ *
  * THE COLOUR RULE THAT MATTERS MOST:
  *
  *   Red is reserved for SAFETY warnings only. Never for food, never for a missed
@@ -17,6 +21,8 @@
  * the entire point of having one.
  */
 
+import type { TextStyle, ViewStyle } from 'react-native'
+
 export const palette = {
   // Neutrals
   ink900: '#0B0B0F',
@@ -24,6 +30,11 @@ export const palette = {
   ink700: '#22222B',
   ink600: '#3A3A46',
   ink500: '#5C5C6B',
+  // Wave 1a (report §11 / Table 11.1): the faint-text tier. ink400 on white is
+  // 3.40:1 — the 11px micro text that failed WCAG AA. ink450 is the computed
+  // replacement: 5.01:1 on white (verified in type-scale.test.ts, which
+  // recomputes the ratio from these hexes on every CI run).
+  ink450: '#6E6E7D',
   ink400: '#8A8A99',
   ink300: '#B8B8C4',
   ink200: '#DCDCE4',
@@ -103,7 +114,11 @@ export const lightTheme: Theme = {
   border: palette.ink200,
   text: palette.ink900,
   textMuted: palette.ink500,
-  textFaint: palette.ink400,
+  // Wave 1a (report §11): ink400 (3.40:1 on white) failed AA for the caption
+  // tier. ink450 is 5.01:1 on white — every faint text now passes 4.5:1. No
+  // single hex can pass 4.5:1 on BOTH white and ink900 (the luminance window
+  // is empty), so the faint tier stays theme-resolved like every other role.
+  textFaint: palette.ink450,
   ring: palette.ink900,
   ringTrack: palette.ink100,
   protein: palette.protein,
@@ -128,9 +143,14 @@ export const lightTheme: Theme = {
 /**
  * Dark theme.
  *
- * [VERIFY] These ratios were designed to AA targets but have never been computed.
- * The M7 contrast sweep must run over this matrix as a CI step, not by eye — the
- * dark palette is the one most likely to have a quiet failure.
+ * Wave 1a (report §11): the caption/muted pairs are now COMPUTED, not eyeballed
+ * (type-scale.test.ts recomputes them every run):
+ *   textFaint ink400 #8A8A99 → 5.78:1 on bg ink900, 5.30:1 on bgElevated ink800
+ *   textMuted ink300 #B8B8C4 → 10.00:1 on bg ink900, 9.17:1 on bgElevated ink800
+ * Both clear the 4.5:1 AA bar for the 12.5px caption floor. The FULL matrix
+ * (macros, uncertain, safety pairs) stays a Wave 4 deliverable — the report's
+ * CI contrast gate — so those pairs are still unverified. The old [VERIFY]
+ * banner is retired with its first paid-down slice.
  */
 export const darkTheme: Theme = {
   bg: palette.ink900,
@@ -176,24 +196,142 @@ export const radius = {
   sm: 8,
   md: 12,
   lg: 16,
+  // Wave 1a (report §4.3): the bottom-sheet radius — sits between lg (16) and
+  // xl (24), matching modern sheet conventions. Wave 2's Sheet primitive is the
+  // first consumer.
+  sheet: 20,
   xl: 24,
   pill: 999,
 } as const
 
 /**
- * Type scale. The rhythm the incumbent gets right and is worth copying: a big
- * bold number next to a small grey unit.
+ * The canonical seven-step type scale (UI/UX report Table 3.1, Wave 1).
+ *
+ * Every text style in the app resolves to one of these eight entries
+ * (bodyStrong is the weight-600 variant of body). A vitest gate
+ * (src/theme/type-scale.test.ts) fails CI on any ad-hoc fontSize literal in
+ * app/, src/components/, src/ui/ or src/onboarding/ — the 17 drifting sizes the
+ * report audited (§3.3) cannot regrow.
+ *
+ * `monoData` carries tabular numerals so every macro number, ring readout and
+ * diary row aligns digit-for-digit — the report's highest-leverage
+ * typographic upgrade for a numbers app (§4.2).
  */
-export const type = {
-  hero: { fontSize: 56, fontWeight: '700' as const, letterSpacing: -1.5 },
-  title: { fontSize: 28, fontWeight: '700' as const, letterSpacing: -0.5 },
-  heading: { fontSize: 20, fontWeight: '600' as const },
-  body: { fontSize: 16, fontWeight: '400' as const },
-  bodyStrong: { fontSize: 16, fontWeight: '600' as const },
-  label: { fontSize: 14, fontWeight: '500' as const },
-  caption: { fontSize: 13, fontWeight: '400' as const },
-  micro: { fontSize: 11, fontWeight: '500' as const, letterSpacing: 0.3 },
+const canonicalType = {
+  display: { fontSize: 56, lineHeight: 60, fontWeight: '800' as const, letterSpacing: -1.5 },
+  title: { fontSize: 28, lineHeight: 32, fontWeight: '700' as const, letterSpacing: -0.5 },
+  heading: { fontSize: 20, lineHeight: 26, fontWeight: '600' as const },
+  body: { fontSize: 16, lineHeight: 24, fontWeight: '400' as const },
+  bodyStrong: { fontSize: 16, lineHeight: 24, fontWeight: '600' as const },
+  label: { fontSize: 14, lineHeight: 18, fontWeight: '500' as const },
+  // The caption floor. 11px micro on faint grey failed AA (report §11); the
+  // floor is now 12.5px paired with the darker ink450 faint colour.
+  caption: { fontSize: 12.5, lineHeight: 16, fontWeight: '400' as const },
+  monoData: {
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '600' as const,
+    // `as const` would make this a readonly tuple, which TextStyle's mutable
+    // FontVariant[] rejects — cast to the exact property type instead.
+    fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+  },
 } as const
+
+export const type = {
+  ...canonicalType,
+  // ---------------------------------------------------------------------
+  // DEPRECATED aliases (UI/UX report Table 3.1). The Wave 1a sweep renamed
+  // every in-app reference to the canonical names above; these aliases only
+  // exist so stragglers outside the swept directories keep compiling. Delete
+  // them once Wave 3 has rebuilt the last screen.
+  /** @deprecated use type.display */
+  hero: canonicalType.display,
+  /** @deprecated use type.caption (the 11px micro tier is retired, §11) */
+  micro: canonicalType.caption,
+} as const
+
+/**
+ * Elevation — the layer this app never had (report §3.2, §4.3).
+ *
+ * Three levels only: subtle for resting cards, medium for floating elements
+ * (the FAB, the ActiveWorkout card), high for sheets and dialogs. Consumers
+ * spread the level into a View style; the shadows are ink-based so they read
+ * on any surface, and `elevation` covers Android where RN ignores shadow*.
+ */
+export const elevation = {
+  subtle: {
+    shadowColor: '#0B0B0F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  medium: {
+    shadowColor: '#0B0B0F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  high: {
+    shadowColor: '#0B0B0F',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.16,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+} as const
+
+export type ElevationLevel = keyof typeof elevation
+
+/**
+ * Dark-mode elevation strategy (report §4.3): shadows are invisible on
+ * near-black backgrounds, so each level lightens the BORDER instead — a
+ * lighter edge reads as "closer to you" exactly where a shadow would. Return
+ * the style for a level in either mode; do not hand-roll shadow values.
+ */
+export const darkElevationBorder = {
+  subtle: { borderWidth: 1, borderColor: '#22222B' },
+  medium: { borderWidth: 1, borderColor: '#3A3A46' },
+  high: { borderWidth: 1.5, borderColor: '#5C5C6B' },
+} as const
+
+export const elevationStyle = (level: ElevationLevel, isDark: boolean): ViewStyle =>
+  isDark ? { ...darkElevationBorder[level] } : { ...elevation[level] }
+
+/**
+ * State layers (report §4.3) — the four interaction states every control owes
+ * its users, tokenized once so five different pressed behaviours cannot
+ * regrow (§3.6). "Accent" is the ink ring colour today; the report (§3.2)
+ * notes the app has no accent slot yet — Wave 2/4 re-points these when one
+ * lands, without touching a single consumer.
+ *
+ * Alpha hexes: 6% ink ≈ 0x0F (15/255 = 5.9%), 12% ≈ 0x1F (31/255 = 12.2%).
+ *
+ * Spread-order contract: disabled must come AFTER any elevation level in the
+ * style array — it zeroes shadowOpacity/elevation so a disabled control never
+ * floats (report: "38% opacity plus no shadow").
+ */
+export const stateLayer = {
+  /** Pressed: 6% ink overlay composited over the resting surface. */
+  pressed: { backgroundColor: '#0B0B0F0F' },
+  /** Disabled: 38% opacity and no shadow. */
+  disabled: { opacity: 0.38, shadowOpacity: 0, elevation: 0 },
+  /** Selected: accent tint at 12%. */
+  selected: { backgroundColor: '#0B0B0F1F' },
+  /** Focus: 2px accent ring — web / external-keyboard users only. */
+  focus: { borderWidth: 2, borderColor: '#0B0B0F' },
+} as const
+
+/** Dark mirror: the ink overlay flips to white ink on near-black surfaces. */
+export const stateLayerDark = {
+  pressed: { backgroundColor: '#FFFFFF0F' },
+  disabled: { opacity: 0.38, shadowOpacity: 0, elevation: 0 },
+  selected: { backgroundColor: '#F7F7FA1F' },
+  focus: { borderWidth: 2, borderColor: '#F7F7FA' },
+} as const
+
+export const stateLayerFor = (isDark: boolean) => (isDark ? stateLayerDark : stateLayer)
 
 /**
  * Motion durations, in ms.

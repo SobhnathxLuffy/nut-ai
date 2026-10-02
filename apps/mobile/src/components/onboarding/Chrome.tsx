@@ -13,8 +13,9 @@ import { MIN_TAP_TARGET, radius, space, type } from '../../theme/tokens'
  * Every screen in the flow uses this, which is what makes the flow feel like one
  * thing rather than twenty. The measurements are taken from the reference
  * walkthrough: a 44pt circular back button on a very light fill, a 6pt pill
- * progress track, a ~40pt bold title with tight tracking, and a full-width pill
- * button docked above the home indicator.
+ * progress track, a bold display-scale title with tight tracking (Wave 1a:
+ * type.display per UI/UX report Table 3.1), and a full-width pill button docked
+ * above the home indicator.
  */
 
 export function ProgressBar({ step, total }: { step: number; total: number }) {
@@ -132,7 +133,7 @@ export function OnboardingScreen({
       >
         {ctaDisabled && disabledHint ? (
           /* PROTECT MOBILE: Render disabled hint with proper margin inside the flex container so we don't break layout on Android/iOS */
-          <Text style={{ textAlign: 'center', marginBottom: 12, color: theme.textMuted, fontSize: 14 }}>
+          <Text style={[type.label, { textAlign: 'center', marginBottom: 12, color: theme.textMuted }]}>
             {disabledHint}
           </Text>
         ) : null}
@@ -146,7 +147,9 @@ export function OnboardingScreen({
             { backgroundColor: ctaDisabled ? theme.bgSunkenStrong : theme.text },
           ]}
         >
-          <Text style={[type.bodyStrong, { color: ctaDisabled ? theme.textMuted : theme.bg, fontSize: 18 }]}>
+          {/* Wave 1a: CTA text drops the 18/17px overrides — bodyStrong is the
+              button voice (UI/UX report Table 3.1). */}
+          <Text style={[type.bodyStrong, { color: ctaDisabled ? theme.textMuted : theme.bg }]}>
             {cta}
           </Text>
         </Pressable>
@@ -158,7 +161,7 @@ export function OnboardingScreen({
             hitSlop={space.sm}
             style={styles.secondary}
           >
-            <Text style={[type.bodyStrong, { color: theme.text, fontSize: 17 }]}>
+            <Text style={[type.bodyStrong, { color: theme.text }]}>
               {secondaryLabel}
             </Text>
           </Pressable>
@@ -185,13 +188,13 @@ const styles = StyleSheet.create({
   track: { height: 6, borderRadius: radius.pill, overflow: 'hidden' },
   fill: { height: 6, borderRadius: radius.pill },
   title: {
-    fontSize: 36,
-    lineHeight: 42,
-    fontWeight: '800',
-    letterSpacing: -1.1,
+    // Wave 1a: the onboarding screen title is a display moment (report
+    // Table 3.1 — 36px ad-hoc joins display 56/60/800). Tight tracking comes
+    // with the token.
+    ...type.display,
     marginTop: space.xs,
   },
-  subtitle: { fontSize: 17, lineHeight: 24, marginTop: space.md },
+  subtitle: { ...type.body, marginTop: space.md },
   content: { marginTop: space.xl },
   actions: {
     paddingHorizontal: space.lg,

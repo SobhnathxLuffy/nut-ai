@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginBottom: space.sm },
-  big: { fontSize: 34, fontWeight: '800', letterSpacing: -1 },
+  big: { ...type.display },
   bonus: {
     alignSelf: 'flex-start',
     paddingHorizontal: space.sm,

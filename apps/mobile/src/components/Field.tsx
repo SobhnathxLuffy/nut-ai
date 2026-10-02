@@ -54,7 +54,8 @@ export function Field({
               borderWidth: StyleSheet.hairlineWidth,
               borderRadius: radius.sm,
               paddingHorizontal: space.md,
-              fontSize: 17,
+              // Wave 1a: inputs sit at type.body (Table 3.1 — 17px ad-hoc joins 16/24).
+              fontSize: type.body.fontSize,
               color: theme.text,
               borderColor: theme.border,
               backgroundColor: theme.bgSunken,

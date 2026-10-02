@@ -126,7 +126,7 @@ export function DayStatusControl({
             </Text>
           </View>
           {!isToday && (
-            <Text style={[type.micro, { color: theme.textFaint, marginTop: 2 }]}>
+            <Text style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
               Editing past day ({date}) · Recalculates affected trends
             </Text>
           )}
@@ -196,7 +196,7 @@ export function DayStatusControl({
 
       {/* History notes if modified */}
       {history.length > 0 && (
-        <Text style={[type.micro, { color: theme.textFaint }]}>
+        <Text style={[type.caption, { color: theme.textFaint }]}>
           Recent changes: {history
             .map((o) => {
               const details = JSON.parse(o.new_json ?? '{}') as { completion?: string }

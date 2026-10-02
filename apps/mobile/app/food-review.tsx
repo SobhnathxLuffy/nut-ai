@@ -138,7 +138,7 @@ export default function FoodReview() {
         </View>
         <Field label="Total grams" value={grams} onValueChange={updateGrams} numeric/>
         {base.grams > 0 ? (
-          <Text style={[type.micro, { color: theme.textMuted, marginTop: -space.xs }]}>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>
             Standard serving: 1 × {Math.round(base.grams * 10) / 10} g — change how many you had and the weight of one piece or bowl
           </Text>
         ) : null}
@@ -191,4 +191,5 @@ export default function FoodReview() {
   </KeyboardAvoidingView>
 }
 
-const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:17},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},primary:{minHeight:54,borderRadius:radius.pill,alignItems:'center',justifyContent:'center',marginTop:space.md},ingredientsCard:{borderWidth:StyleSheet.hairlineWidth,borderColor:'rgba(128,128,128,0.35)',borderRadius:radius.md,padding:space.md,gap:space.xs},ingredientRow:{flexDirection:'row',alignItems:'center',gap:space.sm},editIngredientsBtn:{marginTop:space.xs,minHeight:MIN_TAP_TARGET,borderWidth:1,borderRadius:radius.md,alignItems:'center',justifyContent:'center',paddingHorizontal:space.md}})
+// Wave 1a: the 17px ad-hoc input size joins type.body (UI/UX report Table 3.1).
+const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:type.body.fontSize},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},primary:{minHeight:54,borderRadius:radius.pill,alignItems:'center',justifyContent:'center',marginTop:space.md},ingredientsCard:{borderWidth:StyleSheet.hairlineWidth,borderColor:'rgba(128,128,128,0.35)',borderRadius:radius.md,padding:space.md,gap:space.xs},ingredientRow:{flexDirection:'row',alignItems:'center',gap:space.sm},editIngredientsBtn:{marginTop:space.xs,minHeight:MIN_TAP_TARGET,borderWidth:1,borderRadius:radius.md,alignItems:'center',justifyContent:'center',paddingHorizontal:space.md}})

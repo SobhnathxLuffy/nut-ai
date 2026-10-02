@@ -89,6 +89,17 @@ export default tseslint.config(
             'Hex colours live in src/theme/tokens.ts only — use a theme token (see the tokens.ts header for why).',
         },
         {
+          // Wave 1a (UI/UX report §3.3 / Table 3.1): every fontSize resolves to
+          // the seven-step scale in tokens.ts — an ad-hoc numeric literal is
+          // exactly how the 17-size drift regrew. The CI gate lives in
+          // src/theme/type-scale.test.ts (which also sweeps src/ui); this rule
+          // catches the same drift at editor time. Reference
+          // `type.<token>.fontSize` or spread the token instead.
+          selector: "Property[key.name='fontSize'][value.type='Literal']",
+          message:
+            'fontSize must come from the type scale in src/theme/tokens.ts (UI/UX report Table 3.1) — reference type.<token>.fontSize or spread the token.',
+        },
+        {
           selector: "Property[key.name='minHeight'][value.type='Literal'][value.value<44]",
           message:
             'Tap targets must be at least 44 (MIN_TAP_TARGET) — raise the target, or shrink the visual and set hitSlop on the Pressable.',

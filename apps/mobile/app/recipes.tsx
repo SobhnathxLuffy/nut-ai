@@ -419,7 +419,7 @@ export default function Recipes() {
               >
                 <View style={{ flex: 1 }}>
                   <Text style={[type.body, { color: theme.text }]} numberOfLines={2}>{candidate.name}</Text>
-                  <Text style={[type.micro, { color: theme.textFaint }]}>{candidate.source?.toUpperCase()}</Text>
+                  <Text style={[type.caption, { color: theme.textFaint }]}>{candidate.source?.toUpperCase()}</Text>
                 </View>
                 <Text style={[type.caption, { color: theme.textMuted }]}>{Math.round(candidate.energyKcal ?? 0)} kcal</Text>
               </Pressable>

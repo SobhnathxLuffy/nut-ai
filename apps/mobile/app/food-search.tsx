@@ -625,7 +625,7 @@ export default function FoodSearch() {
       {busy && <ActivityIndicator style={{ marginTop: space.lg }} color={theme.textFaint} />}
 
       {outcome !== '' && (
-        <Text style={[type.micro, { color: theme.textFaint, marginTop: space.md }]}>{outcome.toUpperCase()}</Text>
+        <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md }]}>{outcome.toUpperCase()}</Text>
       )}
 
       {error != null && (
@@ -674,13 +674,13 @@ export default function FoodSearch() {
             {loggingComposite ? (
               <ActivityIndicator size="small" color={theme.protein} />
             ) : (
-              <Text style={[type.micro, { color: theme.protein, fontWeight: '600' }]}>Review</Text>
+              <Text style={[type.caption, { color: theme.protein, fontWeight: '600' }]}>Review</Text>
             )}
           </View>
           <Text style={[type.caption, { color: theme.text, marginTop: space.xs }]}>
             {compositeMeal.selections.map((s) => `${s.grams}g ${s.displayName}`).join('  +  ')}
           </Text>
-          <Text style={[type.micro, { color: theme.textMuted, marginTop: space.xs }]}>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
             Total: {Math.round(compositeMeal.totalKcal)} kcal · {compositeMeal.totalProtein.toFixed(1)}g P · {compositeMeal.totalCarbs.toFixed(1)}g C · {compositeMeal.totalFat.toFixed(1)}g F
           </Text>
         </Pressable>
@@ -704,7 +704,7 @@ export default function FoodSearch() {
             <Text style={[type.body, { color: theme.text }]} numberOfLines={2}>{r.name}</Text>
             {r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? (
               <View style={{ marginVertical: 4, paddingVertical: 2, paddingHorizontal: 6, borderRadius: radius.sm, backgroundColor: theme.bgSunken, borderWidth: 1, borderColor: theme.safety, alignSelf: 'flex-start' }}>
-                <Text style={[type.micro, { color: theme.safety, fontWeight: '700' }]}>
+                <Text style={[type.caption, { color: theme.safety, fontWeight: '700' }]}>
                   DRAFT RECIPE · UNVERIFIED NUTRITION · TAP TO CUSTOMIZE
                 </Text>
               </View>
@@ -717,7 +717,7 @@ export default function FoodSearch() {
                 : 'Nutrition shown during review'}
               {r.brand ? ` · ${r.brand}` : ''}
             </Text>
-            <Text style={[type.micro, { color: theme.textFaint, marginTop: 2 }]}>
+            <Text style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
               {sourceLabel(r.source, r.basisConfidence)}
             </Text>
           </View>
@@ -760,7 +760,7 @@ export default function FoodSearch() {
             </Pressable>
           </View>
 
-          <Text style={[type.micro, { color: theme.textMuted, marginTop: space.xs }]}>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
             Deterministic arithmetic: verified ingredients × yield × portion. No flat guesses.
           </Text>
 
@@ -781,7 +781,7 @@ export default function FoodSearch() {
             <View key={item.key} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs }}>
               <View style={{ flex: 1 }}>
                 <Text style={[type.caption, { color: theme.text }]} numberOfLines={2}>{item.label}</Text>
-                <Text style={[type.micro, { color: theme.textFaint }]}>{sourceLabel(item.source, undefined)}</Text>
+                <Text style={[type.caption, { color: theme.textFaint }]}>{sourceLabel(item.source, undefined)}</Text>
               </View>
               <TextInput
                 accessibilityLabel={`Grams of ${item.label}`}
@@ -801,7 +801,7 @@ export default function FoodSearch() {
             </View>
           ))}
           {decompItems.length === 0 && (
-            <Text style={[type.micro, { color: theme.textMuted, marginTop: space.xs }]}>
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
               Add at least one ingredient below — the estimate needs some mass to work with.
             </Text>
           )}
@@ -824,7 +824,7 @@ export default function FoodSearch() {
                     },
                   ]}
                 >
-                  <Text style={[type.micro, { color: decompItems.some((row) => row.foodId === item.foodId) ? theme.bg : theme.text }]}>
+                  <Text style={[type.caption, { color: decompItems.some((row) => row.foodId === item.foodId) ? theme.bg : theme.text }]}>
                     {item.label}
                   </Text>
                 </Pressable>
@@ -850,7 +850,7 @@ export default function FoodSearch() {
           {ingredientSearching && <ActivityIndicator style={{ marginTop: space.xs }} color={theme.textFaint} />}
           {ingredientQuery.trim().length >= 2 && !ingredientSearching && ingredientResults.length === 0 && !showCreateIngredient && (
             <View style={{ marginTop: space.xs }}>
-              <Text style={[type.micro, { color: theme.textMuted }]}>
+              <Text style={[type.caption, { color: theme.textMuted }]}>
                 No ingredient named “{ingredientQuery.trim()}” in any database yet.
               </Text>
               <Pressable
@@ -875,7 +875,7 @@ export default function FoodSearch() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[type.caption, { color: theme.text }]} numberOfLines={2}>{option.label}</Text>
-                <Text style={[type.micro, { color: theme.textFaint }]}>
+                <Text style={[type.caption, { color: theme.textFaint }]}>
                   {sourceLabel(option.source, undefined)}{option.kcalPer100g != null ? ` · ${Math.round(option.kcalPer100g)} kcal/100g` : ''}
                 </Text>
               </View>
@@ -916,7 +916,7 @@ export default function FoodSearch() {
             if (!fatOpt.foodId) return null
             return (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs }}>
-                <Text style={[type.micro, { color: theme.textMuted }]}>Oil used (g):</Text>
+                <Text style={[type.caption, { color: theme.textMuted }]}>Oil used (g):</Text>
                 <TextInput
                   accessibilityLabel="Grams of cooking oil"
                   value={fatGrams}
@@ -960,21 +960,21 @@ export default function FoodSearch() {
               <Text style={[type.body, { color: theme.protein, fontWeight: '700', marginTop: 2 }]}>
                 {computedDecomp.serving.kcal === null ? 'Calories unknown' : `${Math.round(computedDecomp.serving.kcal)} kcal`} · estimate
               </Text>
-              <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
+              <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
                 Protein: {computedDecomp.serving.protein_g?.toFixed(1) ?? 'unknown'}g · Carbs: {computedDecomp.serving.carbs_g?.toFixed(1) ?? 'unknown'}g · Fat: {computedDecomp.serving.fat_g?.toFixed(1) ?? 'unknown'}g · Fiber: {computedDecomp.serving.fiber_g?.toFixed(1) ?? 'unknown'}g
               </Text>
-              <Text style={[type.micro, { color: theme.textFaint, marginTop: 4 }]}>
+              <Text style={[type.caption, { color: theme.textFaint, marginTop: 4 }]}>
                 Raw mass: {computedDecomp.rawMassGrams}g → Cooked yield: {Math.round(computedDecomp.cookedYieldGrams)}g
               </Text>
               {computedDecomp.ingredientBreakdown.length > 0 && (
                 <View style={{ marginTop: 6 }}>
-                  <Text style={[type.micro, { color: theme.textMuted, fontWeight: '700' }]}>
+                  <Text style={[type.caption, { color: theme.textMuted, fontWeight: '700' }]}>
                     By ingredient (in your {computedDecomp.portionGrams}g serving):
                   </Text>
                   {computedDecomp.ingredientBreakdown.map((part) => {
                     const label = decompItems.find((row) => row.foodId === part.foodId)?.label ?? part.foodId
                     return (
-                      <Text key={part.foodId} style={[type.micro, { color: theme.textFaint, marginTop: 2 }]}>
+                      <Text key={part.foodId} style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
                         • {label} · {Math.round(part.grams)}g → {part.kcal === null ? 'kcal unknown' : `${Math.round(part.kcal)} kcal`}{part.protein_g != null ? `, P ${part.protein_g.toFixed(1)}g` : ''}{part.carbs_g != null ? `, C ${part.carbs_g.toFixed(1)}g` : ''}{part.fat_g != null ? `, F ${part.fat_g.toFixed(1)}g` : ''}
                       </Text>
                     )
@@ -1007,7 +1007,7 @@ export default function FoodSearch() {
         </View>
       )}
 
-      <Text style={[type.micro, { color: theme.textFaint, marginTop: space.xl, lineHeight: 17 }]}>
+      <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xl }]}>
         IFCT 2017: ICMR-NIN, used with permission. USDA FoodData Central: U.S. public domain.
         Open Food Facts barcode data: ODbL 1.0. Nut AI Indian Dish Knowledge Base.
       </Text>
@@ -1023,7 +1023,9 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    fontSize: 16,
+    // Wave 1a: 16px input already matched type.body — reference the token
+    // programmatically instead of the literal (Table 3.1).
+    fontSize: type.body.fontSize,
     minHeight: 48,
   },
   row: {
@@ -1060,7 +1062,8 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs,
     borderRadius: radius.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    fontSize: 14,
+    // Wave 1a: 14px small input joins the label token (Table 3.1).
+    fontSize: type.label.fontSize,
     minHeight: 44,
   },
   chip: {

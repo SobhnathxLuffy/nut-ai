@@ -302,7 +302,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
-    fontSize: 17,
+    // Wave 1a: 17px ad-hoc input joins type.body (Table 3.1).
+    fontSize: type.body.fontSize,
   },
   primary: { minHeight: 54, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   secondary: {

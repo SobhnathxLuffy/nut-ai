@@ -18,6 +18,7 @@
  */
 
 import { Alert, Platform } from 'react-native'
+import { type as typeScale } from '../theme/tokens'
 
 interface ShimButton {
   text: string
@@ -28,6 +29,10 @@ interface ShimButton {
 // Palette mirrors src/theme/tokens.ts — same hexes, duplicated here because
 // this patch must run at module-eval time before the theme's React machinery
 // mounts, and the tokens file is not meant to be imported outside the app.
+// Wave 1a: the TYPE values, however, are pure data with no React machinery —
+// the dialog now sizes itself from the canonical scale (UI/UX report Table 3.1)
+// instead of 17px/13.5px/16px ad-hoc strings, so web dialogs cannot drift from
+// the native type system.
 const PALETTE = {
   light: {
     backdrop: 'rgba(11, 11, 15, 0.45)',
@@ -123,7 +128,7 @@ function present(title?: string, message?: string, buttons: ShimButton[] = []): 
     const titleEl = document.createElement('div')
     titleEl.textContent = title
     Object.assign(titleEl.style, {
-      fontSize: '17px',
+      fontSize: `${typeScale.bodyStrong.fontSize}px`,
       fontWeight: '600',
       lineHeight: '1.3',
       marginBottom: message ? '8px' : '0',
@@ -135,7 +140,7 @@ function present(title?: string, message?: string, buttons: ShimButton[] = []): 
     const msgEl = document.createElement('div')
     msgEl.textContent = message
     Object.assign(msgEl.style, {
-      fontSize: '13.5px',
+      fontSize: `${typeScale.caption.fontSize}px`,
       lineHeight: '1.45',
       color: scheme.message,
       whiteSpace: 'pre-line',
@@ -206,7 +211,7 @@ function present(title?: string, message?: string, buttons: ShimButton[] = []): 
       background: 'transparent',
       cursor: 'pointer',
       padding: '15px 12px',
-      fontSize: '16px',
+      fontSize: `${typeScale.body.fontSize}px`,
       fontWeight: button.style === 'cancel' ? '600' : '400',
       color: isDestructive
         ? scheme.destructiveText

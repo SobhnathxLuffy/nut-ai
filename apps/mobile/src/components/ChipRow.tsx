@@ -58,7 +58,7 @@ export function ChipRow<T>({
                 { backgroundColor: active ? theme.protein : theme.bg, borderColor: theme.border },
               ]}
             >
-              <Text style={[type.micro, { color: active ? theme.bg : theme.text }]}>{label(item)}</Text>
+              <Text style={[type.caption, { color: active ? theme.bg : theme.text }]}>{label(item)}</Text>
             </Pressable>
           )
         })}

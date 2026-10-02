@@ -278,7 +278,9 @@ export function CredentialForm({
             </Text>
           ) : null}
           {detail ? (
-            <Text style={[styles.mono, { color: theme.safety, marginTop: space.sm, fontSize: 11 }]}>
+            /* Wave 1a: the 11px mono detail was the report's §11 AA failure —
+               the caption floor (12.5px + ink450 faint) is the replacement. */
+            <Text style={[styles.mono, { color: theme.safety, marginTop: space.sm, fontSize: type.caption.fontSize }]}>
               {detail}
             </Text>
           ) : null}
@@ -353,7 +355,8 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    fontSize: 14,
+    // Wave 1a: 14px input joins the label token exactly (Table 3.1).
+    fontSize: type.label.fontSize,
     minHeight: 48,
   },
   code: {
@@ -367,15 +370,15 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   // Menlo is iOS-only; Android silently falls back to the default sans unless
-  // told 'monospace' explicitly.
-  mono: { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), fontSize: 15 },
+  // told 'monospace' explicitly. Wave 1a: 15px ad-hoc joins type.body (16).
+  mono: { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }), fontSize: type.body.fontSize },
   input: {
     marginTop: space.lg,
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    fontSize: 16,
+    fontSize: type.body.fontSize,
     minHeight: 54,
   },
   result: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },

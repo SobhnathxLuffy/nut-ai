@@ -504,11 +504,12 @@ export default function AssistantScreen() {
           hitSlop={space.sm}
           style={[s.closeBtn, { borderColor: t.border }]}
         >
-          <Text style={{ color: t.textMuted, fontSize: 18, lineHeight: 22 }}>×</Text>
+          {/* Wave 1a: 18px ad-hoc close glyph joins type.body (Table 3.1). */}
+          <Text style={[type.body, { color: t.textMuted }]}>×</Text>
         </Pressable>
         <View style={s.headerCenter}>
           <Text style={[s.header, { color: t.text }]}>AI Assistant</Text>
-          {modelLine ? <Text style={[type.micro, { color: t.textFaint, marginTop: 1 }]}>{modelLine}</Text> : null}
+          {modelLine ? <Text style={[type.caption, { color: t.textFaint, marginTop: 1 }]}>{modelLine}</Text> : null}
         </View>
         {historyLoaded && messages.length > 0 ? (
           <Pressable
@@ -542,12 +543,12 @@ export default function AssistantScreen() {
             {!thinkingOnly && m.reasoning ? (
               <View style={{ marginTop: space.xs }}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Toggle reasoning" onPress={() => toggleReasoning(m.id)} hitSlop={space.sm}>
-                  <Text style={[type.micro, { color: t.textFaint }]}>
+                  <Text style={[type.caption, { color: t.textFaint }]}>
                     {openReasoning.has(m.id) ? '▾ Hide thinking' : '▸ Show thinking'}
                   </Text>
                 </Pressable>
                 {openReasoning.has(m.id) ? (
-                  <Text style={[type.micro, { color: t.textFaint, marginTop: space.xs, lineHeight: 16 }]}>{m.reasoning}</Text>
+                  <Text style={[type.caption, { color: t.textFaint, marginTop: space.xs, lineHeight: 16 }]}>{m.reasoning}</Text>
                 ) : null}
               </View>
             ) : null}
@@ -672,7 +673,7 @@ function CorrectionProposalCard({
           <Text key={i} style={[type.body, { color: t.text }]}>• {describeCorrectionOperation(op, nameOf)}</Text>
         ))}
       </View>
-      <Text style={[type.micro, { color: t.textMuted, marginTop: space.sm }]}>
+      <Text style={[type.caption, { color: t.textMuted, marginTop: space.sm }]}>
         Nothing changes until you confirm. Unmentioned items stay untouched.
       </Text>
       {status === 'PENDING' ? (

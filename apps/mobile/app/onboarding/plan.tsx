@@ -257,7 +257,9 @@ export default function PlanScreen() {
           }}
           style={[styles.cta, { backgroundColor: theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Let's get started!</Text>
+          {/* Wave 1a: CTA text drops the 18px override — bodyStrong is the
+              button voice (UI/UX report Table 3.1). */}
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>Let's get started!</Text>
         </Pressable>
       </View>
     </View>
@@ -328,8 +330,11 @@ function HowRow({ icon, text }: { icon: IconName; text: string }) {
 const styles = StyleSheet.create({
   check: { width: 44, height: 44, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   goal: {
-    fontSize: 32, lineHeight: 40, fontWeight: '800', letterSpacing: -1,
-    textAlign: 'center', marginTop: space.lg,
+    // Wave 1a: plan headline → type.display; big macro number → display too
+    // (report Table 3.1 — 32/38px hero moments join 56/60/800).
+    ...type.display,
+    textAlign: 'center',
+    marginTop: space.lg,
   },
   section: { marginTop: space.xl, padding: space.lg, borderRadius: radius.xl },
   bigCard: {
@@ -337,10 +342,10 @@ const styles = StyleSheet.create({
     marginTop: space.md, padding: space.lg, borderRadius: radius.lg,
   },
   iconSq: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  bigNum: { fontSize: 38, fontWeight: '800', letterSpacing: -1.2 },
+  bigNum: { ...type.display },
   macroRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
   macroCard: { flex: 1, padding: space.md, borderRadius: radius.lg, gap: space.xs },
-  macroNum: { fontSize: 20, fontWeight: '800', letterSpacing: -0.5 },
+  macroNum: { ...type.heading },
   mathCard: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg, gap: space.md },
   mathRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   notice: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },

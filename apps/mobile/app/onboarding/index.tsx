@@ -25,7 +25,7 @@ export default function Welcome() {
     <View style={[styles.root, { backgroundColor: theme.bg, paddingTop: insets.top }]}>
       <View style={styles.hero}>
         <View style={[styles.phone, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
-          <Text style={[type.micro, { color: theme.textMuted }]}>Today</Text>
+          <Text style={[type.caption, { color: theme.textMuted }]}>Today</Text>
           <View style={{ alignItems: 'center', marginTop: space.md }}>
             <Svg width={104} height={104}>
               <Circle cx={52} cy={52} r={44} stroke={theme.ringTrack} strokeWidth="9" fill="none" />
@@ -50,7 +50,7 @@ export default function Welcome() {
               <View key={m.l} style={{ alignItems: 'center' }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: m.c }} />
                 <Text style={[type.label, { color: theme.text, marginTop: 4 }]}>{m.v}</Text>
-                <Text style={[type.micro, { color: theme.textMuted }]}>{m.l}</Text>
+                <Text style={[type.caption, { color: theme.textMuted }]}>{m.l}</Text>
               </View>
             ))}
           </View>
@@ -65,7 +65,9 @@ export default function Welcome() {
           onPress={() => router.push('/onboarding/sex' as never)}
           style={[styles.cta, { backgroundColor: theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>Get Started</Text>
+          {/* Wave 1a: CTA text drops the 18px override — bodyStrong is the
+              button voice (UI/UX report Table 3.1). */}
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>Get Started</Text>
         </Pressable>
 
         <Text style={[type.caption, { color: theme.textMuted, textAlign: 'center', marginTop: space.lg }]}>
@@ -97,14 +99,13 @@ const styles = StyleSheet.create({
     padding: space.lg,
     transform: [{ rotate: '6deg' }],
   },
-  heroNum: { fontSize: 30, fontWeight: '800', letterSpacing: -1, marginTop: space.sm },
+  heroNum: { ...type.title, marginTop: space.sm },
   macroRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: space.lg },
   bottom: { paddingHorizontal: space.lg },
   title: {
-    fontSize: 42,
-    lineHeight: 48,
-    fontWeight: '800',
-    letterSpacing: -1.4,
+    // Wave 1a: the welcome wordmark-pair hero → type.display (report Table 3.1
+    // — "display replaces welcome 42-56").
+    ...type.display,
     textAlign: 'center',
     marginBottom: space.xl,
   },

@@ -54,7 +54,9 @@ export function ConfidenceChip({
       hitSlop={space.sm}
       style={[styles.chip, { backgroundColor: theme.uncertainBg }]}
     >
-      <Text style={{ color: theme.uncertain, fontSize: 13 }}>{TIER_GLYPH[band.tier]}</Text>
+      {/* Wave 1a: the tier GLYPH rides the caption token (13px ad-hoc → 12.5,
+          UI/UX report Table 3.1) — glyphs follow the same scale as text. */}
+      <Text style={[type.caption, { color: theme.uncertain }]}>{TIER_GLYPH[band.tier]}</Text>
       <Text style={[type.caption, { color: theme.uncertain }]}>{label}</Text>
     </Pressable>
   )

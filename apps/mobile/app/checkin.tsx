@@ -178,7 +178,7 @@ export default function CheckinScreen() {
             <Text style={[styles.metricNumber, { color: theme.text }]}>
               {metrics.included_dates.length}/7
             </Text>
-            <Text style={[type.micro, { color: theme.textFaint }]}>
+            <Text style={[type.caption, { color: theme.textFaint }]}>
               {metrics.fasting_dates.length ? `${metrics.fasting_dates.length} fasting` : 'complete'}
             </Text>
           </View>
@@ -188,7 +188,7 @@ export default function CheckinScreen() {
             <Text style={[styles.metricNumber, { color: theme.text }]}>
               {metrics.average_kcal != null ? `${Math.round(metrics.average_kcal)}` : '—'}
             </Text>
-            <Text style={[type.micro, { color: theme.textFaint }]}>kcal/day</Text>
+            <Text style={[type.caption, { color: theme.textFaint }]}>kcal/day</Text>
           </View>
 
           <View style={[styles.metricTile, { backgroundColor: theme.bgSunken }]}>
@@ -198,7 +198,7 @@ export default function CheckinScreen() {
                 ? `${metrics.weight_change_kg_week > 0 ? '+' : ''}${(weightUnit === 'lb' ? kgToLb(metrics.weight_change_kg_week) : metrics.weight_change_kg_week).toFixed(2)}`
                 : '—'}
             </Text>
-            <Text style={[type.micro, { color: theme.textFaint }]}>
+            <Text style={[type.caption, { color: theme.textFaint }]}>
               {metrics.weigh_in_count} weigh-ins ({weightUnit}/wk)
             </Text>
           </View>
@@ -208,7 +208,7 @@ export default function CheckinScreen() {
             <Text style={[styles.metricNumber, { color: theme.text }]}>
               {metrics.completed_workouts}
             </Text>
-            <Text style={[type.micro, { color: theme.textFaint }]}>completed</Text>
+            <Text style={[type.caption, { color: theme.textFaint }]}>completed</Text>
           </View>
         </View>
 
@@ -310,7 +310,7 @@ export default function CheckinScreen() {
               onPress={handleAccept}
               style={[styles.cta, { backgroundColor: busy ? theme.border : theme.text }]}
             >
-              <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 17 }]}>
+              <Text style={[type.bodyStrong, { color: theme.bg }]}>
                 {busy ? 'Applying…' : 'Accept new target'}
               </Text>
             </Pressable>
@@ -470,8 +470,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   metricNumber: {
-    fontSize: 22,
-    fontWeight: '700',
+    // Wave 1a: 22px ad-hoc metric number joins type.heading (Table 3.1).
+    ...type.heading,
     marginTop: 2,
   },
   infoRow: {

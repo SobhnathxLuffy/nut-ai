@@ -107,7 +107,7 @@ export function Segmented<T extends string>({
             <Text
               style={[
                 type.bodyStrong,
-                { color: active ? theme.text : theme.textMuted, fontSize: 17 },
+                { color: active ? theme.text : theme.textMuted },
               ]}
             >
               {o.label}
@@ -422,11 +422,13 @@ export function Wheel({
         return (
           <View key={item.value} style={{ height: ROW_HEIGHT, justifyContent: 'center', alignItems: 'center' }}>
             <Text
-              style={{
-                fontSize: active ? 24 : 22,
-                fontWeight: active ? '700' : '400',
-                color: active ? theme.text : theme.textFaint,
-              }}
+              style={[
+                /* Wave 1a: the wheel's selected row rides type.title, the rest
+                    type.heading (UI/UX report Table 3.1 — the 24/22 ad-hoc pair
+                    joins the scale; emphasis now comes from scale + colour). */
+                active ? type.title : type.heading,
+                { color: active ? theme.text : theme.textFaint },
+              ]}
             >
               {item.label}
             </Text>
@@ -473,7 +475,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardLabel: { fontSize: 18, fontWeight: '700' },
+  cardLabel: { ...type.bodyStrong },
   radioOuter: {
     width: 28,
     height: 28,
@@ -507,12 +509,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   editRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: space.xs },
-  readoutValue: { fontSize: 44, fontWeight: '800', letterSpacing: -1.2 },
-  readoutUnit: { fontSize: 44, fontWeight: '800', letterSpacing: -1.2 },
+  // Wave 1a: the big picker read-out is a display moment (44px ad-hoc joins
+  // type.display per report Table 3.1); tracking and leading come with the token.
+  readoutValue: { ...type.display },
+  readoutUnit: { ...type.display },
   editInput: {
-    fontSize: 44,
-    fontWeight: '800',
-    letterSpacing: -1.2,
+    ...type.display,
     minWidth: 130,
     textAlign: 'right',
     borderBottomWidth: 2,

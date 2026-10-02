@@ -135,7 +135,9 @@ export default function EditGoals() {
           disabled={kcalV <= 0 || impossible || saving}
           style={[styles.cta, { backgroundColor: kcalV > 0 && !impossible ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>{saving ? 'Saving…' : 'Save'}</Text>
+          {/* Wave 1a: CTA text drops the 18px override — bodyStrong is the
+              button voice (UI/UX report Table 3.1). */}
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>{saving ? 'Saving…' : 'Save'}</Text>
         </Pressable>
       </View>
     </View>
@@ -153,9 +155,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg, borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth, minHeight: 56,
   },
-  input: { flex: 1, fontSize: 22, fontWeight: '700', paddingVertical: space.md },
+  input: { flex: 1, ...type.heading, paddingVertical: space.md },
   derived: { padding: space.lg, borderRadius: radius.lg },
-  big: { fontSize: 24, fontWeight: '800', letterSpacing: -0.6 },
+  big: { ...type.title },
   warn: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
   note: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
   dock: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: space.lg },

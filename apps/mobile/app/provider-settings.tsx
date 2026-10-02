@@ -398,6 +398,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     marginTop: space.md,
-    fontSize: 14,
+    // Wave 1a: 14px input joins the label token exactly (Table 3.1).
+    fontSize: type.label.fontSize,
   },
 })

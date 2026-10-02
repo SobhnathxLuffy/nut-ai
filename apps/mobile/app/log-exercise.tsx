@@ -95,7 +95,7 @@ function Header({ title, icon, onBack }: { title: string; icon?: IconName; onBac
       </Pressable>
       <View style={styles.headerTitle}>
         {icon ? <Icon name={icon} size={20} color={theme.text} /> : null}
-        <Text style={[type.bodyStrong, { color: theme.text, fontSize: 17 }]}>{title}</Text>
+        <Text style={[type.bodyStrong, { color: theme.text }]}>{title}</Text>
       </View>
       <View style={{ width: 44 }} />
     </View>
@@ -108,7 +108,10 @@ function MenuScreen({ onPick }: { onPick: (s: Step) => void }) {
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <Header title="Exercise" onBack={() => router.back()} />
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 120 }}>
-        <Text style={[type.title, { color: theme.text, fontSize: 34 }]}>Log Exercise</Text>
+        {/* Wave 1a: screen headers unify on type.title — the 34px override
+            joins the 24/26/28/30 header family at 28/32 (UI/UX report
+            Table 3.1 + §3.3 "four competing header scales"). */}
+        <Text style={[type.title, { color: theme.text }]}>Log Exercise</Text>
 
         <View style={{ marginTop: space.xl, gap: space.md }}>
           {MENU.map((m) => (
@@ -120,7 +123,7 @@ function MenuScreen({ onPick }: { onPick: (s: Step) => void }) {
             >
               <Icon name={m.icon} size={26} color={theme.text} />
               <View style={{ flex: 1 }}>
-                <Text style={[type.bodyStrong, { color: theme.text, fontSize: 17 }]}>{m.title}</Text>
+                <Text style={[type.bodyStrong, { color: theme.text }]}>{m.title}</Text>
                 <Text style={[type.body, { color: theme.textMuted, marginTop: 2 }]}>{m.sub}</Text>
               </View>
             </Pressable>
@@ -171,7 +174,8 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
         ) : null}
         <View style={styles.sectionHead}>
           <Icon name="sun" size={20} color={theme.text} />
-          <Text style={[type.title, { color: theme.text, fontSize: 26 }]}>Set intensity</Text>
+          {/* Wave 1a: header-scale 26px override removed — type.title (28/32). */}
+          <Text style={[type.title, { color: theme.text }]}>Set intensity</Text>
         </View>
 
         <View style={[styles.intensityCard, { backgroundColor: theme.bgSunken }]}>
@@ -227,7 +231,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
 
         <View style={[styles.sectionHead, { marginTop: space.xl }]}>
           <Icon name="clock" size={20} color={theme.text} />
-          <Text style={[type.title, { color: theme.text, fontSize: 26 }]}>Duration</Text>
+          <Text style={[type.title, { color: theme.text }]}>Duration</Text>
         </View>
 
         <View style={styles.chipRow}>
@@ -265,7 +269,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
           disabled={!valid || saving}
           style={[styles.cta, { backgroundColor: valid ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>
             {saving ? 'Saving…' : 'Continue'}
           </Text>
         </Pressable>
@@ -359,7 +363,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
           disabled={!text.trim() || busy}
           style={[styles.cta, { backgroundColor: text.trim() && !busy ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>
             {busy ? 'Estimating…' : 'Add Exercise'}
           </Text>
         </Pressable>
@@ -415,7 +419,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
           placeholderTextColor={theme.textFaint}
           value={name}
           onChangeText={setName}
-          style={[styles.minutesInput, { color: theme.text, borderColor: theme.border, marginTop: space.sm, fontSize: 17, fontWeight: '400' }]}
+          style={[styles.minutesInput, { color: theme.text, borderColor: theme.border, marginTop: space.sm, ...type.body }]}
         />
 
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.lg, lineHeight: 19 }]}>
@@ -435,7 +439,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
           disabled={!valid || saving}
           style={[styles.cta, { backgroundColor: valid ? theme.text : theme.border }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>
             {saving ? 'Saving…' : 'Add Exercise'}
           </Text>
         </Pressable>
@@ -501,8 +505,9 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    fontSize: 20,
-    fontWeight: '700',
+    // Wave 1a: the 20/700 ad-hoc input joins type.heading (Table 3.1); the
+    // name field below overrides to type.body for regular-weight entry.
+    ...type.heading,
     minHeight: 56,
   },
   describeInput: {
@@ -510,7 +515,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    fontSize: 17,
+    fontSize: type.body.fontSize,
     minHeight: 56,
   },
   aiPill: {

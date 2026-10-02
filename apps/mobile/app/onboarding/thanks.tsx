@@ -45,8 +45,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginTop: space.xl,
   },
   heading: {
-    fontSize: 32, lineHeight: 40, fontWeight: '800', letterSpacing: -1,
-    textAlign: 'center', marginTop: space.xl,
+    // Wave 1a: welcome-heading hero moment → type.display (report Table 3.1).
+    ...type.display,
+    textAlign: 'center',
+    marginTop: space.xl,
   },
   card: { marginTop: space.xl, padding: space.lg, borderRadius: radius.lg, width: '100%' },
 })

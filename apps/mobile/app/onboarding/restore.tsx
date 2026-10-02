@@ -76,7 +76,9 @@ export default function RestoreScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
-      <Text style={[type.title, { color: theme.text, fontSize: 30 }]}>Restore from a backup</Text>
+      {/* Wave 1a: header-scale 30px override removed — type.title (28/32)
+          is the one header voice (UI/UX report Table 3.1). */}
+      <Text style={[type.title, { color: theme.text }]}>Restore from a backup</Text>
       <Text style={[type.body, { color: theme.textMuted, marginTop: space.sm, lineHeight: 22 }]}>
         Pick a Nut AI export file — everything comes back exactly as it was: meals, weights,
         goals, settings.
@@ -130,7 +132,7 @@ export default function RestoreScreen() {
           (!payload || busy) && { opacity: 0.4 },
         ]}
       >
-        <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>
+        <Text style={[type.bodyStrong, { color: theme.bg }]}>
           {busy ? 'Restoring…' : 'Restore'}
         </Text>
       </Pressable>

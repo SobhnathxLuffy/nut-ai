@@ -118,7 +118,9 @@ export default function LogWeight() {
           onPress={save}
           style={[styles.cta, { backgroundColor: saving || !ready ? theme.border : theme.text }]}
         >
-          <Text style={[type.bodyStrong, { color: theme.bg, fontSize: 18 }]}>{saving ? 'Saving…' : 'Save'}</Text>
+          {/* Wave 1a: CTA text drops the 18px override — bodyStrong is the
+              button voice (UI/UX report Table 3.1). */}
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>{saving ? 'Saving…' : 'Save'}</Text>
         </Pressable>
       </View>
     </View>

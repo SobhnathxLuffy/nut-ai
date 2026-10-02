@@ -11,7 +11,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../theme/ThemeProvider'
-import { radius, space } from '../theme/tokens'
+import { radius, space, type } from '../theme/tokens'
 
 /**
  * Reusable screen wrapper with safe areas, scrolling, and consistent header.
@@ -42,9 +42,11 @@ export function Screen({
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        {/* Wave 1a: headers unify on type.title (UI/UX report Table 3.1 — the
+            30px ad-hoc header scale joins the 24/26/28 family at 28/32). */}
         <Text
           accessibilityRole="header"
-          style={{ fontSize: 30, fontWeight: '700', color: t.text, flex: 1 }}
+          style={[type.title, { color: t.text, flex: 1 }]}
         >
           {title}
         </Text>
@@ -65,9 +67,7 @@ export function Label({
 }) {
   const t = useTheme()
   return (
-    <Text style={{ color: muted ? t.textMuted : t.text, fontSize: 16, lineHeight: 23 }}>
-      {children}
-    </Text>
+    <Text style={[type.body, { color: muted ? t.textMuted : t.text }]}>{children}</Text>
   )
 }
 
@@ -120,15 +120,7 @@ export function Button({
         justifyContent: 'center',
       }}
     >
-      <Text
-        style={{
-          color: selected ? t.bg : t.text,
-          fontSize: 15,
-          fontWeight: '600',
-        }}
-      >
-        {label}
-      </Text>
+      <Text style={[type.bodyStrong, { color: selected ? t.bg : t.text }]}>{label}</Text>
     </Pressable>
   )
 }
@@ -151,7 +143,9 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
             borderRadius: radius.md,
             minHeight: 48,
             padding: space.md,
-            fontSize: 17,
+            // Wave 1a: inputs sit at type.body (UI/UX report Table 3.1 —
+            // 17px ad-hoc input size joins the 16/24 body token).
+            fontSize: type.body.fontSize,
           },
           props.style,
         ]}
@@ -203,7 +197,7 @@ export function useAction(refresh?: () => Promise<void>) {
         {busy && <ActivityIndicator accessibilityLabel="Saving" />}
         {!!error && (
           <View style={{ gap: 8, paddingVertical: 4 }}>
-            <Text accessibilityRole="alert" style={{ fontSize: 15, color: t.safety }}>
+            <Text accessibilityRole="alert" style={[type.body, { color: t.safety }]}>
               {error}
             </Text>
             {refresh && (

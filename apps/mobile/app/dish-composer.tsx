@@ -451,7 +451,7 @@ export default function DishComposerScreen() {
                <TextInput style={[type.body, { color: t.text, padding: 0, margin: 0, fontWeight: 'bold' }]} value={c.name} onChangeText={t => updateName(c.id, t)} placeholder="Ingredient Name" placeholderTextColor={t.textMuted} />
                {/* P1-9: show the resolved food's NAME — a raw source id like
                    ifct:A019 tells the user nothing about the ingredient. */}
-               {c.foodId ? <Text style={[type.micro, { color: t.protein }]} numberOfLines={2}>Resolved: {c.resolvedName ?? c.foodId}</Text> : <Text style={[type.micro, { color: t.safety }]}>Unresolved Ingredient</Text>}
+               {c.foodId ? <Text style={[type.caption, { color: t.protein }]} numberOfLines={2}>Resolved: {c.resolvedName ?? c.foodId}</Text> : <Text style={[type.caption, { color: t.safety }]}>Unresolved Ingredient</Text>}
                <Text style={[type.caption, { color: t.textMuted }]}>
                  {c.kcal !== null ? `${Math.round(c.kcal * (c.grams/100))} kcal · ${Math.round((c.protein_g||0)*(c.grams/100))}g P` : 'Unknown nutrition'}
                </Text>
@@ -503,7 +503,7 @@ export default function DishComposerScreen() {
           onPress={() => setUseRecipeYield(true)}
           style={[s.chip, { backgroundColor: useRecipeYield ? t.protein : t.bg, borderColor: t.border, alignSelf: 'flex-start', marginHorizontal: space.md, marginTop: space.xs }]}
         >
-          <Text style={[type.micro, { color: useRecipeYield ? t.bg : t.text, fontWeight: '700' }]}>
+          <Text style={[type.caption, { color: useRecipeYield ? t.bg : t.text, fontWeight: '700' }]}>
             Verified recipe yield ×{recipeYield} (matches curated numbers)
           </Text>
         </Pressable>
@@ -521,7 +521,7 @@ export default function DishComposerScreen() {
                 onPress={() => { setCookingMethod(item.method); setUseRecipeYield(false) }}
                 style={[s.chip, { backgroundColor: active ? t.protein : t.bg, borderColor: t.border }]}
               >
-                <Text style={[type.micro, { color: active ? t.bg : t.text }]}>{item.label}</Text>
+                <Text style={[type.caption, { color: active ? t.bg : t.text }]}>{item.label}</Text>
               </Pressable>
             )
           })}
@@ -541,7 +541,7 @@ export default function DishComposerScreen() {
           <View>
             <Text style={[type.body, { color: t.protein, fontWeight: 'bold' }]}>{Math.round(portionKcal||0)} kcal</Text>
             <Text style={[type.caption, { color: t.textMuted }]}>P: {Math.round(portionP||0)}g · C: {Math.round(portionC||0)}g · F: {Math.round(portionF||0)}g</Text>
-            <Text style={[type.micro, { color: t.textFaint, marginTop: 2 }]}>Raw {Math.round(totalRawMass)}g → cooked yield {Math.round(cookedYield)}g</Text>
+            <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>Raw {Math.round(totalRawMass)}g → cooked yield {Math.round(cookedYield)}g</Text>
           </View>
         )}
       </View>
@@ -646,7 +646,7 @@ function IngredientResolver({
 
   return (
     <View style={{ marginTop: space.sm }}>
-      <Text style={[type.micro, { color: t.textMuted }]}>Search your foods, IFCT and USDA — results appear as you type.</Text>
+      <Text style={[type.caption, { color: t.textMuted }]}>Search your foods, IFCT and USDA — results appear as you type.</Text>
       <TextInput
         value={query}
         onChangeText={(text) => { setQuery(text); setShowCreate(false) }}
@@ -661,7 +661,7 @@ function IngredientResolver({
       {results.map((res) => (
         <Pressable key={res.foodId} accessibilityRole="button" accessibilityLabel={`Select ${res.label}`} onPress={() => void resolve(res)} style={{ padding: space.sm, borderBottomWidth: 1, borderColor: t.border, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}>
           <Text style={{ color: t.text }}>{res.label}</Text>
-          <Text style={[type.micro, { color: t.textMuted }]}>
+          <Text style={[type.caption, { color: t.textMuted }]}>
             {res.source === 'ifct' ? 'IFCT 2017' : res.source === 'userfood' ? 'Your foods' : 'USDA'}
             {res.kcalPer100g != null ? ` · ${Math.round(res.kcalPer100g)} kcal/100g` : ''}
           </Text>

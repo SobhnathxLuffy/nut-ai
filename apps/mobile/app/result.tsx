@@ -82,7 +82,7 @@ function ScanModelCaption() {
   }, [])
   if (!line) return null
   return (
-    <Text style={[type.micro, { color: theme.textFaint, marginTop: space.xs, textAlign: 'center' }]}>
+    <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xs, textAlign: 'center' }]}>
       Scanning with {line}
     </Text>
   )
@@ -349,7 +349,7 @@ export default function Result() {
           ) : null}
 
           <View style={{ marginTop: space.lg }}>
-            <Text style={[type.hero, { color: theme.text }]}>{heroKcal}</Text>
+            <Text style={[type.display, { color: theme.text }]}>{heroKcal}</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
             {showLikelyRange ? (
               // Task 2-d: a wide band may not claim a precise integer — the
@@ -394,7 +394,7 @@ export default function Result() {
           {/* P2-9: a custom (reseller) model has no catalogue price — say so
               instead of the ledger quietly reading as free. */}
           {phase.meta && phase.meta.costUsd == null ? (
-            <Text style={[type.micro, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
+            <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
               Custom model — this scan's exact cost is unknown to the ledger.
             </Text>
           ) : null}
@@ -485,7 +485,7 @@ export default function Result() {
             measured range right under it — a precise-looking integer would be
             the exact fake certainty this screen exists to prevent. */}
         <View style={{ marginTop: space.lg }}>
-          <Text style={[type.hero, { color: theme.text }]}>{heroKcal}</Text>
+          <Text style={[type.display, { color: theme.text }]}>{heroKcal}</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
           {showLikelyRange ? (
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
@@ -521,7 +521,7 @@ export default function Result() {
         {/* P2-9: a custom (reseller) model has no catalogue price — say so
             instead of the ledger quietly reading as free. */}
         {phase.meta && phase.meta.costUsd == null ? (
-          <Text style={[type.micro, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
+          <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
             Custom model — this scan's exact cost is unknown to the ledger.
           </Text>
         ) : null}
@@ -595,17 +595,17 @@ export default function Result() {
                 <View style={{ flex: 1 }}>
                   <Text style={[type.body, { color: theme.text }]}>{row.displayName}</Text>
                   {row.origin === 'web_lookup' && row.sourceUrl ? (
-                    <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
+                    <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
                       From {domainOf(row.sourceUrl)}
                     </Text>
                   ) : row.sourceAttribution ? (
-                    <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
+                    <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
                       {row.sourceAttribution}
                     </Text>
                   ) : provenance ? (
                     <Text
                       style={[
-                        type.micro,
+                        type.caption,
                         { color: provenance.tone === 'positive' ? theme.affirm : theme.uncertain, marginTop: 2 },
                       ]}
                     >
@@ -617,12 +617,12 @@ export default function Result() {
                     // nothing above already says the number is unverified. Rows
                     // showing AI ESTIMATE deliberately do NOT get this suffix —
                     // the amber badge already carries the whole message.
-                    <Text style={[type.micro, { color: theme.uncertain, marginTop: 2 }]}>
+                    <Text style={[type.caption, { color: theme.uncertain, marginTop: 2 }]}>
                       ⚠ Estimated
                     </Text>
                   ) : null}
                   {prepNote ? (
-                    <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>{prepNote}</Text>
+                    <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>{prepNote}</Text>
                   ) : null}
                   {item && (
                     <ConfidenceChip
@@ -664,7 +664,10 @@ export default function Result() {
                   hitSlop={space.md}
                   style={styles.remove}
                 >
-                  <Text style={{ color: theme.textFaint, fontSize: 20 }}>×</Text>
+                {/* Wave 1a: 20px ad-hoc close glyph joins type.heading
+                    (Table 3.1 — the size already matched, now it references the
+                    token programmatically). */}
+                <Text style={[type.heading, { color: theme.textFaint }]}>×</Text>
                 </Pressable>
               </View>
 
@@ -1180,7 +1183,7 @@ function AddIngredientSheet({
             <View style={{ flex: 1 }}>
               <Text style={[type.body, { color: theme.text }]}>{c.name}</Text>
               {c.brand ? (
-                <Text style={[type.micro, { color: theme.textMuted, marginTop: 1 }]}>{c.brand}</Text>
+                <Text style={[type.caption, { color: theme.textMuted, marginTop: 1 }]}>{c.brand}</Text>
               ) : null}
             </View>
             <Text style={[type.label, { color: theme.textMuted }]}>
@@ -1252,7 +1255,7 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
         {result.question ?? 'Which one was it?'}
       </Text>
       {result.source_url ? (
-        <Text style={[type.micro, { color: theme.textMuted, marginTop: 2 }]}>
+        <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
           Menu data from {domainOf(result.source_url)}
         </Text>
       ) : null}
@@ -1269,7 +1272,7 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
             <View style={{ flex: 1 }}>
               <Text style={[type.body, { color: theme.text }]}>{opt.label}</Text>
               {opt.serving_desc ? (
-                <Text style={[type.micro, { color: theme.textMuted, marginTop: 1 }]}>{opt.serving_desc}</Text>
+                <Text style={[type.caption, { color: theme.textMuted, marginTop: 1 }]}>{opt.serving_desc}</Text>
               ) : null}
             </View>
             <Text style={[type.label, { color: theme.textMuted }]}>{Math.round(opt.calories_kcal)} kcal</Text>
@@ -1484,7 +1487,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: space.md,
     minHeight: 88,
-    fontSize: 16,
+    // Wave 1a: 16px fix textarea already matched type.body — reference the
+    // token programmatically (Table 3.1).
+    fontSize: type.body.fontSize,
     textAlignVertical: 'top',
   },
   fixExample: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },

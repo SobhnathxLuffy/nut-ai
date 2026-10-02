@@ -236,7 +236,9 @@ export default function Camera() {
         hitSlop={space.md}
         style={[styles.close, { top: insets.top + space.md }]}
       >
-        <Text style={{ color: '#fff', fontSize: 22 }}>×</Text>
+        {/* Wave 1a: 22px ad-hoc close glyph joins type.heading (Table 3.1);
+            camera chrome stays theme-independent white for live-feed contrast. */}
+        <Text style={[type.heading, { color: '#fff' }]}>×</Text>
       </Pressable>
     </View>
   )
@@ -388,7 +390,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.md,
     paddingHorizontal: space.md,
-    fontSize: 17,
+    // Wave 1a: 17px ad-hoc input joins type.body (Table 3.1).
+    fontSize: type.body.fontSize,
   },
   primary: {
     paddingHorizontal: space.xl,

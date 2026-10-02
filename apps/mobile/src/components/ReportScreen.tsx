@@ -58,7 +58,7 @@ export function ReportScreen({ period }: { period: ReportPeriod }) {
   return <Screen title={period === 'week' ? 'Weekly report' : 'Monthly report'} back>
     <View style={styles.periodHeader}>
       {period === 'month' ? <Button label="Previous month" onPress={() => setMonthOffset((value) => value - 1)} /> : null}
-      <View style={{ flex: 1, minWidth: 120 }}><Text style={[type.bodyStrong, { color: theme.text, textAlign: 'center' }]}>{bounds.label}</Text><Text style={[type.micro, { color: theme.textMuted, textAlign: 'center' }]}>{bounds.start} — {bounds.end}</Text></View>
+      <View style={{ flex: 1, minWidth: 120 }}><Text style={[type.bodyStrong, { color: theme.text, textAlign: 'center' }]}>{bounds.label}</Text><Text style={[type.caption, { color: theme.textMuted, textAlign: 'center' }]}>{bounds.start} — {bounds.end}</Text></View>
       {period === 'month' ? <Button label="Next month" disabled={monthOffset >= 0} onPress={() => setMonthOffset((value) => Math.min(0, value + 1))} /> : null}
     </View>
     {busy ? <ActivityIndicator accessibilityLabel="Loading report" /> : null}
