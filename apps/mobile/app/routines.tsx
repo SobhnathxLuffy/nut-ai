@@ -15,6 +15,7 @@ import { db, localDate } from '../src/data/repo'
 import { consumePendingRoutineExercises } from '../src/data/routine-draft'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { Empty } from '../src/components/Empty'
 import { useTheme } from '../src/theme/ThemeProvider'
 
 const PROGRESSION_KINDS = ['double', 'fixed', 'percentage', 'rir', 'manual'] as const
@@ -217,7 +218,7 @@ export default function RoutinesScreen() {
       </Label>
       {action.feedback}
 
-      {!editing && (
+      {!editing && routines.length > 0 && (
         <Button
           label="Create new routine"
           selected
@@ -229,6 +230,27 @@ export default function RoutinesScreen() {
           }}
         />
       )}
+
+      {routines.length === 0 && !editing ? (
+        // UI/UX report Ch. 6.3 / Table 10.1 (Wave 1c): create-first Empty —
+        // THE one primary action while the list is empty (AGENTS §8.1: one
+        // obvious primary per state); with routines saved, the top button
+        // returns.
+        <Empty
+          icon="dumbbell"
+          title="No routines yet"
+          message="Build a routine once with planned targets, then start it any day from the Train tab — one tap."
+          action={{
+            label: 'Create new routine',
+            onPress: () => {
+              setName('')
+              setEditId(null)
+              setSelectedExercises([])
+              setEditing(true)
+            },
+          }}
+        />
+      ) : null}
 
       {editing && (
         <Card>
@@ -342,9 +364,6 @@ export default function RoutinesScreen() {
       )}
 
       <Label>Saved Routines ({routines.length})</Label>
-      {!routines.length && (
-        <Label muted>No routines created yet. Tap Create new routine above.</Label>
-      )}
 
       {routines.map((r) => {
         let count = 0

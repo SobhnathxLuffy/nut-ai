@@ -9,6 +9,11 @@ import {
   type ToastEntry,
 } from './toast-store'
 import { useMotionScale, useTheme } from '../theme/ThemeProvider'
+// UI/UX report Table 9.2 (Wave 1c): "Action failed → Error". Wired in the HOST
+// (not the pure store) so the store stays free of react-native imports and
+// its plain-Node tests keep their zero-mock setup — every error toast in the
+// app fires the pattern with zero call-site changes.
+import { error as hapticError } from '../utils/haptics'
 import { elevationStyle, MIN_TAP_TARGET, motion, radius, space, type } from '../theme/tokens'
 
 /**
@@ -97,6 +102,9 @@ export function Toast() {
           pan.setValue({ x: 0, y: 0 })
           setRendered(snapshot.current)
           setVisible(true)
+          // Table 9.2: the error tone IS the "action failed" signal — the
+          // haptic lands with the card, never instead of it.
+          if (snapshot.current.tone === 'error') void hapticError()
         } else {
           setVisible(false)
         }

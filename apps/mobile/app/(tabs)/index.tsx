@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import {
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle } from 'react-native-svg'
 import { Icon, type IconName } from '../../src/components/Icon'
 import { DayTimeline } from '../../src/components/DayTimeline'
+import { Skeleton, SkeletonRow } from '../../src/components/Skeleton'
 import {
   currentGoal,
   dayTotals,
@@ -50,6 +52,10 @@ export default function Home() {
   const [adaptive, setAdaptive] = useState<AdaptiveOutcome | null>(null)
   const [offset, setOffset] = useState(0)
   const [streak, setStreak] = useState(0)
+  // UI/UX report §8.2 / Table 9.1 (Wave 1c): pull-to-refresh re-runs the same
+  // day-totals + goal read this screen already performs (loadData) — the
+  // native RefreshControl is the "expected sync gesture"; no new data flow.
+  const [refreshing, setRefreshing] = useState(false)
 
   const selected = useMemo(() => Date.now() + offset * 86_400_000, [offset])
 
@@ -90,16 +96,27 @@ export default function Home() {
 
   useEffect(() => subscribeFoodMutations(() => { void loadData() }), [loadData])
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true)
+    void loadData().finally(() => setRefreshing(false))
+  }, [loadData])
+
   if (!goal || !totals) {
     // P2-36 (QA Wave 4): boot no longer gates first paint behind migrate +
     // seed + three queries. The shell renders immediately — real header, real
     // DayStrip (it needs no DB) — with quiet placeholder blocks where the
     // numbers will land, so cold start reads as structure, not a blank wait.
+    // UI/UX report §8.2 / §9.2 (Wave 1c): the placeholders are now the shared
+    // Skeleton primitive — a timeline-shaped skeleton (ring placeholder,
+    // macro cards, timeline rows) that mimics the layout it becomes.
     return (
       <ScrollView
         style={{ backgroundColor: theme.bg }}
         contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: 150 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} colors={[theme.textMuted]} />
+        }
       >
         <View style={styles.header}>
           <Text style={[styles.wordmark, { color: theme.text }]}>Nut AI</Text>
@@ -114,24 +131,25 @@ export default function Home() {
         <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
           <View style={[styles.heroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
             <View style={{ flex: 1, gap: space.sm }}>
-              <SkeletonBlock width={120} height={40} theme={theme} />
-              <SkeletonBlock width={110} height={16} theme={theme} />
+              <Skeleton width={120} height={40} />
+              <Skeleton width={110} height={16} />
             </View>
-            <SkeletonBlock width={128} height={128} round theme={theme} />
+            {/* The ring placeholder — a circle the same size as the hero ring. */}
+            <Skeleton width={128} height={128} radius={radius.pill} />
           </View>
 
           <View style={styles.macroRow}>
-            <SkeletonBlock width={104} height={124} theme={theme} radius={radius.xl} />
-            <SkeletonBlock width={104} height={124} theme={theme} radius={radius.xl} />
-            <SkeletonBlock width={104} height={124} theme={theme} radius={radius.xl} />
+            <Skeleton width={104} height={124} radius={radius.xl} />
+            <Skeleton width={104} height={124} radius={radius.xl} />
+            <Skeleton width={104} height={124} radius={radius.xl} />
           </View>
         </View>
 
         <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
           <View style={[styles.card, { backgroundColor: theme.bgSunken, borderColor: 'transparent', gap: space.sm }]}>
-            <SkeletonBlock width={140} height={18} theme={theme} />
-            <SkeletonBlock width="100%" height={16} theme={theme} />
-            <SkeletonBlock width="80%" height={16} theme={theme} />
+            <Skeleton width={140} height={18} />
+            <Skeleton width="100%" height={16} />
+            <Skeleton width="80%" height={16} />
           </View>
         </View>
 
@@ -139,7 +157,11 @@ export default function Home() {
           {/* Wave 1a: Home's private 24px header override joins the unified
               type.title (28/32) — one header voice (report §3.3). */}
           <Text style={[type.title, { color: theme.text }]}>Daily timeline</Text>
-          <SkeletonBlock width="100%" height={120} theme={theme} radius={radius.xl} />
+          {/* Timeline rows — the same avatar+line shape the loaded rows use. */}
+          <View style={{ gap: space.lg }}>
+            <SkeletonRow lines={2} />
+            <SkeletonRow lines={2} />
+          </View>
         </View>
       </ScrollView>
     )
@@ -153,6 +175,9 @@ export default function Home() {
       style={{ backgroundColor: theme.bg }}
       contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: 150 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.textMuted} colors={[theme.textMuted]} />
+      }
     >
       {/* Header */}
       <View style={styles.header}>
@@ -384,34 +409,6 @@ function MacroCard({
         </View>
       </View>
     </View>
-  )
-}
-
-/** Quiet boot placeholder: no spinner, no fake data — just shape. */
-function SkeletonBlock({
-  width,
-  height,
-  theme,
-  radius: blockRadius = radius.md,
-  round = false,
-}: {
-  width: number | `${number}%`
-  height: number
-  theme: ReturnType<typeof useTheme>
-  radius?: number
-  round?: boolean
-}) {
-  return (
-    <View
-      accessibilityLabel="Loading"
-      style={{
-        width,
-        height,
-        borderRadius: round ? 999 : blockRadius,
-        backgroundColor: theme.bgSunken,
-        opacity: 0.8,
-      }}
-    />
   )
 }
 

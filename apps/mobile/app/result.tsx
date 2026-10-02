@@ -63,6 +63,9 @@ import {
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 import { showToast } from '../src/components/toast-store'
+// UI/UX report Table 9.2 (Wave 1c): "Log meal → Success" — the scan result's
+// log path is the flagship reward moment.
+import { success as hapticSuccess } from '../src/utils/haptics'
 
 /**
  * The small "which model is reading this photo" line. BYO-key means the user
@@ -310,6 +313,8 @@ export default function Result() {
         await logMeal(result, phase.kind === 'ready' ? phase.meta : null, phase.kind === 'ready' ? phase.photoUri : null, Date.now())
         reset({ retainPhoto: true })
         router.dismissAll()
+        // Table 9.2: log meal → success haptic, alongside the flagship toast.
+        void hapticSuccess()
         // UI/UX report §10.1 (Wave 1b): "meal logged with an Undo action" —
         // THE flagship toast. The host is mounted at the app root, so it
         // outlives dismissAll; undoLastOperation emits the food-mutation event,

@@ -11,8 +11,10 @@ import {
 import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
 import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard } from '../src/components/assistant/AssistantCards'
 import { Icon } from '../src/components/Icon'
+import { Empty } from '../src/components/Empty'
+import { SkeletonLine } from '../src/components/Skeleton'
 import { useTheme, useMotionScale } from '../src/theme/ThemeProvider'
-import { radius, space, type } from '../src/theme/tokens'
+import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 import { router, useFocusEffect } from 'expo-router'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/date-utils'
@@ -37,6 +39,20 @@ const HISTORY_MAX_TURNS = 40
 // tokens the model barely uses, and the today-context block already carries
 // everything current.
 const HISTORY_MAX_REPLAY = 16
+
+// UI/UX report Table 10.1 / §8.7 (Wave 1c): the first-open Empty state's three
+// starter prompts — a meal-planning question, a knowledge lookup, a weekly
+// review — each demonstrates a different thing the assistant can do. Tapping
+// one fills the input AND sends (one tap, per the report's intent).
+const STARTER_PROMPTS = [
+  'What should I eat for a high-protein breakfast?',
+  'How much protein is in 100g of dal?',
+  'Review my week',
+] as const
+
+// §9.2: "assistant gets a three-line reply skeleton when the first byte is
+// slow" — 1.5s of silence after send crosses from fast to slow.
+const SLOW_FIRST_BYTE_MS = 1500
 
 async function resolveMealProposal(data: any): Promise<{ selection: ManualFoodSelection; selections: ManualFoodSelection[] }> {
   const [handle, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), openUserDb()])
@@ -136,6 +152,11 @@ export default function AssistantScreen() {
   const [messages, setMessages] = useState<any[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  // Wave 1c (§9.2): armed when a reply is sent, cleared on the first streamed
+  // delta; while true the newest streaming bubble renders the reply skeleton
+  // instead of the static "Thinking…" text.
+  const [slowFirstByte, setSlowFirstByte] = useState(false)
+  const firstByteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // INTENTIONALLY EPHEMERAL: Assistant proposals and their states (PROPOSED, PENDING, SAVED) are held in memory.
   // They are not durable across process death and UI will not claim recovery.
   const [proposalStatus, setProposalStatus] = useState<Record<string, 'PROPOSED' | 'PENDING' | 'SAVED' | 'FAILED' | 'CANCELLED'>>({})
@@ -234,9 +255,11 @@ export default function AssistantScreen() {
     }
   }, [proposalStatus]))
 
-  const send = async () => {
-    if (!input.trim() || loading) return
-    const text = input.trim()
+  const send = async (textArg?: string) => {
+    // Starter-prompt chips pass their prompt directly; the TextInput's
+    // onSubmitEditing keeps calling send() with no argument.
+    const text = typeof textArg === 'string' ? textArg.trim() : input.trim()
+    if (!text || loading) return
     setInput('')
     setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }])
     setLoading(true)
@@ -268,7 +291,15 @@ export default function AssistantScreen() {
       // The streaming bubble exists from the moment the send happens — deltas
       // patch it in place, word by word.
       setMessages(prev => [...prev, { id: aiMsgId, role: 'assistant', text: '', reasoning: '', streaming: true }])
-      const patchStream = (d: { text?: string; reasoning?: string }) =>
+      // §9.2 slow first byte: if nothing streams within 1.5s, the placeholder
+      // swaps "Thinking…" for a three-line reply skeleton.
+      firstByteTimer.current = setTimeout(() => setSlowFirstByte(true), SLOW_FIRST_BYTE_MS)
+      const patchStream = (d: { text?: string; reasoning?: string }) => {
+        if (firstByteTimer.current != null) {
+          clearTimeout(firstByteTimer.current)
+          firstByteTimer.current = null
+        }
+        setSlowFirstByte(false)
         setMessages(prev =>
           prev.map(m =>
             m.id === aiMsgId
@@ -280,6 +311,7 @@ export default function AssistantScreen() {
               : m,
           ),
         )
+      }
 
       const { system, user } = await buildAssistantTurn(text)
       const replay = historyRef.current.slice(-HISTORY_MAX_REPLAY)
@@ -391,6 +423,11 @@ export default function AssistantScreen() {
         return [...prev, { id: Date.now().toString(), role: 'assistant', text: errText }]
       })
     } finally {
+      if (firstByteTimer.current != null) {
+        clearTimeout(firstByteTimer.current)
+        firstByteTimer.current = null
+      }
+      setSlowFirstByte(false)
       abortRef.current.current = null
       setLoading(false)
     }
@@ -541,7 +578,20 @@ export default function AssistantScreen() {
           return (
           <View key={m.id || i} style={[s.bubble, m.role === 'user' ? s.userBubble : s.aiBubble, { backgroundColor: m.role === 'user' ? t.text : t.bgElevated }]}>
             {m.content && <Text style={{ color: m.role === 'user' ? t.bgElevated : t.text }}>{m.content}</Text>}
-            {thinkingOnly ? <Text style={[type.caption, { color: t.textMuted }]}>Thinking…</Text> : null}
+            {thinkingOnly ? (
+              slowFirstByte && i === messages.length - 1 ? (
+                // §9.2: three-line reply skeleton while the first byte is slow.
+                // Streaming itself stays a spinner-free live bubble — this is
+                // the sanctioned assistant case, not a full-screen skeleton.
+                <View style={{ gap: space.xs, marginTop: space.xs }}>
+                  <SkeletonLine width="100%" height={12} />
+                  <SkeletonLine width="92%" height={12} />
+                  <SkeletonLine width="68%" height={12} />
+                </View>
+              ) : (
+                <Text style={[type.caption, { color: t.textMuted }]}>Thinking…</Text>
+              )
+            ) : null}
             {!thinkingOnly && m.reasoning ? (
               <View style={{ marginTop: space.xs }}>
                 <Pressable accessibilityRole="button" accessibilityLabel="Toggle reasoning" onPress={() => toggleReasoning(m.id)} hitSlop={space.sm}>
@@ -585,6 +635,34 @@ export default function AssistantScreen() {
           </View>
           )
         })}
+
+        {/* UI/UX report Table 10.1 / §8.7 (Wave 1c): the first-open Empty state.
+            The audit found "the assistant has no empty state at all, so first
+            open shows a blank scroll area" — an icon, an explanation, and three
+            starter prompts now fill it, and each chip fills the input AND sends. */}
+        {historyLoaded && messages.length === 0 ? (
+          <>
+            <Empty
+              icon="sparkles"
+              title="Ask anything"
+              message="Questions about your food, log or training get answers; proposals arrive as review cards; nothing is logged until you confirm it."
+            />
+            <View style={{ gap: space.sm, marginTop: space.xl }}>
+              {STARTER_PROMPTS.map((prompt) => (
+                <Pressable
+                  key={prompt}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ask: ${prompt}`}
+                  disabled={loading}
+                  onPress={() => void send(prompt)}
+                  style={[s.starterChip, { borderColor: t.border, backgroundColor: t.bgElevated }]}
+                >
+                  <Text style={[type.body, { color: t.text }]}>{prompt}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        ) : null}
       </ScrollView>
       <View style={s.inputRow}>
         <TextInput
@@ -593,9 +671,9 @@ export default function AssistantScreen() {
           onChangeText={setInput}
           placeholder="Ask about your food, workouts, or say “remove the roti”…"
           placeholderTextColor={t.textMuted}
-          onSubmitEditing={send}
+          onSubmitEditing={() => void send()}
         />
-        <Pressable onPress={send} style={[s.btn, { backgroundColor: t.text }]}>
+        <Pressable onPress={() => void send()} style={[s.btn, { backgroundColor: t.text }]}>
           <Text style={{ color: t.bgElevated, fontWeight: 'bold' }}>Send</Text>
         </Pressable>
       </View>
@@ -722,6 +800,15 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: { flex: 1, padding: space.md },
+  // Wave 1c starter-prompt chips (report §8.7): 44pt pill targets, full width
+  // so each prompt reads on one line at body size.
+  starterChip: {
+    minHeight: MIN_TAP_TARGET,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    paddingHorizontal: space.lg,
+    justifyContent: 'center',
+  },
   bubble: { padding: space.md, borderRadius: radius.md, marginBottom: space.md, maxWidth: '85%' },
   userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 0 },
   aiBubble: { alignSelf: 'flex-start', borderBottomLeftRadius: 0 },

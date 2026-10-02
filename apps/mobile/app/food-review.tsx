@@ -10,6 +10,9 @@ import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
 import { showToast } from '../src/components/toast-store'
+// UI/UX report Table 9.2 (Wave 1c): "Log meal → Success (notification)" — the
+// core reward moment fires with the Undo toast, never instead of it.
+import { success as hapticSuccess } from '../src/utils/haptics'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
@@ -114,6 +117,8 @@ export default function FoodReview() {
       if (params.assistantMsgId) {
         assistantGlobalStatus[params.assistantMsgId] = 'SAVED';
       }
+      // Table 9.2: log meal → success haptic.
+      void hapticSuccess()
       // UI/UX report §10.1 (Wave 1b): every logging path through this screen
       // (food-search, custom food, dish composer, recipes, assistant, saved
       // foods) confirms with the same Undo toast the scan result screen uses.

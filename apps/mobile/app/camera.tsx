@@ -7,6 +7,9 @@ import { Icon, type IconName } from '../src/components/Icon'
 import { startBarcodeScan, startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
 import { setPhase, setScanReviewMode, type ScanReviewMode } from '../src/scan/store'
 import { setting, putSetting } from '../src/data/repo'
+// UI/UX report Table 9.2 (Wave 1c): "Scan captured → Light impact" — the
+// shutter metaphor; fires the moment the photo is secured.
+import { lightImpact as hapticLightImpact } from '../src/utils/haptics'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -148,6 +151,8 @@ export default function Camera() {
     try {
       const shot = await cameraRef.current?.takePictureAsync({ quality: 1, skipProcessing: false })
       if (!shot?.uri) return
+      // Table 9.2: the capture landed — shutter haptic, then navigate.
+      void hapticLightImpact()
 
       // The draft exists from this moment. Everything after can fail safely.
       setPhase({ kind: 'captured', photoUri: shot.uri })

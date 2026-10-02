@@ -26,6 +26,7 @@ import { useTheme } from '../src/theme/ThemeProvider'
 import { ChipRow } from '../src/components/ChipRow'
 import { NewIngredientForm } from '../src/components/NewIngredientForm'
 import { Icon } from '../src/components/Icon'
+import { SkeletonRow } from '../src/components/Skeleton'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
 interface CompositeMealMatch {
@@ -623,7 +624,20 @@ export default function FoodSearch() {
         style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
       />
 
-      {busy && <ActivityIndicator style={{ marginTop: space.lg }} color={theme.textFaint} />}
+      {busy && (
+        // UI/UX report §9.2 / Table 10.1 (Wave 1c): result-row skeletons while
+        // the search runs — the same title + caption + source line shape the
+        // real rows render. Module-level spinners (row select, composite
+        // building) stay spinners per the NN/g rule; only the full results
+        // window gets skeletons.
+        <View style={{ marginTop: space.md, gap: space.sm }}>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <View key={i} style={[styles.row, { borderColor: theme.border }]}>
+              <SkeletonRow lines={2} />
+            </View>
+          ))}
+        </View>
+      )}
 
       {outcome !== '' && (
         <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md }]}>{outcome.toUpperCase()}</Text>

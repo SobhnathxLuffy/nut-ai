@@ -10,6 +10,9 @@ import { Screen, Button, Card, Field, Label, Row, useAction } from '../src/compo
 import { canonicalizeFieldValue, describeSet, getFieldLabels, setValuesToDisplay } from '../src/data/workout-load'
 import { friendlySetValueError } from '../src/data/workout-errors'
 import { showToast } from '../src/components/toast-store'
+// UI/UX report Table 9.2 (Wave 1c): "Complete a set → Light impact" — fast,
+// physical, repeatable; a full workout finish is the success moment instead.
+import { lightImpact as hapticLightImpact } from '../src/utils/haptics'
 import { confirmDialog } from '../src/ui/alert-web'
 
 export default function WorkoutScreen(){const {id}=useLocalSearchParams<{id:string}>();const [detail,setDetail]=useState<Awaited<ReturnType<typeof workoutDetail>>|null>(null);const [advanced,setAdvanced]=useState(false);const [unit,setUnit]=useState<WeightUnit>('kg');const [group,setGroup]=useState<number[]>([]);const [clock,setClock]=useState(Date.now());const [restPref,setRestPref]=useState(90)
@@ -73,6 +76,6 @@ function SetEditor({exercise:e,set:s,active,advanced,refresh,unit,restSeconds=90
     persist(next,!!s.completed_at)
   }}/></View>)}</Row>
   {advanced&&<Row>{SetKind.options.map(k=><Button key={k} label={k} selected={kind===k} disabled={saving} onPress={()=>{setKind(k);persist(draft.current,!!s.completed_at,k)}}/>)}</Row>}
-  <Row><Button label={s.completed_at?'Mark set incomplete':'Complete set'} selected={!!s.completed_at} disabled={saving} onPress={()=>persist(draft.current,!s.completed_at,kind,true)}/><Button label="Duplicate set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,draft.current,{completed:false,kind});await refresh()}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}}/><Button label="Delete set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await removeSet(await db(),s.id);await refresh()}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}}/>{fields.includes('load_kg')&&<Button label="Plate helper" onPress={()=>router.push({pathname:'/equipment',params:{target:draft.current.load_kg!=null?String(Math.round(draft.current.load_kg*100)/100):''}} as never)}/>}</Row>{!!error&&<Label>{error}</Label>}
+  <Row><Button label={s.completed_at?'Mark set incomplete':'Complete set'} selected={!!s.completed_at} disabled={saving} onPress={()=>{if(!s.completed_at)void hapticLightImpact();persist(draft.current,!s.completed_at,kind,true)}}/><Button label="Duplicate set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await saveSet(await db(),e.id,draft.current,{completed:false,kind});await refresh()}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}}/><Button label="Delete set" disabled={saving} onPress={()=>{setSaving(true);queue.current=queue.current.then(async()=>{await removeSet(await db(),s.id);await refresh()}).catch(err=>setError(friendlySetValueError(err))).finally(()=>setSaving(false))}}/>{fields.includes('load_kg')&&<Button label="Plate helper" onPress={()=>router.push({pathname:'/equipment',params:{target:draft.current.load_kg!=null?String(Math.round(draft.current.load_kg*100)/100):''}} as never)}/>}</Row>{!!error&&<Label>{error}</Label>}
  </View>
 }

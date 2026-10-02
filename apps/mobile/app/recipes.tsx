@@ -5,6 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { loadFood, resolveByText, type ScoredCandidate } from '@nutai/resolver'
 import { Icon } from '../src/components/Icon'
+import { Empty } from '../src/components/Empty'
+// UI/UX report Table 9.2 (Wave 1c): "Save recipe → Success" — fires with the
+// undo strip, the same reward moment as meal logging.
+import { success as hapticSuccess } from '../src/utils/haptics'
 import { db } from '../src/data/repo'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import {
@@ -252,6 +256,8 @@ export default function Recipes() {
       const result = editingId === 'new'
         ? await createRecipe(handle, draftData, Date.now())
         : await editRecipe(handle, editingId, draftData, Date.now())
+      // Table 9.2: save recipe → success haptic.
+      void hapticSuccess()
       setUndoUuid(result.operation.uuid)
       resetEditor()
       await reload()
@@ -460,14 +466,16 @@ export default function Recipes() {
         <Pressable onPress={() => router.back()} hitSlop={space.md}><Text style={[type.body, { color: theme.textMuted }]}>Done</Text></Pressable>
       </View>
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 120 }}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={startNewRecipe}
-          style={[styles.primary, { backgroundColor: theme.text, marginTop: 0 }]}
-        >
-          <Icon name="plus" size={18} color={theme.bg} />
-          <Text style={[type.bodyStrong, { color: theme.bg }]}>New recipe</Text>
-        </Pressable>
+        {recipes.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={startNewRecipe}
+            style={[styles.primary, { backgroundColor: theme.text, marginTop: 0 }]}
+          >
+            <Icon name="plus" size={18} color={theme.bg} />
+            <Text style={[type.bodyStrong, { color: theme.bg }]}>New recipe</Text>
+          </Pressable>
+        ) : null}
 
         {undoUuid ? (
           <Pressable
@@ -485,7 +493,15 @@ export default function Recipes() {
         ) : null}
 
         {recipes.length === 0 ? (
-          <Text style={[type.body, { color: theme.textMuted, marginTop: space.xl }]}>No household recipes yet.</Text>
+          // UI/UX report Ch. 6.3 / Table 10.1 (Wave 1c): the Empty primitive with
+          // the Table 6.1 recipes glyph and the create-first action — the same
+          // startNewRecipe the primary button runs.
+          <Empty
+            icon="bookOpen"
+            title="No household recipes yet"
+            message="Build one from ingredients — nutrition is computed deterministically from the food database, never guessed."
+            action={{ label: 'New recipe', onPress: startNewRecipe }}
+          />
         ) : recipes.map((recipe) => (
           <View key={recipe.id} style={[styles.recipeRow, { borderColor: theme.border }]}>
             <View style={{ flex: 1 }}>

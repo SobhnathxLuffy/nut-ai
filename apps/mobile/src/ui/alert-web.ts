@@ -27,6 +27,10 @@
  */
 
 import { Alert, Platform } from 'react-native'
+// UI/UX report Table 9.2 (Wave 1c): "Delete / erase confirm → Warning". The
+// import is app-side only — this shim loads with the app root, never under
+// the plain-Node test environment (haptics.test.ts exercises its own module).
+import { warning as hapticWarning } from '../utils/haptics'
 import { type as typeScale } from '../theme/tokens'
 
 interface ShimButton {
@@ -284,6 +288,10 @@ export interface ConfirmDialogOptions {
  * is for the ~10 destructive sites only. Both buttons are always offered so
  * the dialog can never trap the user; Escape/backdrop press maps to cancel,
  * exactly like the shim contract above.
+ *
+ * Wave 1c / Table 9.2: accepting a DESTRUCTIVE confirmation fires the warning
+ * haptic — destructive intent is exactly the cause-and-effect moment the
+ * pattern exists for. Non-destructive confirms stay silent.
  */
 export function confirmDialog(options: ConfirmDialogOptions): void {
   Alert.alert(options.title, options.message, [
@@ -291,7 +299,10 @@ export function confirmDialog(options: ConfirmDialogOptions): void {
     {
       text: options.confirmLabel,
       style: options.destructive ? 'destructive' : 'default',
-      onPress: options.onConfirm,
+      onPress: () => {
+        if (options.destructive) void hapticWarning()
+        options.onConfirm?.()
+      },
     },
   ])
 }

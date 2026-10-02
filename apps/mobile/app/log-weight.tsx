@@ -6,6 +6,9 @@ import { EditableValue, RulerPicker } from '../src/components/onboarding/Control
 import { lbToKg, weightValueFromKg, type WeightUnit } from '@nutai/analytics'
 import { db, logWeight, weightHistory } from '../src/data/repo'
 import { readWeightUnit } from '../src/data/weight-units'
+// UI/UX report Table 9.2 (Wave 1c): "Log weight → Success" — a dated point is
+// the quiet reward moment of this screen.
+import { success as hapticSuccess } from '../src/utils/haptics'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -59,6 +62,8 @@ export default function LogWeight() {
     setError(null)
     try {
       await logWeight(kg, Date.now())
+      // Table 9.2: log weight → success haptic.
+      void hapticSuccess()
       router.back()
     } catch (caught) {
       setError(caught instanceof Error && caught.message ? caught.message : 'Could not save your weight. Nothing was written.')

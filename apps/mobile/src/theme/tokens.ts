@@ -93,6 +93,16 @@ export interface Theme {
   /** A barely-there raised row inside an elevated card. */
   rowRaised: string
   /**
+   * Skeleton placeholders (UI/UX report §9.2, Wave 1c): the resting block is
+   * 8% ink — quiet structure, never a spinner — and the ONE slow shimmer
+   * sweep (Table 9.1: 1.2s loop, 20% band) runs a lighter overlay across it.
+   * Dark mirrors with white ink, same alphas.
+   */
+  /** Resting skeleton fill: 8% ink (light) / 8% white (dark). */
+  skeletonBase: string
+  /** The moving sweep band: a lighter overlay crossing the resting fill. */
+  skeletonSweep: string
+  /**
    * Onboarding chrome fills (QA P2-19). These exist so the flow's light-gray
    * surfaces come from tokens instead of `theme.isDark ? token : hex`
    * ternaries — dark mode gets a contrast-checked value, not a leftover.
@@ -134,6 +144,9 @@ export const lightTheme: Theme = {
   uncertainTint: '#8B7BD81A',
   proteinTint: '#3E7BFA1A',
   rowRaised: '#0B0B0F08',
+  // 0x14 = 20/255 ≈ 7.8% ink; 0xA6 = 166/255 ≈ 65% white for the sweep band.
+  skeletonBase: '#0B0B0F14',
+  skeletonSweep: '#FFFFFFA6',
   bgSunkenStrong: '#EDEDF0',
   bgChrome: '#F3F3F6',
   bgSunkenVariant: '#F0F0F3',
@@ -175,6 +188,9 @@ export const darkTheme: Theme = {
   uncertainTint: '#A99AE626',
   proteinTint: '#6E9BFF26',
   rowRaised: '#FFFFFF0A',
+  // Same 8% alpha, white ink on near-black; the sweep stays subtle (18%).
+  skeletonBase: '#FFFFFF14',
+  skeletonSweep: '#FFFFFF2E',
   bgSunkenStrong: palette.ink700,
   bgChrome: palette.ink800,
   bgSunkenVariant: palette.ink900,

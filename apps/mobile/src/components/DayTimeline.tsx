@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable } from 'react-native'
+import { Pressable, View } from 'react-native'
 
 import { router, useFocusEffect } from 'expo-router'
 import { timeline, type TimelineEvent } from '@nutai/timeline'
@@ -10,8 +10,10 @@ import { changeDayStatus } from '../data/checkin'
 import { copyYesterday, dateOffset, mealSnapshot, repeatSnapshots, saveShortcut } from '../data/shortcuts'
 import { Button, Card, Field, Label, Row, useAction } from './Screen'
 import { DayStatusControl } from './DayStatusControl'
+import { SkeletonLine, SkeletonRow } from './Skeleton'
 import { showToast } from './toast-store'
 import { confirmDialog } from '../ui/alert-web'
+import { space } from '../theme/tokens'
 import { formatWeightKg, type WeightUnit } from '@nutai/analytics'
 import { readWeightUnit } from '../data/weight-units'
 
@@ -85,9 +87,19 @@ export function DayTimeline({
 
     {!hideTotals && (
       <Card>
-        <Label>{!loaded ? 'Loading your day…' : totals?.mealCount ? `${Math.round(totals.kcal)} kcal logged${goal ? ` · Target ${Math.round(goal.targetKcal)} kcal` : ''}` : 'No food entries logged'}</Label>
-        {!!totals?.mealCount && <Label muted>Protein {Math.round(totals.protein_g)} g · Carbs {Math.round(totals.carbs_g)} g · Fat {Math.round(totals.fat_g)} g</Label>}
-        {!!totals?.pendingCount && <Label muted>{totals.pendingCount} entries still need analysis.</Label>}
+        {/* UI/UX report §9.2 / Table 10.1 (Wave 1c): the totals card's retired
+            loading prose joins the Skeleton primitive — the 1–10s window gets
+            layout-mimicking placeholders, not text. */}
+        {!loaded ? (
+          <View style={{ gap: space.xs }}>
+            <SkeletonLine width="60%" height={16} />
+            <SkeletonLine width="40%" height={12} />
+          </View>
+        ) : (
+          <Label>{totals?.mealCount ? `${Math.round(totals.kcal)} kcal logged${goal ? ` · Target ${Math.round(goal.targetKcal)} kcal` : ''}` : 'No food entries logged'}</Label>
+        )}
+        {loaded && !!totals?.mealCount && <Label muted>Protein {Math.round(totals.protein_g)} g · Carbs {Math.round(totals.carbs_g)} g · Fat {Math.round(totals.fat_g)} g</Label>}
+        {loaded && !!totals?.pendingCount && <Label muted>{totals.pendingCount} entries still need analysis.</Label>}
       </Card>
     )}
 
@@ -136,6 +148,15 @@ export function DayTimeline({
     })}/>}
     {action.feedback}{mealUndoUuid&&<Button label="Undo deleted meal" onPress={()=>perform(async()=>{const r=await undoRecordedOperation(mealUndoUuid);if(!r.success)throw new Error(r.error??'Could not restore meal');setMealUndoUuid(null);setLastDeletedMealUndoUuid(null)})}/>}<Row><Button label={undoTarget?`Undo: ${describeOperation(undoTarget)}`:'Undo last action'} onPress={()=>perform(async()=>{const r=await undoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to undo')})}/><Button label={redoTarget?`Redo: ${describeOperation(redoTarget)}`:'Redo'} onPress={()=>perform(async()=>{const r=await redoLastOperation();if(!r.success)throw new Error(r.error??'Nothing to redo')})}/></Row>
     <Label>Daily timeline · available offline</Label>
+    {/* Same Wave 1c rule as the totals card: while the day loads, the row
+        area shows row-shaped placeholders (§9.2 "mimic the coming layout"),
+        and the empty-day card only renders once loading is known-complete. */}
+    {!loaded && (
+      <View style={{ gap: space.md }}>
+        <SkeletonRow lines={2} />
+        <SkeletonRow lines={2} />
+      </View>
+    )}
     {loaded&&events.length===0&&<Card><Label>No entries for this day yet.</Label><Label muted>Use the logging actions above whenever you’re ready.</Label></Card>}
     {events.map(e=><Card key={e.id}><PressableMeal enabled={e.type==='meal'} onPress={()=>router.push({pathname:'/meal-detail',params:{id:e.entity_id}} as never)}><Label>{new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · {e.label}</Label><Label muted>{e.type === 'weight' && e.weight_kg != null ? formatWeightKg(e.weight_kg, weightUnit) : e.detail}</Label></PressableMeal>
       {e.type==='meal'&&<Row><Button label="Repeat meal" disabled={action.busy} onPress={()=>repeat(e.entity_id)}/><Button label="Favorite" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'favorite',e.detail))}/><Button label="Save usual meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'usual',e.detail))}/><Button label="Save meal" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'saved',e.detail))}/><Button label="Delete meal" onPress={()=>confirmDialog({title:'Delete this meal?',message:'You can restore it with Undo.',confirmLabel:'Delete',destructive:true,onConfirm:()=>perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid)})})}/></Row>}

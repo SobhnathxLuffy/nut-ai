@@ -12,6 +12,9 @@ import { readWeightUnit, writeWeightUnit } from '../../src/data/weight-units'
 import { loadCredential, maskCredential } from '../../src/inference/credentials'
 import { PROVIDER_NAME } from '../../src/components/CredentialForm'
 import { Icon } from '../../src/components/Icon'
+// UI/UX report §9.1 (Wave 1c): "haptics… remain optional (a settings toggle,
+// default on)" — the Display section carries the toggle row.
+import { hapticsEnabled, setHapticsEnabled } from '../../src/utils/haptics'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
 import { showToast } from '../../src/components/toast-store'
@@ -42,6 +45,9 @@ export default function Profile() {
   const [providerLabel, setProviderLabel] = useState('—')
   const [dataBusy, setDataBusy] = useState(false)
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
+  // §9.1: the optional-haptics toggle. Loaded once with the rest of the
+  // profile; written through the wrapper so its cache stays in sync.
+  const [hapticsOn, setHapticsOn] = useState(true)
   // A failed profile load must be distinguishable from genuinely empty data —
   // otherwise the screen shows '—' placeholders forever with no way to retry.
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -53,17 +59,19 @@ export default function Profile() {
       void (async () => {
         try {
           const handle = await db()
-          const [g, avail, d, p, unit] = await Promise.all([
+          const [g, avail, d, p, unit, haptics] = await Promise.all([
             currentGoal(),
             availability(),
             setting('diet.style', 'balanced'),
             setting('provider'),
             readWeightUnit(handle),
+            hapticsEnabled(),
           ])
           if (!alive) return
           setGoal(g)
           setDiet(d)
           setWeightUnit(unit)
+          setHapticsOn(haptics)
           setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
           if (!p || p === 'none') {
             setProviderLabel('Not connected')
@@ -182,6 +190,12 @@ export default function Profile() {
       })
   }
 
+  function changeHaptics(next: boolean) {
+    if (next === hapticsOn) return
+    setHapticsOn(next)
+    void setHapticsEnabled(next)
+  }
+
   return (
     <ScrollView
       style={{ backgroundColor: theme.bg }}
@@ -256,6 +270,35 @@ export default function Profile() {
                   ]}
                 >
                   <Text style={[type.label, { color: selected ? theme.bg : theme.text }]}>{unit}</Text>
+                </Pressable>
+              )
+            })}
+          </View>
+        </View>
+        {/* §9.1: the make-it-optional toggle for the Table 9.2 haptic patterns. */}
+        <View style={{ padding: space.lg }}>
+          <Text style={[type.body, { color: theme.text }]}>Haptic feedback</Text>
+          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+            Success, impact and warning taps. Turn this off if you prefer silence.
+          </Text>
+          <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
+            {([
+              [true, 'On'],
+              [false, 'Off'],
+            ] as const).map(([value, label]) => {
+              const selected = hapticsOn === value
+              return (
+                <Pressable
+                  key={label}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => changeHaptics(value)}
+                  style={[
+                    styles.unitButton,
+                    { backgroundColor: selected ? theme.text : theme.bgElevated, borderColor: theme.border },
+                  ]}
+                >
+                  <Text style={[type.label, { color: selected ? theme.bg : theme.text }]}>{label}</Text>
                 </Pressable>
               )
             })}

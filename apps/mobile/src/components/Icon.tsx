@@ -58,6 +58,8 @@ export type IconName =
   | 'meat'
   | 'scaleBalance'
   | 'bowl'
+  | 'bookOpen'
+  | 'sparkles'
   | 'sprout'
   | 'check'
   | 'chevron'
@@ -399,6 +401,27 @@ function render(name: IconName, c: string, s: Common) {
         <G>
           <Path {...s} d="M3 11h18a9 9 0 0 1-9 9 9 9 0 0 1-9-9Z" />
           <Path {...s} d="M8 8c0-1.5 1-2.5 2-3M12 7.5c0-1.5 1-2.5 2-3" />
+        </G>
+      )
+    case 'bookOpen':
+      // UI/UX report Table 6.1 (Wave 1c): the Recipes mapping. Two spread
+      // pages meeting a centre spine — drawn on the 24-grid so it drops into
+      // the custom set without the Lucide passthrough Wave 2 will add.
+      return (
+        <G>
+          <Path {...s} d="M12 6.5C10.5 5 8.3 4.5 4.5 4.5v13.2c3.8 0 6 .5 7.5 2 1.5-1.5 3.7-2 7.5-2V4.5c-3.8 0-6 .5-7.5 2Z" />
+          <Path {...s} d="M12 6.5v13.2" />
+        </G>
+      )
+    case 'sparkles':
+      // UI/UX report Table 6.1 (Wave 1c): the AI-assistant affordance. One
+      // four-point star plus two small companions — the sparkle reads as
+      // "generated" at every size.
+      return (
+        <G>
+          <Path {...s} d="m11 4 1.7 4.5L17.2 10.2l-4.5 1.7L11 16.4l-1.7-4.5-4.5-1.7 4.5-1.7Z" />
+          <Path {...s} d="m18 13 .8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8Z" />
+          <Circle cx={18.8} cy={5.6} r={1.1} fill={c} stroke="none" />
         </G>
       )
     case 'sprout':

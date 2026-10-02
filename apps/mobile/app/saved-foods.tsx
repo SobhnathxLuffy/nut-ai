@@ -8,6 +8,7 @@ import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/date-utils'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { Button } from '../src/components/Screen'
+import { Empty } from '../src/components/Empty'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type } from '../src/theme/tokens'
 
@@ -162,13 +163,16 @@ export default function SavedFoods() {
 
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }}>
         {meals.length === 0 ? (
-          <View style={[styles.empty, { backgroundColor: theme.bgSunken }]}>
-            <Text style={[type.bodyStrong, { color: theme.text }]}>Nothing saved yet</Text>
-            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs, lineHeight: 19 }]}>
-              After you correct a scan, save it. Relogging it later costs nothing — no scan, no
-              network request, and none of the questions you already answered.
-            </Text>
-          </View>
+          // UI/UX report Ch. 6.3 / Table 10.1 (Wave 1c): the empty-list state is
+          // the Empty primitive — icon, explanation, and the create-first
+          // action (log a food; saving it from the timeline is how this list
+          // fills).
+          <Empty
+            icon="bookmark"
+            title="Nothing saved yet"
+            message="After you correct a scan, save it. Relogging it later costs nothing — no scan, no network request, and none of the questions you already answered."
+            action={{ label: 'Log food', onPress: () => router.push('/food-search' as never) }}
+          />
         ) : (
           meals.map((m) => (
             <View key={m.id} style={[styles.row, { backgroundColor: theme.bgSunken }]}>
@@ -192,7 +196,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: space.lg,
   },
-  empty: { padding: space.lg, borderRadius: radius.xl },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: space.md,
     padding: space.lg, borderRadius: radius.lg, marginBottom: space.sm,

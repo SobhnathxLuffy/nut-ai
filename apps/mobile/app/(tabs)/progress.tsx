@@ -1,13 +1,14 @@
 import { formatWeightKg, kgToLb, type PeriodReport, type WeightUnit } from '@nutai/analytics'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BarChart, LineChart } from '../../src/components/Charts'
 import { analyticsStartDate, loadReport } from '../../src/data/analytics'
 import { localDate, db } from '../../src/data/repo'
 import { readWeightUnit } from '../../src/data/weight-units'
 import { useTheme } from '../../src/theme/ThemeProvider'
+import { Skeleton, SkeletonCard } from '../../src/components/Skeleton'
 import { radius, space, type } from '../../src/theme/tokens'
 
 const SECTIONS = ['Overview', 'Body', 'Nutrition', 'Strength', 'Training'] as const
@@ -60,7 +61,19 @@ export default function Progress() {
       <View style={styles.windows}>
         {WINDOWS.map((item) => <Chip key={item.key} label={item.key} selected={window === item.key} onPress={() => setWindow(item.key)} compact />)}
       </View>
-      {loading ? <ActivityIndicator accessibilityLabel="Loading progress" /> : null}
+      {loading ? (
+        // UI/UX report §9.2 / Table 10.1 (Wave 1c): chart-shaped skeletons
+        // mimic the metric grid + chart card that is coming — no bare spinner
+        // for a full-screen load inside the 1–10s window.
+        <View style={{ gap: space.md }}>
+          <View style={styles.metricGrid}>
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} width="48%" height={120} radius={radius.lg} />
+            ))}
+          </View>
+          <SkeletonCard height={180} lines={1} />
+        </View>
+      ) : null}
       {error ? <Text accessibilityRole="alert" style={[type.body, { color: theme.safety }]}>{error}</Text> : null}
       {!loading && report ? <>
         {section === 'Overview' ? <Overview report={report} unit={weightUnit} /> : null}

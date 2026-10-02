@@ -15,6 +15,7 @@ import { db, localDate } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
 import { friendlySetValueError } from '../src/data/workout-errors'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { Empty } from '../src/components/Empty'
 import { useTheme } from '../src/theme/ThemeProvider'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
@@ -107,7 +108,7 @@ export default function ProgramsScreen() {
       </Label>
       {action.feedback}
 
-      {!editing && (
+      {!editing && programs.length > 0 && (
         <Button
           label="Create new program"
           selected
@@ -167,7 +168,23 @@ export default function ProgramsScreen() {
 
       <Label>Saved Programs ({programs.length})</Label>
       {!programs.length && (
-        <Label muted>No active programs. Tap Create new program to start a routine schedule.</Label>
+        // UI/UX report Ch. 6.3 / Table 10.1 (Wave 1c): create-first Empty —
+        // the same reset-and-edit path the "Create new program" button runs.
+        <Empty
+          icon="calendar"
+          title="No active programs"
+          message="A program schedules your routines across weeks, so the right session launches on the right day automatically."
+          action={{
+            label: 'Create new program',
+            onPress: () => {
+              setName('')
+              setStartDate(today)
+              setWeeks('8')
+              setSchedule([])
+              setEditing(true)
+            },
+          }}
+        />
       )}
 
       {programs.map((p) => {
