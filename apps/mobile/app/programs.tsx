@@ -15,8 +15,10 @@ import { db, localDate } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
 import { friendlySetValueError } from '../src/data/workout-errors'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { space } from '../src/theme/tokens'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
@@ -201,11 +203,14 @@ export default function ProgramsScreen() {
           : null
 
         return (
-          <Card key={p.id}>
-            <Label>{p.name}</Label>
-            <Label muted>
-              Started {plan.start_date} · {plan.weeks} weeks · {plan.schedule.length} days/week
-            </Label>
+          <View key={p.id} style={{ gap: space.sm }}>
+            {/* UI/UX report Ch. 8.5 (Wave 3): the program row collapses to
+                icon + label + value; today's session and Delete ride below. */}
+            <ItemRow
+              icon="calendar"
+              label={p.name}
+              value={`Started ${plan.start_date} · ${plan.weeks} weeks · ${plan.schedule.length} days/week`}
+            />
             {todayRoutineId && (
               <View style={{ padding: 10, borderRadius: 10, backgroundColor: t.affirmTint }}>
                 <Label>Today's Scheduled Workout: {routineName ?? 'Routine'}</Label>
@@ -216,7 +221,7 @@ export default function ProgramsScreen() {
             <Row>
               <Button label="Delete Program" onPress={() => void action.run(() => handleDelete(p.id))} />
             </Row>
-          </Card>
+          </View>
         )
       })}
     </Screen>

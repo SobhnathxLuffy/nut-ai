@@ -1,5 +1,5 @@
 import { router } from 'expo-router'
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -10,10 +10,27 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { ExerciseEstimateZ } from '@nutai/core-schema'
+import { ExerciseEstimateZ, SetValues, type TrackingType } from '@nutai/core-schema'
+import {
+  activeWorkout,
+  addExercise,
+  isExerciseInWorkout,
+  listEquipment,
+  listExercises,
+  performanceHistory,
+  saveSet,
+  startWorkout,
+  type Exercise,
+  type Workout,
+} from '@nutai/training'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { Icon, type IconName } from '../src/components/Icon'
-import { customProviderBaseUrl, logExercise, setting, weightHistory } from '../src/data/repo'
+import { ItemRow } from '../src/components/ItemRow'
+import { Badge } from '../src/components/Badge'
+import { db, customProviderBaseUrl, localDate, logExercise, setting, weightHistory } from '../src/data/repo'
+import { readWeightUnit } from '../src/data/weight-units'
+import { primaryFields, shortFieldLabel } from '../src/data/set-table'
+import { canonicalizeFieldValue, getFieldLabels, setValuesToDisplay } from '../src/data/workout-load'
 import {
   exerciseKcal,
   INTENSITY_ANCHORS,
@@ -24,9 +41,22 @@ import { loadCredential } from '../src/inference/credentials'
 import { runExerciseEstimate } from '../src/inference/pathA/client'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { showToast } from '../src/components/toast-store'
 
 /**
- * Log exercise — the four-path flow.
+ * Log exercise — UI/UX report Ch. 8.5 (Wave 3): the four-screen wizard
+ * compresses into TWO — pick (search, filters, recents) then configure
+ * (sets/reps/weight in one card + Add).
+ *
+ *   PICK      search across the exercise library, an owned-equipment filter,
+ *             recently performed exercises, and the four calorie paths below.
+ *   CONFIGURE for a library exercise: the sets card (one row per set, the
+ *             exercise's own tracked fields) + “Add to workout”, which
+ *             appends to the ACTIVE workout or starts one. For the calorie
+ *             paths (Run / Weight lifting / Describe / Manual) the configure
+ *             screen is the existing deterministic estimator / text / manual
+ *             entry — every one of the old wizard's capabilities survives,
+ *             one pick deep instead of stacked menus.
  *
  * Run and Weight lifting are DETERMINISTIC: MET x body weight x minutes, the
  * same three intensity anchors the incumbent shows, no model anywhere.
@@ -39,14 +69,16 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
  */
 
 type Step =
-  | { kind: 'menu' }
+  | { kind: 'pick' }
+  | { kind: 'configure'; exercise: { id: number; name: string; tracking_type: TrackingType } }
   | { kind: 'intensity'; exercise: ExerciseKind }
   | { kind: 'describe' }
   | { kind: 'manual' }
 
-const MENU: Array<{ step: Step; icon: IconName; title: string; sub: string }> = [
-  { step: { kind: 'intensity', exercise: 'run' }, icon: 'run', title: 'Run', sub: 'Running, jogging, sprinting, etc.' },
-  { step: { kind: 'intensity', exercise: 'weights' }, icon: 'dumbbell', title: 'Weight lifting', sub: 'Machines, free weights, etc.' },
+/** The calorie quick paths — the old menu, now rows on the pick screen. */
+const QUICK_PATHS: Array<{ step: Step; icon: IconName; title: string; sub: string }> = [
+  { step: { kind: 'intensity', exercise: 'run' }, icon: 'run', title: 'Run', sub: 'Running, jogging, sprinting — MET × body weight × minutes' },
+  { step: { kind: 'intensity', exercise: 'weights' }, icon: 'dumbbell', title: 'Weight lifting', sub: 'Machines, free weights — MET × body weight × minutes' },
   { step: { kind: 'describe' }, icon: 'pencil', title: 'Describe', sub: 'Write your workout in text' },
   { step: { kind: 'manual' }, icon: 'flame', title: 'Manual', sub: 'Enter exactly how many calories you burned' },
 ]
@@ -68,14 +100,17 @@ async function saveEntry(name: string, kcal: number): Promise<void> {
 }
 
 export default function LogExercise() {
-  const [step, setStep] = useState<Step>({ kind: 'menu' })
+  const [step, setStep] = useState<Step>({ kind: 'pick' })
 
-  if (step.kind === 'intensity') {
-    return <IntensityScreen exercise={step.exercise} onBack={() => setStep({ kind: 'menu' })} />
+  if (step.kind === 'configure') {
+    return <ConfigureScreen exercise={step.exercise} onBack={() => setStep({ kind: 'pick' })} />
   }
-  if (step.kind === 'describe') return <DescribeScreen onBack={() => setStep({ kind: 'menu' })} />
-  if (step.kind === 'manual') return <ManualScreen onBack={() => setStep({ kind: 'menu' })} />
-  return <MenuScreen onPick={setStep} />
+  if (step.kind === 'intensity') {
+    return <IntensityScreen exercise={step.exercise} onBack={() => setStep({ kind: 'pick' })} />
+  }
+  if (step.kind === 'describe') return <DescribeScreen onBack={() => setStep({ kind: 'pick' })} />
+  if (step.kind === 'manual') return <ManualScreen onBack={() => setStep({ kind: 'pick' })} />
+  return <PickScreen onPick={setStep} />
 }
 
 function Header({ title, icon, onBack }: { title: string; icon?: IconName; onBack: () => void }) {
@@ -102,8 +137,74 @@ function Header({ title, icon, onBack }: { title: string; icon?: IconName; onBac
   )
 }
 
-function MenuScreen({ onPick }: { onPick: (s: Step) => void }) {
+// ---------------------------------------------------------------------------
+// Screen 1 — PICK: search, owned-equipment filter, recents, calorie paths.
+
+function PickScreen({ onPick }: { onPick: (s: Step) => void }) {
   const theme = useTheme()
+  const [query, setQuery] = useState('')
+  const [filterOwned, setFilterOwned] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [exercises, setExercises] = useState<Exercise[]>([])
+  const [owned, setOwned] = useState<string[]>([])
+  const [recentIds, setRecentIds] = useState<number[]>([])
+
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      try {
+        const h = await db()
+        const [all, equipment, perf] = await Promise.all([listExercises(h), listEquipment(h), performanceHistory(h)])
+        if (!alive) return
+        setExercises(all)
+        setOwned(equipment.map(e => e.kind))
+        // Recents: the exercises you actually performed, newest first.
+        const latestAt = new Map<number, number>()
+        for (const row of perf) {
+          const prev = latestAt.get(row.exercise_id) ?? 0
+          if (row.at > prev) latestAt.set(row.exercise_id, row.at)
+        }
+        setRecentIds([...latestAt.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id))
+      } finally {
+        if (alive) setLoading(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
+  const byId = useMemo(() => new Map(exercises.map(e => [e.id, e])), [exercises])
+  const recents = useMemo(
+    () => recentIds.map(id => byId.get(id)).filter((e): e is Exercise => !!e).slice(0, 8),
+    [recentIds, byId],
+  )
+  const matchesQuery = useCallback((e: Exercise, q: string) => {
+    if (!q) return true
+    const needle = q.trim().toLowerCase()
+    if (!needle) return true
+    return (
+      e.name.toLowerCase().includes(needle) ||
+      e.aliases.some(a => a.toLowerCase().includes(needle))
+    )
+  }, [])
+
+  const results = useMemo(() => {
+    let list = exercises
+    if (filterOwned && owned.length > 0) {
+      list = list.filter(e => !e.equipment.length || !e.equipment.some(eq => !owned.includes(eq)))
+    }
+    const q = query.trim().toLowerCase()
+    if (q) list = list.filter(e => matchesQuery(e, q))
+    // Recents stay ranked above the plain alphabetical list when not searching.
+    if (!q) {
+      const recentSet = new Set(recentIds)
+      list = [...list].sort((a, b) => (recentSet.has(b.id) ? 1 : 0) - (recentSet.has(a.id) ? 1 : 0))
+    }
+    return list.slice(0, 30)
+  }, [exercises, filterOwned, owned, query, matchesQuery, recentIds])
+
+  const configure = (e: Exercise) =>
+    onPick({ kind: 'configure', exercise: { id: e.id, name: e.name, tracking_type: e.tracking_type } })
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <Header title="Exercise" onBack={() => router.back()} />
@@ -113,26 +214,303 @@ function MenuScreen({ onPick }: { onPick: (s: Step) => void }) {
             Table 3.1 + §3.3 "four competing header scales"). */}
         <Text style={[type.title, { color: theme.text }]}>Log Exercise</Text>
 
-        <View style={{ marginTop: space.xl, gap: space.md }}>
-          {MENU.map((m) => (
-            <Pressable
+        <TextInput
+          accessibilityLabel="Search exercises"
+          placeholder="Search exercises or aliases"
+          placeholderTextColor={theme.textFaint}
+          autoCorrect={false}
+          value={query}
+          onChangeText={setQuery}
+          style={[styles.searchInput, { color: theme.text, borderColor: theme.border }]}
+        />
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ selected: filterOwned }}
+          onPress={() => setFilterOwned(!filterOwned)}
+          style={[styles.filterRow, { borderColor: theme.border }]}
+        >
+          <Icon name="dumbbell" size={16} color={theme.text} />
+          <Text style={[type.label, { color: theme.text, flex: 1 }]}>
+            {filterOwned ? 'Using owned equipment' : 'Filter by owned equipment'}
+          </Text>
+          {filterOwned ? <Badge label="On" variant="selected" size="sm" accessibilityLabel="Owned-equipment filter on" /> : null}
+        </Pressable>
+
+        {loading ? <ActivityIndicator color={theme.textMuted} style={{ marginTop: space.xl }} /> : null}
+
+        {!query && recents.length > 0 && (
+          <View style={{ marginTop: space.lg, gap: space.sm }}>
+            <Text style={[type.caption, { color: theme.textFaint, textTransform: 'uppercase' as const }]}>Recent</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              {recents.map(e => (
+                <Pressable
+                  key={e.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Pick recent exercise ${e.name}`}
+                  onPress={() => configure(e)}
+                  style={[styles.recentChip, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+                >
+                  <Text style={[type.label, { color: theme.text }]}>{e.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={{ marginTop: space.lg, gap: space.sm }}>
+          <Text style={[type.caption, { color: theme.textFaint, textTransform: 'uppercase' as const }]}>
+            {loading ? 'Library' : `${results.length} exercises`}
+          </Text>
+          {results.map(e => (
+            <ItemRow
+              key={e.id}
+              icon="dumbbell"
+              label={e.name}
+              value={`${e.tracking_type.replaceAll('_', ' + ')} · ${e.equipment.join(', ') || 'bodyweight'}${e.is_custom ? ' · custom' : ''}`}
+              onPress={() => configure(e)}
+              accessibilityLabel={`Pick exercise ${e.name}`}
+            />
+          ))}
+          {!loading && !results.length && (
+            <Text style={[type.body, { color: theme.textMuted }]}>
+              No matching exercise. Adjust the filter, or create your own from the Train tab’s Exercise library.
+            </Text>
+          )}
+        </View>
+
+        <View style={{ marginTop: space.xl, gap: space.sm }}>
+          <Text style={[type.caption, { color: theme.textFaint, textTransform: 'uppercase' as const }]}>Cardio &amp; calories</Text>
+          {QUICK_PATHS.map(m => (
+            <ItemRow
               key={m.title}
-              accessibilityRole="button"
+              icon={m.icon}
+              label={m.title}
+              value={m.sub}
               onPress={() => onPick(m.step)}
-              style={[styles.optionCard, { backgroundColor: theme.bgSunken }]}
-            >
-              <Icon name={m.icon} size={26} color={theme.text} />
-              <View style={{ flex: 1 }}>
-                <Text style={[type.bodyStrong, { color: theme.text }]}>{m.title}</Text>
-                <Text style={[type.body, { color: theme.textMuted, marginTop: 2 }]}>{m.sub}</Text>
-              </View>
-            </Pressable>
+              accessibilityLabel={`${m.title} — log calories`}
+            />
           ))}
         </View>
       </ScrollView>
     </View>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Screen 2 — CONFIGURE: sets/reps/weight in ONE card + Add.
+
+interface DraftRow {
+  key: number
+  /** Display-unit text per field, exactly as typed ("" = empty). */
+  text: Record<string, string>
+  /** Canonical parsed values (kg loads) — null while text is invalid. */
+  parsed: SetValues | null
+}
+
+function defaultSetsFor(trackingType: TrackingType): Array<{ text: Record<string, string>; parsed: SetValues }> {
+  const base: SetValues = {
+    load_kg: trackingType === 'weight_reps' ? 20 : null,
+    reps: ['weight_reps', 'bodyweight_reps', 'reps', 'assisted'].includes(trackingType) ? 10 : null,
+    duration_s: ['distance_time', 'time', 'weight_time'].includes(trackingType) ? 60 : null,
+    distance_m: ['distance_time', 'distance'].includes(trackingType) ? 1000 : null,
+    assistance_kg: trackingType === 'assisted' ? 20 : null,
+    rir: null,
+    rpe: null,
+    tempo: null,
+  }
+  return [base, { ...base }, { ...base }].map(parsed => ({ text: {}, parsed }))
+}
+
+function ConfigureScreen({ exercise, onBack }: { exercise: { id: number; name: string; tracking_type: TrackingType }; onBack: () => void }) {
+  const theme = useTheme()
+  const insets = useSafeAreaInsets()
+  const fields = primaryFields(exercise.tracking_type)
+  const [unit, setUnit] = useState<'kg' | 'lb'>('kg')
+  const [unitReady, setUnitReady] = useState(false)
+  const [active, setActive] = useState<Workout | null>(null)
+  const [rows, setRows] = useState<DraftRow[]>(() =>
+    defaultSetsFor(exercise.tracking_type).map((r, i) => ({ key: i, text: r.text, parsed: r.parsed })),
+  )
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      const h = await db()
+      setUnit(await readWeightUnit(h))
+      setUnitReady(true)
+      setActive(await activeWorkout(h))
+    })()
+  }, [])
+
+  // Seed the display text of each field from the parsed defaults (unit-aware) —
+  // only once the real unit is known, so lb users see lb numbers.
+  useEffect(() => {
+    if (!unitReady) return
+    setRows(prev =>
+      prev.map(row => {
+        if (Object.keys(row.text).length > 0 || !row.parsed) return row
+        return { ...row, text: setValuesToDisplay(row.parsed, unit) }
+      }),
+    )
+  }, [unit, unitReady])
+
+  const updateField = (rowKey: number, key: string, text: string) => {
+    setRows(prev =>
+      prev.map(row => {
+        if (row.key !== rowKey) return row
+        const nextText = { ...row.text, [key]: text }
+        const base: SetValues = row.parsed ?? defaultSetsFor(exercise.tracking_type)[0]!.parsed
+        const { valid, value } = canonicalizeFieldValue(key, text, unit)
+        const parsed = valid ? { ...base, [key]: value } as SetValues : null
+        return { ...row, text: nextText, parsed }
+      }),
+    )
+  }
+
+  const addRow = () => {
+    setRows(prev => {
+      const last = prev.at(-1)
+      const parsed = last?.parsed ?? defaultSetsFor(exercise.tracking_type)[0]!.parsed
+      const copy: SetValues = { ...parsed }
+      return [...prev, { key: (prev.at(-1)?.key ?? 0) + 1, text: last ? { ...last.text } : {}, parsed: copy }]
+    })
+  }
+
+  const removeRow = (rowKey: number) => {
+    setRows(prev => (prev.length > 1 ? prev.filter(r => r.key !== rowKey) : prev))
+  }
+
+  const addToWorkout = async (force: boolean) => {
+    if (saving) return
+    const validRows = rows.filter(r => r.parsed != null)
+    if (!validRows.length) {
+      setError('Enter the set values before adding — or remove the empty row.')
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      const h = await db()
+      const current = await activeWorkout(h)
+      const workoutId = current?.id ?? (await startWorkout(h, localDate(Date.now())))
+      if (!force) {
+        const isDup = await isExerciseInWorkout(h, workoutId, exercise.id)
+        if (isDup) {
+          // UI/UX report §10.1 (Wave 1b): reversible duplicate — a toast states
+          // the fact and offers the action, never a blocking question.
+          setSaving(false)
+          showToast({
+            message: `"${exercise.name}" is already in this workout.`,
+            action: {
+              label: 'Add again',
+              onPress: () => { void addToWorkout(true) },
+            },
+          })
+          return
+        }
+      }
+      const workoutExerciseId = await addExercise(h, workoutId, exercise.id)
+      for (const row of validRows) {
+        await saveSet(h, workoutExerciseId, row.parsed!, { completed: false })
+      }
+      router.push({ pathname: '/workout', params: { id: workoutId } } as never)
+    } catch (caught) {
+      setSaving(false)
+      setError(caught instanceof Error && caught.message ? caught.message : 'Could not add this exercise. Nothing was written.')
+    }
+  }
+
+  const current = active
+
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
+      <Header title={exercise.name} icon="dumbbell" onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: space.lg, paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+        {error ? (
+          <View accessibilityRole="alert" style={[styles.example, { backgroundColor: theme.safetyBg, marginBottom: space.md }]}>
+            <Text style={[type.caption, { color: theme.safety, lineHeight: 19 }]}>{error}</Text>
+          </View>
+        ) : null}
+
+        <View style={[styles.setsCard, { backgroundColor: theme.bgSunken }]}>
+          <View style={styles.setsCardHead}>
+            <Text style={[type.heading, { color: theme.text }]}>Sets</Text>
+            <Text style={[type.caption, { color: theme.textMuted }]}>{rows.length} planned</Text>
+          </View>
+
+          {/* The mini set table — same columns as the live workout screen. */}
+          <View style={styles.setHeader}>
+            <Text style={[type.caption, { color: theme.textFaint, width: 26, textAlign: 'center' }]}>#</Text>
+            {fields.map(key => (
+              <Text key={key} style={[type.caption, { color: theme.textFaint, flex: 1, textAlign: 'center' }]}>
+                {shortFieldLabel(key, unit)}
+              </Text>
+            ))}
+            <Text style={[type.caption, { color: theme.textFaint, width: MIN_TAP_TARGET, textAlign: 'center' }]}>—</Text>
+          </View>
+
+          {rows.map((row, i) => (
+            <View key={row.key} style={styles.setLine}>
+              <Text style={[type.monoData, { color: theme.textFaint, width: 26, textAlign: 'center' }]}>{i + 1}</Text>
+              {fields.map(key => (
+                <TextInput
+                  key={key}
+                  accessibilityLabel={`${getFieldLabels(unit)[key]} set ${i + 1}`}
+                  keyboardType={key === 'tempo' ? 'default' : 'decimal-pad'}
+                  value={row.text[key] ?? ''}
+                  onChangeText={text => updateField(row.key, key, text)}
+                  style={[styles.cellInput, type.monoData, { color: theme.text, borderColor: theme.border }]}
+                />
+              ))}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove set ${i + 1}`}
+                onPress={() => removeRow(row.key)}
+                disabled={rows.length <= 1}
+                hitSlop={space.sm}
+                style={styles.removeSet}
+              >
+                <Icon name="minus" size={18} color={rows.length <= 1 ? theme.textFaint : theme.text} />
+              </Pressable>
+            </View>
+          ))}
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add set"
+            onPress={addRow}
+            style={[styles.addSetRow, { borderColor: theme.border }]}
+          >
+            <Icon name="plus" size={18} color={theme.textMuted} />
+            <Text style={[type.label, { color: theme.textMuted }]}>Add set</Text>
+          </Pressable>
+        </View>
+
+        <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 19 }]}>
+          Added to your {current ? 'active workout' : 'new workout'} — sets land as drafts; complete them with a tap on the workout screen.
+        </Text>
+      </ScrollView>
+
+      <View style={[styles.dock, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg }]}>
+        <Pressable
+          onPress={() => void addToWorkout(false)}
+          disabled={saving}
+          style={[styles.cta, { backgroundColor: theme.text }]}
+        >
+          <Text style={[type.bodyStrong, { color: theme.bg }]}>
+            {saving ? 'Adding…' : 'Add to workout'}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// The calorie configure screens (preserved from the four-path flow — each is
+// now exactly ONE pick deep).
 
 function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack: () => void }) {
   const theme = useTheme()
@@ -464,13 +842,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  optionCard: {
+  searchInput: {
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    fontSize: type.body.fontSize,
+    minHeight: 56,
+    marginTop: space.md,
+  },
+  filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.lg,
-    padding: space.lg,
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    marginTop: space.md,
+    minHeight: MIN_TAP_TARGET + 4,
+  },
+  recentChip: {
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+  },
+  setsCard: {
     borderRadius: radius.lg,
-    minHeight: 84,
+    padding: space.lg,
+    gap: space.sm,
+  },
+  setsCardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  setHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  setLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cellInput: {
+    flex: 1,
+    minHeight: MIN_TAP_TARGET,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: space.sm,
+  },
+  removeSet: {
+    width: MIN_TAP_TARGET,
+    height: MIN_TAP_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addSetRow: {
+    minHeight: 48,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.sm,
   },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.lg },
   intensityCard: {

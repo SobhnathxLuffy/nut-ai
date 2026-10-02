@@ -13,6 +13,7 @@ import {
 } from '@nutai/training'
 import { db } from '../src/data/repo'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { ItemRow } from '../src/components/ItemRow'
 import { useTheme } from '../src/theme/ThemeProvider'
 
 const KINDS = [
@@ -276,17 +277,15 @@ export default function EquipmentScreen() {
         <Label muted>No equipment recorded yet. Add items or seed standard equipment.</Label>
       )}
       {items.map((item) => (
-        <Card key={item.id}>
-          <Row>
-            <View style={{ flex: 1 }}>
-              <Label>{item.name}</Label>
-              <Label muted>
-                {item.kind.replace('_', ' ')} · {item.weight_kg} kg each · count: {item.count}
-              </Label>
-            </View>
-            <Button label="Delete" onPress={() => void action.run(() => handleDelete(item.id))} />
-          </Row>
-        </Card>
+        // UI/UX report Ch. 8.5 (Wave 3): inventory rows collapse to icon +
+        // label + value, with the (still-working) Delete in the trailing slot.
+        <ItemRow
+          key={item.id}
+          icon={item.kind === 'plate' ? 'scale' : 'dumbbell'}
+          label={item.name}
+          value={`${item.kind.replace('_', ' ')} · ${item.weight_kg} kg each · count: ${item.count}`}
+          trailing={<Button label="Delete" onPress={() => void action.run(() => handleDelete(item.id))} />}
+        />
       ))}
     </Screen>
   )

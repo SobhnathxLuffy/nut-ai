@@ -15,8 +15,10 @@ import { db, localDate } from '../src/data/repo'
 import { consumePendingRoutineExercises } from '../src/data/routine-draft'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
+import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { space } from '../src/theme/tokens'
 
 const PROGRESSION_KINDS = ['double', 'fixed', 'percentage', 'rir', 'manual'] as const
 
@@ -373,14 +375,28 @@ export default function RoutinesScreen() {
         } catch {
           // ignore
         }
+        // UI/UX report Ch. 8.5 (Wave 3): list rows collapse to icon + label +
+        // value + chevron; the three actions ride below instead of competing
+        // with the row itself.
         return (
-          <Card key={r.id}>
-            <Row>
-              <View style={{ flex: 1 }}>
-                <Label>{r.name}</Label>
-                <Label muted>{count} exercises</Label>
-              </View>
-            </Row>
+          <View key={r.id} style={{ gap: space.sm }}>
+            <ItemRow
+              icon="dumbbell"
+              label={r.name}
+              value={`${count} exercise${count === 1 ? '' : 's'}`}
+              onPress={() => {
+                setEditId(r.id)
+                setName(r.name)
+                try {
+                  const parsed = RoutineInput.parse(JSON.parse(r.definition_json))
+                  setSelectedExercises(parsed.exercises)
+                  setEditing(true)
+                } catch {
+                  // ignore
+                }
+              }}
+              accessibilityLabel={`Edit routine ${r.name}`}
+            />
             <Row>
               <Button label="Launch workout" selected onPress={() => void action.run(() => handleLaunch(r.id))} />
               <Button
@@ -399,7 +415,7 @@ export default function RoutinesScreen() {
               />
               <Button label="Delete" onPress={() => void action.run(() => handleDeleteRoutine(r.id))} />
             </Row>
-          </Card>
+          </View>
         )
       })}
     </Screen>
