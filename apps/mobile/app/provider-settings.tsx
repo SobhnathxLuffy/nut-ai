@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PROVIDER_MODELS, providersByPrice, type ProviderId } from '@nutai/prompt'
 import { CredentialForm, PROVIDER_NAME } from '../src/components/CredentialForm'
+import { Disclosure } from '../src/components/Disclosure'
 import { Icon } from '../src/components/Icon'
 import { showToast } from '../src/components/toast-store'
 import { putSetting, setting } from '../src/data/repo'
@@ -216,53 +217,78 @@ export default function ProviderSettings() {
               better at portion size, which is where nearly all the error lives.
             </Text>
 
-            {/* Gateway routing is provider-agnostic now: a custom base URL
+            {/* UI/UX report Ch 8.8 (Wave 3): the reseller base URL and custom
+                model IDs are power-user fields — they live behind an
+                "Advanced" disclosure, COLLAPSED by default, so the catalog
+                picker above stays the visible path. Nothing is removed: one
+                tap reveals every field, and it stays revealed.
+
+                Gateway routing is provider-agnostic now: a custom base URL
                 re-hosts scans, chat AND validation for EVERY provider, so a
                 Google/Anthropic user pointed at a reseller needs these fields
                 exactly as much as an OpenAI user does. */}
-            <View style={[styles.card, { backgroundColor: theme.bgSunken, marginTop: space.xl }]}>
-              <Text style={[type.bodyStrong, { color: theme.text }]}>Custom API endpoint (resellers)</Text>
-              <Text style={[type.caption, { color: theme.textMuted, marginTop: 4, lineHeight: 18 }]}>
-                Works with any OpenAI-compatible API reseller (aicredits.in, OpenRouter, a proxy) for
-                every provider — Gemini and Claude models behind the same gateway. Paste the base
-                URL their dashboard shows — it must end in /v1. Leave empty to use the official
-                endpoint. These are the same fields offered on the key form when you tap Replace key.
-              </Text>
-              <TextInput
-                value={baseUrlDraft}
-                onChangeText={setBaseUrlDraft}
-                onEndEditing={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
-                onBlur={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                placeholder={RESELLER_BASE_URL_PLACEHOLDER}
-                placeholderTextColor={theme.textFaint}
-                style={[styles.input, { borderColor: theme.border, color: theme.text }]}
-              />
-              {/* P2-11: the missing-/v1 paste is the most common wrong hunt
-                  (it 404s as 'model not available'). Flag it at paste time. */}
-              {baseUrlWarning(baseUrlDraft) ? (
-                <Text style={[type.caption, { color: theme.uncertain, marginTop: space.sm, lineHeight: 18 }]}>
-                  {baseUrlWarning(baseUrlDraft)}
+            <View style={{ marginTop: space.xl }}>
+              <Disclosure
+                label="Advanced — reseller endpoint & custom model IDs"
+                caption="aicredits.in, OpenRouter, or any OpenAI-compatible gateway"
+              >
+                <Text style={[type.caption, { color: theme.textMuted, lineHeight: 18 }]}>
+                  Works with any OpenAI-compatible API reseller (aicredits.in, OpenRouter, a proxy) for
+                  every provider — Gemini and Claude models behind the same gateway. Paste the base
+                  URL their dashboard shows — it must end in /v1. Leave empty to use the official
+                  endpoint. These are the same fields offered on the key form when you tap Replace key.
                 </Text>
-              ) : null}
-              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 18 }]}>
-                Model ID override — type the exact model name your reseller uses (e.g. gemini-2.5-flash,
-                google/gemini-2.5-flash, deepseek-chat). Replaces the picker above and is sent exactly
-                as typed.
-              </Text>
-              <TextInput
-                value={customModelDraft}
-                onChangeText={setCustomModelDraft}
-                onBlur={saveScanModel}
-                onEndEditing={saveScanModel}
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholder="gemini-2.5-flash"
-                placeholderTextColor={theme.textFaint}
-                style={[styles.input, { borderColor: theme.border, color: theme.text }]}
-              />
+                <TextInput
+                  value={baseUrlDraft}
+                  onChangeText={setBaseUrlDraft}
+                  onEndEditing={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
+                  onBlur={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  placeholder={RESELLER_BASE_URL_PLACEHOLDER}
+                  placeholderTextColor={theme.textFaint}
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+                />
+                {/* P2-11: the missing-/v1 paste is the most common wrong hunt
+                    (it 404s as 'model not available'). Flag it at paste time. */}
+                {baseUrlWarning(baseUrlDraft) ? (
+                  <Text style={[type.caption, { color: theme.uncertain, lineHeight: 18 }]}>
+                    {baseUrlWarning(baseUrlDraft)}
+                  </Text>
+                ) : null}
+                <Text style={[type.caption, { color: theme.textMuted, lineHeight: 18 }]}>
+                  Model ID override — type the exact model name your reseller uses (e.g. gemini-2.5-flash,
+                  google/gemma-2.5-flash, deepseek-chat). Replaces the picker above and is sent exactly
+                  as typed.
+                </Text>
+                <TextInput
+                  value={customModelDraft}
+                  onChangeText={setCustomModelDraft}
+                  onBlur={saveScanModel}
+                  onEndEditing={saveScanModel}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="gemini-2.5-flash"
+                  placeholderTextColor={theme.textFaint}
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+                />
+                <Text style={[type.caption, { color: theme.textMuted, lineHeight: 18 }]}>
+                  Custom chatbot model ID — a reseller-specific chat model. Empty means "same as the
+                  scan model". Sent exactly as typed.
+                </Text>
+                <TextInput
+                  value={assistantModelId ?? ''}
+                  onChangeText={(v) => setAssistantModelId(v.trim())}
+                  onBlur={saveAssistantModel}
+                  onEndEditing={saveAssistantModel}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Custom chatbot model ID (optional)"
+                  placeholderTextColor={theme.textFaint}
+                  style={[styles.input, { borderColor: theme.border, color: theme.text }]}
+                />
+              </Disclosure>
             </View>
 
             <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Chatbot model</Text>
@@ -304,21 +330,11 @@ export default function ProviderSettings() {
                 )
               })}
             </View>
-            <TextInput
-              value={assistantModelId ?? ''}
-              onChangeText={(v) => setAssistantModelId(v.trim())}
-              onBlur={saveAssistantModel}
-              onEndEditing={saveAssistantModel}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="Custom chatbot model ID (optional)"
-              placeholderTextColor={theme.textFaint}
-              style={[styles.input, { borderColor: theme.border, color: theme.text, marginTop: space.sm }]}
-            />
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, lineHeight: 18 }]}>
               The chatbot is text-only: it reads your log and proposes changes, and never sees a
               photo. A cheap model here barely changes answer quality and makes credits last far
-              longer — photo scans remain on the scan model above.
+              longer — photo scans remain on the scan model above. The custom chatbot model ID
+              lives in Advanced, with the reseller fields.
             </Text>
 
             {/* P2-8: cross-provider fallback opt-in. The default (off) keeps
