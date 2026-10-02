@@ -551,3 +551,59 @@ export function preparationNoteFor(row: IngredientRowV13): string | null {
   if (fat !== 'moderate' && fat !== 'heavy') return null
   return '· likely cooked in oil/ghee'
 }
+
+// -- UI/UX report §8.4 (Wave 3): confidence you can see -------------------------
+//
+// "Confidence chips get a legend on first appearance, uncertain rows show the
+// reason inline instead of behind a tap." Both rulings are decisions, so they
+// live here next to every other result-screen ruling, node-pure and tested.
+
+/** Settings key persisting the legend dismissal (survives restarts). */
+export const CONFIDENCE_LEGEND_SETTING_KEY = 'confidence_legend_dismissed'
+
+/**
+ * The legend gate. `stored` is the raw settings value ('1' = dismissed).
+ * Anything else — including null/undefined (never read) — shows the legend:
+ * the one-time explanatory line is the DEFAULT, and only an explicit
+ * dismissal hides it.
+ */
+export function shouldShowConfidenceLegend(stored: string | null | undefined): boolean {
+  return stored !== '1'
+}
+
+/**
+ * The first reason an uncertain row shows INLINE (§8.4: "the reason inline
+ * instead of behind a tap"), or null when the band is confident enough that
+ * an inline reason would be noise. 'tight' bands are excluded deliberately:
+ * the chip still offers its tap-for-range, but a near-label band whose
+ * reason reads aloud trains people to ignore the signal — the same ruling
+ * ConfidenceChip already makes for tier 'none'. Only the FIRST reason shows;
+ * the chip's tap expands the full list.
+ */
+const INLINE_REASON_TIERS: ReadonlySet<BandTier> = new Set(['moderate', 'wide', 'very_wide'])
+
+export function inlineUncertaintyReason(band: Band): string | null {
+  if (!INLINE_REASON_TIERS.has(band.tier)) return null
+  return band.reasons[0] ?? null
+}
+
+/**
+ * How many skeleton ingredient rows the analyzing state shows — the list
+ * GROWS as the pipeline advances (§8.4: "a skeleton ingredient list builds
+ * while the model works"), anchored to the real stage, never a fake timer:
+ * 'preparing' has nothing identified yet, 'identifying' has found half the
+ * plate, 'matching' is close to the full list. The last row renders shorter
+ * (see result.tsx) so a growing list reads as filling, not appending.
+ */
+export function analyzingSkeletonRowCount(
+  stage: 'preparing' | 'identifying' | 'matching',
+): number {
+  switch (stage) {
+    case 'preparing':
+      return 2
+    case 'identifying':
+      return 4
+    case 'matching':
+      return 6
+  }
+}

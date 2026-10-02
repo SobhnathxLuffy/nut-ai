@@ -13,22 +13,30 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult, MacroTotals, IngredientRow, CorrectionIntent } from '@nutai/core-schema'
 import { CorrectionIntentZ } from '@nutai/core-schema'
-import type { Band } from '@nutai/confidence'
+import { TIER_GLYPH, type Band } from '@nutai/confidence'
 import type { ScoredCandidate } from '@nutai/resolver'
 import { loadFood, resolveByText } from '@nutai/resolver'
 import { buildCorrectionPrompt, cheapestModel, type ProviderId } from '@nutai/prompt'
 import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
 import { Button } from '../src/components/Screen'
 import { Icon, type IconName } from '../src/components/Icon'
-import { customProviderBaseUrl, logMeal, setting, db as openUserDb, undoLastOperation } from '../src/data/repo'
+import { Badge } from '../src/components/Badge'
+import { Sheet } from '../src/components/Sheet'
+import { Empty } from '../src/components/Empty'
+import { Skeleton, SkeletonLine, SkeletonRow } from '../src/components/Skeleton'
+import { customProviderBaseUrl, logMeal, putSetting, setting, db as openUserDb, undoLastOperation } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
-import { describeCorrectionOperation, rowsNameOf } from '../src/data/correction-describe'
+import { describeCorrectionOperation, rowsNameOf, type CorrectionOperation } from '../src/data/correction-describe'
 import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
+import { recentFoodsWithGrams, type RecentFoodWithGrams } from '../src/data/one-tap-log'
 import {
+  CONFIDENCE_LEGEND_SETTING_KEY,
+  analyzingSkeletonRowCount,
   estimateProvenanceLabel,
   formatInt,
+  inlineUncertaintyReason,
   isWideTier,
   likelyRangeLabel,
   mealTitleFor,
@@ -36,6 +44,7 @@ import {
   quickSetGramsFor,
   roundForUncertainty,
   sceneCaptionFor,
+  shouldShowConfidenceLegend,
 } from '../src/scan/review'
 import {
   portionConfidenceNoteFor,
@@ -45,7 +54,6 @@ import {
   type ScanResultV13,
   topUncertaintyFor,
 } from '../src/scan/review'
-import { describeActiveModel } from '../src/inference/active-model'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { isQuickEligible } from '../src/scan/quick-mode'
 import {
@@ -69,49 +77,87 @@ import { showToast } from '../src/components/toast-store'
 import { success as hapticSuccess } from '../src/utils/haptics'
 
 /**
- * The small "which model is reading this photo" line. BYO-key means the user
- * chose (and pays) a specific model — the scan screen should show exactly what
- * runs, the same way the assistant header does.
+ * UI/UX report §8.4 (Wave 3): the confidence legend.
  *
- * UI/UX report Table 12.1 (Wave 1b): vendor model names mid-scan are
- * debug-class information — "users need confidence, not vendor names,
- * mid-scan" (§8.4). The caption is now folded behind a diagnostics disclosure:
- * collapsed while scanning, one tap reveals the exact model + provider, and
- * the information stays visible after the tap (nothing is deleted).
+ * ONE explanatory line the first time a confidence chip appears on this
+ * screen — dismissible, and the dismissal PERSISTS (settings row), so the
+ * legend is a genuine one-time teacher, not a recurring caption. After it,
+ * the chips speak for themselves: violet + glyph + "tap for range".
+ *
+ * THE MODEL CAPTION IS GONE from the scan flow on purpose (same report):
+ * "users need confidence, not vendor names, mid-scan". The model identifier
+ * now lives in ONE honest home — Profile → Diagnostics (app/diagnostics.tsx,
+ * Task 16). The P1-2 model-hint on the FAILED state stays: that is failure
+ * guidance, not a caption.
  */
-function ScanModelCaption() {
+function ConfidenceLegend() {
   const theme = useTheme()
-  const [line, setLine] = useState('')
-  const [open, setOpen] = useState(false)
+  // null = not read yet; false = dismissed (or unreadable — quiet default).
+  const [show, setShow] = useState<boolean | null>(null)
   useEffect(() => {
     let live = true
-    void describeActiveModel('scan').then((m) => {
-      if (live) setLine(m ?? '')
-    })
+    void setting(CONFIDENCE_LEGEND_SETTING_KEY)
+      .then((v) => {
+        if (live) setShow(shouldShowConfidenceLegend(v))
+      })
+      .catch(() => {
+        if (live) setShow(false)
+      })
     return () => {
       live = false
     }
   }, [])
-  if (!line) return null
+  if (show !== true) return null
   return (
-    <View style={{ marginTop: space.sm, alignItems: 'center' }}>
+    <View
+      accessibilityLabel="About the confidence chips"
+      style={[styles.legendCard, { backgroundColor: theme.uncertainBg }]}
+    >
+      <View style={{ flexDirection: 'row', gap: space.xs, alignItems: 'flex-start' }}>
+        <Text style={[type.caption, { color: theme.uncertain }]}>{TIER_GLYPH.moderate}</Text>
+        <Text style={[type.caption, { color: theme.text, flex: 1, lineHeight: 19 }]}>
+          Violet chips mark estimates. Tap one for its likely range and the reasons behind it — numbers
+          tighten as you confirm details.
+        </Text>
+      </View>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={open ? 'Hide scan details' : 'Show scan details'}
-        onPress={() => setOpen((v) => !v)}
-        hitSlop={space.sm}
-        style={{ minHeight: MIN_TAP_TARGET, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: space.xs }}
+        accessibilityLabel="Dismiss the confidence guide"
+        onPress={() => {
+          setShow(false)
+          void putSetting(CONFIDENCE_LEGEND_SETTING_KEY, '1')
+        }}
+        style={{ alignSelf: 'flex-start', minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
       >
-        <Text style={[type.caption, { color: theme.textFaint }]}>Scan details</Text>
-        <View style={{ transform: [{ rotate: open ? '90deg' : '0deg' }] }}>
-          <Icon name="chevron" size={12} color={theme.textFaint} />
-        </View>
+        <Text style={[type.bodyStrong, { color: theme.uncertain }]}>Got it</Text>
       </Pressable>
-      {open ? (
-        <Text style={[type.caption, { color: theme.textFaint, textAlign: 'center' }]}>
-          Scanning with {line}
-        </Text>
-      ) : null}
+    </View>
+  )
+}
+
+/**
+ * §8.4: the skeleton ingredient list that BUILDS while the model works.
+ *
+ * Row count is anchored to the real pipeline stage (analyzingSkeletonRowCount)
+ * — never a fake timer — and each row mimics the ingredient row it is about
+ * to become: name + subtitle line on the left, the gram block on the right.
+ * The last row renders shorter so a growing list reads as filling in, not
+ * appending. The spinner + honest stage copy above stay: this is the 10s+
+ * window, and the list is structure, not a fake result.
+ */
+function AnalyzingSkeletonRows({ stage }: { stage: 'preparing' | 'identifying' | 'matching' }) {
+  const count = analyzingSkeletonRowCount(stage)
+  return (
+    <View style={styles.analyzingList}>
+      {Array.from({ length: count }, (_, i) => (
+        <View key={i} style={styles.analyzingRow}>
+          <View style={{ flex: 1, gap: space.xs }}>
+            <SkeletonLine width={i === count - 1 ? '60%' : '80%'} height={16} />
+            <SkeletonLine width="45%" height={12} />
+          </View>
+          <Skeleton width={64} height={16} />
+        </View>
+      ))}
     </View>
   )
 }
@@ -214,31 +260,62 @@ export default function Result() {
           ? 'Identifying ingredients…'
           : 'Matching the nutrition database…'
     return (
-      <View style={[styles.center, { backgroundColor: theme.bg }]}>
+      <ScrollView
+        style={{ backgroundColor: theme.bg }}
+        contentContainerStyle={[styles.center, { paddingBottom: Math.max(insets.bottom, space.xl) }]}
+      >
         <Image source={{ uri: phase.photoUri }} style={styles.photo} />
         <ActivityIndicator color={theme.textMuted} style={{ marginTop: space.xl }} />
         <Text style={[type.heading, { color: theme.text, marginTop: space.md }]}>{copy}</Text>
-        <ScanModelCaption />
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center' }]}>
           Your photo is saved — nothing is lost if this fails.
         </Text>
-        <Pressable onPress={() => router.back()} hitSlop={space.md} style={{ marginTop: space.xl }}>
+        {/* §8.4: the skeleton ingredient list builds while the model works —
+            the mid-scan model caption it replaces is gone (see the
+            ConfidenceLegend doc block for where the model id lives now). */}
+        <AnalyzingSkeletonRows stage={stage} />
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={space.md}
+          style={{ marginTop: space.xl, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
+        >
           <Text style={[type.body, { color: theme.textMuted }]}>Close</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     )
   }
 
   if (phase.kind === 'failed') {
+    // §8.4: the failed state is a real Empty — the SPECIFIC reason, then two
+    // ways out. Retake replaces the scan when the failure says retrying the
+    // same photo cannot work (auth, quota, refusal); "Try again" takes that
+    // slot when the failure is honestly retryable (rate limit). Log manually
+    // is the always-present escape hatch — a failed scan never strands the
+    // meal. The P1-2 model hint stays (failure guidance, not a caption).
+    const retake = () => {
+      reset()
+      router.replace('/camera')
+    }
+    const logManually = () => {
+      reset()
+      router.replace('/food-search')
+    }
     return (
-      <View style={[styles.center, { backgroundColor: theme.bg }]}>
-        <Image source={{ uri: phase.photoUri }} style={[styles.photo, { opacity: 0.5 }]} />
-        <Text style={[type.heading, { color: theme.text, marginTop: space.xl, textAlign: 'center' }]}>
-          Could not read this meal
-        </Text>
-        <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center', lineHeight: 19 }]}>
-          {phase.message}
-        </Text>
+      <ScrollView
+        style={{ backgroundColor: theme.bg }}
+        contentContainerStyle={[styles.center, { paddingBottom: Math.max(insets.bottom, space.xl) }]}
+      >
+        <Empty
+          icon="scan"
+          title="Could not read this meal"
+          message={phase.message}
+          action={
+            phase.canRetry
+              ? { label: 'Try again', onPress: () => void retryScan() }
+              : { label: 'Retake photo', onPress: retake }
+          }
+          secondaryAction={{ label: 'Log manually', onPress: logManually }}
+        />
         {/* P1-2 (QA report Cycle 2): honest model guidance under the failure
             copy — present ONLY after the same model failed with gateway server
             errors twice in a row (the Ling-3.0-VL retry loop's way out). */}
@@ -247,22 +324,14 @@ export default function Result() {
             {phase.modelHint}
           </Text>
         ) : null}
-        {phase.canRetry ? (
-          <Pressable
-            onPress={() => void retryScan()}
-            style={[styles.primary, { backgroundColor: theme.text, marginTop: space.xl, paddingHorizontal: space.xl }]}
-          >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>Try again</Text>
-          </Pressable>
-        ) : null}
         <Pressable
           onPress={() => { reset(); router.back() }}
           hitSlop={space.md}
-          style={{ marginTop: space.lg }}
+          style={{ marginTop: space.lg, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
         >
           <Text style={[type.body, { color: theme.textMuted }]}>Close</Text>
         </Pressable>
-      </View>
+      </ScrollView>
     )
   }
 
@@ -440,6 +509,9 @@ export default function Result() {
               </View>
             ) : null}
 
+            {/* §8.4: the legend rides the FIRST appearance of a confidence
+                chip — one-time, dismissible, persisted. */}
+            <ConfidenceLegend />
             <View style={{ marginTop: space.md }}>
               <ConfidenceChip
                 value={result.totals.kcal}
@@ -578,6 +650,9 @@ export default function Result() {
             </View>
           ) : null}
 
+          {/* §8.4: the legend rides the FIRST appearance of a confidence
+              chip — one-time, dismissible, persisted. */}
+          <ConfidenceLegend />
           <View style={{ marginTop: space.md }}>
             <ConfidenceChip
               value={result.totals.kcal}
@@ -662,6 +737,11 @@ export default function Result() {
           // additional muted line under the provenance chain; never replaces
           // it (different facts: data source vs this meal's cooking).
           const prepNote = preparationNoteFor(row)
+          // §8.4: the reason an uncertain row is uncertain, shown INLINE — not
+          // behind the chip's tap. The tap still expands the full reason list
+          // and the range controls; this line is the headline, not the whole
+          // disclosure. Confident tiers stay quiet (inlineUncertaintyReason).
+          const inlineReason = item ? inlineUncertaintyReason(item.band) : null
           return (
             <View key={row.id}>
               <View style={[styles.row, { borderColor: theme.border }]}>
@@ -696,6 +776,12 @@ export default function Result() {
                   ) : null}
                   {prepNote ? (
                     <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>{prepNote}</Text>
+                  ) : null}
+                  {inlineReason ? (
+                    <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
+                      <Text style={{ color: theme.uncertain }}>Why: </Text>
+                      {inlineReason}
+                    </Text>
                   ) : null}
                   {item && (
                     <ConfidenceChip
@@ -801,158 +887,136 @@ export default function Result() {
         </View>
       </View>
 
-      {fixOpen ? (
-        <View style={[styles.fixOverlay, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <Icon name="pencil" size={20} color={theme.text} />
-            <Text style={[type.title, { color: theme.text }]}>Fix result</Text>
-          </View>
-
-          {fixStage === 'input' ? (
-            <>
-              <TextInput
-                autoFocus
-                multiline
-                placeholder="Describe what needs to be fixed"
-                placeholderTextColor={theme.textFaint}
-                value={fixText}
-                onChangeText={setFixText}
-                style={[styles.fixInput, { color: theme.text, borderColor: theme.border }]}
-              />
-              <View style={[styles.fixExample, { backgroundColor: theme.bgSunken }]}>
-                <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
-                  <Text style={{ fontWeight: '600' }}>Example:</Text> The wrap is missing the chicken and
-                  avocado. Only what you mention gets changed — your other edits stay put.
-                </Text>
-              </View>
-              {fixMessage ? (
-                <Text style={[type.caption, { color: theme.uncertain, marginTop: space.lg, lineHeight: 19 }]}>
-                  {fixMessage}
-                </Text>
-              ) : null}
-              <View style={{ flex: 1 }} />
-              {fixMessage ? (
-                <>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={!fixText.trim() || fixBusy}
-                    onPress={() => void submitFix()}
-                    style={[
-                      styles.primary,
-                      { backgroundColor: theme.text, marginBottom: space.md },
-                      (!fixText.trim() || fixBusy) && { opacity: 0.4 },
-                    ]}
-                  >
-                    <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Checking…' : 'Update'}</Text>
-                  </Pressable>
-                  {/* P2-3: the billed re-analysis is an explicit choice, shown
-                      exactly when the parser path failed. */}
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={fixBusy}
-                    onPress={() => {
-                      const note = fixText.trim()
-                      if (!note) return
-                      setFixOpen(false)
-                      setFixStage('input')
-                      setFixText('')
-                      setFixMessage('')
-                      void fixScan(note)
-                    }}
-                    style={[styles.primary, { backgroundColor: theme.bgSunken, marginBottom: Math.max(insets.bottom, space.lg) }]}
-                  >
-                    <Text style={[type.bodyStrong, { color: theme.text }]}>Re-analyze the photo instead</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={!fixText.trim() || fixBusy}
-                    onPress={() => void submitFix()}
-                    style={[
-                      styles.primary,
-                      { backgroundColor: theme.text, marginBottom: Math.max(insets.bottom, space.lg) },
-                      (!fixText.trim() || fixBusy) && { opacity: 0.4 },
-                    ]}
-                  >
-                    <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Checking…' : 'Update'}</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => { setFixOpen(false); setFixStage('input'); setFixMessage('') }}
-                    hitSlop={space.md}
-                    style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
-                  >
-                    <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
-                  </Pressable>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
-                Check each change before applying — nothing below is applied until you confirm.
+      {/* UI/UX report §8.4 (Wave 3): Fix collapses from a three-stage
+          full-screen overlay into ONE bottom sheet on the Sheet primitive —
+          the note field, the parsed before/after rows, Apply, and the
+          explicit billed-re-analysis fallback (P2-3) all live in the same
+          surface; only the content swaps between note and confirmation. */}
+      <Sheet open={fixOpen} onClose={closeFixSheet} title="Fix result" accessibleTitle="Fix result">
+        {fixStage === 'input' ? (
+          <View style={{ gap: space.md }}>
+            <TextInput
+              autoFocus
+              multiline
+              placeholder="Describe what needs to be fixed"
+              placeholderTextColor={theme.textFaint}
+              value={fixText}
+              onChangeText={setFixText}
+              style={[styles.fixInput, { color: theme.text, borderColor: theme.border }]}
+            />
+            <View style={[styles.fixExample, { backgroundColor: theme.bgSunken }]}>
+              <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
+                <Text style={{ fontWeight: '600' }}>Example:</Text> The wrap is missing the chicken and
+                avocado. Only what you mention gets changed — your other edits stay put.
               </Text>
-              <ScrollView style={{ marginTop: space.lg }} contentContainerStyle={{ gap: space.sm }}>
-                {(pendingIntent?.operations ?? []).map((op, i) => (
-                  <View key={`${op.type}-${i}`} style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}>
-                    <Text style={[type.body, { color: theme.text, flex: 1 }]}>
-                      {describeCorrectionOperation(op, rowsNameOf(result.meal.ingredients))}
-                    </Text>
-                  </View>
-                ))}
-                {fixMessage ? (
-                  <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{fixMessage}</Text>
-                ) : null}
-              </ScrollView>
-              <View style={{ flex: 1 }} />
-              <Pressable
-                accessibilityRole="button"
-                disabled={fixBusy}
-                onPress={() => void applyIntent()}
-                style={[styles.primary, { backgroundColor: theme.text, marginBottom: space.md }, fixBusy && { opacity: 0.4 }]}
-              >
-                <Text style={[type.bodyStrong, { color: theme.bg }]}>{fixBusy ? 'Applying…' : 'Apply changes'}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
+            </View>
+            {fixMessage ? (
+              <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{fixMessage}</Text>
+            ) : null}
+            <Button
+              label={fixBusy ? 'Checking…' : 'Update'}
+              icon="check"
+              size="lg"
+              selected
+              disabled={!fixText.trim() || fixBusy}
+              onPress={() => void submitFix()}
+            />
+            {fixMessage ? (
+              // P2-3: the billed re-analysis is an explicit choice, shown
+              // exactly when the parser path failed.
+              <Button
+                label="Re-analyze the photo instead"
+                size="lg"
                 disabled={fixBusy}
                 onPress={() => {
                   const note = fixText.trim()
-                  setFixOpen(false)
-                  setFixStage('input')
-                  setPendingIntent(null)
-                  setFixText('')
-                  setFixMessage('')
-                  if (note) void fixScan(note)
+                  if (!note) return
+                  closeFixSheet()
+                  void fixScan(note)
                 }}
-                style={[styles.primary, { backgroundColor: theme.bgSunken, marginBottom: space.md }]}
-              >
-                <Text style={[type.bodyStrong, { color: theme.text }]}>Re-analyze the photo instead</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => { setFixStage('input'); setPendingIntent(null); setFixMessage('') }}
-                hitSlop={space.md}
-                style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
-              >
-                <Text style={[type.body, { color: theme.textMuted }]}>Back</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
-      ) : null}
+              />
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel fixing this result"
+              onPress={closeFixSheet}
+              hitSlop={space.md}
+              style={{ alignSelf: 'center', minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
+            >
+              <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ gap: space.md }}>
+            <Text style={[type.caption, { color: theme.textMuted, lineHeight: 19 }]}>
+              Check each change before applying — nothing below is applied until you confirm.
+            </Text>
+            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: space.sm }}>
+              {fixText.trim() ? (
+                <Text style={[type.caption, { color: theme.textFaint, lineHeight: 19 }]}>
+                  You asked: “{fixText.trim()}”
+                </Text>
+              ) : null}
+              {(pendingIntent?.operations ?? []).map((op, i) => (
+                <FixOperationRow key={`${op.type}-${i}`} op={op} rows={result.meal.ingredients} />
+              ))}
+              {fixMessage ? (
+                <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{fixMessage}</Text>
+              ) : null}
+            </ScrollView>
+            <Button
+              label={fixBusy ? 'Applying…' : 'Apply changes'}
+              icon="check"
+              size="lg"
+              selected
+              disabled={fixBusy}
+              onPress={() => void applyIntent()}
+            />
+            <Button
+              label="Re-analyze the photo instead"
+              size="lg"
+              disabled={fixBusy}
+              onPress={() => {
+                const note = fixText.trim()
+                setFixStage('input')
+                setPendingIntent(null)
+                closeFixSheet()
+                if (note) void fixScan(note)
+              }}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back to the fix note"
+              onPress={() => { setFixStage('input'); setPendingIntent(null); setFixMessage('') }}
+              hitSlop={space.md}
+              style={{ alignSelf: 'center', minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
+            >
+              <Text style={[type.body, { color: theme.textMuted }]}>Back</Text>
+            </Pressable>
+          </View>
+        )}
+      </Sheet>
 
-      {addOpen ? (
-        <AddIngredientSheet
-          onClose={() => setAddOpen(false)}
-          onAdd={(row) => {
-            addRow(row)
-            setAddOpen(false)
-          }}
-        />
-      ) : null}
+      {/* §8.4: Add-ingredient is a bottom sheet WITH recents — the foods this
+          user actually logs are one tap away before any search happens. */}
+      <AddIngredientSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onAdd={(row) => {
+          addRow(row)
+          setAddOpen(false)
+        }}
+      />
     </View>
   )
+
+  /** §8.4: close-and-reset for the Fix sheet (every stage returns to the note). */
+  function closeFixSheet() {
+    setFixOpen(false)
+    setFixStage('input')
+    setPendingIntent(null)
+    setFixMessage('')
+  }
 
   /**
    * AIP-004 fast path: parse the note into structured ops against the current
@@ -1080,6 +1144,36 @@ function domainOf(url: string): string {
   return m?.[1] ?? url
 }
 
+/**
+ * §8.4: one parsed correction as a BEFORE/AFTER row inside the Fix sheet.
+ *
+ * The "after" line is the ONE operation describer (describeCorrectionOperation
+ * — the same text the assistant's proposal card renders, P2-30-e). Update and
+ * swap operations also show what the row is NOW, so every change reads as
+ * from → to instead of a bare instruction.
+ */
+function FixOperationRow({ op, rows }: { op: CorrectionOperation; rows: IngredientRow[] }) {
+  const theme = useTheme()
+  const current =
+    op.type === 'update_quantity' || op.type === 'replace_item'
+      ? rows.find((r) => r.id === op.id)
+      : undefined
+  return (
+    <View style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[type.body, { color: theme.text }]}>
+          {describeCorrectionOperation(op, rowsNameOf(rows))}
+        </Text>
+        {current ? (
+          <Text style={[type.caption, { color: theme.textMuted }]}>
+            Now: {formatInt(current.grams)} g
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Add-from-search (#2) — corpus helpers shared by the add sheet and the
 // AIP-004 add/replace operations.
@@ -1159,25 +1253,46 @@ function toIngredientRow(sel: ManualFoodSelection, displayName: string): Ingredi
 }
 
 /**
- * The add-from-search sheet. The search runs the SAME resolver the manual
+ * The add-from-search sheet — §8.4 (Wave 3): a bottom sheet on the Sheet
+ * primitive, WITH recents. The search runs the SAME resolver the manual
  * logging screen uses — one corpus, one ranking, no parallel lookup code to
- * drift. Tap a result and it joins the ingredient list as a fully editable,
- * DB-backed row.
+ * drift. Tap a result (or a recent) and it joins the ingredient list as a
+ * fully editable, DB-backed row.
  */
 function AddIngredientSheet({
+  open,
   onClose,
   onAdd,
 }: {
+  open: boolean
   onClose: () => void
   onAdd: (row: IngredientRow) => void
 }) {
   const theme = useTheme()
-  const insets = useSafeAreaInsets()
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [candidates, setCandidates] = useState<ScoredCandidate[]>([])
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState('')
+  // §8.4: recents — the foods this user actually logs, one tap away before
+  // any search happens. Same derivation as the Food tab's one-tap cards.
+  const [recents, setRecents] = useState<RecentFoodWithGrams[]>([])
+
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      try {
+        const db = await openUserDb()
+        const foods = await recentFoodsWithGrams(db, Date.now())
+        if (live) setRecents(foods.slice(0, 8))
+      } catch {
+        // Recents are a convenience, never a gate — quiet failure.
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [])
 
   useEffect(() => {
     const q = query.trim()
@@ -1217,69 +1332,98 @@ function AddIngredientSheet({
     }
   }
 
+  /** A recent resolves through the same corpus path as a search result. */
+  async function addRecent(food: RecentFoodWithGrams) {
+    try {
+      const sel = await resolveCorpusSelection(food.name)
+      if (!sel) {
+        setError(`“${food.name}” is no longer in the nutrition database — try searching for it.`)
+        return
+      }
+      onAdd(toIngredientRow(sel, food.name))
+    } catch {
+      setError('Could not load nutrition for that item.')
+    }
+  }
+
+  const showRecents = recents.length > 0 && query.trim().length < 2
+
   return (
-    <View style={[styles.fixOverlay, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Icon name="search" size={20} color={theme.text} />
-        <Text style={[type.title, { color: theme.text }]}>Add ingredient</Text>
-      </View>
-      <TextInput
-        autoFocus
-        placeholder="Search foods and dishes"
-        placeholderTextColor={theme.textFaint}
-        value={query}
-        onChangeText={setQuery}
-        returnKeyType="search"
-        style={[styles.otherInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken, marginTop: space.lg }]}
-      />
+    <Sheet open={open} onClose={onClose} title="Add ingredient" accessibleTitle="Add ingredient">
+      <View style={{ gap: space.md }}>
+        <TextInput
+          autoFocus
+          placeholder="Search foods and dishes"
+          placeholderTextColor={theme.textFaint}
+          value={query}
+          onChangeText={setQuery}
+          returnKeyType="search"
+          style={[styles.otherInput, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+        />
 
-      {searching ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.lg }}>
-          <ActivityIndicator size="small" color={theme.textFaint} />
-          <Text style={[type.caption, { color: theme.textMuted }]}>Searching the database…</Text>
-        </View>
-      ) : null}
-
-      {error ? (
-        <Text style={[type.caption, { color: theme.uncertain, marginTop: space.lg }]}>{error}</Text>
-      ) : null}
-
-      <ScrollView style={{ marginTop: space.lg }} contentContainerStyle={{ gap: space.sm, paddingBottom: 120 }}>
-        {candidates.map((c) => (
-          <Pressable
-            key={c.foodId}
-            accessibilityRole="button"
-            accessibilityLabel={`Add ${c.name}`}
-            onPress={() => void addCandidate(c)}
-            style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[type.body, { color: theme.text }]}>{c.name}</Text>
-              {c.brand ? (
-                <Text style={[type.caption, { color: theme.textMuted, marginTop: 1 }]}>{c.brand}</Text>
-              ) : null}
-            </View>
-            <Text style={[type.label, { color: theme.textMuted }]}>
-              {c.energyKcal != null ? `${Math.round(c.energyKcal)} kcal / 100 g` : ''}
+        {showRecents ? (
+          <View>
+            <Text style={[type.caption, { color: theme.textFaint, textTransform: 'uppercase' as const }]}>
+              Recent
             </Text>
-          </Pressable>
-        ))}
-        {searched && !searching && candidates.length === 0 && !error ? (
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, lineHeight: 19 }]}>
-            Nothing matched “{query.trim()}”. Try plainer words, or use Fix result to describe it for re-analysis.
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.xs }}>
+              {recents.map((food) => (
+                <Badge
+                  key={`recent-${food.id}`}
+                  label={food.name}
+                  size="sm"
+                  onPress={() => void addRecent(food)}
+                  accessibilityLabel={`Add ${food.name}`}
+                />
+              ))}
+            </View>
+          </View>
+        ) : null}
+
+        {searching ? (
+          // §9.2: the search is a 1–10s window — content-shaped skeleton rows,
+          // not a spinner.
+          <View style={{ gap: space.sm }}>
+            <SkeletonRow lines={2} />
+            <SkeletonRow lines={1} />
+            <SkeletonRow lines={2} />
+          </View>
+        ) : null}
+
+        {error ? (
+          <Text accessibilityRole="alert" style={[type.caption, { color: theme.uncertain }]}>
+            {error}
           </Text>
         ) : null}
-      </ScrollView>
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={onClose}
-        hitSlop={space.md}
-        style={{ alignSelf: 'center', marginBottom: Math.max(insets.bottom, space.lg) }}
-      >
-        <Text style={[type.body, { color: theme.textMuted }]}>Cancel</Text>
-      </Pressable>
-    </View>
+        <ScrollView style={{ maxHeight: 360 }} contentContainerStyle={{ gap: space.sm }}>
+          {candidates.map((c) => (
+            <Pressable
+              key={c.foodId}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${c.name}`}
+              onPress={() => void addCandidate(c)}
+              style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[type.body, { color: theme.text }]}>{c.name}</Text>
+                {c.brand ? (
+                  <Text style={[type.caption, { color: theme.textMuted, marginTop: 1 }]}>{c.brand}</Text>
+                ) : null}
+              </View>
+              <Text style={[type.label, { color: theme.textMuted }]}>
+                {c.energyKcal != null ? `${Math.round(c.energyKcal)} kcal / 100 g` : ''}
+              </Text>
+            </Pressable>
+          ))}
+          {searched && !searching && candidates.length === 0 && !error ? (
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, lineHeight: 19 }]}>
+              Nothing matched “{query.trim()}”. Try plainer words, or use Fix result to describe it for re-analysis.
+            </Text>
+          ) : null}
+        </ScrollView>
+      </View>
+    </Sheet>
   )
 }
 
@@ -1553,9 +1697,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     minHeight: MIN_TAP_TARGET,
   },
-  fixOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, padding: space.lg },
   fixInput: {
-    marginTop: space.xl,
     borderWidth: 1,
     borderRadius: radius.md,
     padding: space.md,
@@ -1564,8 +1706,20 @@ const styles = StyleSheet.create({
     // token programmatically (Table 3.1).
     fontSize: type.body.fontSize,
     textAlignVertical: 'top',
+    backgroundColor: 'transparent',
   },
-  fixExample: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
+  fixExample: { padding: space.lg, borderRadius: radius.lg },
+  // §8.4: the skeleton ingredient list that builds while the model works —
+  // bounded width, row rhythm matches the real ingredient rows.
+  analyzingList: { width: '100%', maxWidth: 420, marginTop: space.xl, gap: space.md },
+  analyzingRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  // §8.4: the one-time confidence legend — violet wash, quiet border.
+  legendCard: {
+    marginTop: space.md,
+    padding: space.md,
+    borderRadius: radius.md,
+    gap: space.xs,
+  },
   qCard: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg, borderWidth: 1 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },
   chip: {
@@ -1671,12 +1825,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     padding: space.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  primary: {
-    paddingVertical: space.md,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    minHeight: MIN_TAP_TARGET,
-    justifyContent: 'center',
   },
 })

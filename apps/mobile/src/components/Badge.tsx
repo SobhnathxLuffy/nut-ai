@@ -47,6 +47,12 @@ export interface BadgeProps {
   /** Interactive selection state — flips the surface to the ink dialect. */
   selected?: boolean
   accessibilityLabel?: string
+  /**
+   * A11y role override for interactive badges — 'button' (default) or 'radio'
+   * (a Badge inside a radiogroup, e.g. the camera's Quick/Advanced segmented
+   * pair, UI/UX report §8.4).
+   */
+  role?: 'button' | 'radio'
   /** Only for icons; an interactive chip IS the 44pt target (Table 11.1). */
   hitSlop?: number
   style?: StyleProp<ViewStyle>
@@ -95,6 +101,7 @@ export function Badge({
   onPress,
   selected = false,
   accessibilityLabel,
+  role = 'button',
   hitSlop,
   style,
   children,
@@ -144,9 +151,17 @@ export function Badge({
 
   return (
     <PressableFX
-      accessibilityRole="button"
+      accessibilityRole={role}
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ selected }}
+      accessibilityState={role === 'radio' ? { checked: selected } : { selected }}
+      // react-native-web (this version) does not translate accessibilityState
+      // into DOM aria-* attributes, so the web half is passed flat: a radio
+      // Badge exposes aria-checked; a button Badge is a segmented toggle, whose
+      // selected mode is aria-pressed (aria-selected is not valid on role=button).
+      // Native keeps reading accessibilityState; RN 0.74+ also understands the
+      // flat props, so both dialects agree on one truth.
+      aria-checked={role === 'radio' ? selected : undefined}
+      aria-pressed={role === 'radio' ? undefined : selected}
       onPress={onPress}
       hitSlop={hitSlop}
       style={surface}

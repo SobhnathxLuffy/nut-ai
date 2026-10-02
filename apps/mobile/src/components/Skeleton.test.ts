@@ -78,12 +78,19 @@ describe('reduce-motion — no Animated.loop is ever started (report §9.2)', ()
     expect(lightTheme.skeletonBase).toBe('#0B0B0F14')
   })
 
-  it('NN/g rule: over-10s paths keep spinners — no Skeleton in the scan/result path', () => {
+  it('over-10s honesty + §8.4: the analyzing state keeps the spinner AND stage copy, and builds the skeleton ingredient list', () => {
     // §9.2: "The 45-second scan and streaming paths keep spinners plus textual
-    // progress because they exceed the skeleton window."
+    // progress because they exceed the skeleton window." That half SURVIVES —
+    // the spinner (ActivityIndicator) and the honest stage copy stay.
     const result = read('../../app/result.tsx')
-    expect(result).not.toContain("from '../src/components/Skeleton'")
     expect(result).toContain('ActivityIndicator')
+    // UI/UX report §8.4 (Wave 3): "a skeleton ingredient list builds while the
+    // model works" — the exception documented in Skeleton.tsx's header: the
+    // list is CONTENT-SHAPED and rides the real pipeline stage
+    // (analyzingSkeletonRowCount — 2/4/6 rows), never a fake timer.
+    expect(result).toContain("from '../src/components/Skeleton'")
+    expect(result).toMatch(/<AnalyzingSkeletonRows stage=\{stage\} \/>/)
+    expect(result).toContain('analyzingSkeletonRowCount(stage)')
   })
 })
 

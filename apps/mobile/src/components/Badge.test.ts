@@ -100,14 +100,29 @@ describe('variant → token colour mapping (both themes)', () => {
 })
 
 describe('interactive form — 44pt target + press feedback (Table 11.1 / 9.1)', () => {
-  it('an onPress badge renders through PressableFX with the button role', () => {
+  it('an onPress badge renders through PressableFX with the button role (radio via the §8.4 role prop)', () => {
     expect(source).toMatch(/const interactive = onPress != null/)
-    expect(source).toContain('accessibilityRole="button"')
+    // The role is prop-driven: 'button' by default, 'radio' for the camera's
+    // §8.4 Quick/Advanced segmented pair inside a radiogroup.
+    expect(source).toContain('accessibilityRole={role}')
+    expect(source).toMatch(/role\?: 'button' | 'radio'/)
+    expect(source).toMatch(/role = 'button',/)
     expect(source).toMatch(/minHeight: interactive \? MIN_TAP_TARGET : undefined/)
   })
 
   it('interactive selection flips to the ink dialect exactly like the old chips', () => {
     expect(source).toMatch(/selected && variant !== 'selected'/)
+  })
+
+  it('selection state speaks BOTH a11y dialects (native accessibilityState + flat web aria)', () => {
+    // react-native-web (the bundled version) does not translate
+    // accessibilityState into DOM aria-*, so the flat props carry the web half:
+    // radios expose aria-checked, segmented button pills expose aria-pressed
+    // (aria-selected is invalid on role=button). Verified live: the camera
+    // pills/radios expose no state without these (scan17 runtime proof).
+    expect(source).toMatch(/accessibilityState=\{role === 'radio' \? \{ checked: selected \} : \{ selected \}\}/)
+    expect(source).toMatch(/aria-checked=\{role === 'radio' \? selected : undefined\}/)
+    expect(source).toMatch(/aria-pressed=\{role === 'radio' \? undefined : selected\}/)
   })
 
   it('non-interactive badges stay compact (no forced tap target on static chips)', () => {

@@ -9,8 +9,13 @@ import { radius, space } from '../theme/tokens'
  * NN/g placement rules, adopted wholesale:
  *   - under 1s: show NOTHING (flash-and-vanish placeholders annoy);
  *   - 1–10s: skeletons that MIMIC the coming layout (what this file draws);
- *   - over 10s (scan analyzing, streaming): spinner + textual progress —
- *     those paths deliberately never render a Skeleton.
+ *   - over 10s (streaming): spinner + textual progress — those paths
+ *     deliberately never render a Skeleton.
+ *   - EXCEPTION (UI/UX report §8.4, Wave 3): the scan ANALYZING state is
+ *     over-10s, but the report explicitly wants a skeleton INGREDIENT LIST
+ *     building while the model works. The two rules are reconciled, not
+ *     traded: result.tsx keeps the spinner AND the honest stage copy AND adds
+ *     the content-shaped list — structure plus textual progress together.
  *   - frame-only skeletons (chrome with no content placeholders) are forbidden;
  *     every composition below places content-shaped blocks.
  *

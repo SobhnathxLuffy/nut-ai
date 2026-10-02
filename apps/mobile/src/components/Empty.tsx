@@ -30,6 +30,12 @@ export interface EmptyProps {
   title: string
   message?: string
   action?: EmptyAction
+  /**
+   * Quiet second action (UI/UX report §8.4, Wave 3: the scan failed state's
+   * "retake or log manually" pair). Renders as a non-selected Button under
+   * the primary — never a private button dialect.
+   */
+  secondaryAction?: EmptyAction
 }
 
 /**
@@ -41,7 +47,7 @@ export function pressEmptyAction(action: EmptyAction | undefined): void {
   action.onPress()
 }
 
-export function Empty({ icon, title, message, action }: EmptyProps) {
+export function Empty({ icon, title, message, action, secondaryAction }: EmptyProps) {
   const t = useTheme()
   return (
     <View
@@ -71,6 +77,9 @@ export function Empty({ icon, title, message, action }: EmptyProps) {
         <Text style={[type.body, { color: t.textMuted, textAlign: 'center', lineHeight: 22 }]}>{message}</Text>
       ) : null}
       {action ? <Button label={action.label} selected onPress={() => pressEmptyAction(action)} /> : null}
+      {secondaryAction ? (
+        <Button label={secondaryAction.label} onPress={() => pressEmptyAction(secondaryAction)} />
+      ) : null}
     </View>
   )
 }

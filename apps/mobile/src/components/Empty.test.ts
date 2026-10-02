@@ -87,6 +87,12 @@ describe('render structure — icon, title, message, one shared Button (Ch. 6.3)
     expect(source).toMatch(/<Button label=\{action\.label\}[^>]*onPress=\{\(\) => pressEmptyAction\(action\)\}/)
   })
 
+  it('§8.4: the optional secondary action rides the SAME Button, unselected (no private dialect)', () => {
+    // The scan failed state's "retake or log manually" pair (UI/UX report
+    // Ch. 8.4): the second action is a quiet Button under the primary.
+    expect(source).toMatch(/secondaryAction \? \(\s*<Button label=\{secondaryAction\.label\} onPress=\{\(\) => pressEmptyAction\(secondaryAction\)\} \/>/)
+  })
+
   it('centered with generous empty-state spacing (Ch. 6.3 resting place)', () => {
     expect(source).toContain('space.xxxl')
     expect(source).toContain('alignItems: \'center\'')
