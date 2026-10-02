@@ -38,6 +38,19 @@ export async function parseAssistantReply(responseText: string): Promise<Assista
     if (jsonStr) {
       const parsed = AssistantToolCallZ.safeParse(JSON.parse(jsonStr))
       if (parsed.success) {
+        // Tool misroute (live browser E2E, Task 3): a nutrition-KNOWLEDGE
+        // question ("How much protein is in 100g of cooked toor dal?") can come
+        // back as a real text answer PLUS a spurious tool call. When the model
+        // gave the user words to read, the words win and the tool call is
+        // dropped (console.debug, never a silent divergence) — the tool only
+        // runs when the reply IS the tool call, bare or fenced.
+        const prose = proseOutsideToolJson(responseText, jsonStr)
+        if (prose) {
+          console.debug(
+            `[assistant] reply carried text AND a tool call — rendering the text, discarding tool "${parsed.data.tool_name}"`,
+          )
+          return { text: prose }
+        }
         const data = await executeToolLocally(parsed.data)
         return { toolCard: { ...parsed.data, data } }
       }
@@ -47,6 +60,44 @@ export async function parseAssistantReply(responseText: string): Promise<Assista
     // If it's not valid JSON or something else, fall through
   }
   return { text: responseText.trim() }
+}
+
+/**
+ * The prose surrounding a tool-call JSON block, if any: the reply minus the
+ * JSON object, minus markdown-fence chrome and collapsed whitespace. Empty
+ * when the reply was the tool call ALONE (bare or fenced) — exactly the only
+ * case where the tool should execute. Text before AND after a mid-reply JSON
+ * is kept (joined) so nothing the model said is lost.
+ */
+export function proseOutsideToolJson(reply: string, jsonStr: string): string {
+  const withoutJson = reply.replace(jsonStr, '\n')
+  const lines = withoutJson.split('\n').filter((line) => !isMarkdownFenceLine(line))
+  return lines.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * The streaming twin of the JSON guard: while a tool call is still arriving,
+ * the bubble must never pour raw JSON. Returns the prose to display (whatever
+ * arrived before the JSON started) and whether a tool JSON is in flight — the
+ * caller swaps in a quiet "preparing" state for the latter.
+ */
+export function stripStreamingToolJson(raw: string): { text: string; toolJson: boolean } {
+  const idx = raw.indexOf('{"tool_name"')
+  if (idx !== -1) {
+    return { text: raw.slice(0, idx).replace(/\s+$/, ''), toolJson: true }
+  }
+  // The JSON may be only half-formed (no "tool_name" key yet): a reply that
+  // STARTS with '{' is the earliest honest signal that a tool call is coming.
+  if (raw.trimStart().startsWith('{')) {
+    return { text: '', toolJson: true }
+  }
+  return { text: raw, toolJson: false }
+}
+
+/** ``` / ~~~ fence lines (optionally language-tagged) — chrome, never content. */
+function isMarkdownFenceLine(line: string): boolean {
+  const trimmed = line.trim()
+  return /^(```+|~~~+)[a-zA-Z0-9_-]*$/.test(trimmed)
 }
 
 export async function runAssistantChat(

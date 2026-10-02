@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { VISION_WIRE_SCHEMA } from '@nutai/core-schema'
 import {
+  ASSISTANT_PROMPT_VERSION,
   ASSISTANT_SYSTEM_PROMPT,
   buildAnthropicRequest,
   buildExerciseEstimateInstruction,
@@ -151,7 +152,9 @@ const SYSTEM_PROMPT_GOLDEN_SHA256 = '4acedf9197903e85a3b614951b797a95026ac303573
 
 // P3-D3: computed from the current ASSISTANT_SYSTEM_PROMPT. Update in the
 // same commit as an intentional prompt edit and say why in the message.
-const ASSISTANT_SYSTEM_PROMPT_GOLDEN_SHA256 = '3a2b70cda6bfa78c9128861df6de24ad6a869af2a53a1a29510fc4fde4c593c4'
+// 2026-09 tool-misroute fix (assistant-v1.1): get_nutrition_summary scoped to
+// the user's own logged data; knowledge questions instructed to answer in text.
+const ASSISTANT_SYSTEM_PROMPT_GOLDEN_SHA256 = '629735b06326520f12f72e566694d39cadcde091869bc4128afff6c2e3fe5e17'
 
 // ---------------------------------------------------------------------------
 // P3-D3 completion: the remaining builder surfaces (label/receipt/assistant/
@@ -204,6 +207,22 @@ describe('golden: assistant system prompt', () => {
   })
   it('keeps its tool-first behavioural anchors', () => {
     expect(ASSISTANT_SYSTEM_PROMPT).toContain('tool')
+  })
+
+  // Tool-misroute fix (live browser E2E, Task 3): "How much protein is in 100g
+  // of cooked toor dal?" routed to get_nutrition_summary (today's LOG totals —
+  // a non-answer) because the prompt's only numeric guidance was "Numbers only
+  // come from tools". These guards pin the fix's load-bearing language.
+  it('scopes get_nutrition_summary to the user’s own logged data', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('their own diary only')
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('never a nutrition-facts lookup')
+  })
+  it('tells knowledge questions to answer in text with typical values', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('DIRECT plain-text answer with typical values')
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('cooked toor dal')
+  })
+  it('carries a version that was bumped with the fix', () => {
+    expect(ASSISTANT_PROMPT_VERSION).toBe('assistant-v1.1')
   })
 })
 

@@ -1,5 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { StyleSheet, Text, View, TextInput, ScrollView, Pressable } from 'react-native'
+import {
+  KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  ScrollView,
+  Pressable,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
   runAssistantChat,
@@ -7,15 +18,16 @@ import {
   parseAssistantReply,
   applyProposal,
   assistantGlobalStatus,
+  stripStreamingToolJson,
 } from '../src/inference/pathA/assistant'
 import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
-import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard } from '../src/components/assistant/AssistantCards'
+import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard, ProposalStatusBadge } from '../src/components/assistant/AssistantCards'
 import { Icon } from '../src/components/Icon'
 import { Button } from '../src/components/Screen'
 import { Empty } from '../src/components/Empty'
 import { SkeletonLine } from '../src/components/Skeleton'
 import { useTheme, useMotionScale } from '../src/theme/ThemeProvider'
-import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { MIN_TAP_TARGET, elevationStyle, radius, space, stateLayerFor, type } from '../src/theme/tokens'
 import { router, useFocusEffect } from 'expo-router'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/date-utils'
@@ -54,6 +66,12 @@ const STARTER_PROMPTS = [
 // §9.2: "assistant gets a three-line reply skeleton when the first byte is
 // slow" — 1.5s of silence after send crosses from fast to slow.
 const SLOW_FIRST_BYTE_MS = 1500
+
+// §8.7 Message Scroller: how far from the bottom (px) the view may sit and
+// still count as "following" the stream. Beyond it the auto-follow pauses and
+// the anchored Latest pill appears, so reading history mid-stream never fights
+// the scroll position.
+const AT_BOTTOM_THRESHOLD = 120
 
 async function resolveMealProposal(data: any): Promise<{ selection: ManualFoodSelection; selections: ManualFoodSelection[] }> {
   const [handle, ifctDb, userDb] = await Promise.all([openNutritionDb(), openIfctDb(), openUserDb()])
@@ -147,9 +165,32 @@ export default function AssistantScreen() {
   const t = useTheme()
   const insets = useSafeAreaInsets()
   const motionScale = useMotionScale()
-  // Chat autoscroll (P1-7): every content-size change — a new message, or a
-  // streaming bubble growing word by word — pins the view to the newest line.
+  // Chat autoscroll (P1-7 → §8.7 Message Scroller): every content-size change
+  // — a new message, or a streaming bubble growing word by word — pins the
+  // view to the newest line, but ONLY while the user is following the
+  // conversation. Scrolling up to reread pauses the auto-follow; the anchored
+  // Latest pill (§8.7) offers the way back down.
   const scrollRef = useRef<ScrollView>(null)
+  const isAtBottomRef = useRef(true)
+  const [isAtBottom, setIsAtBottom] = useState(true)
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y
+    const atBottom = distanceFromBottom < AT_BOTTOM_THRESHOLD
+    // State only moves on a real flip — a 60fps scroll stream must not
+    // re-render the whole transcript per frame.
+    if (atBottom !== isAtBottomRef.current) {
+      isAtBottomRef.current = atBottom
+      setIsAtBottom(atBottom)
+    }
+  }
+
+  const scrollToLatest = (animated: boolean) => {
+    isAtBottomRef.current = true
+    setIsAtBottom(true)
+    scrollRef.current?.scrollToEnd({ animated })
+  }
   const [messages, setMessages] = useState<any[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -534,7 +575,13 @@ export default function AssistantScreen() {
     })
 
   return (
-    <View style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <KeyboardAvoidingView
+      style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      // §8.7 keyboard-safe insets: iOS lifts the input bar above the software
+      // keyboard (Android adjusts via windowSoftInputMode; web browsers scroll
+      // the focused input into view themselves — no behavior needed there).
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
       <View style={s.headerRow}>
         <Pressable
           accessibilityRole="button"
@@ -563,22 +610,47 @@ export default function AssistantScreen() {
           </Pressable>
         ) : null}
       </View>
-      <ScrollView
-        ref={scrollRef}
-        style={s.scroll}
-        onContentSizeChange={() =>
-          // Animated scrolling respects reduce-motion (motionScale 0 = jump cut).
-          scrollRef.current?.scrollToEnd({ animated: motionScale !== 0 })
-        }
-      >
+      <View style={s.chatArea}>
+        <ScrollView
+          ref={scrollRef}
+          style={s.scroll}
+          scrollEventThrottle={16}
+          onScroll={onScroll}
+          onContentSizeChange={() =>
+            // §8.7 auto-scroll-to-new-reply: animated scrolling respects
+            // reduce-motion (motionScale 0 = jump cut) and pauses when the
+            // user has scrolled up (isAtBottomRef) — the Latest pill takes
+            // them back down on their own tap.
+            isAtBottomRef.current &&
+            scrollRef.current?.scrollToEnd({ animated: motionScale !== 0 })
+          }
+        >
         {messages.map((m, i) => {
-          // While a tool-call JSON is still streaming in, show a quiet
-          // "preparing" state instead of raw JSON pouring into the bubble.
-          const hidesRawToolJson = !!m.streaming && (m.text || '').trimStart().startsWith('{')
+          // §8.7 "raw JSON guards become silent states": while a tool-call
+          // JSON is streaming in — at the head of the reply or arriving after
+          // prose — the bubble keeps showing the prose plus a quiet preparing
+          // state; raw JSON never pours into the conversation.
+          const streamingStrip = m.streaming ? stripStreamingToolJson(m.text || '') : null
+          const displayText = streamingStrip ? streamingStrip.text : (m.text || '')
+          const toolJsonInFlight = streamingStrip?.toolJson === true
           const thinkingOnly = !!m.streaming && !!m.reasoning && !m.text
           return (
-          <View key={m.id || i} style={[s.bubble, m.role === 'user' ? s.userBubble : s.aiBubble, { backgroundColor: m.role === 'user' ? t.text : t.bgElevated }]}>
-            {m.content && <Text style={{ color: m.role === 'user' ? t.bgElevated : t.text }}>{m.content}</Text>}
+          <View
+            key={m.id || i}
+            style={[
+              s.bubble,
+              m.role === 'user' ? s.userBubble : s.aiBubble,
+              // §8.7 bubble tone: user right in the accent tint at 12%
+              // (stateLayer.selected), assistant left on the card background.
+              {
+                backgroundColor:
+                  m.role === 'user'
+                    ? stateLayerFor(t.isDark).selected.backgroundColor
+                    : t.bgElevated,
+              },
+            ]}
+          >
+            {m.content ? <Text style={{ color: t.text }}>{m.content}</Text> : null}
             {thinkingOnly ? (
               slowFirstByte && i === messages.length - 1 ? (
                 // §9.2: three-line reply skeleton while the first byte is slow.
@@ -595,18 +667,31 @@ export default function AssistantScreen() {
             ) : null}
             {!thinkingOnly && m.reasoning ? (
               <View style={{ marginTop: space.xs }}>
-                <Pressable accessibilityRole="button" accessibilityLabel="Toggle reasoning" onPress={() => toggleReasoning(m.id)} hitSlop={space.sm}>
-                  <Text style={[type.caption, { color: t.textFaint }]}>
-                    {openReasoning.has(m.id) ? '▾ Hide thinking' : '▸ Show thinking'}
-                  </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={openReasoning.has(m.id) ? 'Hide thinking' : 'Show thinking'}
+                  onPress={() => toggleReasoning(m.id)}
+                  hitSlop={space.sm}
+                >
+                  {/* §8.7: the reasoning disclosure is a clean collapsible — one
+                      chevron glyph that rotates open (the header back-chevron's
+                      flip is the established dialect), not unicode arrows. */}
+                  <View style={s.reasoningToggle}>
+                    <View style={openReasoning.has(m.id) ? s.chevronOpen : s.chevronClosed}>
+                      <Icon name="chevron" size={14} color={t.textFaint} />
+                    </View>
+                    <Text style={[type.caption, { color: t.textFaint }]}>Thinking</Text>
+                  </View>
                 </Pressable>
                 {openReasoning.has(m.id) ? (
                   <Text style={[type.caption, { color: t.textFaint, marginTop: space.xs, lineHeight: 16 }]}>{m.reasoning}</Text>
                 ) : null}
               </View>
             ) : null}
-            {m.text && !hidesRawToolJson && <Text style={{ color: m.role === 'user' ? t.bgElevated : t.text }}>{m.text}</Text>}
-            {hidesRawToolJson && <Text style={[type.caption, { color: t.textMuted }]}>Preparing a proposal…</Text>}
+            {displayText ? <Text style={{ color: t.text }}>{displayText}</Text> : null}
+            {toolJsonInFlight ? (
+              <Text style={[type.caption, { color: t.textMuted }]}>Preparing…</Text>
+            ) : null}
             {m.toolCard?.tool_name === 'get_last_workout' && <LastWorkoutCard data={m.toolCard.data} />}
             {m.toolCard?.tool_name === 'get_nutrition_summary' && <NutritionSummaryCard data={m.toolCard.data} />}
             {m.toolCard?.tool_name === 'propose_meal' && (
@@ -664,7 +749,30 @@ export default function AssistantScreen() {
             </View>
           </>
         ) : null}
-      </ScrollView>
+        </ScrollView>
+
+        {/* §8.7 anchored scroll-to-bottom pill: when the user has scrolled up
+            (mid-stream or after replies), a floating Latest pill sits above the
+            input — 44pt target, chevron-down glyph, one tap returns to the
+            newest line and resumes the auto-follow. */}
+        {!isAtBottom && messages.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scroll to the latest message"
+            onPress={() => scrollToLatest(motionScale !== 0)}
+            style={[
+              s.latestPill,
+              elevationStyle('medium', t.isDark),
+              { backgroundColor: t.bgElevated, borderColor: t.border },
+            ]}
+          >
+            <View style={s.latestPillIcon}>
+              <Icon name="chevron" size={16} color={t.text} />
+            </View>
+            <Text style={[type.label, { color: t.text }]}>Latest</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <View style={s.inputRow}>
         <TextInput
           style={[s.input, { color: t.text, borderColor: t.border }]}
@@ -680,7 +788,7 @@ export default function AssistantScreen() {
             arrive with it. */}
         <Button label="Send" selected onPress={() => void send()} />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 
@@ -715,21 +823,24 @@ function CorrectionProposalCard({
   if (status === 'SAVED') {
     return (
       <View style={[s.card, { borderColor: t.border }]}>
-        <Text style={[type.body, { color: t.text }]}>Applied to your log. You can undo it from the Home timeline.</Text>
+        <ProposalStatusBadge status={status} savedLabel="Applied" />
+        <Text style={[type.body, { color: t.text, marginTop: space.xs }]}>Applied to your log. You can undo it from the Home timeline.</Text>
       </View>
     )
   }
   if (status === 'CANCELLED') {
     return (
       <View style={[s.card, { borderColor: t.border }]}>
-        <Text style={[type.body, { color: t.textMuted }]}>Correction cancelled — your log is unchanged.</Text>
+        <ProposalStatusBadge status={status} />
+        <Text style={[type.body, { color: t.textMuted, marginTop: space.xs }]}>Correction cancelled — your log is unchanged.</Text>
       </View>
     )
   }
   if (status === 'FAILED') {
     return (
       <View style={[s.card, { borderColor: t.border }]}>
-        <Text style={[type.body, { color: t.text }]}>
+        <ProposalStatusBadge status={status} />
+        <Text style={[type.body, { color: t.text, marginTop: space.xs }]}>
           {clarification || 'That correction could not be applied. Try naming the food exactly as it appears in your log.'}
         </Text>
         <Pressable onPress={onConfirm} style={[s.cardBtn, { backgroundColor: t.text }]}>
@@ -750,7 +861,10 @@ function CorrectionProposalCard({
 
   return (
     <View style={[s.card, { borderColor: t.border }]}>
-      <Text style={[type.bodyStrong, { color: t.text }]}>Correct today&apos;s log</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        <Text style={[type.bodyStrong, { color: t.text, flex: 1 }]}>Correct today&apos;s log</Text>
+        <ProposalStatusBadge status={status} />
+      </View>
       <View style={{ marginTop: space.sm, gap: space.xs }}>
         {operations.map((op, i) => (
           <Text key={i} style={[type.body, { color: t.text }]}>• {describeCorrectionOperation(op, nameOf)}</Text>
@@ -759,9 +873,7 @@ function CorrectionProposalCard({
       <Text style={[type.caption, { color: t.textMuted, marginTop: space.sm }]}>
         Nothing changes until you confirm. Unmentioned items stay untouched.
       </Text>
-      {status === 'PENDING' ? (
-        <Text style={[type.body, { color: t.textMuted, marginTop: space.md }]}>Applying…</Text>
-      ) : (
+      {status === 'PENDING' ? null : (
         <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
           <Pressable onPress={onConfirm} style={[s.cardBtn, { backgroundColor: t.text, flex: 1 }]}>
             <Text style={{ color: t.bgElevated, fontWeight: '700' }}>Confirm</Text>
@@ -803,6 +915,32 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: { flex: 1, padding: space.md },
+  // §8.7: the transcript column the Latest pill anchors to — the pill floats
+  // above the input row, inside this relative wrapper.
+  chatArea: { flex: 1 },
+  // §8.7 anchored scroll-to-bottom pill: floating element (elevation
+  // medium), 44pt target, pill radius. Sits `space.xs` above the input row
+  // (inputRow = 2× space.md padding + 48pt control ≈ 72pt tall).
+  latestPill: {
+    position: 'absolute',
+    right: space.lg,
+    bottom: 76,
+    minHeight: MIN_TAP_TARGET,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingHorizontal: space.md,
+  },
+  // The icon set's chevron points right (forward); rotated 90° it points
+  // down — the "to the latest" direction (the header back-chevron's flip is
+  // the same one-asset-mirrors dialect).
+  latestPillIcon: { transform: [{ rotate: '90deg' }] },
+  // §8.7 reasoning disclosure row: chevron glyph + caption label.
+  reasoningToggle: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  chevronClosed: { transform: [{ rotate: '0deg' }] },
+  chevronOpen: { transform: [{ rotate: '90deg' }] },
   // Wave 1c starter-prompt chips (report §8.7): 44pt pill targets, full width
   // so each prompt reads on one line at body size.
   starterChip: {
@@ -812,10 +950,14 @@ const s = StyleSheet.create({
     paddingHorizontal: space.lg,
     justifyContent: 'center',
   },
-  bubble: { padding: space.md, borderRadius: radius.md, marginBottom: space.md, maxWidth: '85%' },
-  userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: 0 },
-  aiBubble: { alignSelf: 'flex-start', borderBottomLeftRadius: 0 },
-  card: { marginTop: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1, maxWidth: '100%' },
+  // §8.7 bubble system radius/tone: radius.lg with the corner "tail"
+  // (user bottom-right, assistant bottom-left); colour is applied inline from
+  // the §4.3 state-layer selected tint (user) / bgElevated card token
+  // (assistant).
+  bubble: { padding: space.md, borderRadius: radius.lg, marginBottom: space.md, maxWidth: '85%' },
+  userBubble: { alignSelf: 'flex-end', borderBottomRightRadius: radius.sm },
+  aiBubble: { alignSelf: 'flex-start', borderBottomLeftRadius: radius.sm },
+  card: { marginTop: space.md, padding: space.md, borderRadius: radius.lg, borderWidth: 1, maxWidth: '100%', backgroundColor: 'transparent' },
   cardBtn: {
     paddingHorizontal: space.md,
     paddingVertical: space.sm,

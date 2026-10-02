@@ -3,7 +3,21 @@ import { router } from 'expo-router'
 import { useTheme } from '../../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../../src/theme/tokens'
 import { expandProposalIngredients } from '../../data/proposal-ingredients'
-import { Icon } from '../Icon'
+import { Badge } from '../Badge'
+
+/**
+ * §8.7 tool-card status badge (Wave 3): every proposal card carries ONE Badge
+ * stating its lifecycle — proposed (outline), applied/saved (affirm), failed
+ * (safety) — instead of each card growing its own status typography.
+ */
+export function ProposalStatusBadge({ status, savedLabel = 'Saved' }: { status?: string; savedLabel?: string }) {
+  if (status === 'SAVED') return <Badge label={savedLabel} variant="affirm" size="sm" />
+  if (status === 'FAILED') return <Badge label="Failed" variant="safety" size="sm" />
+  if (status === 'CANCELLED') return <Badge label="Cancelled" size="sm" />
+  if (status === 'PENDING') return <Badge label="Applying…" size="sm" />
+  if (status === 'PROPOSED') return <Badge label="Proposed" variant="outline" size="sm" />
+  return null
+}
 
 export function LastWorkoutCard({ data }: { data: any }) {
   const t = useTheme()
@@ -53,7 +67,8 @@ export function NutritionSummaryCard({ data }: { data: any }) {
 
 const s = StyleSheet.create({
   card: { padding: space.md, borderRadius: radius.md, marginVertical: space.sm, borderWidth: 1 },
-  title: { ...type.heading, fontWeight: 'bold', marginBottom: space.xs },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.xs },
+  title: { ...type.heading, fontWeight: 'bold' },
   body: { ...type.body, marginBottom: space.xs },
   row: { flexDirection: 'row', gap: space.md, marginTop: space.sm },
   btn: { padding: space.sm, borderRadius: radius.sm, alignItems: 'center', marginTop: space.sm },
@@ -86,14 +101,14 @@ export function ProposalCard({
   const t = useTheme()
   return (
     <View style={[s.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}>
-      <Text style={[s.title, { color: t.text }]}>{title}</Text>
+      <View style={s.cardHeader}>
+        <Text style={[s.title, { color: t.text, flex: 1 }]}>{title}</Text>
+        <ProposalStatusBadge status={status} />
+      </View>
       {lines.map((line, i) => (
         <Text key={i} style={[s.body, { color: t.text }]}>• {line}</Text>
       ))}
-      {status === 'SAVED' && <View style={[s.row, { marginTop: space.sm, alignItems: 'center' }]}><Icon name="check" size={16} color={t.protein} /><Text style={[s.body, { color: t.protein, fontWeight: 'bold', marginBottom: 0 }]}>  Saved</Text></View>}
       {status === 'FAILED' && <Text style={[s.body, { color: t.safety }]}>Save failed — tap {confirmLabel} to try again.</Text>}
-      {status === 'CANCELLED' && <Text style={[s.body, { color: t.textMuted }]}>Cancelled</Text>}
-      {status === 'PENDING' && <Text style={[s.body, { color: t.textMuted }]}>Saving...</Text>}
 
       {(status === 'PROPOSED' || status === 'FAILED') && (
         <View style={s.row}>
