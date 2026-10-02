@@ -9,8 +9,8 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Circle } from 'react-native-svg'
 import { Icon, type IconName } from '../../src/components/Icon'
+import { CountUp, ProgressRing } from '../../src/components/ProgressRing'
 import { DayTimeline } from '../../src/components/DayTimeline'
 import { Skeleton, SkeletonRow } from '../../src/components/Skeleton'
 import {
@@ -195,16 +195,19 @@ export default function Home() {
       <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
         <View style={[styles.heroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.hero, { color: theme.text }]}>
-              {Math.abs(Math.round(remaining))}
-            </Text>
+            {/* UI/UX report Table 5.1 / Table 12.2 (Wave 2): the hero number
+                joins the ONE ring's count-up twin — 600ms ease-out on focus
+                (Table 9.1), tabular figures from monoData (§4.2). */}
+            <CountUp value={Math.abs(Math.round(remaining))} style={[styles.hero, { color: theme.text }]} />
             <Text style={[type.body, { color: theme.textMuted }]}>
               {over ? 'Calories over' : 'Calories left'}
             </Text>
           </View>
-          <Ring pct={pct} over={over} size={128} stroke={12}>
+          {/* Table 12.2 (Wave 2): the hand-rolled Ring joins the ONE
+              ProgressRing — stroke + track + the honest overflow arc. */}
+          <ProgressRing value={pct} overflow={over ? pct - 1 : 0} size={128} stroke={12}>
             <Icon name="flame" size={26} color={theme.text} />
-          </Ring>
+          </ProgressRing>
         </View>
 
         <View style={styles.macroRow}>
@@ -327,49 +330,6 @@ function isoLocal(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function Ring({
-  pct, over, size, stroke, children,
-}: {
-  pct: number
-  over: boolean
-  size: number
-  stroke: number
-  children?: React.ReactNode
-}) {
-  const theme = useTheme()
-  const r = size / 2 - stroke
-  const c = 2 * Math.PI * r
-  const primary = Math.min(1, pct)
-  const overflow = over ? Math.min(1, pct - 1) : 0
-  const innerR = r - stroke - 3
-  const innerC = 2 * Math.PI * innerR
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.ringTrack} strokeWidth={stroke} fill="none" />
-        <Circle
-          cx={size / 2} cy={size / 2} r={r}
-          stroke={theme.ring} strokeWidth={stroke} fill="none"
-          strokeDasharray={`${c * primary} ${c}`}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-        {overflow > 0 ? (
-          <Circle
-            cx={size / 2} cy={size / 2} r={innerR}
-            stroke={theme.uncertain} strokeWidth={stroke * 0.6} fill="none"
-            strokeDasharray={`${innerC * overflow} ${innerC}`}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          />
-        ) : null}
-      </Svg>
-      {children}
-    </View>
-  )
-}
-
 function MacroCard({
   label, icon, eaten, target, color,
 }: {
@@ -382,9 +342,6 @@ function MacroCard({
   const theme = useTheme()
   const left = Math.max(0, target - eaten)
   const pct = target > 0 ? Math.min(1, eaten / target) : 0
-  const size = 74
-  const r = size / 2 - 5
-  const c = 2 * Math.PI * r
 
   return (
     <View style={[styles.macroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
@@ -394,19 +351,11 @@ function MacroCard({
       <Text style={[type.caption, { color: theme.textMuted }]}>{label} left</Text>
 
       <View style={{ alignItems: 'center', marginTop: space.md }}>
-        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-          <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-            <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.ringTrack} strokeWidth={5} fill="none" />
-            <Circle
-              cx={size / 2} cy={size / 2} r={r}
-              stroke={color} strokeWidth={5} fill="none"
-              strokeDasharray={`${c * pct} ${c}`}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
-            />
-          </Svg>
+        {/* Wave 2: the per-macro ring is the same ONE primitive with the
+            macro identity colour — one geometry, one animation contract. */}
+        <ProgressRing value={pct} size={74} stroke={5} color={color}>
           <Icon name={icon} size={22} color={color} />
-        </View>
+        </ProgressRing>
       </View>
     </View>
   )

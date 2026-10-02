@@ -1,10 +1,10 @@
 import { router } from 'expo-router'
-import Svg, { Circle } from 'react-native-svg'
 import { StyleSheet, Text, View } from 'react-native'
 import { OnboardingScreen } from '../../src/components/onboarding/Chrome'
 import { nextRoute, stepIndex, TOTAL_STEPS } from '../../src/onboarding/flow'
 import { setAnswer } from '../../src/onboarding/store'
 import { Icon } from '../../src/components/Icon'
+import { ProgressRing } from '../../src/components/ProgressRing'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
@@ -22,25 +22,10 @@ import { radius, space, type } from '../../src/theme/tokens'
  */
 export const ROLLOVER_CAP_KCAL = 200
 
+// UI/UX report Table 12.2 (Wave 2): the second of the audited three rings
+// joins the ONE ProgressRing (the 0.82 fill is the rollover demo fraction).
 function MiniRing({ size = 96 }: { size?: number }) {
-  const theme = useTheme()
-  const r = size / 2 - 6
-  const c = 2 * Math.PI * r
-  return (
-    <Svg width={size} height={size}>
-      <Circle
-        cx={size / 2} cy={size / 2} r={r}
-        stroke={theme.ringTrack} strokeWidth="7" fill="none"
-      />
-      <Circle
-        cx={size / 2} cy={size / 2} r={r}
-        stroke={theme.text} strokeWidth="7" fill="none"
-        strokeDasharray={`${c * 0.82} ${c}`}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </Svg>
-  )
+  return <ProgressRing value={0.82} size={size} stroke={7} />
 }
 
 function DayCard({

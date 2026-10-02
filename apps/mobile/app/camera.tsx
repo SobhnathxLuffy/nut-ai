@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../src/components/Icon'
+import { Badge } from '../src/components/Badge'
 import { startBarcodeScan, startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
 import { setPhase, setScanReviewMode, type ScanReviewMode } from '../src/scan/store'
 import { setting, putSetting } from '../src/data/repo'
@@ -316,22 +317,21 @@ function WebCameraFallback() {
       </Text>
 
       <View style={styles.modeRow}>
-        {MODES.map((m) => {
-          const active = mode === m.id
-          return (
-            <Pressable
-              key={m.id}
-              accessibilityRole="button"
-              accessibilityLabel={m.label}
-              accessibilityState={{ selected: active }}
-              onPress={() => { setGtinError(''); setMode(m.id) }}
-              style={[styles.modePill, active && styles.modePillActive, { backgroundColor: active ? theme.text : theme.bgSunken, borderColor: theme.border }]}
-            >
-              <Icon name={m.icon} size={18} color={active ? theme.bg : theme.text} />
-              <Text style={[type.label, { color: active ? theme.bg : theme.text }]}>{m.label}</Text>
-            </Pressable>
-          )
-        })}
+        {/* UI/UX report Table 12.2 (Wave 2): the theme-driven WEB mode pills
+            join the ONE Badge (ink-when-selected + icon slot + 44pt target).
+            The native camera's pills stay hand-rolled: they sit on a live
+            camera feed and must keep their theme-independent chrome (the
+            eslint camera exemption documents why). */}
+        {MODES.map((m) => (
+          <Badge
+            key={m.id}
+            label={m.label}
+            icon={m.icon}
+            selected={mode === m.id}
+            onPress={() => { setGtinError(''); setMode(m.id) }}
+            style={{ width: '47%' }}
+          />
+        ))}
       </View>
 
       <ReviewModeToggle value={reviewPref} onChange={setReviewPref} onDark={false} />

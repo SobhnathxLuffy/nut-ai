@@ -18,6 +18,7 @@ import type { ScoredCandidate } from '@nutai/resolver'
 import { loadFood, resolveByText } from '@nutai/resolver'
 import { buildCorrectionPrompt, cheapestModel, type ProviderId } from '@nutai/prompt'
 import { ConfidenceChip, ConfidenceReasons } from '../src/components/ConfidenceChip'
+import { Button } from '../src/components/Screen'
 import { Icon, type IconName } from '../src/components/Icon'
 import { customProviderBaseUrl, logMeal, setting, db as openUserDb, undoLastOperation } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
@@ -480,15 +481,19 @@ export default function Result() {
               <Text style={[type.bodyStrong, { color: theme.text }]}>Review</Text>
             </Pressable>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Log it"
+            {/* UI/UX report Table 12.2 (Wave 2): the flagship log CTA joins the
+                ONE Button at lg — press feedback, state layers and the icon
+                slot arrive with it; the 0.6 busy opacity becomes the §4.3
+                disabled layer. */}
+            <Button
+              label={logging ? 'Logging…' : 'Log it'}
+              icon="check"
+              size="lg"
+              selected
               disabled={logging}
               onPress={logNow}
-              style={[styles.primary, { flex: 1, backgroundColor: theme.text }, logging && { opacity: 0.6 }]}
-            >
-              <Text style={[type.bodyStrong, { color: theme.bg }]}>{logging ? 'Logging…' : 'Log it'}</Text>
-            </Pressable>
+              style={{ flex: 1 }}
+            />
           </View>
         </View>
       </View>
@@ -775,15 +780,16 @@ export default function Result() {
             <Text style={[type.bodyStrong, { color: theme.text }]}>Fix result</Text>
           </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Log it"
+          {/* Table 12.2 (Wave 2): advanced view's log CTA — same migration. */}
+          <Button
+            label={logging ? 'Logging…' : 'Log it'}
+            icon="check"
+            size="lg"
+            selected
             disabled={logging}
             onPress={logNow}
-            style={[styles.primary, { flex: 1, backgroundColor: theme.text }, logging && { opacity: 0.6 }]}
-          >
-            <Text style={[type.bodyStrong, { color: theme.bg }]}>{logging ? 'Logging…' : 'Log it'}</Text>
-          </Pressable>
+            style={{ flex: 1 }}
+          />
         </View>
       </View>
 

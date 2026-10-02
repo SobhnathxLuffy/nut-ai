@@ -11,6 +11,7 @@ import {
 import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
 import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard } from '../src/components/assistant/AssistantCards'
 import { Icon } from '../src/components/Icon'
+import { Button } from '../src/components/Screen'
 import { Empty } from '../src/components/Empty'
 import { SkeletonLine } from '../src/components/Skeleton'
 import { useTheme, useMotionScale } from '../src/theme/ThemeProvider'
@@ -673,9 +674,11 @@ export default function AssistantScreen() {
           placeholderTextColor={t.textMuted}
           onSubmitEditing={() => void send()}
         />
-        <Pressable onPress={() => void send()} style={[s.btn, { backgroundColor: t.text }]}>
-          <Text style={{ color: t.bgElevated, fontWeight: 'bold' }}>Send</Text>
-        </Pressable>
+        {/* UI/UX report Table 12.2 (Wave 2): the private send dialect (bold
+            one-off fontWeight, no a11y role, no pressed state) joins the ONE
+            Button — the token-weighted label, state layers and press feedback
+            arrive with it. */}
+        <Button label="Send" selected onPress={() => void send()} />
       </View>
     </View>
   )
@@ -821,7 +824,6 @@ const s = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  inputRow: { flexDirection: 'row', padding: space.md, gap: space.sm },
+  inputRow: { flexDirection: 'row', padding: space.md, gap: space.sm, alignItems: 'center' },
   input: { flex: 1, borderWidth: 1, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: space.sm },
-  btn: { paddingHorizontal: space.md, justifyContent: 'center', borderRadius: radius.md }
 })

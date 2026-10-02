@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pressable, View } from 'react-native'
+import { View } from 'react-native'
 
 import { router, useFocusEffect } from 'expo-router'
 import { timeline, type TimelineEvent } from '@nutai/timeline'
@@ -9,6 +9,7 @@ import { subscribeFoodMutations } from '../data/food-mutations'
 import { changeDayStatus } from '../data/checkin'
 import { copyYesterday, dateOffset, mealSnapshot, repeatSnapshots, saveShortcut } from '../data/shortcuts'
 import { Button, Card, Field, Label, Row, useAction } from './Screen'
+import { PressableFX } from './PressableFX'
 import { DayStatusControl } from './DayStatusControl'
 import { SkeletonLine, SkeletonRow } from './Skeleton'
 import { showToast } from './toast-store'
@@ -164,9 +165,12 @@ export function DayTimeline({
   </>
 }
 
+// UI/UX report Table 9.1 (Wave 2): the timeline's meal rows — the app's
+// highest-traffic list — ride PressableFX, so every tap confirms with the
+// 0.97 scale + 6% ink state layer instead of a silent Pressable.
 function PressableMeal({enabled,onPress,children}:{enabled:boolean;onPress:()=>void;children:React.ReactNode}) {
   if (!enabled) return <>{children}</>
-  return <Pressable onPress={onPress} accessibilityRole="button">{children}</Pressable>
+  return <PressableFX onPress={onPress} accessibilityRole="button">{children}</PressableFX>
 }
 
 const OPERATION_VERBS: Record<string, string> = { insert: 'add', update: 'edit', delete: 'delete' }

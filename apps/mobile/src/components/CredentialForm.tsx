@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { PROVIDER_MODELS, cheapestModel, type ProviderId } from '@nutai/prompt'
 import { customProviderBaseUrl, putSetting, setting } from '../data/repo'
 import { normalizeBaseUrl } from '../inference/base-url'
@@ -8,6 +8,7 @@ import { looksPlausible, saveCredential, type CredentialKind } from '../inferenc
 import { validateCredential } from '../inference/pathA/validate'
 import { useTheme } from '../theme/ThemeProvider'
 import { radius, space, type } from '../theme/tokens'
+import { Field, Button } from './Screen'
 import { Icon } from './Icon'
 
 /**
@@ -206,10 +207,15 @@ export function CredentialForm({
           shows (ends in /v1), and the exact model ID if it differs from the
           default. Leave empty for the official {PROVIDER_NAME[provider]} endpoint.
         </Text>
-        <TextInput
-          accessibilityLabel="Reseller base URL"
+        {/* UI/UX report Table 5.1 / Table 12.2 (Wave 2): the two reseller
+            inputs join the ONE labelled Field — its error + hint slots and
+            web focus ring replace this form's private TextInput dialect
+            (label-less, placeholder-only). The elevated input surface and
+            label-size text are preserved through style overrides. */}
+        <Field
+          label="Reseller base URL"
+          hint="From the reseller's dashboard — ends in /v1."
           placeholder="https://aicredits.in/v1"
-          placeholderTextColor={theme.textFaint}
           value={baseUrl}
           onChangeText={(t) => {
             setBaseUrl(t)
@@ -224,12 +230,11 @@ export function CredentialForm({
           autoCorrect={false}
           keyboardType="url"
           editable={!busy}
-          style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+          style={[styles.resellerInput, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
         />
-        <TextInput
-          accessibilityLabel="Reseller model ID"
+        <Field
+          label="Reseller model ID"
           placeholder={`Model ID (default ${model.id})`}
-          placeholderTextColor={theme.textFaint}
           value={modelOverride}
           onChangeText={(t) => {
             setModelOverride(t)
@@ -241,14 +246,16 @@ export function CredentialForm({
           autoCapitalize="none"
           autoCorrect={false}
           editable={!busy}
-          style={[styles.resellerInput, { color: theme.text, backgroundColor: theme.bgElevated, borderColor: theme.border }]}
+          style={[styles.resellerInput, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}
         />
       </View>
 
-      <TextInput
-        accessibilityLabel="API credential"
+      {/* Table 5.1 (Wave 2): the credential input also rides the ONE Field —
+          error={error} drives the safety border this form used to hand-roll,
+          and the visible label replaces the placeholder-only a11y label. */}
+      <Field
+        label="API credential"
         placeholder={kind === 'oauth' ? 'Paste the token' : 'sk-…'}
-        placeholderTextColor={theme.textFaint}
         value={value}
         onChangeText={(t) => {
           setValue(t)
@@ -260,7 +267,8 @@ export function CredentialForm({
         autoCorrect={false}
         secureTextEntry={!ok}
         editable={!busy}
-        style={[styles.input, { color: theme.text, backgroundColor: theme.bgSunken, borderColor: error ? theme.safety : theme.border }]}
+        error={error}
+        style={[styles.input, { backgroundColor: theme.bgSunken, borderColor: error ? theme.safety : theme.border }]}
       />
 
       {busy ? (
@@ -269,18 +277,20 @@ export function CredentialForm({
         </View>
       ) : null}
 
-      {error ? (
+      {/* Table 10.1 (report Ch. 8 "Settings / profile → inline field errors"):
+          the message itself now lives in the Field's error slot above; this
+          card only carries the EXTRA diagnostics (provider hint + raw HTTP
+          detail) that do not fit an inline slot, and disappears when a
+          failure has neither. */}
+      {error && (hint || detail) ? (
         <View style={[styles.result, { backgroundColor: theme.safetyBg }]}>
-          <Text style={[type.caption, { color: theme.safety, lineHeight: 19 }]}>{error}</Text>
           {hint ? (
-            <Text style={[type.caption, { color: theme.safety, marginTop: space.sm, lineHeight: 19 }]}>
-              {hint}
-            </Text>
+            <Text style={[type.caption, { color: theme.safety, lineHeight: 19 }]}>{hint}</Text>
           ) : null}
           {detail ? (
             /* Wave 1a: the 11px mono detail was the report's §11 AA failure —
                the caption floor (12.5px + ink450 faint) is the replacement. */
-            <Text style={[styles.mono, { color: theme.safety, marginTop: space.sm, fontSize: type.caption.fontSize }]}>
+            <Text style={[styles.mono, { color: theme.safety, marginTop: hint ? space.sm : 0, fontSize: type.caption.fontSize }]}>
               {detail}
             </Text>
           ) : null}
@@ -302,20 +312,16 @@ export function CredentialForm({
           </Text>
         </View>
       ) : (
-        <Pressable
-          accessibilityRole="button"
+        // Table 12.2 (Wave 2): the 52pt pill verify CTA joins the ONE Button
+        // at lg (56pt) — press feedback + state layers arrive with it.
+        <Button
+          label={busy ? 'Checking…' : 'Verify and save'}
+          size="lg"
+          selected
           disabled={busy || !plausible}
           onPress={verify}
-          style={[
-            styles.verify,
-            { backgroundColor: theme.text },
-            (busy || !plausible) && { opacity: 0.4 },
-          ]}
-        >
-          <Text style={[type.bodyStrong, { color: theme.bg }]}>
-            {busy ? 'Checking…' : 'Verify and save'}
-          </Text>
-        </Pressable>
+          style={{ marginTop: space.lg }}
+        />
       )}
     </View>
   )
@@ -382,12 +388,4 @@ const styles = StyleSheet.create({
     minHeight: 54,
   },
   result: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
-  verify: {
-    marginTop: space.lg,
-    paddingVertical: space.md,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    minHeight: 52,
-    justifyContent: 'center',
-  },
 })

@@ -9,6 +9,7 @@ import { db, undoLastOperation } from '../src/data/repo'
 import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
+import { Button } from '../src/components/Screen'
 import { showToast } from '../src/components/toast-store'
 // UI/UX report Table 9.2 (Wave 1c): "Log meal → Success (notification)" — the
 // core reward moment fires with the Undo toast, never instead of it.
@@ -212,11 +213,22 @@ export default function FoodReview() {
           </Text>
         </View>
         {error ? <Text style={[type.caption,{color:theme.safety}]}>{error}</Text> : null}
-        <Pressable accessibilityRole="button" accessibilityLabel="Save to diary" disabled={busy || !dateValid} onPress={()=>void save()} style={[styles.primary,{backgroundColor:busy||!dateValid?theme.border:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>{busy?'Saving…':'Save to diary'}</Text></Pressable>
-      </> : <><Text style={[type.body,{color:theme.safety}]}>{error}</Text><Pressable accessibilityRole="button" onPress={()=>router.back()} style={[styles.primary,{backgroundColor:theme.text}]}><Text style={[type.bodyStrong,{color:theme.bg}]}>Back</Text></Pressable></>}
+        {/* UI/UX report Table 12.2 (Wave 2): the 54pt pill save CTA joins the
+            ONE Button at lg — press feedback + state layers included, and the
+            hand-rolled busy opacity becomes the §4.3 disabled layer. */}
+        <Button
+          label={busy ? 'Saving…' : 'Save to diary'}
+          icon="check"
+          size="lg"
+          selected
+          disabled={busy || !dateValid}
+          onPress={() => void save()}
+          style={{ marginTop: space.md }}
+        />
+      </> : <><Text style={[type.body,{color:theme.safety}]}>{error}</Text><Button label="Back" size="lg" selected onPress={()=>router.back()} style={{marginTop:space.md}}/></>}
     </ScrollView>
   </KeyboardAvoidingView>
 }
 
 // Wave 1a: the 17px ad-hoc input size joins type.body (UI/UX report Table 3.1).
-const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:type.body.fontSize},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},primary:{minHeight:54,borderRadius:radius.pill,alignItems:'center',justifyContent:'center',marginTop:space.md},ingredientsCard:{borderWidth:StyleSheet.hairlineWidth,borderColor:'rgba(128,128,128,0.35)',borderRadius:radius.md,padding:space.md,gap:space.xs},ingredientRow:{flexDirection:'row',alignItems:'center',gap:space.sm},editIngredientsBtn:{marginTop:space.xs,minHeight:MIN_TAP_TARGET,borderWidth:1,borderRadius:radius.md,alignItems:'center',justifyContent:'center',paddingHorizontal:space.md}})
+const styles=StyleSheet.create({header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},row:{flexDirection:'row',gap:space.md},input:{minHeight:MIN_TAP_TARGET,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.md,paddingHorizontal:space.md,fontSize:type.body.fontSize},slots:{flexDirection:'row',flexWrap:'wrap',gap:space.sm},slot:{minHeight:MIN_TAP_TARGET,paddingHorizontal:space.md,borderWidth:StyleSheet.hairlineWidth,borderRadius:radius.pill,alignItems:'center',justifyContent:'center'},ingredientsCard:{borderWidth:StyleSheet.hairlineWidth,borderColor:'rgba(128,128,128,0.35)',borderRadius:radius.md,padding:space.md,gap:space.xs},ingredientRow:{flexDirection:'row',alignItems:'center',gap:space.sm},editIngredientsBtn:{marginTop:space.xs,minHeight:MIN_TAP_TARGET,borderWidth:1,borderRadius:radius.md,alignItems:'center',justifyContent:'center',paddingHorizontal:space.md}})

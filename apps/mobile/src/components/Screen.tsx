@@ -12,9 +12,11 @@ import {
   type TextInputProps,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { StyleProp, ViewStyle } from 'react-native'
 import { Icon, type IconName } from './Icon'
+import { PressableFX } from './PressableFX'
 import { useMotionScale, useTheme } from '../theme/ThemeProvider'
-import { MIN_TAP_TARGET, radius, space, type } from '../theme/tokens'
+import { MIN_TAP_TARGET, radius, space, stateLayerFor, type } from '../theme/tokens'
 
 /** One header action — icon-only, so the label is mandatory (report Ch. 6). */
 export interface HeaderAction {
@@ -228,44 +230,104 @@ export function Card({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** Standard button with selected and disabled states. */
+/**
+ * The ONE Button (UI/UX report Table 5.1 / Table 12.2, Wave 2).
+ *
+ * "Rebuild one Button, 48/56pt, icon slot" — the 54–60pt hand-rolled pill CTAs
+ * and the 48pt shared Button collapse into one primitive with two sizes:
+ *   md (48pt, radius 14) — the compact action rows every screen already uses;
+ *   lg (56pt, pill) — the migrated full-width CTA dialects (result "Log it",
+ *   food-review "Save to diary", the assistant send button).
+ *
+ * Press feedback is Table 9.1 via PressableFX (scale 0.97 + the 6% ink state
+ * layer, 120ms out, instant under reduce motion); pressed/disabled/focus come
+ * from the §4.3 state-layer tokens so no call site can grow a private dialect.
+ * `selected` keeps its Wave 1a meaning (the ink-filled primary surface) so all
+ * 79 existing call sites compile and render unchanged.
+ */
+export type ButtonSize = 'md' | 'lg'
+
 export function Button({
   label,
   onPress,
   disabled = false,
   selected = false,
+  icon,
+  size = 'md',
+  style,
 }: {
   label: string
   onPress: () => void
   disabled?: boolean
   selected?: boolean
+  /** Icon slot (Table 5.1) — one glyph left of the label, theme-coloured. */
+  icon?: IconName
+  /** Two sizes (Table 12.2 "One Button, two sizes"): md 48pt, lg 56pt. */
+  size?: ButtonSize
+  /** Layout overrides (margin/flex) — merged after the primitive's style. */
+  style?: StyleProp<ViewStyle>
 }) {
   const t = useTheme()
+  const isLg = size === 'lg'
+  const contentColor = selected ? t.bg : t.text
   return (
-    <Pressable
+    <PressableFX
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       onPress={onPress}
-      style={{
-        minHeight: 48,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        borderRadius: radius.md + 2,
-        backgroundColor: selected ? t.text : t.bgSunken,
-        opacity: disabled ? 0.5 : 1,
-        justifyContent: 'center',
-      }}
+      style={[
+        {
+          minHeight: isLg ? 56 : 48,
+          paddingHorizontal: isLg ? space.xl : 14,
+          paddingVertical: isLg ? space.md : 12,
+          borderRadius: isLg ? radius.pill : radius.md + 2,
+          backgroundColor: selected ? t.text : t.bgSunken,
+          justifyContent: 'center',
+          alignItems: 'center',
+          flexDirection: 'row',
+          gap: space.sm,
+        },
+        style,
+      ]}
     >
-      <Text style={[type.bodyStrong, { color: selected ? t.bg : t.text }]}>{label}</Text>
-    </Pressable>
+      {icon ? <Icon name={icon} size={isLg ? 22 : 18} color={contentColor} /> : null}
+      <Text style={[type.bodyStrong, { color: contentColor }]}>{label}</Text>
+    </PressableFX>
   )
 }
 
-/** Text input with label. */
-export function Field({ label, ...props }: TextInputProps & { label: string }) {
+/**
+ * The ONE labelled Field (UI/UX report Table 5.1 / Table 12.2, Wave 2):
+ * "One Field, error + hint slots."
+ *
+ *   label  — muted caption above the input (unchanged Wave 1a shape).
+ *   error  — safety-coloured caption under the input (§10.1: "inline
+ *            validation stays inline, Field error slots"); the border turns
+ *            safety while an error is present.
+ *   hint   — muted caption under the input for quiet guidance.
+ *   focus  — the §4.3 stateLayer.focus token (2px accent ring) on web, where
+ *            external-keyboard users tab through forms; touch platforms never
+ *            show it (there is no hover/tab focus to ring).
+ */
+export function Field({
+  label,
+  error,
+  hint,
+  onFocus,
+  onBlur,
+  ...props
+}: TextInputProps & {
+  label: string
+  /** Error slot — safety colour, caption size; also drives the safety border. */
+  error?: string | null
+  /** Hint slot — muted caption under the input. */
+  hint?: string | null
+}) {
   const t = useTheme()
+  const layers = stateLayerFor(t.isDark)
+  const [focused, setFocused] = useState(false)
   return (
     <View style={{ gap: 4, flexGrow: 1 }}>
       <Label muted>{label}</Label>
@@ -273,10 +335,18 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
         accessibilityLabel={label}
         placeholderTextColor={t.textFaint}
         {...props}
+        onFocus={(event) => {
+          setFocused(true)
+          onFocus?.(event)
+        }}
+        onBlur={(event) => {
+          setFocused(false)
+          onBlur?.(event)
+        }}
         style={[
           {
             color: t.text,
-            borderColor: t.border,
+            borderColor: error ? t.safety : t.border,
             borderWidth: 1,
             borderRadius: radius.md,
             minHeight: 48,
@@ -286,8 +356,17 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
             fontSize: type.body.fontSize,
           },
           props.style,
+          // The focus ring rides LAST so a caller's border override (error
+          // colours, sunken surfaces) cannot smother it while focused.
+          focused && Platform.OS === 'web' ? layers.focus : null,
         ]}
       />
+      {error ? (
+        <Text accessibilityRole="alert" style={[type.caption, { color: t.safety }]}>
+          {error}
+        </Text>
+      ) : null}
+      {hint ? <Text style={[type.caption, { color: t.textMuted }]}>{hint}</Text> : null}
     </View>
   )
 }

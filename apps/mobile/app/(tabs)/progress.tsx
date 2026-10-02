@@ -1,8 +1,9 @@
 import { formatWeightKg, kgToLb, type PeriodReport, type WeightUnit } from '@nutai/analytics'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Badge } from '../../src/components/Badge'
 import { BarChart, LineChart } from '../../src/components/Charts'
 import { analyticsStartDate, loadReport } from '../../src/data/analytics'
 import { localDate, db } from '../../src/data/repo'
@@ -178,7 +179,10 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 function SmallMetric({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={{ minWidth: '44%' }}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[type.bodyStrong, { color: t.text }]}>{value}</Text></View> }
 function DataRow({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={styles.dataRow}><Text style={[type.body, { color: t.text, flex: 1 }]}>{label}</Text><Text style={[type.bodyStrong, { color: t.text }]}>{value}</Text></View> }
 function Muted({ children }: { children: React.ReactNode }) { const t = useTheme(); return <Text style={[type.caption, { color: t.textMuted, lineHeight: 19 }]}>{children}</Text> }
-function Chip({ label, selected, onPress, compact = false }: { label: string; selected: boolean; onPress: () => void; compact?: boolean }) { const t = useTheme(); return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={[styles.chip, compact && styles.compactChip, { backgroundColor: selected ? t.text : t.bgSunken }]}><Text style={[type.label, { color: selected ? t.bg : t.text }]}>{label}</Text></Pressable> }
+// UI/UX report Table 12.2 (Wave 2): the section/window chip dialect joins the
+// ONE Badge — selected flips to the ink surface exactly as before, and the
+// 44pt interactive target + press feedback arrive with it (Table 11.1).
+function Chip({ label, selected, onPress, compact = false }: { label: string; selected: boolean; onPress: () => void; compact?: boolean }) { return <Badge label={label} selected={selected} onPress={onPress} size={compact ? 'sm' : 'md'} /> }
 
 function signedWeight(kg: number, unit: WeightUnit): string {
   const value = displayWeight(kg, unit)
@@ -187,7 +191,6 @@ function signedWeight(kg: number, unit: WeightUnit): string {
 
 const styles = StyleSheet.create({
   tabs: { gap: space.sm, paddingRight: space.lg }, windows: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
-  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md, borderRadius: radius.pill }, compactChip: { minHeight: 44, paddingHorizontal: 11 },
   card: { borderWidth: 1, borderRadius: radius.xl, padding: space.lg, gap: space.md }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   metricCard: { width: '48%', minHeight: 120, borderRadius: radius.lg, padding: space.md, gap: space.xs }, metricValue: { ...type.title },
   dataRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }, reportRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },

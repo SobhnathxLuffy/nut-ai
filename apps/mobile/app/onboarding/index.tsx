@@ -1,7 +1,7 @@
 import { router } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Circle } from 'react-native-svg'
+import { ProgressRing } from '../../src/components/ProgressRing'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { radius, space, type } from '../../src/theme/tokens'
 
@@ -27,16 +27,10 @@ export default function Welcome() {
         <View style={[styles.phone, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
           <Text style={[type.caption, { color: theme.textMuted }]}>Today</Text>
           <View style={{ alignItems: 'center', marginTop: space.md }}>
-            <Svg width={104} height={104}>
-              <Circle cx={52} cy={52} r={44} stroke={theme.ringTrack} strokeWidth="9" fill="none" />
-              <Circle
-                cx={52} cy={52} r={44}
-                stroke={theme.text} strokeWidth="9" fill="none"
-                strokeDasharray={`${2 * Math.PI * 44 * 0.68} ${2 * Math.PI * 44}`}
-                strokeLinecap="round"
-                transform="rotate(-90 52 52)"
-              />
-            </Svg>
+            {/* UI/UX report Table 12.2 (Wave 2): the welcome demo ring joins the
+                ONE ProgressRing — the third of the audited three rings. The demo
+                value (0.68) sweeps in on mount like every other ring now. */}
+            <ProgressRing value={0.68} size={104} stroke={9} />
             <Text style={[styles.heroNum, { color: theme.text }]}>2,340</Text>
             <Text style={[type.caption, { color: theme.textMuted }]}>Calories left</Text>
           </View>

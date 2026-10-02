@@ -26,6 +26,7 @@ import { useTheme } from '../src/theme/ThemeProvider'
 import { ChipRow } from '../src/components/ChipRow'
 import { NewIngredientForm } from '../src/components/NewIngredientForm'
 import { Icon } from '../src/components/Icon'
+import { PressableFX } from '../src/components/PressableFX'
 import { SkeletonRow } from '../src/components/Skeleton'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 
@@ -671,16 +672,16 @@ export default function FoodSearch() {
       )}
 
       {/* Composite Meal Banner */}
+      {/* UI/UX report Table 9.1 (Wave 2): the composite banner's private
+          pressed-opacity dialect joins PressableFX — 0.97 scale + the 6% ink
+          state layer, 120ms out. */}
       {compositeMeal && (
-        <Pressable
+        <PressableFX
           accessibilityRole="button"
           accessibilityLabel={`Review meal ${compositeMeal.displayName}`}
           disabled={loggingComposite}
           onPress={handleSelectComposite}
-          style={({ pressed }) => [
-            styles.compositeCard,
-            { backgroundColor: theme.bgSunken, borderColor: theme.protein, opacity: pressed ? 0.7 : 1 },
-          ]}
+          style={[styles.compositeCard, { backgroundColor: theme.bgSunken, borderColor: theme.protein }]}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <Text style={[type.body, { color: theme.protein, fontWeight: '700' }]}>
@@ -698,22 +699,21 @@ export default function FoodSearch() {
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
             Total: {Math.round(compositeMeal.totalKcal)} kcal · {compositeMeal.totalProtein.toFixed(1)}g P · {compositeMeal.totalCarbs.toFixed(1)}g C · {compositeMeal.totalFat.toFixed(1)}g F
           </Text>
-        </Pressable>
+        </PressableFX>
       )}
 
       {/* Regular Search Result Rows */}
+      {/* Table 9.1 (Wave 2): the food-list rows — the write surface's
+          highest-traffic list — confirm touch via the ONE press feedback. */}
       {results.map((r) => (
-        <Pressable
+        <PressableFX
           key={r.foodId}
           testID={`food-search-row-${r.foodId}`}
           accessibilityRole="button"
           accessibilityLabel={r.source === 'indian_dish_kb' && r.basisConfidence === 'low' ? `Customize draft recipe ${r.name}` : `Review ${r.name}`}
           disabled={selectingId != null}
           onPress={() => handleSelect(r)}
-          style={({ pressed }) => [
-            styles.row,
-            { borderColor: theme.border, minHeight: MIN_TAP_TARGET, opacity: pressed ? 0.6 : 1 },
-          ]}
+          style={[styles.row, { borderColor: theme.border, minHeight: MIN_TAP_TARGET }]}
         >
           <View style={{ flex: 1 }}>
             <Text style={[type.body, { color: theme.text }]} numberOfLines={2}>{r.name}</Text>
@@ -737,7 +737,7 @@ export default function FoodSearch() {
             </Text>
           </View>
           {selectingId === r.foodId ? <ActivityIndicator color={theme.textFaint} /> : null}
-        </Pressable>
+        </PressableFX>
       ))}
 
       {/* Unknown Dish / Zero Matches Fallback Button */}

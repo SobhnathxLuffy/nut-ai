@@ -90,6 +90,9 @@ export interface Theme {
   affirmTint: string
   uncertainTint: string
   proteinTint: string
+  /** Macro identity tints (Wave 2 Badge) — one per macro, same alpha family. */
+  carbsTint: string
+  fatTint: string
   /** A barely-there raised row inside an elevated card. */
   rowRaised: string
   /**
@@ -143,6 +146,11 @@ export const lightTheme: Theme = {
   affirmTint: '#2E9E6B1A',
   uncertainTint: '#8B7BD81A',
   proteinTint: '#3E7BFA1A',
+  // Wave 2 (report Table 5.1 "Badge/Chip — one Badge with variants"): the
+  // macro identity tints, same 0x1A ≈ 10% alpha family as proteinTint, so the
+  // Badge's macro variants never hand-roll a wash.
+  carbsTint: '#F2A93B1A',
+  fatTint: '#7B5EA71A',
   rowRaised: '#0B0B0F08',
   // 0x14 = 20/255 ≈ 7.8% ink; 0xA6 = 166/255 ≈ 65% white for the sweep band.
   skeletonBase: '#0B0B0F14',
@@ -187,6 +195,9 @@ export const darkTheme: Theme = {
   affirmTint: '#4FBE8C26',
   uncertainTint: '#A99AE626',
   proteinTint: '#6E9BFF26',
+  // Dark mirrors the macro tints at the same 0x26 ≈ 15% alpha.
+  carbsTint: '#F5BC6326',
+  fatTint: '#A288CC26',
   rowRaised: '#FFFFFF0A',
   // Same 8% alpha, white ink on near-black; the sweep stays subtle (18%).
   skeletonBase: '#FFFFFF14',

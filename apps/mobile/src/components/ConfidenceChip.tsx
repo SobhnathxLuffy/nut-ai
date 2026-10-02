@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import type { Band } from '@nutai/confidence'
 import { TIER_GLYPH, rangeFor } from '@nutai/confidence'
+import { Badge } from './Badge'
 import { useTheme } from '../theme/ThemeProvider'
-import { radius, space, type } from '../theme/tokens'
+import { space, type } from '../theme/tokens'
 
 /**
  * The confidence chip.
@@ -46,19 +47,23 @@ export function ConfidenceChip({
     ? `${Math.round(low)}–${Math.round(high)} ${unit}`
     : 'Estimate — tap for range'
 
+  // UI/UX report Table 5.1 / Table 12.2 (Wave 2): the chip's private surface
+  // joins the ONE Badge (variant="uncertain" keeps the violet identity +
+  // uncertainBg wash); the 44pt interactive target and press feedback arrive
+  // with it. The public API (value/band/unit/expanded/onPress) is unchanged.
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Estimated ${Math.round(value)} ${unit}, likely between ${Math.round(low)} and ${Math.round(high)}. Tap for why.`}
+    <Badge
+      variant="uncertain"
+      size="sm"
       onPress={onPress}
+      accessibilityLabel={`Estimated ${Math.round(value)} ${unit}, likely between ${Math.round(low)} and ${Math.round(high)}. Tap for why.`}
       hitSlop={space.sm}
-      style={[styles.chip, { backgroundColor: theme.uncertainBg }]}
     >
       {/* Wave 1a: the tier GLYPH rides the caption token (13px ad-hoc → 12.5,
           UI/UX report Table 3.1) — glyphs follow the same scale as text. */}
       <Text style={[type.caption, { color: theme.uncertain }]}>{TIER_GLYPH[band.tier]}</Text>
       <Text style={[type.caption, { color: theme.uncertain }]}>{label}</Text>
-    </Pressable>
+    </Badge>
   )
 }
 
@@ -76,15 +81,3 @@ export function ConfidenceReasons({ band }: { band: Band }) {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.xs,
-    alignSelf: 'flex-start',
-    paddingHorizontal: space.md,
-    paddingVertical: space.xs + 2,
-    borderRadius: radius.pill,
-  },
-})
