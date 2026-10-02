@@ -1,6 +1,7 @@
-import { Pressable, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Field } from './Field'
 import { useTheme } from '../theme/ThemeProvider'
-import { space, type } from '../theme/tokens'
+import { MIN_TAP_TARGET, radius, space, type } from '../theme/tokens'
 
 export interface NewIngredientDraft {
   name: string
@@ -20,14 +21,18 @@ const MACRO_FIELDS = [
 ] as const
 
 /**
- * P2-30 (a): the ONE create-custom-ingredient mini form.
+ * P2-30 (a) → Wave 3 (UI/UX report Ch. 8.3): the ONE create-custom-ingredient
+ * mini form, REBUILT on the shared Field primitive.
  *
- * food-search and dish-composer each carried a verbatim copy (same title,
- * same name field, same per-100 g macro row, same "Save ingredient
- * (searchable afterwards)" button) that had already drifted into different
- * error UX. Both now render THIS form and keep only their own save handler —
- * the resolution semantics legitimately differ per surface, the fields and
- * copy do not.
+ * food-search and dish-composer each carried a verbatim copy (same title, same
+ * name field, same per-100 g macro row, same save button) that had drifted
+ * into different error UX — P2-30 folded them into one component; this wave
+ * removes the component's own hand-rolled TextInput dialects (private borders,
+ * radii, minHeight) so the fields, focus handling and sizing all resolve from
+ * the ONE Field. Both surfaces render THIS form and keep only their own save
+ * handler — resolution semantics legitimately differ per surface, the fields
+ * do not. The per-call-site inputStyle overrides are gone: style drift was the
+ * original bug.
  */
 export function NewIngredientForm({
   value,
@@ -35,75 +40,36 @@ export function NewIngredientForm({
   onSave,
   saving,
   containerStyle,
-  nameInputStyle,
-  macroInputStyle,
 }: {
   value: NewIngredientDraft
   onChange: (next: NewIngredientDraft) => void
   onSave: () => void
   saving: boolean
   containerStyle?: StyleProp<ViewStyle>
-  nameInputStyle?: StyleProp<TextStyle>
-  macroInputStyle?: StyleProp<TextStyle>
 }) {
   const theme = useTheme()
   return (
-    <View
-      style={[
-        {
-          borderWidth: 1,
-          borderRadius: 12,
-          padding: space.md,
-          gap: space.xs,
-        },
-        containerStyle,
-      ]}
-    >
+    <View style={[styles.box, { borderColor: theme.border, backgroundColor: theme.bgSunken }, containerStyle]}>
       <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>New ingredient (values per 100 g)</Text>
-      <TextInput
-        accessibilityLabel="Ingredient name"
+      <Field
+        label="Ingredient name"
         value={value.name}
-        onChangeText={(text) => onChange({ ...value, name: text })}
+        onValueChange={(name) => onChange({ ...value, name })}
         placeholder="Name"
-        placeholderTextColor={theme.textFaint}
-        style={[
-          {
-            borderWidth: 1,
-            borderRadius: 8,
-            minHeight: 44,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            color: theme.text,
-            borderColor: theme.border,
-            backgroundColor: theme.bgSunken,
-          },
-          nameInputStyle,
-        ]}
+        inputStyle={styles.input}
       />
-      <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.xs }}>
-        {MACRO_FIELDS.map(([field, placeholder]) => (
-          <TextInput
+      <View style={styles.macroRow}>
+        {MACRO_FIELDS.map(([field, unit]) => (
+          <Field
             key={field}
-            accessibilityLabel={`${placeholder} per 100 grams`}
+            label={unit}
+            accessibilityLabel={`${unit} per 100 grams`}
             value={value[field]}
-            onChangeText={(text) => onChange({ ...value, [field]: text })}
-            placeholder={placeholder}
-            placeholderTextColor={theme.textFaint}
-            keyboardType="numeric"
-            style={[
-              {
-                flex: 1,
-                borderWidth: 1,
-                borderRadius: 8,
-                minHeight: 44,
-                textAlign: 'center',
-                paddingVertical: 4,
-                color: theme.text,
-                borderColor: theme.border,
-                backgroundColor: theme.bgSunken,
-              },
-              macroInputStyle,
-            ]}
+            onValueChange={(text) => onChange({ ...value, [field]: text })}
+            placeholder={unit}
+            numeric
+            containerStyle={styles.macroField}
+            inputStyle={styles.macroInput}
           />
         ))}
       </View>
@@ -112,17 +78,7 @@ export function NewIngredientForm({
         accessibilityLabel="Save custom ingredient"
         disabled={saving}
         onPress={onSave}
-        style={{
-          marginTop: space.sm,
-          minHeight: 44,
-          borderRadius: 8,
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: theme.protein,
-          borderColor: theme.protein,
-          borderWidth: 1,
-          paddingHorizontal: space.md,
-        }}
+        style={[styles.saveBtn, { backgroundColor: theme.protein, borderColor: theme.protein }]}
       >
         <Text style={[type.label, { color: theme.bg, fontWeight: '700' }]}>
           {saving ? 'Saving…' : 'Save ingredient (searchable afterwards)'}
@@ -131,3 +87,36 @@ export function NewIngredientForm({
     </View>
   )
 }
+
+const styles = StyleSheet.create({
+  box: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    padding: space.md,
+    gap: space.xs,
+  },
+  macroRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  macroField: {
+    flex: 1,
+  },
+  // The Field primitive owns the size/focus/border dialect; these overrides
+  // only COMPACT the macro cells so four fit one row (value + unit caption).
+  input: {},
+  macroInput: {
+    minHeight: MIN_TAP_TARGET,
+    textAlign: 'center',
+    paddingVertical: space.xs,
+  },
+  saveBtn: {
+    marginTop: space.sm,
+    minHeight: MIN_TAP_TARGET,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space.md,
+  },
+})

@@ -1,15 +1,28 @@
 import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useRef, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View,  } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { undoOperation } from '@nutai/db-adapter'
 import { db, deleteMeal } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
-import { getLoggedMeal, updateLoggedMeal, type LoggedMealDetail } from '../src/data/logged-meals'
+import {
+  duplicateLoggedItem,
+  getLoggedMeal,
+  removeLoggedItem,
+  updateLoggedMeal,
+  type LoggedMealDetail,
+} from '../src/data/logged-meals'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
+import { Icon } from '../src/components/Icon'
+import { PressableFX } from '../src/components/PressableFX'
+import { MenuSheet } from '../src/components/Sheet'
+import { showToast } from '../src/components/toast-store'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 import { confirmDialog } from '../src/ui/alert-web'
+// Table 9.2: expanding a row / picking from its menu is a selection; the
+// destructive remove confirm lands warning (confirmDialog path).
+import { selectionAsync } from '../src/utils/haptics'
 
 const SLOTS = ['breakfast', 'lunch', 'dinner', 'snack'] as const
 
@@ -40,6 +53,29 @@ export default function MealDetail() {
   const [busy, setBusy] = useState(false)
   const isSavingRef = useRef(false)
   const [undoUuid, setUndoUuid] = useState<string | null>(null)
+  // Row actions (Ch. 8.3): the item whose context menu is open, and the item
+  // whose inline editor is expanded.
+  const [menuItemId, setMenuItemId] = useState<number | null>(null)
+  const [editingItemId, setEditingItemId] = useState<number | null>(null)
+
+  const applyLoggedMeal = useCallback((value: LoggedMealDetail) => {
+    setMeal({
+      id: value.id,
+      date: value.date,
+      slot: value.slot,
+      items: value.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        gramsText: String(item.grams),
+        kcalPer100g: item.kcalPer100g,
+      })),
+    })
+  }, [])
+
+  const reloadMeal = useCallback(async (targetId: number) => {
+    const restored = await getLoggedMeal(await db(), targetId)
+    if (restored) applyLoggedMeal(restored)
+  }, [applyLoggedMeal])
 
   useEffect(() => {
     if (!mealId) {
@@ -54,22 +90,12 @@ export default function MealDetail() {
         setNotFound(true)
         return
       }
-      setMeal({
-        id: value.id,
-        date: value.date,
-        slot: value.slot,
-        items: value.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          gramsText: String(item.grams),
-          kcalPer100g: item.kcalPer100g,
-        })),
-      })
+      applyLoggedMeal(value)
     })().catch((e) => setError(String(e)))
     return () => {
       alive = false
     }
-  }, [mealId])
+  }, [mealId, applyLoggedMeal])
 
   const changeItem = (index: number, key: 'name' | 'gramsText', value: string) => {
     setMeal((current) =>
@@ -126,6 +152,39 @@ export default function MealDetail() {
       isSavingRef.current = false
       setBusy(false)
     }
+  }
+
+  const menuItem = meal?.items.find((item) => item.id === menuItemId) ?? null
+
+  /** Row actions: duplicate/remove write through the operation ledger and
+   *  confirm with the same Undo-toast pattern every logging path uses. */
+  const runItemAction = (kind: 'duplicate' | 'remove', itemId: number) => {
+    if (!meal) return
+    const target = meal.id
+    void (async () => {
+      try {
+        const uuid =
+          kind === 'duplicate'
+            ? await duplicateLoggedItem(await db(), target, itemId, Date.now())
+            : await removeLoggedItem(await db(), target, itemId, Date.now())
+        await reloadMeal(target)
+        showToast({
+          message: kind === 'duplicate' ? 'Item duplicated.' : 'Item removed.',
+          tone: 'success',
+          action: {
+            label: 'Undo',
+            onPress: () => {
+              void (async () => {
+                await undoOperation(await db(), uuid)
+                await reloadMeal(target)
+              })()
+            },
+          },
+        })
+      } catch (e) {
+        showToast({ message: e instanceof Error ? e.message : 'Could not update this item', tone: 'error' })
+      }
+    })()
   }
 
   if (!meal) {
@@ -192,6 +251,10 @@ export default function MealDetail() {
           })}
         </View>
 
+        {/* ITEM ROWS — the row-action pattern (Ch. 8.3): tap a row to expand
+            its inline editor, long-press (or the ⋯ affordance) for the
+            context menu with edit / duplicate / remove. Swipe is native-only,
+            so the visible affordance is the honest web+native pattern. */}
         {meal.items.map((item, index) => {
           const parsedGrams = parseFloat(item.gramsText)
           const validGrams = Number.isFinite(parsedGrams) && parsedGrams > 0 ? parsedGrams : null
@@ -201,17 +264,53 @@ export default function MealDetail() {
               : validGrams !== null
               ? `${Math.round((item.kcalPer100g * validGrams) / 100)} kcal`
               : '— kcal'
+          const editing = editingItemId === item.id
 
           return (
             <View key={item.id} style={[styles.card, { borderColor: theme.border }]}>
-              <Field label="Food" value={item.name} onValueChange={(value) => changeItem(index, 'name', value)} />
-              <Field
-                label="Grams"
-                value={item.gramsText}
-                onValueChange={(value) => changeItem(index, 'gramsText', value)}
-                numeric
-              />
-              <Text style={[type.caption, { color: theme.textMuted }]}>{preview}</Text>
+              <View style={styles.itemRow}>
+                <PressableFX
+                  accessibilityRole="button"
+                  accessibilityLabel={`Item ${item.name}, ${item.gramsText} grams, ${preview}`}
+                  accessibilityHint="Tap to edit this item. Long-press for actions."
+                  accessibilityState={{ expanded: editing }}
+                  onPress={() => {
+                    // Table 9.2: expanding a row is a selection.
+                    void selectionAsync()
+                    setEditingItemId(editing ? null : item.id)
+                  }}
+                  onLongPress={() => setMenuItemId(item.id)}
+                  style={styles.itemSummary}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[type.bodyStrong, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
+                    <Text style={[type.caption, { color: theme.textMuted }]}>{item.gramsText} g · {preview}</Text>
+                  </View>
+                  <Icon name={editing ? 'chevron' : 'pencil'} size={16} color={theme.textFaint} />
+                </PressableFX>
+                {/* The visible affordance — same menu as the long-press. */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Item actions for ${item.name}`}
+                  onPress={() => setMenuItemId(item.id)}
+                  hitSlop={space.xs}
+                  style={styles.itemMenuBtn}
+                >
+                  <Icon name="dot3" size={20} color={theme.text} />
+                </Pressable>
+              </View>
+              {editing ? (
+                <View style={{ gap: space.sm }}>
+                  <Field label="Food" value={item.name} onValueChange={(value) => changeItem(index, 'name', value)} />
+                  <Field
+                    label="Grams"
+                    value={item.gramsText}
+                    onValueChange={(value) => changeItem(index, 'gramsText', value)}
+                    numeric
+                  />
+                  <Text style={[type.caption, { color: theme.textMuted }]}>Use “Save changes” to persist edits, or the ⋯ menu for quick actions.</Text>
+                </View>
+              ) : null}
             </View>
           )
         })}
@@ -282,6 +381,44 @@ export default function MealDetail() {
           <Text style={[type.label, { color: theme.safety }]}>Delete meal</Text>
         </Pressable>
       </ScrollView>
+
+      {/* The row-action context menu (Sheet primitive) — long-press or the ⋯
+          affordance opens it; the sheet closes before the action runs. */}
+      <MenuSheet
+        open={menuItem != null}
+        onClose={() => setMenuItemId(null)}
+        title={menuItem?.name}
+        sections={
+          menuItem
+            ? [
+                {
+                  items: [
+                    {
+                      key: 'edit',
+                      label: 'Edit item',
+                      icon: 'pencil',
+                      onPress: () => setEditingItemId(menuItem.id),
+                    },
+                    {
+                      key: 'duplicate',
+                      label: 'Duplicate item',
+                      icon: 'plus',
+                      hint: 'Adds the same food with the same grams',
+                      onPress: () => runItemAction('duplicate', menuItem.id),
+                    },
+                    {
+                      key: 'remove',
+                      label: 'Remove item',
+                      icon: 'close',
+                      destructive: true,
+                      onPress: () => runItemAction('remove', menuItem.id),
+                    },
+                  ],
+                },
+              ]
+            : []
+        }
+      />
     </KeyboardAvoidingView>
   )
 }
@@ -299,6 +436,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: { gap: space.sm, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: space.md },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  itemSummary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    minHeight: MIN_TAP_TARGET,
+    paddingVertical: space.xs,
+  },
+  itemMenuBtn: {
+    width: MIN_TAP_TARGET,
+    height: MIN_TAP_TARGET,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   input: {
     minHeight: MIN_TAP_TARGET,
     borderWidth: StyleSheet.hairlineWidth,

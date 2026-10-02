@@ -1,4 +1,5 @@
-import { recordOperation, type DbAdapter } from '@nutai/db-adapter'
+import { createSyncMetadata, recordOperation, type DbAdapter } from '@nutai/db-adapter'
+import { insertCopy } from './shortcuts'
 import { emitFoodMutation } from './food-mutations'
 
 export interface LoggedMealItem { id: number; name: string; grams: number; kcalPer100g: number | null }
@@ -15,7 +16,7 @@ async function aggregate(db: DbAdapter, mealId: number): Promise<Record<string, 
 export async function getLoggedMeal(db: DbAdapter, mealId: number): Promise<LoggedMealDetail | null> {
   const meal = await db.get<{ id:number; local_date:string; meal_slot:string | null }>('SELECT id, local_date, meal_slot FROM meals WHERE id = ?', [mealId])
   if (!meal) return null
-  const items = await db.all<{id:number;display_name:string;grams:number;snap_energy_kcal:number|null}>('SELECT id, display_name, grams, snap_energy_kcal FROM log_items WHERE meal_id = ? ORDER BY sort_order, id', [mealId])
+  const items = await db.all<{id:number;display_name:string;grams:number;snap_energy_kcal:number|null}>('SELECT id, display_name, grams, snap_energy_kcal FROM log_items WHERE meal_id = ? AND deleted_at IS NULL ORDER BY sort_order, id', [mealId])
   return { id: meal.id, date: meal.local_date, slot: meal.meal_slot ?? 'snack', items: items.map(item=>({id:item.id,name:item.display_name,grams:item.grams,kcalPer100g:item.snap_energy_kcal})) }
 }
 
@@ -28,6 +29,62 @@ export async function updateLoggedMeal(db: DbAdapter, detail: LoggedMealDetail, 
     for(const item of detail.items) await tx.run("UPDATE log_items SET display_name=?, grams=?, updated_at=?, revision=revision+1, sync_state='local' WHERE id=? AND meal_id=?",[item.name.trim(),item.grams,now,item.id,detail.id])
     const next=await aggregate(tx,detail.id)
     return recordOperation(tx,{entityType:'meals',entityId:detail.id,opType:'update',prevJson:previous,newJson:next,actor:'user',createdAt:now})
+  })
+  emitFoodMutation({kind:'meal',operationUuid:operation.uuid})
+  return operation.uuid
+}
+
+// ---------------------------------------------------------------------------
+// Row actions (UI/UX report Ch. 8.3, Wave 3): meal-detail's per-item
+// duplicate/remove. Same operation shape updateLoggedMeal writes — meal
+// 'update' with full { meal, items, ledger } prev/new aggregates — so the ONE
+// undoOperation path reverses them like every other meal edit.
+// ---------------------------------------------------------------------------
+
+const TOUCHED_ITEM_UPDATE = `updated_at = ?, revision = revision + 1, sync_state = 'local'`
+
+/**
+ * Duplicate one logged item: a byte-identical nutrition snapshot (same food,
+ * same grams, same per-100 g numbers) appended after the meal's last row with
+ * fresh sync metadata. Undo removes the copy.
+ */
+export async function duplicateLoggedItem(db: DbAdapter, mealId: number, itemId: number, now: number): Promise<string> {
+  const operation = await db.transaction(async tx=>{
+    const previous = await aggregate(tx,mealId)
+    const item = await tx.get<Record<string, unknown>>(
+      'SELECT * FROM log_items WHERE id = ? AND meal_id = ? AND deleted_at IS NULL',
+      [itemId,mealId],
+    )
+    if (!item) throw new Error('Item not found')
+    const sort = await tx.get<{ next: number }>(
+      'SELECT COALESCE(MAX(sort_order) + 1, 0) AS next FROM log_items WHERE meal_id = ? AND deleted_at IS NULL',
+      [mealId],
+    )
+    const row = { ...item, ...createSyncMetadata(now), meal_id: mealId, sort_order: sort!.next }
+    const copyId = await insertCopy(tx,'log_items',row)
+    if (!copyId) throw new Error('Could not duplicate the item')
+    const next = await aggregate(tx,mealId)
+    return recordOperation(tx,{entityType:'meals',entityId:mealId,opType:'update',prevJson:previous,newJson:next,actor:'user',createdAt:now})
+  })
+  emitFoodMutation({kind:'meal',operationUuid:operation.uuid})
+  return operation.uuid
+}
+
+/**
+ * Remove one logged item (soft delete — the row stays for Undo/redo and
+ * backup). Undo restores it. Removing the LAST item of a meal is allowed:
+ * the meal row stays with zero items, which the timeline renders honestly.
+ */
+export async function removeLoggedItem(db: DbAdapter, mealId: number, itemId: number, now: number): Promise<string> {
+  const operation = await db.transaction(async tx=>{
+    const previous = await aggregate(tx,mealId)
+    const result = await tx.run(
+      `UPDATE log_items SET deleted_at = ?, ${TOUCHED_ITEM_UPDATE} WHERE id = ? AND meal_id = ? AND deleted_at IS NULL`,
+      [now,now,itemId,mealId],
+    )
+    if (!result.changes) throw new Error('Item not found')
+    const next = await aggregate(tx,mealId)
+    return recordOperation(tx,{entityType:'meals',entityId:mealId,opType:'update',prevJson:previous,newJson:next,actor:'user',createdAt:now})
   })
   emitFoodMutation({kind:'meal',operationUuid:operation.uuid})
   return operation.uuid

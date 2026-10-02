@@ -684,14 +684,15 @@ function IngredientResolver({
         </Pressable>
       )}
       {showCreate && (
+        // Wave 3 (Ch. 8.3): the shared form rides the Field primitive now —
+        // the per-call-site inputStyle overrides are gone (style drift was the
+        // original duplicate-form bug).
         <NewIngredientForm
           value={newIngredient}
           onChange={setNewIngredient}
           onSave={() => void handleCreate()}
           saving={creating}
           containerStyle={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border, marginTop: space.sm }]}
-          nameInputStyle={s.searchInput}
-          macroInputStyle={s.input}
         />
       )}
     </View>

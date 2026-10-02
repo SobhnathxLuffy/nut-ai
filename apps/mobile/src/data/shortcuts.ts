@@ -40,7 +40,8 @@ export function remapTimestamp(at:number,date:string):number {
   validateLocalDate(date);const old=new Date(at);const [y,m,d]=date.split('-').map(Number)
   return new Date(y!,m!-1,d!,old.getHours(),old.getMinutes(),old.getSeconds(),old.getMilliseconds()).getTime()
 }
-async function insertCopy(tx:DbAdapter,table:'meals'|'log_items',row:Row):Promise<number> {
+/** Column-validated table copy (id stripped) — the insert primitive every snapshot write shares. */
+export async function insertCopy(tx:DbAdapter,table:'meals'|'log_items',row:Row):Promise<number> {
   const allowed=new Set((await tx.all<{name:string}>(`PRAGMA table_info(${table})`)).map(c=>c.name))
   const keys=Object.keys(row).filter(k=>k!=='id')
   if(keys.some(k=>!allowed.has(k)))throw new Error('Invalid snapshot field')

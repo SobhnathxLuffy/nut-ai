@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { DbAdapter } from '@nutai/db-adapter'
 import { loadFood, resolveByText, type NutritionSourceContext, type ScoredCandidate } from '@nutai/resolver'
@@ -21,6 +21,7 @@ import { createCustomFood } from '../src/data/custom-foods'
 import { searchIngredientOptions, createIngredientFood, type IngredientOption } from '../src/data/ingredient-options'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
+import { recentFoodsWithGrams, type RecentFoodWithGrams } from '../src/data/one-tap-log'
 import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { ChipRow } from '../src/components/ChipRow'
@@ -129,6 +130,9 @@ export default function FoodSearch() {
   const [showCreateIngredient, setShowCreateIngredient] = useState(false)
   const [newIngredient, setNewIngredient] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' })
   const [creatingIngredient, setCreatingIngredient] = useState(false)
+  // Wave 3 (Ch. 8.3): the search-first surface carries recent chips — one
+  // query field, FTS results, and the foods this user actually logs.
+  const [recentChips, setRecentChips] = useState<RecentFoodWithGrams[]>([])
 
   function openDecompose(name: string) {
     setDecomposeName(name)
@@ -149,6 +153,9 @@ export default function FoodSearch() {
       setDb(handle)
       setSourceContext({ ifctDb, userDb })
       setCorpus({ ...info, ifctFoods: ifctInfo.foods, ifctVersion: ifctInfo.version })
+      // Wave 3 (Ch. 8.3): recent chips from the user's own log — the same
+      // derivation the Food tab's one-tap strip uses, read once at init.
+      setRecentChips(await recentFoodsWithGrams(userDb, Date.now()).catch(() => []))
       if (info.foods === 0 || ifctInfo.foods === 0) {
         throw new Error(
           info.foods === 0 && ifctInfo.foods === 0
@@ -625,6 +632,43 @@ export default function FoodSearch() {
         style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.bgSunken }]}
       />
 
+      {/* Wave 3 (Ch. 8.3): recent chips — the foods this user actually logs,
+          one tap from a cold query to a warmed-up search. */}
+      {recentChips.length > 0 && (
+        <View style={{ marginTop: space.md }}>
+          <Text style={[type.caption, { color: theme.textFaint, textTransform: 'uppercase' as const }]}>Recent</Text>
+          <ChipRow
+            items={recentChips}
+            keyOf={(r) => `recent-chip-${r.id}`}
+            label={(r) => r.name}
+            a11yLabel={(r) => `Search recent food ${r.name}`}
+            isActive={() => false}
+            onPress={(r) => setQuery(r.name)}
+          />
+        </View>
+      )}
+
+      {/* Wave 3 (Ch. 8.3): the unknown-dish decomposer and the on-the-spot
+          ingredient creator live BEHIND this labeled entry — a clear door,
+          not a stacked inline section under the results. */}
+      {initialization === 'ready' && (
+        <PressableFX
+          accessibilityRole="button"
+          accessibilityLabel="Build a dish from ingredients"
+          onPress={() => openDecompose(query)}
+          style={[styles.entryRow, { borderColor: theme.border, backgroundColor: theme.bgElevated }]}
+        >
+          <Icon name="bowl" size={22} color={theme.text} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[type.body, { color: theme.text }]}>Build a dish from ingredients</Text>
+            <Text style={[type.caption, { color: theme.textMuted }]}>
+              For meals no database knows — combine ingredients, oil and yield
+            </Text>
+          </View>
+          <Icon name="chevron" size={18} color={theme.textFaint} />
+        </PressableFX>
+      )}
+
       {busy && (
         // UI/UX report §9.2 / Table 10.1 (Wave 1c): result-row skeletons while
         // the search runs — the same title + caption + source line shape the
@@ -763,21 +807,29 @@ export default function FoodSearch() {
         </View>
       )}
 
-      {/* Unknown Dish Decomposition / Recipe Builder Interface */}
-      {showDecompose && (
-        <View style={[styles.decomposeContainer, { backgroundColor: theme.bgSunken, borderColor: theme.border }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={[type.body, { color: theme.text, fontWeight: '700' }]}>
-              Dish Recipe Decomposition
-            </Text>
+      {/* Unknown Dish Decomposition / Recipe Builder Interface — Wave 3
+          (Ch. 8.3): behind its own door now. The builder opens as a native
+          slide-up surface (Modal) instead of a stacked inline section under
+          the results, so the search surface stays search-first. The on-the-spot
+          ingredient creator (NewIngredientForm) lives inside the same door —
+          ONE rebuilt form, shared with the dish composer. */}
+      <Modal
+        visible={showDecompose}
+        animationType="slide"
+        onRequestClose={() => setShowDecompose(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: theme.bg, paddingTop: insets.top }}>
+          <View style={styles.decomposeHeader}>
+            <Text style={[type.heading, { color: theme.text }]}>Dish decomposition</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Close dish decomposition" onPress={() => setShowDecompose(false)} hitSlop={space.sm}>
-              {/* UI/UX report Table 12.1 (Wave 1b): the unicode ✕ close glyph
-                  joins the icon set — one close affordance across the app. */}
-              <Icon name="close" size={16} color={theme.textMuted} />
+              <Icon name="close" size={20} color={theme.textMuted} />
             </Pressable>
           </View>
-
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ padding: space.lg, paddingBottom: insets.bottom + 160, gap: space.sm }}
+          >
+          <Text style={[type.caption, { color: theme.textMuted }]}>
             Deterministic arithmetic: verified ingredients × yield × portion. No flat guesses.
           </Text>
 
@@ -909,8 +961,6 @@ export default function FoodSearch() {
               onSave={handleCreateIngredient}
               saving={creatingIngredient}
               containerStyle={[styles.nutritionBox, { backgroundColor: theme.bg, borderColor: theme.border, marginTop: space.xs }]}
-              nameInputStyle={styles.smallInput}
-              macroInputStyle={[styles.smallInput, { marginTop: 0 }]}
             />
           )}
 
@@ -1021,8 +1071,9 @@ export default function FoodSearch() {
               <Text style={[type.body, { color: theme.text, fontWeight: '600' }]}>Save to Foods</Text>
             </Pressable>
           </View>
+          </ScrollView>
         </View>
-      )}
+      </Modal>
 
       <Text style={[type.caption, { color: theme.textFaint, marginTop: space.xl }]}>
         IFCT 2017: ICMR-NIN, used with permission. USDA FoodData Central: U.S. public domain.
@@ -1067,11 +1118,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 44,
   },
-  decomposeContainer: {
-    marginTop: space.lg,
+  entryRow: {
+    marginTop: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
     padding: space.md,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 56,
+  },
+  decomposeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: space.lg,
+    paddingBottom: space.sm,
   },
   smallInput: {
     marginTop: space.xs,

@@ -7,7 +7,7 @@ import {
   type DbAdapter,
 } from '@nutai/db-adapter'
 import { openMemoryDb } from '@nutai/db-adapter/node'
-import { getLoggedMeal, updateLoggedMeal } from './logged-meals'
+import { duplicateLoggedItem, getLoggedMeal, removeLoggedItem, updateLoggedMeal } from './logged-meals'
 import {
   subscribeFoodMutations,
   setLastDeletedMealUndoUuid,
@@ -277,3 +277,87 @@ describe('Logged Meals Data Layer (Edit, Delete, Undo, Redo, Aggregate Restorati
     expect(await db.get('SELECT * FROM exercise_entries WHERE id = 501')).not.toBeNull()
   })
 })
+
+describe('Logged Meal row actions (Wave 3 Ch. 8.3: meal-detail duplicate / remove)', () => {
+  let db: DbAdapter
+
+  beforeEach(async () => {
+    db = openMemoryDb()
+    await db.exec('PRAGMA foreign_keys = ON;')
+    await migrate(db, NOW)
+  })
+
+  async function createRowActionMeal(): Promise<void> {
+    await db.run(
+      `INSERT INTO meals (id, logged_at, local_date, meal_slot, photo_uri, portion_eaten_fraction, analysis_status, uuid, created_at, updated_at, revision, sync_state)
+       VALUES (1, ?, '2026-09-13', 'lunch', NULL, 1.0, 'complete', 'meal-uuid-1', ?, ?, 1, 'local')`,
+      [NOW, NOW, NOW],
+    )
+    await db.run(
+      `INSERT INTO log_items (id, meal_id, matched_food_id, matched_food_source, display_name, grams, gram_pathway, portion_source, snap_energy_kcal, snap_protein_g, snap_fat_g, snap_carb_g, is_estimate, sort_order, logged_at, uuid, created_at, updated_at, revision, sync_state)
+       VALUES (101, 1, 'D036', 'ifct', 'Cauliflower sabzi', 150, 'manual', 'user', 50, 2.5, 2.0, 6.0, 0, 0, ?, 'item-uuid-101', ?, ?, 1, 'local'),
+              (102, 1, 'A015', 'ifct', 'Steamed rice', 200, 'manual', 'user', 130, 2.7, 0.3, 28.0, 0, 1, ?, 'item-uuid-102', ?, ?, 1, 'local')`,
+      [NOW, NOW, NOW, NOW, NOW, NOW],
+    )
+  }
+
+  it('duplicate copies the item byte-identically, appends it, and undoes cleanly', async () => {
+    await createRowActionMeal()
+    const mutations: FoodMutation[] = []
+    const unsub = subscribeFoodMutations((m) => mutations.push(m))
+
+    const uuid = await duplicateLoggedItem(db, 1, 101, NOW + 1000)
+
+    // The copy: same name/grams/snapshot, NEW id/uuid, appended last.
+    const items = await db.all<{ id: number; display_name: string; grams: number; snap_energy_kcal: number; uuid: string; sort_order: number; deleted_at: number | null }>(
+      'SELECT id, display_name, grams, snap_energy_kcal, uuid, sort_order, deleted_at FROM log_items WHERE meal_id = 1 ORDER BY sort_order, id',
+    )
+    expect(items).toHaveLength(3)
+    const copy = items[2]!
+    const original = items[0]!
+    expect(copy.display_name).toBe(original.display_name)
+    expect(copy.grams).toBe(original.grams)
+    expect(copy.snap_energy_kcal).toBe(original.snap_energy_kcal)
+    expect(copy.id).not.toBe(original.id)
+    expect(copy.uuid).not.toBe(original.uuid)
+    expect(copy.sort_order).toBeGreaterThan(original.sort_order)
+    expect(copy.deleted_at).toBeNull()
+
+    // The meal-mutation event fired (the timelines refresh).
+    expect(mutations.some((m) => m.kind === 'meal')).toBe(true)
+    unsub()
+
+    // Undo removes exactly the copy — the original pair survives.
+    await undoOperation(db, uuid, NOW + 2000)
+    const afterUndo = await db.all('SELECT id FROM log_items WHERE meal_id = 1 AND deleted_at IS NULL')
+    expect(afterUndo).toHaveLength(2)
+    expect(afterUndo.some((r) => r.id === 101)).toBe(true)
+    expect(afterUndo.some((r) => r.id === 102)).toBe(true)
+  })
+
+  it('remove soft-deletes the item; undo restores it with its grams and snapshot', async () => {
+    await createRowActionMeal()
+
+    const uuid = await removeLoggedItem(db, 1, 102, NOW + 1000)
+
+    // Soft delete: the row stays (undo/backup), getLoggedMeal hides it.
+    const row = await db.get<{ deleted_at: number | null }>('SELECT deleted_at FROM log_items WHERE id = 102')
+    expect(row!.deleted_at).not.toBeNull()
+    const meal = await getLoggedMeal(db, 1)
+    expect(meal!.items.map((i) => i.id)).toEqual([101])
+
+    await undoOperation(db, uuid, NOW + 2000)
+    const restored = await getLoggedMeal(db, 1)
+    expect(restored!.items.map((i) => i.id).sort()).toEqual([101, 102])
+    expect(restored!.items.find((i) => i.id === 102)).toEqual({ id: 102, name: 'Steamed rice', grams: 200, kcalPer100g: 130 })
+  })
+
+  it('refuses honestly when the item does not exist', async () => {
+    await createRowActionMeal()
+    await expect(duplicateLoggedItem(db, 1, 999, NOW)).rejects.toThrow('Item not found')
+    await expect(removeLoggedItem(db, 1, 999, NOW)).rejects.toThrow('Item not found')
+    // And nothing changed.
+    expect((await db.all('SELECT id FROM log_items WHERE meal_id = 1 AND deleted_at IS NULL')).length).toBe(2)
+  })
+})
+
