@@ -34,6 +34,7 @@
     "indian-dishes:build": "node tools/indian-dishes/build-sqlite.mjs",
     "indian-dishes:verify": "npm run build:tools-pkgs && node tools/indian-dishes/validate.mjs",
     "postinstall": "node scripts/patch-expo-modules-jsi.mjs",
+    "eas-build-post-install": "npm run build:tools-pkgs && npm run data:build",
     "indian-dishes:verify-mappings": "node tools/indian-dishes/verify-mappings.mjs",
     "indian-dishes:curate": "node tools/indian-dishes/curate-drafts.mjs"
   },

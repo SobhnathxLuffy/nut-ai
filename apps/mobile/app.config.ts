@@ -61,10 +61,21 @@ const config: ExpoConfig = {
 
   android: {
     package: BUNDLE_ID,
+    // First release build baseline; EAS production profile uses autoIncrement
+    // so store/update builds never collide.
+    versionCode: 1,
     // Native static config: one fixed colour baked into the APK at build time —
     // the runtime theme system cannot apply here. Must stay a literal (QA P2-20
     // exemption), and matches palette.ink900 in src/theme/tokens.ts.
-    adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B0B0F' },
+    adaptiveIcon: {
+      foregroundImage: './assets/adaptive-icon.png',
+      backgroundColor: '#0B0B0F',
+      // Android 13 themed (monochrome) icon + layered background — both assets
+      // existed on disk but were unreferenced until this round (APK-readiness
+      // QA 2026-10).
+      backgroundImage: './assets/android-icon-background.png',
+      monochromeImage: './assets/android-icon-monochrome.png',
+    },
     permissions: ['android.permission.CAMERA'],
     // No Google Play Services dependency: all notifications are local, there is
     // no push token and no FCM. Preserving that keeps F-Droid viable, which

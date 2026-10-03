@@ -57,6 +57,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # nutrition.db is a gitignored build artifact that expo-adapter.ts
+      # require()s at bundle time — a clean checkout without this step cannot
+      # export at all (APK-readiness QA 2026-10; also regenerates
+      # corpus-revision.ts deterministically so the freshness gate matches).
+      - name: Build nutrition corpus
+        run: npm run build:tools-pkgs && npm run data:build
+
       - name: Build web bundle
         working-directory: apps/mobile
         run: npx expo export --platform web
