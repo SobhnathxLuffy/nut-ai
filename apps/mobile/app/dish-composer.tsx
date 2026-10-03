@@ -443,7 +443,7 @@ export default function DishComposerScreen() {
       </View>
 
       {dish?.recordStatus === 'CURATED' ? (
-        <Text style={[s.alert, { color: t.protein }]}>Curated recipe — you can still modify to a household variant.</Text>
+        <Text style={[s.alert, { color: t.proteinText }]}>Curated recipe — you can still modify to a household variant.</Text>
       ) : (
         <Text style={[s.alert, { color: t.safety }]}>Draft Recipe. Review ingredients and quantities before logging.</Text>
       )}
@@ -455,7 +455,7 @@ export default function DishComposerScreen() {
                <TextInput style={[type.body, { color: t.text, padding: 0, margin: 0, fontWeight: 'bold' }]} value={c.name} onChangeText={t => updateName(c.id, t)} placeholder="Ingredient Name" placeholderTextColor={t.textMuted} />
                {/* P1-9: show the resolved food's NAME — a raw source id like
                    ifct:A019 tells the user nothing about the ingredient. */}
-               {c.foodId ? <Text style={[type.caption, { color: t.protein }]} numberOfLines={2}>Resolved: {c.resolvedName ?? c.foodId}</Text> : <Text style={[type.caption, { color: t.safety }]}>Unresolved Ingredient</Text>}
+               {c.foodId ? <Text style={[type.caption, { color: t.proteinText }]} numberOfLines={2}>Resolved: {c.resolvedName ?? c.foodId}</Text> : <Text style={[type.caption, { color: t.safety }]}>Unresolved Ingredient</Text>}
                <Text style={[type.caption, { color: t.textMuted }]}>
                  {c.kcal !== null ? `${Math.round(c.kcal * (c.grams/100))} kcal · ${Math.round((c.protein_g||0)*(c.grams/100))}g P` : 'Unknown nutrition'}
                </Text>
@@ -545,7 +545,7 @@ export default function DishComposerScreen() {
           <Text style={[type.body, { color: t.safety }]}>Resolve ingredients to calculate.</Text>
         ) : (
           <View>
-            <Text style={[type.body, { color: t.protein, fontWeight: 'bold' }]}>{Math.round(portionKcal||0)} kcal</Text>
+            <Text style={[type.body, { color: t.proteinText, fontWeight: 'bold' }]}>{Math.round(portionKcal||0)} kcal</Text>
             <Text style={[type.caption, { color: t.textMuted }]}>P: {Math.round(portionP||0)}g · C: {Math.round(portionC||0)}g · F: {Math.round(portionF||0)}g</Text>
             <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>Raw {Math.round(totalRawMass)}g → cooked yield {Math.round(cookedYield)}g</Text>
           </View>
@@ -680,7 +680,7 @@ function IngredientResolver({
           onPress={() => { setNewIngredient((prev) => ({ ...prev, name: query.trim() })); setShowCreate(true) }}
           style={[s.btn, { borderColor: t.protein, paddingVertical: 8 }]}
         >
-          <Text style={{ color: t.protein, textAlign: 'center' }}>+ Create “{query.trim()}” as a custom ingredient</Text>
+          <Text style={{ color: t.proteinText, textAlign: 'center' }}>+ Create “{query.trim()}” as a custom ingredient</Text>
         </Pressable>
       )}
       {showCreate && (

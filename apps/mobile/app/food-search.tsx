@@ -708,7 +708,7 @@ export default function FoodSearch() {
             onPress={handleBuildSuggestedCombo}
             style={[styles.actionBtn, { alignSelf: 'flex-start', marginTop: space.sm, backgroundColor: theme.bg, borderColor: theme.protein }]}
           >
-            <Text style={[type.label, { color: theme.protein, fontWeight: '600' }]}>
+            <Text style={[type.label, { color: theme.proteinText, fontWeight: '600' }]}>
               {loggingComposite ? 'Building…' : 'Review this combo'}
             </Text>
           </Pressable>
@@ -728,13 +728,13 @@ export default function FoodSearch() {
           style={[styles.compositeCard, { backgroundColor: theme.bgSunken, borderColor: theme.protein }]}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Text style={[type.body, { color: theme.protein, fontWeight: '700' }]}>
+            <Text style={[type.body, { color: theme.proteinText, fontWeight: '700' }]}>
               {compositeMeal.displayName}
             </Text>
             {loggingComposite ? (
               <ActivityIndicator size="small" color={theme.protein} />
             ) : (
-              <Text style={[type.caption, { color: theme.protein, fontWeight: '600' }]}>Review</Text>
+              <Text style={[type.caption, { color: theme.proteinText, fontWeight: '600' }]}>Review</Text>
             )}
           </View>
           <Text style={[type.caption, { color: theme.text, marginTop: space.xs }]}>
@@ -800,7 +800,7 @@ export default function FoodSearch() {
             onPress={() => openDecompose(query)}
             style={[styles.actionBtn, { backgroundColor: theme.bgSunken, borderColor: theme.protein }]}
           >
-            <Text style={[type.body, { color: theme.protein, fontWeight: '600' }]}>
+            <Text style={[type.body, { color: theme.proteinText, fontWeight: '600' }]}>
               Decompose “{query}” into Ingredients
             </Text>
           </Pressable>
@@ -930,7 +930,7 @@ export default function FoodSearch() {
                 }}
                 style={[styles.actionBtn, { alignSelf: 'flex-start', marginTop: space.xs, backgroundColor: theme.bg, borderColor: theme.protein }]}
               >
-                <Text style={[type.label, { color: theme.protein, fontWeight: '600' }]}>+ Create “{ingredientQuery.trim()}” as a custom ingredient</Text>
+                <Text style={[type.label, { color: theme.proteinText, fontWeight: '600' }]}>+ Create “{ingredientQuery.trim()}” as a custom ingredient</Text>
               </Pressable>
             </View>
           )}
@@ -948,7 +948,7 @@ export default function FoodSearch() {
                   {sourceLabel(option.source, undefined)}{option.kcalPer100g != null ? ` · ${Math.round(option.kcalPer100g)} kcal/100g` : ''}
                 </Text>
               </View>
-              <Text style={[type.label, { color: theme.protein, fontWeight: '700' }]}>+ Add</Text>
+              <Text style={[type.label, { color: theme.proteinText, fontWeight: '700' }]}>+ Add</Text>
             </Pressable>
           ))}
 
@@ -1024,7 +1024,7 @@ export default function FoodSearch() {
               <Text style={[type.caption, { color: theme.text, fontWeight: '700' }]}>
                 Calculated Serving ({computedDecomp.portionGrams}g):
               </Text>
-              <Text style={[type.body, { color: theme.protein, fontWeight: '700', marginTop: 2 }]}>
+              <Text style={[type.body, { color: theme.proteinText, fontWeight: '700', marginTop: 2 }]}>
                 {computedDecomp.serving.kcal === null ? 'Calories unknown' : `${Math.round(computedDecomp.serving.kcal)} kcal`} · estimate
               </Text>
               <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>

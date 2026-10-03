@@ -69,6 +69,10 @@ interface BadgeColors {
 /**
  * Variant → token colour mapping. Exported for the unit tests (the repo's
  * established pattern: pure mappings are asserted against the real tokens).
+ *
+ * Wave 4 (report Table 11.1): macro/tone LABELS use the text-grade *Text
+ * slots — the identity colours stay on icons/strokes. Light badge text pairs
+ * were 1.86–3.44:1; the grades lift them to ≥4.5:1 on the same tints.
  */
 export function badgeColorsFor(variant: BadgeVariant, t: Theme): BadgeColors {
   switch (variant) {
@@ -77,17 +81,17 @@ export function badgeColorsFor(variant: BadgeVariant, t: Theme): BadgeColors {
     case 'outline':
       return { bg: 'transparent', fg: t.text, border: t.border }
     case 'protein':
-      return { bg: t.proteinTint, fg: t.protein, border: null }
+      return { bg: t.proteinTint, fg: t.proteinText, border: null }
     case 'carbs':
-      return { bg: t.carbsTint, fg: t.carbs, border: null }
+      return { bg: t.carbsTint, fg: t.carbsText, border: null }
     case 'fat':
-      return { bg: t.fatTint, fg: t.fat, border: null }
+      return { bg: t.fatTint, fg: t.fatText, border: null }
     case 'affirm':
-      return { bg: t.affirmTint, fg: t.affirm, border: null }
+      return { bg: t.affirmTint, fg: t.affirmText, border: null }
     case 'safety':
       return { bg: t.safetyBg, fg: t.safety, border: null }
     case 'uncertain':
-      return { bg: t.uncertainBg, fg: t.uncertain, border: null }
+      return { bg: t.uncertainBg, fg: t.uncertainText, border: null }
     default:
       return { bg: t.bgSunken, fg: t.text, border: null }
   }

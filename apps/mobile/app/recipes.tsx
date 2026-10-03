@@ -488,7 +488,7 @@ export default function Recipes() {
             style={[styles.undo, { backgroundColor: theme.bgSunken }]}
           >
             <Text style={[type.bodyStrong, { color: theme.text }]}>Recipe saved</Text>
-            <Text style={[type.label, { color: theme.uncertain }]}>Undo</Text>
+            <Text style={[type.label, { color: theme.uncertainText }]}>Undo</Text>
           </Pressable>
         ) : null}
 

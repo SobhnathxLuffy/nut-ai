@@ -310,7 +310,7 @@ export default function FoodReview() {
                     } as never)}
                     style={[styles.editIngredientsBtn, { borderColor: theme.protein }]}
                   >
-                    <Text style={[type.label, { color: theme.protein, fontWeight: '700' }]}>Edit ingredients to your version</Text>
+                    <Text style={[type.label, { color: theme.proteinText, fontWeight: '700' }]}>Edit ingredients to your version</Text>
                   </Pressable>
                 ) : null}
               </Card>

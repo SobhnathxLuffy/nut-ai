@@ -46,6 +46,11 @@ interface ShimButton {
 // the dialog now sizes itself from the canonical scale (UI/UX report Table 3.1)
 // instead of 17px/13.5px/16px ad-hoc strings, so web dialogs cannot drift from
 // the native type system.
+// Wave 4 (report Table 11.1): the light TEXT grades follow the theme's *Text
+// slots — destructiveText is safety #C13A30 (5.36:1 on the white card; the old
+// #D5453B was 4.43:1) and defaultText is proteinText #2E63D9 (5.38:1; the old
+// #3E7BFA was 3.88:1). The dark values already cleared AA on the dark card and
+// keep their lighter hand-tuned hexes.
 const PALETTE = {
   light: {
     backdrop: 'rgba(11, 11, 15, 0.45)',
@@ -53,9 +58,9 @@ const PALETTE = {
     title: '#0B0B0F',
     message: '#3A3A46',
     separator: '#EFEFF3',
-    defaultText: '#3E7BFA',
+    defaultText: '#2E63D9',
     cancelText: '#5C5C6B',
-    destructiveText: '#D5453B',
+    destructiveText: '#C13A30',
     shadow: '0 24px 48px rgba(11, 11, 15, 0.28)',
   },
   dark: {

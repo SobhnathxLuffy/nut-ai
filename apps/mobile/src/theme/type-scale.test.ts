@@ -6,6 +6,7 @@ import {
   darkTheme,
   elevationStyle,
   lightTheme,
+  palette,
   radius,
   stateLayer,
   stateLayerFor,
@@ -152,6 +153,72 @@ describe('Wave 1a token additions (report §4.3)', () => {
     // Dark mirror flips the ink overlay to white ink.
     expect(stateLayerFor(true).pressed.backgroundColor).toBe('#FFFFFF0F')
     expect(stateLayerFor(false)).toBe(stateLayer)
+  })
+})
+
+describe('Wave 4 text-grade tokens (report Table 11.1 "compute all pairs")', () => {
+  // The full pair matrix — including these assertions — is gated by
+  // scripts/check-contrast.mjs (npm run check:contrast, chained into npm run
+  // check). This block pins the SAME contract from the vitest side so a
+  // regression is caught twice: once per pair in CI, once per token here.
+
+  it('the retired identity-as-text pairings fail — proof this gate can catch the original bug', () => {
+    // Pre-Wave-4 values, computed exactly: the report's Table 11.1 findings.
+    expect(ratio(palette.protein, '#FFFFFF')).toBeLessThan(4.5) // 3.88:1
+    expect(ratio(palette.carbs, '#FFFFFF')).toBeLessThan(3) // 2.00:1 — failed even the graphical bar
+    expect(ratio(palette.uncertain, '#FFFFFF')).toBeLessThan(4.5) // 3.55:1
+    expect(ratio('#D5453B', '#FFFFFF')).toBeLessThan(4.5) // old safety: 4.43:1
+    expect(ratio(palette.affirm, '#FFFFFF')).toBeLessThan(4.5) // 3.38:1
+  })
+
+  it('light theme: every *Text slot passes 4.5:1 on bg and bgElevated', () => {
+    for (const slot of ['proteinText', 'carbsText', 'fatText', 'uncertainText', 'affirmText'] as const) {
+      expect(contrast(lightTheme[slot], lightTheme.bg)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(lightTheme[slot], lightTheme.bgElevated)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('dark theme: the *Text slots (same hexes as the dark identity colors) pass 4.5:1 on both surfaces', () => {
+    for (const slot of ['proteinText', 'carbsText', 'fatText', 'uncertainText', 'affirmText'] as const) {
+      expect(contrast(darkTheme[slot], darkTheme.bg)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(darkTheme[slot], darkTheme.bgElevated)).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('light safety #C13A30 passes 4.5:1 as text on bg, bgElevated and its own wash', () => {
+    expect(lightTheme.safety).toBe('#C13A30') // palette.safety, the computed replacement
+    expect(contrast(lightTheme.safety, lightTheme.bg)).toBeGreaterThanOrEqual(4.5) // 5.36:1
+    expect(contrast(lightTheme.safety, lightTheme.bgElevated)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(lightTheme.safety, lightTheme.safetyBg)).toBeGreaterThanOrEqual(4.5) // 4.73:1
+  })
+
+  it('light carbs is recomputed to clear the 3:1 graphical bar (ring strokes, chart series)', () => {
+    // palette.carbs stays the artwork/brand hex; the THEME slot is the grade.
+    expect(palette.carbs).toBe('#F2A93B')
+    expect(lightTheme.carbs).toBe('#C68607')
+    expect(contrast(lightTheme.carbs, lightTheme.bg)).toBeGreaterThanOrEqual(3) // 3.08:1
+    expect(lightTheme.carbsTint).toBe('#C686071A')
+  })
+
+  it('identity colors clear the 3:1 graphical bar in BOTH themes (icons, strokes, chart series)', () => {
+    for (const slot of ['protein', 'carbs', 'fat', 'uncertain', 'heart'] as const) {
+      expect(contrast(lightTheme[slot], lightTheme.bg)).toBeGreaterThanOrEqual(3)
+      expect(contrast(lightTheme[slot], lightTheme.bgElevated)).toBeGreaterThanOrEqual(3)
+      expect(contrast(darkTheme[slot], darkTheme.bg)).toBeGreaterThanOrEqual(3)
+      expect(contrast(darkTheme[slot], darkTheme.bgElevated)).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('the accent slot is the ink dialect the selected surfaces hardcoded — zero visual change', () => {
+    // report §3.2: the semantic set gains the accent slot. Same hexes the
+    // Button selected fill / tab pill tint resolved to before, now named and
+    // contrast-gated (light: ink900 19.64:1 on bg; dark: ink50 18.37:1 on bg).
+    expect(lightTheme.accent).toBe(lightTheme.text) // palette.ink900
+    expect(lightTheme.accent).toBe('#0B0B0F')
+    expect(darkTheme.accent).toBe(darkTheme.text) // palette.ink50
+    expect(darkTheme.accent).toBe('#F7F7FA')
+    expect(lightTheme.accentTint).toBe(stateLayer.selected.backgroundColor) // #0B0B0F1F
+    expect(darkTheme.accentTint).toBe('#F7F7FA1F')
   })
 })
 

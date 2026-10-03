@@ -9,6 +9,14 @@
  * seven-step type scale (report Table 3.1), the elevation + state-layer tokens
  * (report §4.3), and the caption contrast fix (report §11 / Table 11.1).
  *
+ * Wave 4 (report Table 11.1 "compute all pairs", §11.1 "contrast verification
+ * becomes a CI gate"): the light palette is now CONTRAST-GRADED — every identity
+ * colour that is used as text has a dedicated *Text slot at ≥4.5:1 on its
+ * surfaces, light `carbs`/`safety` were recomputed to clear their bars, and the
+ * accent slot the report demanded (§3.2) landed. `scripts/check-contrast.mjs`
+ * recomputes the full WCAG 2.1 matrix from this file on every CI run, so no pair
+ * here is ever "designed but uncomputed" again.
+ *
  * THE COLOUR RULE THAT MATTERS MOST:
  *
  *   Red is reserved for SAFETY warnings only. Never for food, never for a missed
@@ -45,6 +53,10 @@ export const palette = {
   // Macro identity. These are IDENTITY colours: one macro, one hue, everywhere.
   // They never double as status.
   protein: '#3E7BFA',
+  // Wave 4: the PALETTE hex stays the artwork/brand identity — but 2.00:1 on
+  // white fails even the 3:1 graphical bar for ring strokes and chart series,
+  // so `lightTheme.carbs` now resolves to the computed #C68607 (3.08:1) and
+  // darkTheme keeps its own literal. Same pattern the dark theme already used.
   carbs: '#F2A93B',
   fat: '#7B5EA7',
 
@@ -54,7 +66,10 @@ export const palette = {
 
   // Safety only. If you are reaching for this and it is not a safety warning,
   // you want `uncertain` or a neutral.
-  safety: '#D5453B',
+  // Wave 4: #D5453B was 4.43:1 on white — under the 4.5:1 AA text bar it is
+  // used at (in-line error copy). #C13A30 is 5.36:1 on white and ≥4.5:1 on
+  // every light surface it renders on; one-slot fix, no `safetyText` needed.
+  safety: '#C13A30',
   safetyBg: '#FDEDEC',
 
   // Success is quiet on purpose. Logging a meal is not an achievement to
@@ -86,6 +101,33 @@ export interface Theme {
   affirm: string
   /** Heart/health identity coral (iconographic, never a status). */
   heart: string
+  /**
+   * Text-grade colors (Wave 4, report Table 11.1 "compute all pairs") — one
+   * per identity hue that is ever set as a `<Text>` color. The IDENTITY colors
+   * above are for icons, ring strokes, chart series and tints (3:1 graphical
+   * bar); any text label uses its *Text slot so it clears the 4.5:1 text bar.
+   * Light values are darker grades of the same hue; dark values are the same
+   * hexes as the dark identity colors, which already passed.
+   */
+  /** Text-grade protein — `theme.protein` as Text color is a Wave 4 violation. */
+  proteinText: string
+  /** Text-grade carbs — light is a brown-grade amber; carbs-as-text was never AA. */
+  carbsText: string
+  /** Text-grade fat — light equals palette.fat (5.25:1, already passing). */
+  fatText: string
+  /** Text-grade uncertain — the violet "please double-check" label color. */
+  uncertainText: string
+  /** Text-grade affirm — the quiet success color (check glyphs, saved copy). */
+  affirmText: string
+  /**
+   * The accent slot (report §3.2 "tighten and complete the semantic set" —
+   * Wave 4, previously promised at the stateLayer comment). The ink dialect:
+   * ink900 on light, ink50 on dark — exactly what the selected-state surfaces
+   * hardcoded before. Same values, now a named token the CI gate can check.
+   */
+  accent: string
+  /** 12% accent wash — the selected-state surface tint (same alpha family as the macro tints). */
+  accentTint: string
   /** Low-alpha washes for "tinted card" moments — the only sanctioned way to tint. */
   affirmTint: string
   uncertainTint: string
@@ -135,7 +177,11 @@ export const lightTheme: Theme = {
   ring: palette.ink900,
   ringTrack: palette.ink100,
   protein: palette.protein,
-  carbs: palette.carbs,
+  // Wave 4: light `carbs` was the palette hex #F2A93B — 2.00:1 on white,
+  // failing even the 3:1 graphical bar for ring strokes and chart series.
+  // The computed grade #C68607 is 3.08:1; the palette hex stays the artwork /
+  // brand identity value.
+  carbs: '#C68607',
   fat: palette.fat,
   uncertain: palette.uncertain,
   uncertainBg: palette.uncertainBg,
@@ -143,13 +189,26 @@ export const lightTheme: Theme = {
   safetyBg: palette.safetyBg,
   affirm: palette.affirm,
   heart: palette.heart,
+  // Wave 4 text grades (report Table 11.1): darker grades of the identity
+  // hues — 5.38 / 5.57 / 5.25 / 5.79 / 5.74 :1 on white. Identity colors stay
+  // on icons/strokes/tints; every Text color migrates to these slots.
+  proteinText: '#2E63D9',
+  carbsText: '#8F5E05',
+  fatText: '#7B5EA7',
+  uncertainText: '#6754C2',
+  affirmText: '#1E744C',
+  // The accent slot: the ink dialect the selected-state surfaces hardcoded
+  // (stateLayer.selected / the Button's t.text fill). Same hexes, now named.
+  accent: palette.ink900,
+  accentTint: '#0B0B0F1F',
   affirmTint: '#2E9E6B1A',
   uncertainTint: '#8B7BD81A',
   proteinTint: '#3E7BFA1A',
   // Wave 2 (report Table 5.1 "Badge/Chip — one Badge with variants"): the
   // macro identity tints, same 0x1A ≈ 10% alpha family as proteinTint, so the
-  // Badge's macro variants never hand-roll a wash.
-  carbsTint: '#F2A93B1A',
+  // Badge's macro variants never hand-roll a wash. Wave 4: carbTint follows its
+  // recomputed light identity grade (was #F2A93B1A).
+  carbsTint: '#C686071A',
   fatTint: '#7B5EA71A',
   rowRaised: '#0B0B0F08',
   // 0x14 = 20/255 ≈ 7.8% ink; 0xA6 = 166/255 ≈ 65% white for the sweep band.
@@ -168,10 +227,11 @@ export const lightTheme: Theme = {
  * (type-scale.test.ts recomputes them every run):
  *   textFaint ink400 #8A8A99 → 5.78:1 on bg ink900, 5.30:1 on bgElevated ink800
  *   textMuted ink300 #B8B8C4 → 10.00:1 on bg ink900, 9.17:1 on bgElevated ink800
- * Both clear the 4.5:1 AA bar for the 12.5px caption floor. The FULL matrix
- * (macros, uncertain, safety pairs) stays a Wave 4 deliverable — the report's
- * CI contrast gate — so those pairs are still unverified. The old [VERIFY]
- * banner is retired with its first paid-down slice.
+ * Wave 4 (report Table 11.1 "compute all pairs") closes the matrix: the FULL
+ * pair set — macros, uncertain, safety, badges, the new text grades and the
+ * accent slot — is computed by `scripts/check-contrast.mjs` on every CI run,
+ * mirrored across both themes. The dark theme passes every pair (text 18.37:1
+ * on bg down to badge pairs ≥4.79:1); there is nothing left to eyeball.
  */
 export const darkTheme: Theme = {
   bg: palette.ink900,
@@ -192,6 +252,18 @@ export const darkTheme: Theme = {
   safetyBg: '#3A1E1C',
   affirm: '#4FBE8C',
   heart: '#F2766B',
+  // Wave 4 text grades: the dark identity colors already cleared the 4.5:1
+  // text bar (computed, §9 of the Wave 4 spec), so the dark grades are the
+  // same hexes — no visual change in dark mode.
+  proteinText: '#6E9BFF',
+  carbsText: '#F5BC63',
+  fatText: '#A288CC',
+  uncertainText: '#A99AE6',
+  affirmText: '#4FBE8C',
+  // The accent slot, dark dialect: white-ink, exactly what the dark
+  // selected-state surfaces hardcoded.
+  accent: palette.ink50,
+  accentTint: '#F7F7FA1F',
   affirmTint: '#4FBE8C26',
   uncertainTint: '#A99AE626',
   proteinTint: '#6E9BFF26',
@@ -329,9 +401,11 @@ export const elevationStyle = (level: ElevationLevel, isDark: boolean): ViewStyl
 /**
  * State layers (report §4.3) — the four interaction states every control owes
  * its users, tokenized once so five different pressed behaviours cannot
- * regrow (§3.6). "Accent" is the ink ring colour today; the report (§3.2)
- * notes the app has no accent slot yet — Wave 2/4 re-points these when one
- * lands, without touching a single consumer.
+ * regrow (§3.6). Wave 4: the accent slot the report demanded (§3.2) HAS now
+ * landed (`theme.accent` / `theme.accentTint`) — the values below are the
+ * light dialect of exactly those tokens, kept here as the spread-compatible
+ * style objects consumers import. `t.accent`/`t.accentTint` are the refs to
+ * reach for in JSX; these objects are the style layer.
  *
  * Alpha hexes: 6% ink ≈ 0x0F (15/255 = 5.9%), 12% ≈ 0x1F (31/255 = 12.2%).
  *

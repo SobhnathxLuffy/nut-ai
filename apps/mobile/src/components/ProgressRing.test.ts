@@ -91,9 +91,15 @@ describe('the Table 9.1 motion contract', () => {
     expect(source).toMatch(/<Text style=\{\[type\.monoData, style\]\}/)
   })
 
-  it('reanimated is NOT imported — RN Animated only (web export safety)', () => {
+  it('reanimated is NOT imported and NOT a dependency — RN Animated only (web export safety)', () => {
+    // Wave 4f (report Table 12.1 KILL list): the dead `react-native-reanimated`
+    // dep was removed — zero source imports ever existed, so removal is safe.
+    // This locks both halves: the animation source stays on RN Animated, and
+    // the dependency cannot silently return to package.json.
     expect(source).not.toContain('react-native-reanimated')
     expect(source).toContain('useNativeDriver: false')
+    const manifest = readFileSync(join(here, '../../package.json'), 'utf8')
+    expect(manifest).not.toContain('react-native-reanimated')
   })
 })
 

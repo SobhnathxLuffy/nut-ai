@@ -114,7 +114,7 @@ function ConfidenceLegend() {
       style={[styles.legendCard, { backgroundColor: theme.uncertainBg }]}
     >
       <View style={{ flexDirection: 'row', gap: space.xs, alignItems: 'flex-start' }}>
-        <Text style={[type.caption, { color: theme.uncertain }]}>{TIER_GLYPH.moderate}</Text>
+        <Text style={[type.caption, { color: theme.uncertainText }]}>{TIER_GLYPH.moderate}</Text>
         <Text style={[type.caption, { color: theme.text, flex: 1, lineHeight: 19 }]}>
           Violet chips mark estimates. Tap one for its likely range and the reasons behind it — numbers
           tighten as you confirm details.
@@ -129,7 +129,7 @@ function ConfidenceLegend() {
         }}
         style={{ alignSelf: 'flex-start', minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
       >
-        <Text style={[type.bodyStrong, { color: theme.uncertain }]}>Got it</Text>
+        <Text style={[type.bodyStrong, { color: theme.uncertainText }]}>Got it</Text>
       </Pressable>
     </View>
   )
@@ -505,7 +505,7 @@ export default function Result() {
             ) : null}
             {portionNote ? (
               <View accessibilityLabel={portionNote} style={[styles.portionChip, { backgroundColor: theme.uncertainBg }]}>
-                <Text style={[type.caption, { color: theme.uncertain }]}>{portionNote}</Text>
+                <Text style={[type.caption, { color: theme.uncertainText }]}>{portionNote}</Text>
               </View>
             ) : null}
 
@@ -546,7 +546,7 @@ export default function Result() {
             hitSlop={space.sm}
             style={{ marginTop: space.xl, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
           >
-            <Text style={[type.body, { color: theme.uncertain }]}>Review ingredients before logging</Text>
+            <Text style={[type.body, { color: theme.uncertainText }]}>Review ingredients before logging</Text>
           </Pressable>
         </ScrollView>
 
@@ -646,7 +646,7 @@ export default function Result() {
           ) : null}
           {portionNote ? (
             <View accessibilityLabel={portionNote} style={[styles.portionChip, { backgroundColor: theme.uncertainBg }]}>
-              <Text style={[type.caption, { color: theme.uncertain }]}>{portionNote}</Text>
+              <Text style={[type.caption, { color: theme.uncertainText }]}>{portionNote}</Text>
             </View>
           ) : null}
 
@@ -705,7 +705,7 @@ export default function Result() {
                 hitSlop={space.xs}
               >
                 <Text style={[type.caption, { color: theme.textMuted }]}>
-                  {q.disclosure} · <Text style={{ color: theme.uncertain }}>change</Text>
+                  {q.disclosure} · <Text style={{ color: theme.uncertainText }}>change</Text>
                 </Text>
               </Pressable>
             ))}
@@ -759,7 +759,7 @@ export default function Result() {
                     <Text
                       style={[
                         type.caption,
-                        { color: provenance.tone === 'positive' ? theme.affirm : theme.uncertain, marginTop: 2 },
+                        { color: provenance.tone === 'positive' ? theme.affirmText : theme.uncertainText, marginTop: 2 },
                       ]}
                     >
                       {provenance.label}
@@ -770,7 +770,7 @@ export default function Result() {
                     // nothing above already says the number is unverified. Rows
                     // showing AI ESTIMATE deliberately do NOT get this suffix —
                     // the amber badge already carries the whole message.
-                    <Text style={[type.caption, { color: theme.uncertain, marginTop: 2 }]}>
+                    <Text style={[type.caption, { color: theme.uncertainText, marginTop: 2 }]}>
                       ⚠ Estimated
                     </Text>
                   ) : null}
@@ -779,7 +779,7 @@ export default function Result() {
                   ) : null}
                   {inlineReason ? (
                     <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
-                      <Text style={{ color: theme.uncertain }}>Why: </Text>
+                      <Text style={{ color: theme.uncertainText }}>Why: </Text>
                       {inlineReason}
                     </Text>
                   ) : null}
@@ -911,7 +911,7 @@ export default function Result() {
               </Text>
             </View>
             {fixMessage ? (
-              <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{fixMessage}</Text>
+              <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>{fixMessage}</Text>
             ) : null}
             <Button
               label={fixBusy ? 'Checking…' : 'Update'}
@@ -961,7 +961,7 @@ export default function Result() {
                 <FixOperationRow key={`${op.type}-${i}`} op={op} rows={result.meal.ingredients} />
               ))}
               {fixMessage ? (
-                <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{fixMessage}</Text>
+                <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>{fixMessage}</Text>
               ) : null}
             </ScrollView>
             <Button
@@ -1391,7 +1391,7 @@ function AddIngredientSheet({
         ) : null}
 
         {error ? (
-          <Text accessibilityRole="alert" style={[type.caption, { color: theme.uncertain }]}>
+          <Text accessibilityRole="alert" style={[type.caption, { color: theme.uncertainText }]}>
             {error}
           </Text>
         ) : null}
@@ -1644,10 +1644,10 @@ function HonestySummaryCard({ known, unknown }: { known: string | null; unknown:
   return (
     <View accessibilityLabel="What the model could and could not identify" style={[styles.honestyCard, { backgroundColor: theme.bgSunken }]}>
       {known != null ? (
-        <Text style={[type.caption, { color: theme.affirm, lineHeight: 19 }]}>{known}</Text>
+        <Text style={[type.caption, { color: theme.affirmText, lineHeight: 19 }]}>{known}</Text>
       ) : null}
       {unknown != null ? (
-        <Text style={[type.caption, { color: theme.uncertain, lineHeight: 19 }]}>{unknown}</Text>
+        <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>{unknown}</Text>
       ) : null}
     </View>
   )

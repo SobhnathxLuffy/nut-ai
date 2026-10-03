@@ -52,7 +52,7 @@ function DayCard({
 
       {bonus != null ? (
         <View style={[styles.bonus, { backgroundColor: theme.uncertainBg }]}>
-          <Text style={[type.caption, { color: theme.protein, fontWeight: '700' }]}>+{bonus}</Text>
+          <Text style={[type.caption, { color: theme.proteinText, fontWeight: '700' }]}>+{bonus}</Text>
         </View>
       ) : null}
 
@@ -83,7 +83,7 @@ export default function RolloverScreen() {
       scroll
     >
       <Text style={[type.bodyStrong, { color: theme.text, marginTop: -space.md, marginBottom: space.xl }]}>
-        Rollover up to <Text style={{ color: theme.protein }}>{ROLLOVER_CAP_KCAL} cals</Text>
+        Rollover up to <Text style={{ color: theme.proteinText }}>{ROLLOVER_CAP_KCAL} cals</Text>
       </Text>
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>

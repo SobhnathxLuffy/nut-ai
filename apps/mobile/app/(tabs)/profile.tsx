@@ -190,7 +190,7 @@ export default function Profile() {
                   />
                 </View>
                 {goal.floorApplied ? (
-                  <Text style={[type.caption, { color: theme.uncertain, lineHeight: 18 }]}>
+                  <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 18 }]}>
                     Raised to our safe floor. Your inputs alone gave {Math.round(goal.targetRawKcal)} kcal.
                   </Text>
                 ) : null}

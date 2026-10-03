@@ -140,7 +140,7 @@ export function DayStatusControl({
             hitSlop={space.sm}
             style={[styles.undoButton, { borderColor: theme.border }]}
           >
-            <Text style={[type.caption, { color: undoing ? theme.textFaint : theme.protein }]}>
+            <Text style={[type.caption, { color: undoing ? theme.textFaint : theme.proteinText }]}>
               {undoing ? 'Undoing…' : 'Undo'}
             </Text>
           </Pressable>

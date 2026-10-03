@@ -11,7 +11,6 @@ import {
   motion,
   radius,
   space,
-  stateLayerFor,
   type,
 } from '../../src/theme/tokens'
 import { ActiveWorkoutCard } from '../../src/components/ActiveWorkout'
@@ -140,7 +139,6 @@ function TabBarPill({
 }) {
   const theme = useTheme()
   const reduced = useReducedMotion()
-  const layers = stateLayerFor(theme.isDark)
   const [frames, setFrames] = useState<Array<{ x: number; width: number } | null>>(() =>
     TABS.map(() => null),
   )
@@ -179,8 +177,10 @@ function TabBarPill({
               top: 0,
               height: '100%',
               borderRadius: radius.pill,
-              // §4.3 selected tint — 12% ink/white, the accent stand-in.
-              backgroundColor: layers.selected.backgroundColor,
+              // Wave 4 (report §3.2): the pill fill re-points to the accent
+              // tint slot — the same 12% ink/white dialect the stateLayer
+              // selected wash resolved to. Zero visual change.
+              backgroundColor: theme.accentTint,
               left: pillLeft,
               width: pillWidth,
             }}

@@ -332,7 +332,7 @@ export default function CustomFoodScreen() {
                       <Text style={[type.bodyStrong, { color: theme.text }]}>{food.name}</Text>
                       <Text style={[type.caption, { color: theme.textMuted }]}>{food.servingAmount} {food.servingUnit} · {Math.round(food.calories)} kcal</Text>
                     </View>
-                    <Text style={[type.label, { color: theme.protein }]}>Edit</Text>
+                    <Text style={[type.label, { color: theme.proteinText }]}>Edit</Text>
                   </Pressable>
                 ))}
               </View>

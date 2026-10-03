@@ -165,7 +165,7 @@ describe('§8.4 item 4 — the confidence legend on first chip appearance', () =
 describe('§8.4 item 5 — uncertain rows show the reason INLINE', () => {
   it('each row computes the inline reason from its band and renders it under the name', () => {
     expect(result).toContain('const inlineReason = item ? inlineUncertaintyReason(item.band) : null')
-    expect(result).toMatch(/<Text style=\{\{ color: theme\.uncertain \}\}>Why: <\/Text>/)
+    expect(result).toMatch(/<Text style=\{\{ color: theme\.uncertainText \}\}>Why: <\/Text>/)
     // The tap-to-expand list SURVIVES — inline is the headline, not a replacement.
     expect(result).toMatch(/expandedRows\.has\(row\.id\)/)
   })

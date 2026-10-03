@@ -108,7 +108,10 @@ describe('the tab bar craft (Table 7.1 / Table 9.1 / Table 9.2)', () => {
   })
 
   it('the pill fill is the §4.3 selected accent tint, not a flat background swap', () => {
-    expect(source).toMatch(/backgroundColor: layers\.selected\.backgroundColor/)
+    // Wave 4 (report §3.2): the pill fill re-pointed from the stateLayer
+    // selected wash to the named accent tint slot — same 12% ink/white hexes,
+    // zero visual change, now contrast-gated via scripts/check-contrast.mjs.
+    expect(source).toMatch(/backgroundColor: theme\.accentTint/)
   })
 
   it('reduce motion snaps the pill instantly', () => {

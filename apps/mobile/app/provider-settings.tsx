@@ -139,7 +139,7 @@ export default function ProviderSettings() {
             </View>
             <View style={{ flexDirection: 'row', gap: space.lg, marginTop: space.md }}>
               <Pressable onPress={() => setShowForm(true)} hitSlop={space.sm}>
-                <Text style={[type.label, { color: theme.protein }]}>Replace key</Text>
+                <Text style={[type.label, { color: theme.proteinText }]}>Replace key</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
@@ -253,7 +253,7 @@ export default function ProviderSettings() {
                 {/* P2-11: the missing-/v1 paste is the most common wrong hunt
                     (it 404s as 'model not available'). Flag it at paste time. */}
                 {baseUrlWarning(baseUrlDraft) ? (
-                  <Text style={[type.caption, { color: theme.uncertain, lineHeight: 18 }]}>
+                  <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 18 }]}>
                     {baseUrlWarning(baseUrlDraft)}
                   </Text>
                 ) : null}

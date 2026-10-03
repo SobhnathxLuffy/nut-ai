@@ -179,7 +179,7 @@ export function CredentialForm({
               onPress={() => void Linking.openURL(CONSOLE_URL[provider])}
               style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, marginTop: space.sm }}
             >
-              <Text style={[type.label, { color: theme.protein }]}>Open the console</Text>
+              <Text style={[type.label, { color: theme.proteinText }]}>Open the console</Text>
               <Icon name="chevron" size={14} color={theme.protein} />
             </Pressable>
             <Text style={[type.caption, { color: theme.textFaint, marginTop: space.sm, lineHeight: 18 }]}>

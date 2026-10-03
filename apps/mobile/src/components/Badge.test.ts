@@ -85,16 +85,26 @@ describe('variant → token colour mapping (both themes)', () => {
     expect(c.border).toBe(lightTheme.border)
   })
 
-  it('macro variants ride the identity tints — never the old Tailwind alphas', () => {
-    expect(badgeColorsFor('protein', lightTheme)).toEqual({ bg: lightTheme.proteinTint, fg: lightTheme.protein, border: null })
-    expect(badgeColorsFor('carbs', lightTheme)).toEqual({ bg: lightTheme.carbsTint, fg: lightTheme.carbs, border: null })
-    expect(badgeColorsFor('fat', lightTheme)).toEqual({ bg: lightTheme.fatTint, fg: lightTheme.fat, border: null })
+  it('macro variants ride the identity tints with TEXT-GRADE labels — never the old Tailwind alphas', () => {
+    // Wave 4 (report Table 11.1): the fg slot is the *Text grade so badge
+    // labels clear 4.5:1 on their own tints (light was 1.86–3.44:1).
+    expect(badgeColorsFor('protein', lightTheme)).toEqual({ bg: lightTheme.proteinTint, fg: lightTheme.proteinText, border: null })
+    expect(badgeColorsFor('carbs', lightTheme)).toEqual({ bg: lightTheme.carbsTint, fg: lightTheme.carbsText, border: null })
+    expect(badgeColorsFor('fat', lightTheme)).toEqual({ bg: lightTheme.fatTint, fg: lightTheme.fatText, border: null })
     expect(badgeColorsFor('carbs', darkTheme).bg).toBe(darkTheme.carbsTint)
   })
 
+  it('the light fg grades are the exact computed hexes (Wave 4 contract)', () => {
+    expect(badgeColorsFor('protein', lightTheme).fg).toBe('#2E63D9')
+    expect(badgeColorsFor('carbs', lightTheme).fg).toBe('#8F5E05')
+    expect(badgeColorsFor('fat', lightTheme).fg).toBe('#7B5EA7')
+    expect(badgeColorsFor('uncertain', lightTheme).fg).toBe('#6754C2')
+    expect(badgeColorsFor('affirm', lightTheme).fg).toBe('#1E744C')
+  })
+
   it('tone variants keep their established semantics (affirm/uncertain washes, safetyBg)', () => {
-    expect(badgeColorsFor('affirm', lightTheme)).toEqual({ bg: lightTheme.affirmTint, fg: lightTheme.affirm, border: null })
-    expect(badgeColorsFor('uncertain', lightTheme)).toEqual({ bg: lightTheme.uncertainBg, fg: lightTheme.uncertain, border: null })
+    expect(badgeColorsFor('affirm', lightTheme)).toEqual({ bg: lightTheme.affirmTint, fg: lightTheme.affirmText, border: null })
+    expect(badgeColorsFor('uncertain', lightTheme)).toEqual({ bg: lightTheme.uncertainBg, fg: lightTheme.uncertainText, border: null })
     expect(badgeColorsFor('safety', lightTheme)).toEqual({ bg: lightTheme.safetyBg, fg: lightTheme.safety, border: null })
   })
 })

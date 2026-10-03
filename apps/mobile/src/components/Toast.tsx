@@ -181,7 +181,7 @@ export function Toast() {
               hitSlop={space.sm}
               style={styles.action}
             >
-              <Text style={[type.label, { color: theme.protein, fontWeight: '600' }]}>
+              <Text style={[type.label, { color: theme.proteinText, fontWeight: '600' }]}>
                 {rendered.action.label}
               </Text>
             </Pressable>

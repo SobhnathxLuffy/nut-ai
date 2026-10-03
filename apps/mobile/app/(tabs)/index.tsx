@@ -524,7 +524,7 @@ export default function Home() {
             style={styles.weightLink}
           >
             <Icon name="scale" size={16} color={theme.protein} />
-            <Text style={[type.label, { color: theme.protein }]}>Log today's weight</Text>
+            <Text style={[type.label, { color: theme.proteinText }]}>Log today's weight</Text>
           </PressableFX>
         </View>
       </View>

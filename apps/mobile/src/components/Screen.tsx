@@ -283,7 +283,10 @@ export function Button({
           paddingHorizontal: isLg ? space.xl : 14,
           paddingVertical: isLg ? space.md : 12,
           borderRadius: isLg ? radius.pill : radius.md + 2,
-          backgroundColor: selected ? t.text : t.bgSunken,
+          // Wave 4 (report §3.2): the selected fill re-points to the new
+          // accent slot — same ink dialect t.text resolved to before, now a
+          // named token the contrast gate checks. Zero visual change.
+          backgroundColor: selected ? t.accent : t.bgSunken,
           justifyContent: 'center',
           alignItems: 'center',
           flexDirection: 'row',

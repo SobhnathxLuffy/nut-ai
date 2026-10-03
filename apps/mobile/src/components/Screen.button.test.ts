@@ -42,8 +42,10 @@ describe('Button — two sizes (Table 12.2 "One Button, two sizes")', () => {
     expect(source).toMatch(/onPress: \(\) => void/)
     expect(source).toMatch(/disabled\?: boolean/)
     expect(source).toMatch(/selected\?: boolean/)
-    // `selected` still means the ink-filled primary surface.
-    expect(source).toMatch(/backgroundColor: selected \? t\.text : t\.bgSunken/)
+    // `selected` still means the ink-filled primary surface. Wave 4 (report
+    // §3.2): the fill re-pointed to the accent slot — the same ink dialect
+    // t.text resolved to, now a named, contrast-gated token. Zero visual change.
+    expect(source).toMatch(/backgroundColor: selected \? t\.accent : t\.bgSunken/)
     expect(source).toMatch(/contentColor = selected \? t\.bg : t\.text/)
   })
 

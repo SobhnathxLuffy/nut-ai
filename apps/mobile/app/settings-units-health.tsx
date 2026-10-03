@@ -179,7 +179,7 @@ export default function UnitsHealthSettings() {
                 >
                   <Text style={[type.caption, { color: theme.textMuted }]}>
                     Already answered the prompt?{' '}
-                    <Text style={{ color: theme.protein }}>Manage access in Settings</Text>
+                    <Text style={{ color: theme.proteinText }}>Manage access in Settings</Text>
                   </Text>
                 </Pressable>
               </>

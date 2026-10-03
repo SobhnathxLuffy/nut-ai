@@ -218,7 +218,7 @@ export default function CheckinScreen() {
         {metrics.protein_compliance != null && (
           <View style={[styles.infoRow, { borderTopColor: theme.border }]}>
             <Text style={[type.caption, { color: theme.textMuted }]}>Protein target compliance:</Text>
-            <Text style={[type.bodyStrong, { color: theme.protein }]}>
+            <Text style={[type.bodyStrong, { color: theme.proteinText }]}>
               {Math.round(metrics.protein_compliance * 100)}% ({metrics.protein_days} days)
             </Text>
           </View>
@@ -236,7 +236,7 @@ export default function CheckinScreen() {
             {metrics.excluded_dates.map((ex) => (
               <View key={ex.date} style={styles.spread}>
                 <Text style={[type.body, { color: theme.text }]}>{ex.date}</Text>
-                <Text style={[type.caption, { color: theme.uncertain }]}>{ex.reason}</Text>
+                <Text style={[type.caption, { color: theme.uncertainText }]}>{ex.reason}</Text>
               </View>
             ))}
           </View>
@@ -271,7 +271,7 @@ export default function CheckinScreen() {
               <Text style={[type.body, { color: theme.textMuted, flex: 1, textAlign: 'right' }]}>
                 {suggestion.old.kcal} kcal
               </Text>
-              <Text style={[type.bodyStrong, { color: theme.protein, flex: 1, textAlign: 'right' }]}>
+              <Text style={[type.bodyStrong, { color: theme.proteinText, flex: 1, textAlign: 'right' }]}>
                 {suggestion.proposed.kcal} kcal
               </Text>
             </View>
@@ -335,7 +335,7 @@ export default function CheckinScreen() {
           {flags.length > 0 ? (
             <View style={{ gap: space.xs, marginTop: space.xs }}>
               {flags.map((flag) => (
-                <Text key={flag} style={[type.caption, { color: theme.uncertain, lineHeight: 18 }]}>
+                <Text key={flag} style={[type.caption, { color: theme.uncertainText, lineHeight: 18 }]}>
                   • {flag}
                 </Text>
               ))}
