@@ -13,7 +13,39 @@ import { useTheme } from '../theme/ThemeProvider'
  *
  * These are stroke-based, inherit `color`, align on a shared optical grid, and
  * scale to any size without a second asset.
+ *
+ * Wave 4d (report Ch 6 / Table 6.1 — icon set extension): the set is 63 glyphs
+ * with three semantic sizes (ICON_SIZES) and an a11y `label` prop.
+ *
+ * THE EXTENSION PROTOCOL (the report Ch 6.2 "Lucide passthrough", superseded —
+ * deliberate Wave 4 deviation, spec §7): when a metaphor is missing, pick the
+ * NAME and the GEOMETRY REFERENCE from the Lucide vocabulary (24 px grid, 2 px
+ * reference stroke) and draw it here in-house at this set's 1.8 stroke. One
+ * stroke philosophy per app (the report's own Option-2 rejection: "two stroke
+ * philosophies in one app is exactly the inconsistency this report is
+ * eliminating"), zero new dependencies, and Metro's unreliable tree-shaking
+ * can never strand a bundle with a half-imported icon package. Precedent:
+ * Wave 1c hand-drew `bookOpen` and `sparkles` exactly this way. REVISIT
+ * TRIGGER, recorded: if a single wave needs more than ~10 new glyphs, evaluate
+ * lucide-react-native (MIT, react-native-svg renderer, web-safe) instead of
+ * hand-drawing a whole library.
+ *
+ * A11y rule (report Ch 6.2): an icon rendered WITHOUT adjacent text must carry
+ * `label` — a lone glyph is unnameable to a screen reader. Icons that already
+ * sit beside a label, or inside a labelled Pressable, leave it unset and let
+ * the adjacent text speak. (Caveat: react-native-svg's web renderer may drop
+ * the prop; acceptable because standalone unlabeled icons are rare on web and
+ * interactive ones already live in labelled Pressables.)
  */
+
+/**
+ * Three semantic sizes (report Ch 6.2), so call sites stop hand-picking
+ * numerals: `default` for row/tool icons, `dense` for navigation chrome and
+ * compact rows, `inline` beside caption text. The numeric `size` prop stays
+ * authoritative — this is the vocabulary, not a gate; the ~60 existing call
+ * sites are not force-migrated.
+ */
+export const ICON_SIZES = { default: 24, dense: 20, inline: 16 } as const
 
 export type IconName =
   | 'flame'
@@ -72,6 +104,13 @@ export type IconName =
   | 'dot1'
   | 'dot3'
   | 'dot6'
+  | 'plusCircle'
+  | 'bowlPlus'
+  | 'trash'
+  | 'share'
+  | 'crown'
+  | 'uturnBack'
+  | 'uturnFwd'
 
 export interface IconProps {
   name: IconName
@@ -79,9 +118,17 @@ export interface IconProps {
   color?: string
   /** Stroke weight. 1.8 is the default optical weight for this set. */
   weight?: number
+  /**
+   * Accessible name for screen readers (report Ch 6.2): MANDATORY when the
+   * icon renders without adjacent text — a lone glyph has nothing a screen
+   * reader can speak. Leave unset when a label already sits beside the icon
+   * or wraps it in a labelled Pressable. Forwards as accessibilityLabel +
+   * the "image" role on the Svg.
+   */
+  label?: string
 }
 
-export function Icon({ name, size = 24, color, weight = 1.8 }: IconProps) {
+export function Icon({ name, size = 24, color, weight = 1.8, label }: IconProps) {
   const theme = useTheme()
   const c = color ?? theme.text
   const common: Common = {
@@ -93,7 +140,13 @@ export function Icon({ name, size = 24, color, weight = 1.8 }: IconProps) {
   }
 
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      accessibilityLabel={label}
+      accessibilityRole="image"
+    >
       {render(name, c, common)}
     </Svg>
   )
@@ -488,6 +541,73 @@ function render(name: IconName, c: string, s: Common) {
           <Circle cx="15.5" cy="12" r="1.8" />
           <Circle cx="8.5" cy="17.5" r="1.8" />
           <Circle cx="15.5" cy="17.5" r="1.8" />
+        </G>
+      )
+    case 'plusCircle':
+      // Wave 4d (report Table 6.1): the "Log a meal" row action — the
+      // report's plus-circle, drawn on the same r=8.5 ring as clock/target
+      // so the affordance families optically match.
+      return (
+        <G>
+          <Circle {...s} cx="12" cy="12" r="8.5" />
+          <Path {...s} d="M12 7.5v9M7.5 12h9" />
+        </G>
+      )
+    case 'bowlPlus':
+      // Wave 4d (report Table 6.1): "Save as usual meal" — the plain bowl
+      // with a small plus at the top-right. The bowl body is the existing
+      // `bowl` path; the steam curls are dropped so the plus owns the space
+      // above the rim.
+      return (
+        <G>
+          <Path {...s} d="M3 11h18a9 9 0 0 1-9 9 9 9 0 0 1-9-9Z" />
+          <Path {...s} d="M17 4v6M14 7h6" />
+        </G>
+      )
+    case 'trash':
+      // Wave 4d (report Table 6.1): delete actions. Can x 8-16, lid line
+      // spanning wider, handle tab floating above — the classic trash
+      // anatomy at this set's insets.
+      return (
+        <G>
+          <Path {...s} d="M6 6.5h12" />
+          <Path {...s} d="M8 6.5v11.5a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V6.5" />
+          <Path {...s} d="M10 4h4" />
+        </G>
+      )
+    case 'share':
+      // Wave 4d (report Table 6.1): share/export affordance. Lucide
+      // "share" anatomy (nodes + tangent links) on the same 24 grid,
+      // drawn in-house at 1.8 per the extension protocol.
+      return (
+        <G>
+          <Circle {...s} cx="6" cy="12" r="3" />
+          <Circle {...s} cx="18" cy="5" r="3" />
+          <Circle {...s} cx="18" cy="19" r="3" />
+          <Path {...s} d="m8.6 10.5 6.8-4" />
+          <Path {...s} d="m8.6 13.5 6.8 4" />
+        </G>
+      )
+    case 'crown':
+      // Wave 4d (report Table 6.1): premium/supporter surfaces. Three
+      // peaks (the middle one tallest) over a flat base line.
+      return <Path {...s} d="M4 18.5l1.5-11 3.3 4.5 3.2-6.5 3.2 6.5 3.3-4.5 1.5 11H4Z" />
+    case 'uturnBack':
+      // Wave 4d (report Table 6.1): undo — the HIG standard action. A
+      // left-pointing arrow whose tail sweeps right and hooks 180° back
+      // (Lucide "undo-2" anatomy).
+      return (
+        <G>
+          <Path {...s} d="M9 14 4 9l5-5" />
+          <Path {...s} d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11" />
+        </G>
+      )
+    case 'uturnFwd':
+      // Wave 4d (report Table 6.1): redo — the mirror of uturnBack.
+      return (
+        <G>
+          <Path {...s} d="M15 14 20 9l-5-5" />
+          <Path {...s} d="M20 9H9.5a5.5 5.5 0 0 0-5.5 5.5 5.5 5.5 0 0 0 5.5 5.5H13" />
         </G>
       )
   }

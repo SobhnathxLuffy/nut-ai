@@ -369,17 +369,18 @@ export interface SummaryLines {
  * Each summary is independently optional: the model may know things and not
  * know others, know both, or have flagged neither. Null/undefined/empty and
  * whitespace-only summaries mean "nothing to say" — the card renders only the
- * lines that survive, and neither line exists to pad the other. The prefixes
- * ("✓ " for what the model could see, "? " for what it could not) are part of
- * the copy so the display contract is pinned in one tested place.
+ * lines that survive, and neither line exists to pad the other.
+ *
+ * Wave 4d (report Ch 13 DoD "no text glyph standing in for a symbol"): the
+ * lines come back PLAIN. The old "✓ "/"? " text prefixes were the last text
+ * glyphs standing in for icons — result.tsx now renders the real check and
+ * search ICONS beside these lines, so the symbol lives in the icon system
+ * where it can take a weight, a theme colour, and an accessible name.
  */
 export function summaryLinesFor(result: SummaryLinesInput): SummaryLines {
   const known = cleanSummaryLine(result.knownSummary)
   const unknown = cleanSummaryLine(result.unknownSummary)
-  return {
-    known: known == null ? null : `✓ ${known}`,
-    unknown: unknown == null ? null : `? ${unknown}`,
-  }
+  return { known, unknown }
 }
 
 function cleanSummaryLine(raw: string | null | undefined): string | null {

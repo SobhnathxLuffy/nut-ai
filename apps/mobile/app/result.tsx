@@ -1632,11 +1632,15 @@ function MacroStats({ totals }: { totals: MacroTotals }) {
 /**
  * Task 3-c: the known/unknown summary card (contract v1.3.0).
  *
- * Two independent, optional lines: what the model could SEE (theme.affirm)
- * and what it could NOT (theme.uncertain — violet, an invitation to check,
- * never a scold). Non-interactive by design; the card exists so silence can
- * never fake knowledge. Renders nothing when both lines are absent —
- * summaryLinesFor already applied the trimming/emptiness rules.
+ * Two independent, optional lines: what the model could SEE (affirm) and what
+ * it could NOT (uncertain — violet, an invitation to check, never a scold).
+ * Non-interactive by design; the card exists so silence can never fake
+ * knowledge. Renders nothing when both lines are absent — summaryLinesFor
+ * already applied the trimming/emptiness rules.
+ *
+ * Wave 4d (report Ch 13 DoD “no text glyph standing in for a symbol”): the
+ * line markers are the real check/search ICONS beside the text, replacing
+ * the old "✓ "/"? " text prefixes — the app's last text glyph dies here.
  */
 function HonestySummaryCard({ known, unknown }: { known: string | null; unknown: string | null }) {
   const theme = useTheme()
@@ -1644,10 +1648,20 @@ function HonestySummaryCard({ known, unknown }: { known: string | null; unknown:
   return (
     <View accessibilityLabel="What the model could and could not identify" style={[styles.honestyCard, { backgroundColor: theme.bgSunken }]}>
       {known != null ? (
-        <Text style={[type.caption, { color: theme.affirmText, lineHeight: 19 }]}>{known}</Text>
+        <View style={styles.honestyLine}>
+          <View style={styles.honestyGlyph}>
+            <Icon name="check" size={12} color={theme.affirmText} />
+          </View>
+          <Text style={[type.caption, { color: theme.affirmText, lineHeight: 19 }]}>{known}</Text>
+        </View>
       ) : null}
       {unknown != null ? (
-        <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>{unknown}</Text>
+        <View style={styles.honestyLine}>
+          <View style={styles.honestyGlyph}>
+            <Icon name="search" size={12} color={theme.uncertainText} />
+          </View>
+          <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>{unknown}</Text>
+        </View>
       ) : null}
     </View>
   )
@@ -1808,6 +1822,19 @@ const styles = StyleSheet.create({
     padding: space.md,
     borderRadius: radius.md,
     gap: space.xs,
+  },
+  // Wave 4d: each summary line is an icon + text row (the icon replaces the
+  // old "✓ "/"? " text prefix). The glyph drops 3.5 into the caption's 19px
+  // first line so it optically centers against the text, and the row keeps
+  // wrapping text hanging off a first-line icon instead of centering against
+  // the whole block.
+  honestyLine: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space.xs,
+  },
+  honestyGlyph: {
+    marginTop: 3.5,
   },
   // Task 3-c: the portion-context honesty chip — a static badge (a View, not
   // a Pressable), so it intentionally has no MIN_TAP_TARGET.

@@ -369,26 +369,26 @@ describe('count question math', () => {
 // ---------------------------------------------------------------------------
 
 describe('summaryLinesFor', () => {
-  it('renders both lines display-ready with their prefixes', () => {
+  it('renders both lines display-ready and PLAIN — the icons carry the ✓/? signal now (Wave 4d)', () => {
     expect(
       summaryLinesFor({
         knownSummary: 'Rice, dal, and chapati are clearly visible',
         unknownSummary: 'The amount of ghee in the tadka',
       }),
     ).toEqual({
-      known: '✓ Rice, dal, and chapati are clearly visible',
-      unknown: '? The amount of ghee in the tadka',
+      known: 'Rice, dal, and chapati are clearly visible',
+      unknown: 'The amount of ghee in the tadka',
     })
   })
 
   it('renders each line independently', () => {
     expect(summaryLinesFor({ knownSummary: 'Whole meal is visible', unknownSummary: null })).toEqual({
-      known: '✓ Whole meal is visible',
+      known: 'Whole meal is visible',
       unknown: null,
     })
     expect(summaryLinesFor({ knownSummary: null, unknownSummary: 'Cooking fat is not visible' })).toEqual({
       known: null,
-      unknown: '? Cooking fat is not visible',
+      unknown: 'Cooking fat is not visible',
     })
   })
 
@@ -399,7 +399,7 @@ describe('summaryLinesFor', () => {
 
   it('trims the model\'s text', () => {
     expect(summaryLinesFor({ knownSummary: '  Two chapatis visible  ', unknownSummary: ' \t ' }).known).toBe(
-      '✓ Two chapatis visible',
+      'Two chapatis visible',
     )
   })
 })
