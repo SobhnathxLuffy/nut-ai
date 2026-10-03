@@ -138,9 +138,9 @@ export default function IndianDishesScreen() {
             accessibilityState={{ selected: filter === f }}
             // eslint-disable-next-line no-restricted-syntax -- filter chips render from a local id list typed loosely for the map
             onPress={() => setFilter(f as any)}
-            style={[s.filterBtn, { backgroundColor: filter === f ? t.protein : t.bgSunken, borderColor: filter === f ? t.protein : t.border }]}
+            style={[s.filterBtn, { backgroundColor: filter === f ? t.proteinTint : t.bgSunken, borderColor: filter === f ? t.protein : t.border }]}
           >
-            <Text style={[type.caption, { color: filter === f ? t.bg : t.text }]}>
+            <Text style={[type.caption, { color: filter === f ? t.proteinText : t.text }]}>
               {f === 'DRAFT_CURATED' ? 'Draft' : f === 'CURATED' ? 'Curated' : f === 'HOUSEHOLD' ? 'My Version' : 'All'}
             </Text>
           </Pressable>

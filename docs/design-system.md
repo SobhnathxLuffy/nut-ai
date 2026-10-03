@@ -17,7 +17,7 @@ Six gates keep this file true. A UI change that bypasses them is a regression by
 |---|---|---|
 | Hex rule (eslint) | `tokens.ts` is the ONLY file allowed a hex colour literal | `npm run lint` |
 | fontSize rule (eslint) | No ad-hoc `fontSize` outside the 7-step type scale; `MIN_TAP_TARGET` on interactive elements | `npm run lint` |
-| Contrast gate | Every text/graphical token pair in BOTH themes passes WCAG 2.1 (100 gated pairs, 24 logged) — computed from `tokens.ts`, with a completeness guard that hard-fails on any unresolvable `Theme` key | `npm run check:contrast` (chained into `npm run check`) |
+| Contrast gate | Every text/graphical token pair in BOTH themes passes WCAG 2.1 (104 gated pairs, 24 logged — incl. the Wave 5C filled option-chip pairs) — computed from `tokens.ts`, with a completeness guard that hard-fails on any unresolvable `Theme` key | `npm run check:contrast` (chained into `npm run check`) |
 | Type-scale + dynamic-type tests | Exact token values, the 1.2× numeral caps, the 68px display headroom at every call site, and a repo sweep that font scaling is never disabled | `npx vitest run apps/mobile/src/theme/type-scale.test.ts` |
 | Sweep tests (Badge/Icon/etc.) | One-primitive-per-family contracts and the icon-set rules, via source inspection | root vitest suite (`npm run test`) |
 | Node purity | Shared packages stay React-Native-free so the token/type tests run under plain Node | `npm run check:node-purity` |
@@ -227,7 +227,7 @@ Nine variants (`default outline selected protein carbs fat affirm safety uncerta
 
 ### 5.6 `ChipRow` — the ONE option-chip row (P2-30)
 
-Horizontal scroll of selectable chips: `items/keyOf/label/a11yLabel/isActive/onPress` + style slots. Selected = protein fill + white caption; `accessibilityState.selected`; 44pt. Status: implemented — AUTOMATICALLY VERIFIED via `wave3-food.test.ts` (consumers) — see §8 for the fill-pair deviation.
+Horizontal scroll of selectable chips: `items/keyOf/label/a11yLabel/isActive/onPress` + style slots. Selected = the Badge macro dialect — `proteinTint` fill + `proteinText` caption + `protein` border (Wave 5C closed the old solid-protein-fill deviation, §7); `accessibilityState.selected`; 44pt. The hand-rolled siblings (indian-dishes filter chips, food-search quick-add chips, dish-composer yield/method chips) render the same dialect — one family. Status: implemented — AUTOMATICALLY VERIFIED via `ChipRow.test.ts` (source lock over all five sites) + the contrast gate's filled-chip pairs; consumers swept by `wave3-food.test.ts`.
 
 ### 5.7 `ItemRow` — the ONE list row (report Ch 8.5 / §5)
 
@@ -298,20 +298,64 @@ Gate-visibility note (honest): `check:contrast` parses `tokens.ts` only. `src/ui
 
 ---
 
-## 7. Known accepted deviations
+## 7. Deviations — closed and open
 
-Recorded, deliberate, each with its remediation path:
+**Closed:**
 
-1. **Filled-protein chip fill pair ~3.9:1** (ChipRow selected state: `bg` on `theme.protein` fill, 12.5px caption). Below the 4.5:1 text bar. Accepted as a *fill pair* — state is also carried by the ink fill + `accessibilityState.selected`, and the pattern is a compact secondary control. Not gated. Remediation if promoted: move to the accent ink dialect or darken the fill grade.
-2. **130% device font audit — NOT TESTED (device).** Checklist for the owner pass: Android Settings → Display → Font size max; Home hero ring card, macro stat rows, slot-guide disclosure, set table (cells / prev / set-number columns), rest chip, tab bar labels. The caps, headroom and input scaling that make it pass are AUTOMATICALLY VERIFIED; the rendered layout is not.
-3. **Native rebuild after reanimated removal — NOT TESTED (device).** Zero source imports (autolinking-only risk); web export + e2e re-verified after removal.
-4. **Deep-link device taps — NOT TESTED (device).** `adb shell am start -a android.intent.action.VIEW -d "nutai://scan"` (and `log`) is the owner pass; unit + web e2e cover the resolution and the not-found fallback.
+1. **Filled-protein chip fill pair — CLOSED (Wave 5C, 2026-10-03).** The
+   ChipRow selected state (and its hand-rolled siblings: the indian-dishes
+   filter chips, the food-search quick-add ingredient chips, the
+   dish-composer yield/method chips) used to render a `bg` label on a SOLID
+   `theme.protein` fill — 3.88:1 in light, the last accepted deviation. The
+   chips now render the Badge macro dialect (`proteinTint` wash +
+   `proteinText` label + `protein` border; selection still doubled in
+   `accessibilityState.selected`), locked two ways: `ChipRow.test.ts`
+   (source sweep over all five sites — the retired pattern cannot regrow)
+   and the contrast gate's two filled-chip pairs over the page bg (label
+   4.78:1 light / 6.00:1 dark, border 3.44:1 / 6.00:1 — 104/104 gated pairs
+   total). One-time adversarial proof: re-adding the retired `bg on protein`
+   pair to the gate manifest fails at exactly 3.88:1.
+2. **Residual of the same class (recorded, open):** two FILLED BUTTONS
+   still render a `bg` label on a solid `protein` fill — the decomposer's
+   "Review & log dish" action (`food-search.tsx`) and the
+   `NewIngredientForm` save button. Buttons, not chips — outside the 5C chip
+   scope; the next a11y pass should move them to the accent ink dialect
+   (the Button selected pattern) or a proteinText fill, and add the gate
+   pair.
+
+**Open — NOT TESTED (device), the owner pass list:**
+
+1. **130% device font audit.** Checklist for the owner pass: Android
+   Settings → Display → Font size max; Home hero ring card, macro stat rows,
+   slot-guide disclosure, set table (cells / prev / set-number columns), rest
+   chip, tab bar labels — plus the Wave 5 day-detail and clarification-card
+   layouts. The caps, headroom and input scaling that make it pass are
+   AUTOMATICALLY VERIFIED; the rendered layout is not.
+2. **Native rebuild after reanimated removal.** Zero source imports
+   (autolinking-only risk); web export + e2e re-verified after removal.
+3. **Deep-link device taps.** `adb shell am start -a android.intent.action.VIEW
+   -d "nutai://scan"` (and `log`, and the Wave 5 `day` alias) is the owner
+   pass; unit + web e2e cover the resolution and the not-found fallback.
+
+The browser-emulation suite has landed and is green:
+`apps/mobile/e2e/wave5-a11y.spec.ts` (tree walk: Sheet dialog naming,
+honesty-row announcement, camera/day-strip/tab naming, Toast live region),
+`wave5-font-scale.spec.ts` (the 130% audit for Home hero + macro rows,
+Camera, and the workout set table — two-pronged CSS injection emulating
+the native 1.2 numeral cap; 3 journeys, no cut text), and
+`wave5-routes.spec.ts` (all 8 direct routes + 3 aliases render their real
+screens). Final e2e: **46 passed / 0 skipped / 0 failed** (29 at the start
+of Wave 5). Prebuild proof: `npx expo prebuild --platform android
+--no-install` exits 0 with zero reanimated references in autolinking (the
+only template mention is a static proguard keep-rule, harmless); the
+hardware halves (native VoiceOver, ADB taps, a real gradle build, hardware
+glyph rendering) remain the owner's.
 
 ---
 
 ## 8. Related records
 
 - ADR-021 — design-system deviations (lucide fallback protocol; Text-slot grade split).
-- `VERIFICATION.md` — the Wave 4 round entry (gate runs, counts, adversarial proofs).
+- `VERIFICATION.md` — the Wave 4 + Wave 5 round entries (gate runs, counts, adversarial proofs).
 - `AGENTS.md` §8 — the binding UI rules; §13 the command list.
 - The UI/UX Transformation Report (Ch 13 Table 13.1) — the wave program this implements.

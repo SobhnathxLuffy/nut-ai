@@ -139,7 +139,19 @@ export function Sheet({
   if (!rendered) return null
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose}>
+    // A11y (Wave 5C audit): RN Web's Modal host already renders role="dialog"
+    // + aria-modal — but UNNAMED, so assistive tech announced a bare "dialog".
+    // The label rides the same host: RN Web forwards Modal's rest props onto
+    // the dialog element (aria-label lands next to its hardcoded role), while
+    // native's RCTModalHostView destructures only its own props and ignores
+    // this one — the inner surface label below stays the native name.
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      accessibilityLabel={accessibleTitle ?? title}
+    >
       <View style={styles.root}>
         <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: backdrop }}>
           <Pressable

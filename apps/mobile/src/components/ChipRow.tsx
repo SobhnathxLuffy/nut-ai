@@ -10,6 +10,14 @@ import { MIN_TAP_TARGET, radius, space, type } from '../theme/tokens'
  * the food-search copy had. Every horizontal option-chip row renders through
  * here: selected tint, accessibilityRole/Label/State, 44px target, theme
  * colors, in one place.
+ *
+ * Wave 5C (AA fix, docs/design-system.md §7): the selected state used to be
+ * a SOLID `theme.protein` fill with a `theme.bg` label — 3.88:1 in light,
+ * the last accepted contrast deviation. It now renders the Badge macro
+ * dialect instead: `proteinTint` wash + `proteinText` label + `protein`
+ * border (4.79:1 light / 6.00:1 dark, gated in check-contrast.mjs as the
+ * "filled option-chip" pairs over the page bg). Selection is still doubled
+ * in accessibilityState, so the state never rides colour alone.
  */
 export function ChipRow<T>({
   items,
@@ -55,10 +63,13 @@ export function ChipRow<T>({
                   justifyContent: 'center',
                 },
                 chipStyle,
-                { backgroundColor: active ? theme.protein : theme.bg, borderColor: theme.border },
+                {
+                  backgroundColor: active ? theme.proteinTint : theme.bg,
+                  borderColor: active ? theme.protein : theme.border,
+                },
               ]}
             >
-              <Text style={[type.caption, { color: active ? theme.bg : theme.text }]}>{label(item)}</Text>
+              <Text style={[type.caption, { color: active ? theme.proteinText : theme.text }]}>{label(item)}</Text>
             </Pressable>
           )
         })}

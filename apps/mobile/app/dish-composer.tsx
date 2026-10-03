@@ -703,9 +703,9 @@ export default function DishComposerScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Use verified recipe yield ${recipeYield}`}
           onPress={() => setUseRecipeYield(true)}
-          style={[s.chip, { backgroundColor: useRecipeYield ? t.protein : t.bg, borderColor: t.border, alignSelf: 'flex-start', marginHorizontal: space.md, marginTop: space.xs }]}
+          style={[s.chip, { backgroundColor: useRecipeYield ? t.proteinTint : t.bg, borderColor: useRecipeYield ? t.protein : t.border, alignSelf: 'flex-start', marginHorizontal: space.md, marginTop: space.xs }]}
         >
-          <Text style={[type.caption, { color: useRecipeYield ? t.bg : t.text, fontWeight: '700' }]}>
+          <Text style={[type.caption, { color: useRecipeYield ? t.proteinText : t.text, fontWeight: '700' }]}>
             Verified recipe yield ×{recipeYield} (matches curated numbers)
           </Text>
         </Pressable>
@@ -721,9 +721,9 @@ export default function DishComposerScreen() {
                 accessibilityLabel={`Select ${item.label}`}
                 accessibilityState={{ selected: active }}
                 onPress={() => { setCookingMethod(item.method); setUseRecipeYield(false) }}
-                style={[s.chip, { backgroundColor: active ? t.protein : t.bg, borderColor: t.border }]}
+                style={[s.chip, { backgroundColor: active ? t.proteinTint : t.bg, borderColor: active ? t.protein : t.border }]}
               >
-                <Text style={[type.caption, { color: active ? t.bg : t.text }]}>{item.label}</Text>
+                <Text style={[type.caption, { color: active ? t.proteinText : t.text }]}>{item.label}</Text>
               </Pressable>
             )
           })}

@@ -6,15 +6,15 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **1,479 passed**, 129 files (Wave 4 gate run, 2026-10-03) |
+| Unit + property + integration tests | `npx vitest run` | **1,595 passed**, 140 files (Wave 5C gate run, 2026-10-03) |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **19/19 packages** React-Native-free |
-| Contrast gate | `npm run check:contrast` | **100/100 pairs pass** (light 50, dark 50) + 24 logged |
+| Contrast gate | `npm run check:contrast` | **104/104 pairs pass** (light 52, dark 52) + 24 logged |
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted (7,930 foods incl. 2 supplemental) |
 | IFCT corpus verification | `npm run ifct:verify` | **542-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
 | Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, **1,451/1,451 mapped slots** (verify-mappings), 0 hard errors, 0 sanity warnings |
-| Playwright e2e (real exported bundle, :3000) | `npm run check:e2e` | **27 passed**, 2 ticketed skips, 0 failed (2026-10-03) |
+| Playwright e2e (real exported bundle, :3000) | `npm run check:e2e` | **36 passed**, 0 skipped, 0 failed at the Wave 5B commit `1eef079` (2026-10-03; the two ticketed BUG-007/009 skips are closed) |
 | Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
 | Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
 | Android runtime & cold launch | `adb shell am start -n .../MainActivity` | **Clean launch**, 0 crashes in logcat |
@@ -292,7 +292,7 @@ Stated plainly so nothing here reads as more finished than it is.
 
 **Not built / Partial:**
 - Onboarding (routes scaffolded, full functional integration pending), goals UI (edit-goals route exists, partial), key-entry screen
-- Trends / You are placeholder screens
+- Trends / You are NO LONGER placeholder screens — `progress.tsx` ships real charts (bodyweight raw + 7-day trend, calories, protein, strength e1RM), metric cards and adherence rows; `profile.tsx` ships real profile groups and the provider-settings link. What remains open is device QA of those screens (AGENTS.md §0.2) — chart axes/touch/sparse-data behavior has no owner pass yet
 - HealthKit, Health Connect, widgets (M6)
 - Branded-foods tier and the five verified-open national tables (UK CoFID, Japan MEXT, France CIQUAL, Germany BLS, Australia FSANZ)
 
@@ -917,3 +917,198 @@ requiring the Android device is NOT TESTED (device) — never inferred.
 - **Known accepted deviation (documented, not gated):** the filled-protein
   ChipRow pair (`bg` on `theme.protein` fill, ~3.9:1) — see
   docs/design-system.md §7.
+
+---
+
+## Wave 5 — QA completion + polish (2026-10-03)
+
+Wave 5 closed every §0.2-known product gap that automated evidence could
+close. Wave 5A (commit `a06ad42` + working tree): the e2e fixture became a
+realistic completed profile, the two ticketed BUG skips were un-skipped,
+recipe ingredient rows gained per-ingredient contributions, and the dish
+composer started asking the uncertainty model's clarification questions.
+Wave 5B (commit `1eef079`): the day-detail view, honesty persistence
+(migration v12), the training event bus + seedExercises boot-crash fix,
+assistant message dedupe, the reasoning-stream fixture, and the assistant
+write-path e2e. Wave 5C (this wrap, uncommitted): the last accepted
+contrast deviation (the protein-chip fill pair) is closed and gated, and
+the records are refreshed. Evidence classes below: suite/gate items are
+AUTOMATICALLY VERIFIED; anything requiring the Android device or a live
+provider gateway is NOT TESTED (device) — never inferred.
+
+- **Gates at the Wave 5C wrap (2026-10-03):** full `npm run check` exit 0 —
+  lint clean, typecheck clean (root + app), vitest **1,595 passed / 0 failed**
+  (140 files), node-purity **19/19**, `check:contrast` **104/104 pairs**
+  (light 52, dark 52; 24 logged — the two new filled-chip pairs land this
+  wrap), data:verify 26/26, ifct:verify 542-row, indian-dishes:verify
+  **362/362 CURATED**, verify-mappings **1,451/1,451 slots, 0 hard errors,
+  0 sanity warnings** (the 1,444 in older records was a pre-graduation
+  snapshot), density + filling audits ALL PASS, composer equivalence 362/362
+  within 0.5 kcal. Playwright at the Wave 5B commit (`1eef079`):
+  **36 passed / 0 skipped / 0 failed** — progression 27+2 ticketed skips
+  (Wave 4) → 29/0/0 (the skips closed) → 36 (+3 day-detail, +4
+  assistant-write). The 5C wrap itself does NOT re-run Playwright: the
+  parallel browser-emulation agent owns the in-flight specs, and the
+  coordinator runs the final central e2e after it lands. Unit progression
+  this wave: 1,479 (Wave 4) → 1,491 (+12 fixture invariants) → 1,506
+  (+15 recipe contributions) → 1,530 (+24 composer clarifications) → 1,542
+  (+12 seed/event/reasoning) → 1,563 (+21 migration v12) → 1,573 (+10
+  day-detail) → 1,588 (+15 assistant dedupe) → **1,595 (+7 protein-chip
+  locks, this wrap)**.
+- **O1 — e2e fixture + invariants (AUTOMATICALLY VERIFIED):**
+  `e2e/fixtures/qa-backup.json` is now a realistic completed profile — two
+  append-only `goals` rows in the exact onboarding-writer shape (19 columns,
+  the newest one is what `currentGoal()` reads), `user_profile`, the lb
+  weight unit, two byte-identical library exercises, and one ACTIVE workout
+  with a completed + an open set. 12 node-side invariant tests
+  (`e2e/fixtures/fixture-invariant.test.ts`) push the fixture through the
+  REAL parse→validate→import path against a migrated in-memory schema
+  (row counts, writer shape, uuid validity, PRAGMA column coverage, the
+  BUG-009 contract, the seed-compat lock). Adversarial: emptying
+  `tables.goals` failed 2 invariant tests, then was restored. Playwright's
+  `testMatch` was split to `**/*.spec.ts` so it can no longer double-load
+  vitest files.
+- **O2 — BUG-007/BUG-009 un-skipped (e2e, AUTOMATICALLY VERIFIED):** the two
+  pre-existing `fixme` tickets are gone. BUG-007: a cold `/` after
+  restore lands on Home (not onboarding), the hero reads the restored kcal
+  target, the DayStrip renders 56 weekday-labelled days with a Today marker
+  and 6−dow disabled future days. BUG-009: the seeded workout opens, the
+  unit-aware labels (`Load (lb) set N`) exist in BOTH set tables (Wave 3
+  rewrite), a `60 kg → 132.28 lb` reading round-trips, `fill('100')` stays
+  `100` (no mid-typing reconversion), and Complete writes through the real
+  `saveSet` path back to `100` lb + `2/2 sets complete`.
+- **O3 — recipe ingredient contributions (AUTOMATICALLY VERIFIED):** recipe
+  rows (editor, live per keystroke, and the read-only list, stored-derived)
+  show per-ingredient `→ 170 kcal · 11.0g P · 30.0g C · 0.5g F` captions
+  via ONE pure helper (`recipes-contributions.ts`) that reuses the engine's
+  exact factor math and multiplier. Σ(contributions) ≡
+  `computeRecipeServing` totals at 1e-10 (with oil, + the engine-measured
+  oil share); unknown macros null-propagate exactly like the totals; zero
+  grams count zero. +15 tests; two adversarial proofs (caption render
+  deleted, multiplier dropped — both failed their gates, reverted).
+- **O4 — day-detail view (unit + e2e AUTOMATICALLY VERIFIED; device NOT
+  TESTED):** `/day-detail` (Screen header, hero ring, macro stat rows,
+  ItemRow meals, DayStatusControl, Empty/Skeleton states) with a strict
+  `?date=` parser (malformed dates render an honest fallback, never a
+  silent different day) and a `nutai://day` deep-link alias (bare tap lands
+  on today). Pressing a DayStrip chip now drills into the day view with
+  Home's inline selection synced on the way back — and BUG-007's spec was
+  HONESTLY updated to the new drill-in + back journey instead of asserting
+  the old strip-stays-put behavior. 10 unit tests (totals≡Home reads,
+  per-meal kcal rows, empty-day shape, date parsing, title forms, repo
+  singleton) + 3 e2e journeys (meal day, empty day + create-first action,
+  bad date).
+- **O5 — composer clarifications (AUTOMATICALLY VERIFIED):** the composer
+  asks the dish uncertainty model's own questions inline — a "Clarify this
+  estimate" Disclosure above the slot list, one card per question with
+  ChipRow chips from the model's options and a visible Skip; answers
+  re-derive per-serving grams through the SAME `buildComponentsFromRow`
+  path (skip is byte-identical to load behavior), and answers live in
+  component state only — never written to the dish record. The summary
+  keeps uncertainty visible: an "N unknowns open" Badge, the model's own
+  clamped prior range ("Reviewed prior range X–Y kcal at N g"), and the
+  humanized open-unknowns list. ZERO engine changes — a 24-test app-layer
+  adapter; a corpus-wide adversarial probe over all 362 shipped rows (111
+  dishes generate the fat question, none elsewhere, no phantom rows on
+  "None"). Composer equivalence re-proven 362/362 after the refactor.
+- **O6 — honesty persistence, migration v12 (AUTOMATICALLY VERIFIED):**
+  `log_items` gained visibility / qualitative_amount / portion_min_g /
+  portion_max_g / preparation_json; `meals` gained the honesty_json
+  snapshot. `logMeal` persists what the scan actually said (post-review
+  state), `getLoggedMeal` reads it back, and meal-detail renders per row
+  the basis caption (violet reserved for inferred) + the kcal band
+  (uncertain Badge, tier glyph, spoken label). Everything is nullable —
+  pre-v12 rows, manual/barcode writers and old backups land NULL = "no
+  claim" — and the undo/redo + backup round-trips were extended to the new
+  columns (the operations whitelist had to grow first, or logging itself
+  would have thrown). Adversarial: corrupt JSON degrades to null, crossing
+  portion ranges drop both ends, an explicit downgrade target no-ops. +21
+  tests.
+- **O7 — assistant message dedupe (AUTOMATICALLY VERIFIED):** all four
+  append sites in `assistant.tsx` route through `appendDeduped` with ids
+  from ONE monotonic factory — the real same-millisecond `Date.now()`
+  collision (user message vs no-provider error sharing one React key) is
+  structurally impossible now. +15 tests including a source-inspection
+  lock that no hand-rolled append or raw `Date.now()` id regrows.
+- **O8 — event-driven workout card (AUTOMATICALLY VERIFIED; device NOT
+  TESTED):** `@nutai/training` grew `onWorkoutsChanged(db, cb)` — a
+  per-repo-instance registry fired post-commit from `mutate()` (rolled-back
+  writes stay silent). ActiveWorkoutCard's 5 s DB poll and its guard
+  machinery are REPLACED by the subscription; the 1 s display CLOCK, the
+  foreground re-read and the path-change re-read are kept (they cover
+  non-repo writes: backup restore, undo/redo — which emit no event).
+  +4 tests (fire-on-write + post-commit visibility, unrelated writes
+  silent, rollback silent, unsubscribe).
+- **O9 — reasoning-stream fixture (AUTOMATICALLY VERIFIED):** a
+  byte-stable synthetic SSE fixture in the DeepSeek/Qwen/GLM dialect
+  (multi-chunk `reasoning_content` INTERLEAVED with content deltas,
+  finish_reason + usage, `[DONE]`, a degradation twin, a non-streamed
+  full-body variant) drives the REAL pathA parser — lane deltas, 7-byte
+  chunk reassembly, joined reasoning, degradation — with zero parser
+  changes (the fixture passed first run). +5 tests.
+- **O10 — assistant write-path e2e (AUTOMATICALLY VERIFIED, web build):**
+  `e2e/assistant-write.spec.ts` drives the REAL browser against a
+  route-mocked OpenAI-compatible gateway (CORS + preflight + models probe
+  + an SSE stream that reassembles a `propose_meal` tool call), with the
+  provider seeded through the app's own provider-settings screen. Confirm:
+  the proposal card renders from the streamed JSON, `resolveMealProposal`
+  computes macros from the shipped corpora (359 kcal — the model's claimed
+  numbers are never logged), "Meal logged." + a `Saved` badge only AFTER
+  `logManualMealWithItems` completes, Home reads the meal back, and Undo
+  removes it. Cancel writes nothing. A 500 on every call renders the
+  gateway's own error message with no fake success and the input re-usable.
+  The wire-level proof: the chat POST carries the configured Bearer key +
+  `stream: true`. AGENTS §9.1 holds — no real credentials anywhere.
+- **seedExercises boot-crash fix (AUTOMATICALLY VERIFIED):** restoring a
+  backup whose exercise rows sit on library ids with non-library uuids used
+  to crash the NEXT boot (SQLITE_CONSTRAINT_PRIMARYKEY 1555 in the reseed).
+  The reseed now seeds only MISSING library rows and takes a hardcoded id
+  only when free (else the SQLite rowid), user-restored rows untouched,
+  library-complete-after-boot invariant locked. 3 tests that reproduced the
+  crash red first.
+- **C2-P2-6 — Provider row hit-test (e2e, AUTOMATICALLY VERIFIED):** at
+  390×844 the Profile tab's "Provider & key" row is clickable and opens
+  provider-settings (asserted by its close control, not the ambiguous
+  title).
+- **Protein-chip fill pair CLOSED (this wrap, AUTOMATICALLY VERIFIED):**
+  the last accepted contrast deviation. The ChipRow selected state and its
+  hand-rolled siblings (indian-dishes filter chips, food-search quick-add
+  chips, dish-composer yield/method chips) no longer render
+  `theme.bg` labels on a SOLID `theme.protein` fill (3.88:1 light) — they
+  render the Badge macro dialect: `proteinTint` wash + `proteinText` label
+  + `protein` border, state still doubled in `accessibilityState.selected`.
+  The contrast gate grew the filled-chip pairs over the page bg
+  (**104/104** now): label 4.78:1 light / 6.00:1 dark, border 3.44:1 /
+  6.00:1. One-time adversarial proofs: swapping the manifest pair back to
+  `bg on protein` fails the gate at exactly 3.88:1 (light); reverting
+  ChipRow to the solid fill fails the new source lock; both restored
+  byte-identical. +7 tests (`ChipRow.test.ts`).
+- **NOT TESTED (device) — the honest list for the owner pass:**
+  1. Native VoiceOver/TalkBack speech of the new surfaces: the
+     clarification cards, the meal-detail basis captions + band labels, the
+     recipe contribution captions, the day-detail screen, the assistant
+     proposal cards.
+  2. ADB deep-link taps — now including the new `nutai://day` alias (the
+     Wave 4 `scan`/`log` list stands).
+  3. Native rebuild (unchanged Wave 4 risk list: reanimated removal was
+     autolink-only) + the on-device ActiveWorkoutCard subscription latency
+     and background/foreground transitions.
+  4. A live provider gateway: the e2e uses a route-mocked OpenAI-compatible
+     gateway; real-provider SSE dialects, native SecureStore credentials
+     and native dismissal behavior after food-review remain untested.
+  5. The 130% font-scale layout walk (Wave 4 list) — the new day-detail and
+     clarification-card layouts join it.
+  6. The Exercise Library 2026-09-14 device findings and the full training
+     journey remain open owner passes (the seed crash fix is regression-
+     locked in node, not device-verified).
+  The parallel browser-emulation suite (in flight —
+  `e2e/wave5-a11y.spec.ts`, `wave5-font-scale.spec.ts`,
+  `wave5-routes.spec.ts` + its a11y fixes in `Sheet.tsx`/`result.tsx`;
+  counts not final until it appends) closes the browser-verifiable halves
+  of items 1, 5 and parts of the design-system §7 device list; the
+  coordinator amends the final counts when it lands.
+- **Known deviation kept, honest note (Wave 5C):** two FILLED BUTTONS
+  still render a `bg` label on a solid `protein` fill (the decomposer's
+  "Review & log dish" action and the NewIngredientForm save button) —
+  buttons, not chips, outside this task's chip scope; recorded in
+  docs/design-system.md §7 for the next a11y pass.

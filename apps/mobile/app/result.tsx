@@ -773,9 +773,12 @@ export default function Result() {
                     // Wave 4 wrap (report Ch 13 DoD): the marker is the real
                     // warning icon beside the plain word (the honesty card's
                     // glyph-row pattern) — the "⚠" text glyph dies here.
+                    // Wave 5C a11y: the glyph carries the Wave 4d `label` so
+                    // the row announces "Estimated" with image semantics —
+                    // a lone unnamed role="img" is unnameable to readers.
                     <View style={[styles.honestyLine, { marginTop: 2 }]}>
                       <View style={styles.honestyGlyph}>
-                        <Icon name="warning" size={12} color={theme.uncertainText} />
+                        <Icon name="warning" size={12} color={theme.uncertainText} label="Estimated" />
                       </View>
                       <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>Estimated</Text>
                     </View>
@@ -1647,6 +1650,10 @@ function MacroStats({ totals }: { totals: MacroTotals }) {
  * Wave 4d (report Ch 13 DoD “no text glyph standing in for a symbol”): the
  * line markers are the real check/search ICONS beside the text, replacing
  * the old "✓ "/"? " text prefixes — the app's last text glyph dies here.
+ * Wave 5C a11y: each glyph carries the Wave 4d `label` (the icon-label
+ * call-site migration this row pattern was waiting for) so the markers
+ * announce "Identified" / "Could not identify" with image semantics
+ * instead of surfacing as unnamed role="img" nodes in the tree.
  */
 function HonestySummaryCard({ known, unknown }: { known: string | null; unknown: string | null }) {
   const theme = useTheme()
@@ -1656,7 +1663,7 @@ function HonestySummaryCard({ known, unknown }: { known: string | null; unknown:
       {known != null ? (
         <View style={styles.honestyLine}>
           <View style={styles.honestyGlyph}>
-            <Icon name="check" size={12} color={theme.affirmText} />
+            <Icon name="check" size={12} color={theme.affirmText} label="Identified" />
           </View>
           <Text style={[type.caption, { color: theme.affirmText, lineHeight: 19 }]}>{known}</Text>
         </View>
@@ -1664,7 +1671,7 @@ function HonestySummaryCard({ known, unknown }: { known: string | null; unknown:
       {unknown != null ? (
         <View style={styles.honestyLine}>
           <View style={styles.honestyGlyph}>
-            <Icon name="search" size={12} color={theme.uncertainText} />
+            <Icon name="search" size={12} color={theme.uncertainText} label="Could not identify" />
           </View>
           <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>{unknown}</Text>
         </View>

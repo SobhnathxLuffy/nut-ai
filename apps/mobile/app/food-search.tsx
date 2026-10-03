@@ -879,25 +879,29 @@ export default function FoodSearch() {
           <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Common ingredients (tap to add)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: space.xs }}>
             <View style={{ flexDirection: 'row', gap: space.xs }}>
-              {COMMON_BASE_INGREDIENTS.map((item) => (
-                <Pressable
-                  key={item.optionId}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Add ${item.label}`}
-                  onPress={() => addDecompItem(item.foodId, item.label, 'ifct', item.defaultRawGrams)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: decompItems.some((row) => row.foodId === item.foodId) ? theme.protein : theme.bg,
-                      borderColor: theme.border,
-                    },
-                  ]}
-                >
-                  <Text style={[type.caption, { color: decompItems.some((row) => row.foodId === item.foodId) ? theme.bg : theme.text }]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              ))}
+              {COMMON_BASE_INGREDIENTS.map((item) => {
+                const picked = decompItems.some((row) => row.foodId === item.foodId)
+                return (
+                  <Pressable
+                    key={item.optionId}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${item.label}`}
+                    accessibilityState={{ selected: picked }}
+                    onPress={() => addDecompItem(item.foodId, item.label, 'ifct', item.defaultRawGrams)}
+                    style={[
+                      styles.chip,
+                      {
+                        backgroundColor: picked ? theme.proteinTint : theme.bg,
+                        borderColor: picked ? theme.protein : theme.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[type.caption, { color: picked ? theme.proteinText : theme.text }]}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
             </View>
           </ScrollView>
 

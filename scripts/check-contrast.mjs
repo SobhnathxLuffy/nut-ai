@@ -168,6 +168,11 @@ async function loadTokens() {
 //   { fg, bg, mode, note }            — solid fg on solid bg.
 //   { fg, wash, mode, note }           — fg on (wash composited over bgElevated)
 //                                        — the Badge variant rendering.
+//   { fg, wash, base, mode, note }     — fg on (wash composited over `base`)
+//                                        — Wave 5C: the filled option-chip pairs
+//                                        — composite over the PAGE bg, not the
+//                                        — elevated card (Badges sit on cards;
+//                                        — ChipRow + its siblings sit on pages).
 //   { wash, bg, mode, note, over? }    — LOG-only: the wash's own visibility
 //                                        against bg, composited first (and over
 //                                        `over` first when stacked, e.g. the
@@ -209,6 +214,14 @@ function buildManifest() {
   pairs.push({ fg: 'fatText', wash: 'fatTint', mode: 'text', note: 'fat badge label on its tint over bgElevated' })
   pairs.push({ fg: 'affirmText', wash: 'affirmTint', mode: 'text', note: 'affirm badge label on its tint over bgElevated' })
   pairs.push({ fg: 'text', wash: 'affirmTint', mode: 'text', note: 'completed-set row text on the affirm tint over bgElevated' })
+  // Wave 5C — the filled option-chip selected state (ChipRow + the hand-rolled
+  // siblings in indian-dishes/food-search/dish-composer). The retired pair was
+  // a SOLID protein fill with a bg label — 3.88:1 in light, the last accepted
+  // deviation (design-system §7, closed). The chips now render the Badge macro
+  // dialect: proteinText label + protein border on the proteinTint wash over
+  // the PAGE (the badge pairs above composite the same wash over bgElevated).
+  pairs.push({ fg: 'proteinText', wash: 'proteinTint', base: 'bg', mode: 'text', note: 'filled option-chip label on its tint over the page (ChipRow selected)' })
+  pairs.push({ fg: 'protein', wash: 'proteinTint', base: 'bg', mode: 'graphical', note: 'filled option-chip border on its tint over the page' })
   // Graphical (3:1) — ring strokes, chart series, icon fills.
   for (const fg of ['protein', 'carbs', 'fat', 'uncertain', 'heart']) {
     for (const bg of ['bg', 'bgElevated']) {
@@ -242,11 +255,15 @@ function resolvePair(entry, theme) {
     let bgHex
     let bgName
     if (entry.wash != null) {
-      // Badge-style: the wash composited over the elevated card surface.
+      // Badge-style: the wash composited over a base surface (cards by
+      // default; the Wave 5C chip pairs pass their own `base: 'bg'`).
+      const baseKey = entry.base ?? 'bgElevated'
       const washHex = theme[entry.wash]
       if (washHex === undefined) throw new Error(`pair key "${entry.wash}" does not resolve`)
-      bgHex = composite(washHex, theme.bgElevated)
-      bgName = `${entry.wash}/bgElevated`
+      const baseHex = theme[baseKey]
+      if (baseHex === undefined) throw new Error(`pair key "${baseKey}" does not resolve`)
+      bgHex = composite(washHex, baseHex)
+      bgName = `${entry.wash}/${baseKey}`
     } else {
       bgHex = theme[entry.bg]
       if (bgHex === undefined) throw new Error(`pair key "${entry.bg}" does not resolve`)
