@@ -108,7 +108,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs, marginBottom: space.sm },
-  big: { ...type.display },
+  // Wave 4b: display caps at 1.2× (56×1.2 = 67.2 > 60) — lineHeight 68
+  // keeps the number unclipped at the cap.
+  big: { ...type.display, lineHeight: 68 },
   bonus: {
     alignSelf: 'flex-start',
     paddingHorizontal: space.sm,

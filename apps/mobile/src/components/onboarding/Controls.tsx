@@ -315,6 +315,11 @@ export function EditableValue({
             onChangeText={setDraft}
             onSubmitEditing={commit}
             onBlur={commit}
+            // Wave 4b (report §11.1): Android's TextInput ships with font
+            // scaling OFF — the explicit default keeps this input growing
+            // with the OS font size (the token spread below caps it at 1.2×
+            // like the read-out it replaces, so typed digits stay aligned).
+            allowFontScaling
             accessibilityLabel={`${label ?? 'Value'} in ${unit}`}
             style={[
               styles.editInput,
@@ -510,11 +515,16 @@ const styles = StyleSheet.create({
   },
   editRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: space.xs },
   // Wave 1a: the big picker read-out is a display moment (44px ad-hoc joins
-  // type.display per report Table 3.1); tracking and leading come with the token.
-  readoutValue: { ...type.display },
-  readoutUnit: { ...type.display },
+  // type.display per report Table 3.1); tracking and leading come with the
+  // token.
+  // Wave 4b: display caps at 1.2× (56×1.2 = 67.2 > 60) — lineHeight 68
+  // keeps the read-out (and the edit input in its place) unclipped at the
+  // cap; the column's flex layout absorbs the +8px.
+  readoutValue: { ...type.display, lineHeight: 68 },
+  readoutUnit: { ...type.display, lineHeight: 68 },
   editInput: {
     ...type.display,
+    lineHeight: 68,
     minWidth: 130,
     textAlign: 'right',
     borderBottomWidth: 2,

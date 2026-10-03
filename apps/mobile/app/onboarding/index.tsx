@@ -243,6 +243,9 @@ const styles = StyleSheet.create({
     // Wave 1a: the welcome wordmark-pair hero → type.display (report Table 3.1
     // — "display replaces welcome 42-56").
     ...type.display,
+    // Wave 4b: display caps at 1.2× (56×1.2 = 67.2 > 60) — lineHeight 68
+    // keeps descenders unclipped; the scroll layout absorbs the +8px.
+    lineHeight: 68,
     textAlign: 'center',
     marginBottom: space.xl,
   },

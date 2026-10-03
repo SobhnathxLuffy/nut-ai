@@ -685,6 +685,13 @@ function SetRow({
             ref={fieldIndex === 0 ? (el: SetInputRef | null) => registerFirstInput(index, el) : undefined}
             accessibilityLabel={`${labels[key]} set ${s.sort_order + 1}`}
             keyboardType={key === 'tempo' ? 'default' : 'decimal-pad'}
+            // Wave 4b (report §11.1): Android's TextInput ships with font
+            // scaling OFF — without the explicit prop the set table ignores
+            // the OS font scale entirely. The cap mirrors the monoData token
+            // (spread below in the style array), so numeral cells grow with
+            // the OS font size but stop at 1.2× where column alignment lives.
+            allowFontScaling
+            maxFontSizeMultiplier={1.2}
             value={values[key] ?? ''}
             onChangeText={text => {
               setValues(v => ({ ...v, [key]: text }))

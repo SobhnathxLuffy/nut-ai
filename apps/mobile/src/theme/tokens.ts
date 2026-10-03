@@ -315,9 +315,22 @@ export const radius = {
  * `monoData` carries tabular numerals so every macro number, ring readout and
  * diary row aligns digit-for-digit — the report's highest-leverage
  * typographic upgrade for a numbers app (§4.2).
+ *
+ * Wave 4b (report §11.1, dynamic type): the NUMERAL tiers carry
+ * `maxFontSizeMultiplier: 1.2` ON THE TOKEN — every style that spreads
+ * monoData or display (≈30 numeral sites) inherits the cap, so numbers grow
+ * with the OS font scale but stop at 1.2× where tabular column alignment
+ * matters. Prose/label tiers scale freely (the RN default — the type-scale
+ * test sweeps the repo to keep scaling enabled everywhere). TextInput cells
+ * state `allowFontScaling` explicitly because Android's default is OFF,
+ * which is exactly the gap the report flagged. monoData cannot clip at the
+ * cap (16×1.2 = 19.2 ≤ lineHeight 22); display CAN (56×1.2 = 67.2 > 60),
+ * which is why its call sites add a `lineHeight: 68` headroom override.
  */
 const canonicalType = {
-  display: { fontSize: 56, lineHeight: 60, fontWeight: '800' as const, letterSpacing: -1.5 },
+  // Wave 4b: display caps at 1.2× — 56×1.2 = 67.2 exceeds the token's own
+  // lineHeight 60, so call sites that spread it add lineHeight: 68.
+  display: { fontSize: 56, lineHeight: 60, fontWeight: '800' as const, letterSpacing: -1.5, maxFontSizeMultiplier: 1.2 },
   title: { fontSize: 28, lineHeight: 32, fontWeight: '700' as const, letterSpacing: -0.5 },
   heading: { fontSize: 20, lineHeight: 26, fontWeight: '600' as const },
   body: { fontSize: 16, lineHeight: 24, fontWeight: '400' as const },
@@ -333,6 +346,10 @@ const canonicalType = {
     // `as const` would make this a readonly tuple, which TextStyle's mutable
     // FontVariant[] rejects — cast to the exact property type instead.
     fontVariant: ['tabular-nums'] as TextStyle['fontVariant'],
+    // Wave 4b (report §11.1): numerals grow with the OS font scale but stop
+    // at 1.2× so tabular columns stay aligned; 16×1.2 = 19.2 stays inside the
+    // 22 lineHeight, so nothing clips at the cap.
+    maxFontSizeMultiplier: 1.2,
   },
 } as const
 

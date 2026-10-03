@@ -155,6 +155,8 @@ const styles = StyleSheet.create({
   },
   wordRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.sm, marginTop: space.lg },
   word: { paddingHorizontal: space.md, paddingVertical: 6, borderRadius: radius.pill },
-  heading: { ...type.display, marginTop: space.xl },
+  // Wave 4b: display caps at 1.2× (56×1.2 = 67.2 > 60) — lineHeight 68
+  // keeps the heading unclipped at the cap.
+  heading: { ...type.display, lineHeight: 68, marginTop: space.xl },
   note: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
 })

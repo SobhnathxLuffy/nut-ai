@@ -396,6 +396,9 @@ const styles = StyleSheet.create({
     // Wave 1a: plan headline → type.display; big macro number → display too
     // (report Table 3.1 — 32/38px hero moments join 56/60/800).
     ...type.display,
+    // Wave 4b: display caps at 1.2× (56×1.2 = 67.2 > 60) — lineHeight 68
+    // keeps the headline unclipped at the cap.
+    lineHeight: 68,
     textAlign: 'center',
     marginTop: space.lg,
   },
@@ -407,7 +410,9 @@ const styles = StyleSheet.create({
   iconSq: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   // The count-up hero numbers ride monoData (tabular figures, report §4.2) at
   // the display / heading scales — every size still a token reference.
-  bigNum: { ...type.monoData, fontSize: type.display.fontSize, lineHeight: type.display.lineHeight },
+  // Wave 4b: display-size numerals cap at 1.2× (56×1.2 = 67.2) — the 68
+  // lineHeight matches every other display call site.
+  bigNum: { ...type.monoData, fontSize: type.display.fontSize, lineHeight: 68 },
   macroRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
   macroCard: { flex: 1, padding: space.md, borderRadius: radius.lg, gap: space.xs },
   macroNum: { ...type.monoData, fontSize: type.heading.fontSize, lineHeight: type.heading.lineHeight },

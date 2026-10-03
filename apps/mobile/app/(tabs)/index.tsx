@@ -773,6 +773,10 @@ const styles = StyleSheet.create({
     // Wave 1a: the calories-left hero is THE display moment of the Home
     // screen (report Table 3.1 — "display 56/60 replaces hero one-offs").
     ...type.display,
+    // Wave 4b (report §11.1): display caps at 1.2× — 56×1.2 = 67.2 exceeds
+    // the token lineHeight 60, so the hero carries 68; the heroCard's flex
+    // layout absorbs the +8px.
+    lineHeight: 68,
   },
   macroCard: {
     borderRadius: radius.xl,

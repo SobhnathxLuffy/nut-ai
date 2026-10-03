@@ -47,6 +47,11 @@ export function Field({
           placeholder={placeholder}
           placeholderTextColor={theme.textFaint}
           keyboardType={keyboardType ?? (numeric ? 'decimal-pad' : 'default')}
+          // Wave 4b (report §11.1): Android's TextInput ships with font scaling
+          // OFF — the explicit default keeps these inputs growing with the OS
+          // font size. No cap: user content grows freely; the input is
+          // minHeight, never a fixed height.
+          allowFontScaling
           style={[
             {
               flex: 1,

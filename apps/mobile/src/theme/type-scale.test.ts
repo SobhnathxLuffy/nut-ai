@@ -30,6 +30,11 @@ import {
  *      and deprecated token names — the 17 drifting sizes the report audited
  *      (§3.3) must not regrow. Only src/theme/tokens.ts (this scale's home)
  *      and test files are exempt.
+ *   4. Wave 4b (report §11.1, dynamic type): the numeral tokens cap at 1.2×
+ *      (maxFontSizeMultiplier ON the token, inherited by every spread),
+ *      display call sites carry lineHeight headroom (68) for the cap, and
+ *      font scaling is never disabled anywhere (sweep) — TextInputs state
+ *      allowFontScaling explicitly because Android's default is OFF.
  */
 
 // ---------------------------------------------------------------------------
@@ -57,8 +62,8 @@ const ratio = (fg: string, bg: string) => Math.round(contrast(fg, bg) * 100) / 1
 // ---------------------------------------------------------------------------
 
 describe('Table 3.1 canonical type scale (Wave 1)', () => {
-  it('display: 56/60 weight 800', () => {
-    expect(type.display).toEqual({ fontSize: 56, lineHeight: 60, fontWeight: '800', letterSpacing: -1.5 })
+  it('display: 56/60 weight 800 with the Wave 4b numeral cap 1.2', () => {
+    expect(type.display).toEqual({ fontSize: 56, lineHeight: 60, fontWeight: '800', letterSpacing: -1.5, maxFontSizeMultiplier: 1.2 })
   })
 
   it('title: 28/32 weight 700', () => {
@@ -82,11 +87,13 @@ describe('Table 3.1 canonical type scale (Wave 1)', () => {
     expect(type.caption).toEqual({ fontSize: 12.5, lineHeight: 16, fontWeight: '400' })
   })
 
-  it('monoData: 16/22 weight 600 with tabular numerals (report §4.2)', () => {
+  it('monoData: 16/22 weight 600 with tabular numerals and the 1.2 cap (report §4.2, §11.1)', () => {
     expect(type.monoData.fontSize).toBe(16)
     expect(type.monoData.lineHeight).toBe(22)
     expect(type.monoData.fontWeight).toBe('600')
     expect(type.monoData.fontVariant).toEqual(['tabular-nums'])
+    // Wave 4b: the numeral cap rides the token so every spread site inherits it.
+    expect(type.monoData.maxFontSizeMultiplier).toBe(1.2)
   })
 
   it('deprecated aliases point at the canonical objects, not copies', () => {
@@ -222,19 +229,15 @@ describe('Wave 4 text-grade tokens (report Table 11.1 "compute all pairs")', () 
   })
 })
 
-describe('typography discipline sweep — zero ad-hoc sizes (report §3.3, §13 Wave 1)', () => {
-  // The report audited 17 distinct off-scale fontSize values plus four
-  // competing header scales. This block is what keeps them dead: any numeric
-  // fontSize literal (React Native points or DOM px) in the swept trees fails
-  // CI with file:line. tokens.ts itself is the only sanctioned home, and test
-  // files are exempt (this file's own regexes would otherwise self-match).
-  const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..')
-  const SWEEP_DIRS = ['app', 'src/components', 'src/ui', 'src/onboarding']
-  const RN_LITERAL = /fontSize:\s*\d+(?:\.\d+)?/
-  const WEB_LITERAL = /fontSize:\s*'\d+(?:\.\d+)?px'/
-  const DEPRECATED = /\btype\.(micro|hero)\b/
+// ---------------------------------------------------------------------------
+// Source-walk helper, shared by the typography sweeps: every non-test
+// .ts/.tsx file under the given trees of apps/mobile. A swept directory that
+// does not exist is not a violation (same contract as the Wave 1a sweep).
 
-  const hits: string[] = []
+const APP_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..')
+
+function listSourceFiles(dirs: readonly string[]): string[] {
+  const files: string[] = []
   const walk = (dir: string): void => {
     let entries: string[] = []
     try {
@@ -254,29 +257,158 @@ describe('typography discipline sweep — zero ad-hoc sizes (report §3.3, §13 
         walk(full)
         continue
       }
-      if (!/\.(ts|tsx)$/.test(entry) || /\.test\./.test(entry)) continue
-      const source = readFileSync(full, 'utf8')
-      source.split('\n').forEach((line, i) => {
-        const checks: Array<[RegExp, string]> = [
-          [RN_LITERAL, 'ad-hoc fontSize literal'],
-          [WEB_LITERAL, 'ad-hoc fontSize px literal'],
-          [DEPRECATED, 'deprecated token name (use type.caption / type.display)'],
-        ]
-        for (const [pattern, why] of checks) {
-          if (pattern.test(line)) {
-            hits.push(`${full.slice(APP_ROOT.length + 1)}:${i + 1}: ${why}: ${line.trim()}`)
-          }
-        }
-      })
+      if (/\.(ts|tsx)$/.test(entry) && !/\.test\./.test(entry)) files.push(full)
     }
   }
+  for (const dir of dirs) walk(join(APP_ROOT, dir))
+  return files
+}
 
-  for (const dir of SWEEP_DIRS) walk(join(APP_ROOT, dir))
+describe('typography discipline sweep — zero ad-hoc sizes (report §3.3, §13 Wave 1)', () => {
+  // The report audited 17 distinct off-scale fontSize values plus four
+  // competing header scales. This block is what keeps them dead: any numeric
+  // fontSize literal (React Native points or DOM px) in the swept trees fails
+  // CI with file:line. tokens.ts itself is the only sanctioned home, and test
+  // files are exempt (this file's own regexes would otherwise self-match).
+  const SWEEP_DIRS = ['app', 'src/components', 'src/ui', 'src/onboarding']
+  const RN_LITERAL = /fontSize:\s*\d+(?:\.\d+)?/
+  const WEB_LITERAL = /fontSize:\s*'\d+(?:\.\d+)?px'/
+  const DEPRECATED = /\btype\.(micro|hero)\b/
+
+  const hits: string[] = []
+  for (const full of listSourceFiles(SWEEP_DIRS)) {
+    const source = readFileSync(full, 'utf8')
+    source.split('\n').forEach((line, i) => {
+      const checks: Array<[RegExp, string]> = [
+        [RN_LITERAL, 'ad-hoc fontSize literal'],
+        [WEB_LITERAL, 'ad-hoc fontSize px literal'],
+        [DEPRECATED, 'deprecated token name (use type.caption / type.display)'],
+      ]
+      for (const [pattern, why] of checks) {
+        if (pattern.test(line)) {
+          hits.push(`${full.slice(APP_ROOT.length + 1)}:${i + 1}: ${why}: ${line.trim()}`)
+        }
+      }
+    })
+  }
 
   it('no off-scale fontSize literals and no deprecated token names in the swept trees', () => {
     expect(
       hits,
       `off-scale typography found (UI/UX report §3.3 / Table 3.1):\n${hits.join('\n')}`,
     ).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Wave 4b — dynamic type (report §11.1: "allowFontScaling is enabled with the
+// new type scale mapped to accessibility tiers").
+//
+// Repo-wide policy, mirrored by the comments on the tokens themselves:
+//   - prose/label tiers grow with the OS font scale (RN default — never
+//     disabled; the sweep below bans turning it off);
+//   - NUMERALS (monoData, display) cap at 1.2× via maxFontSizeMultiplier ON
+//     the token, so every spread site inherits the cap;
+//   - the display hero additionally needs lineHeight headroom at its call
+//     sites because 56×1.2 = 67.2 outgrows the token's lineHeight 60;
+//   - every TextInput states allowFontScaling explicitly — Android's
+//     TextInput default is OFF, which is the gap the report flagged.
+//
+// The 130% device audit is deliberately NOT claimed here: it is the owner's
+// physical pass (NOT TESTED (device) until actually run on hardware).
+
+/** The sanctioned display call-site lineHeight override (Wave 4b): ≥ 56×1.2. */
+const DISPLAY_HEADROOM = 68
+
+describe('Wave 4b numeral caps (report §11.1 — numbers grow, but stop at 1.2×)', () => {
+  it('monoData caps at 1.2 and cannot clip at the cap: 16×1.2 = 19.2 ≤ lineHeight 22', () => {
+    expect(type.monoData.maxFontSizeMultiplier).toBe(1.2)
+    expect(type.monoData.fontSize * type.monoData.maxFontSizeMultiplier).toBeLessThanOrEqual(
+      type.monoData.lineHeight,
+    )
+  })
+
+  it('display caps at 1.2 — and 56×1.2 = 67.2 exceeds the token lineHeight 60, so call sites add 68', () => {
+    expect(type.display.maxFontSizeMultiplier).toBe(1.2)
+    // This inequality is exactly WHY the headroom override exists: at the cap
+    // the scaled glyph box outgrows the token's own leading. The 68 override
+    // (≥ 67.2, 0.8px slack, +8px the flex layouts absorb) fixes it per call
+    // site — the token's 60 stays pinned for the unscaled 1.0 rendering.
+    expect(type.display.fontSize * type.display.maxFontSizeMultiplier).toBeGreaterThan(
+      type.display.lineHeight,
+    )
+    expect(DISPLAY_HEADROOM).toBeGreaterThanOrEqual(
+      type.display.fontSize * type.display.maxFontSizeMultiplier,
+    )
+  })
+})
+
+describe('font scaling is never disabled (report §11.1 sweep)', () => {
+  // RN Text scales with the OS font setting by default, and the only
+  // sanctioned way to bound growth is the numeral tokens' 1.2 cap above.
+  // Turning scaling OFF outright is what this report section exists to
+  // prevent: a screen that ignores the user's chosen font size. Test files
+  // are exempt (this file's own regexes would otherwise self-match).
+  //
+  // ALLOWLIST: EMPTY — expected to stay empty. If a site ever genuinely needs
+  // scaling off, add `file:line — reason` here and a worklog note; the gate
+  // exists so that decision is deliberate, not accidental.
+  const BANNED = /allowFontScaling\s*[=:]\s*\{?\s*false\s*\}?/
+  const hits: string[] = []
+  for (const full of listSourceFiles(['app', 'src'])) {
+    const source = readFileSync(full, 'utf8')
+    source.split('\n').forEach((line, i) => {
+      if (BANNED.test(line)) {
+        hits.push(`${full.slice(APP_ROOT.length + 1)}:${i + 1}: ${line.trim()}`)
+      }
+    })
+  }
+
+  it('no disabled allowFontScaling anywhere in app/ or src/ (test files exempt)', () => {
+    expect(hits, `font scaling disabled at:\n${hits.join('\n')}`).toEqual([])
+  })
+})
+
+describe('Wave 4b source inspection — the scaling props actually landed', () => {
+  const read = (rel: string) => readFileSync(join(APP_ROOT, rel), 'utf8')
+
+  it('workout set-table TextInput cells: allowFontScaling + the 1.2 cap, together', () => {
+    // workout.tsx has exactly one TextInput — the set-cell field map. The two
+    // props sit together on it: Android's scaling-off default is the gap the
+    // report's §11.1 pass flagged for exactly this table (the numeral cap
+    // also arrives via the monoData token spread in the style array).
+    expect(read('app/workout.tsx')).toMatch(/allowFontScaling\s*\n\s*maxFontSizeMultiplier=\{1\.2\}/)
+  })
+
+  it('the Field primitive and the onboarding EditableValue input state allowFontScaling explicitly', () => {
+    // Field is the ONE labelled input primitive (NewIngredientForm and every
+    // compact form ride it); EditableValue is the onboarding value input.
+    // Both are minHeight inputs — user content grows, no cap.
+    expect(read('src/components/Field.tsx')).toMatch(/<TextInput[\s\S]{0,600}?allowFontScaling/)
+    expect(read('src/components/onboarding/Controls.tsx')).toMatch(
+      /<TextInput[\s\S]{0,600}?allowFontScaling/,
+    )
+  })
+
+  it('every in-scope display call site carries the 68 headroom (56×1.2 = 67.2 > 60)', () => {
+    // The regexes pin the same value as DISPLAY_HEADROOM. Sites OUTSIDE this
+    // list that also spread type.display (Chrome's onboarding title,
+    // result's hero kcal — other tasks' files) are recorded as follow-ups in
+    // the Wave 4b worklog, not asserted here.
+    const sites: Array<[string, RegExp]> = [
+      ['app/(tabs)/index.tsx', /hero:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
+      ['app/onboarding/index.tsx', /title:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
+      ['app/onboarding/health.tsx', /heading:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
+      ['app/onboarding/plan.tsx', /goal:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
+      // bigNum is monoData raised to the display size — same cap math, same 68.
+      ['app/onboarding/plan.tsx', /bigNum:\s*\{[^}]*lineHeight:\s*68/],
+      ['app/onboarding/rollover.tsx', /big:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
+      ['src/components/onboarding/Controls.tsx', /readoutValue:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
+      ['src/components/onboarding/Controls.tsx', /readoutUnit:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
+      ['src/components/onboarding/Controls.tsx', /editInput:\s*\{[\s\S]{0,300}?\.\.\.type\.display,\s*lineHeight:\s*68/],
+    ]
+    for (const [rel, pattern] of sites) {
+      expect(read(rel), `display call site without headroom: ${rel}`).toMatch(pattern)
+    }
   })
 })
