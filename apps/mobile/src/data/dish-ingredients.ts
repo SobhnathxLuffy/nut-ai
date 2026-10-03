@@ -169,6 +169,8 @@ export interface DishRowLike {
   recipe_template_json: string | null
   yield_model_json: string | null
   portion_model_json: string | null
+  /** Corpus rows carry the uncertainty model column; household rows do not. */
+  uncertainty_model_json?: string | null
 }
 
 /**

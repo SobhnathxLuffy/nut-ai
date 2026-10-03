@@ -82,13 +82,13 @@ describe('dishClarificationQuestions — the gate', () => {
     expect(q.id).toBe('clarify_added_fat_optional')
     expect(q.slotLabel).toBe('added_fat_optional')
     expect(q.questionText).toBe('Which fat was used for cooking?')
-    expect(q.options.map((o) => o.label)).toEqual(['Ghee', 'Mustard Oil', 'Sunflower Oil', 'None / Dry Roasted'])
+    expect(q.options.map((o) => o.label)).toEqual(['Ghee', 'Mustard Oil', 'Sunflower Oil', 'Groundnut Oil', 'Butter', 'None / Dry Roasted'])
     expect(q.options.find((o) => o.label === 'Ghee')!.canonicalFoodId).toBe('ifct:T013')
     expect(q.options.find((o) => o.label === 'None / Dry Roasted')).toMatchObject({ canonicalFoodId: null, amountMultiplier: 0 })
   })
 
   it('asks nothing for household rows (no uncertainty model column) — current behavior', () => {
-    const householdRow = {
+    const householdRow: DishClarificationRow = {
       recipe_template_json: JSON.stringify({
         ingredientSlots: [slot('grain_flour', [0.6, 0.7], { amountPrior: { kind: 'HOUSEHOLD_MEASURED', grams: 33, verified: true } })],
       }),
@@ -190,6 +190,38 @@ describe('dishOpenUnknowns — the honest uncertainty surface', () => {
   it('an answered fat question resolves the fat-identity unknown only', () => {
     const open = dishOpenUnknowns(rotiRow, { clarify_added_fat_optional: { canonicalFoodId: 'ifct:T013' } })
     expect(open).toEqual(['piece_weight', 'flour_type'])
+  })
+
+  // Owner QA 2026-10: frying dishes carry their fat in a slot labeled
+  // added_fat_or_frying_oil — the old question gate matched only
+  // added_fat_optional / cooking_oil, so Aloo Tikki, Samosa, Pakora, … never
+  // got the "which fat?" question and their fat unknowns could never close.
+  it('asks the fat question for added_fat_or_frying_oil slots (frying dishes)', () => {
+    const tikkiRow: DishClarificationRow & Record<string, unknown> = {
+      ...rotiRow,
+      id: 'dish:in:aloo-tikki',
+      canonical_name: 'Aloo Tikki',
+      recipe_template_json: JSON.stringify({
+        templateStatus: 'CURATED',
+        numericRatiosVerified: true,
+        ingredientSlots: [
+          slot('starch_or_wrapper', [0.65, 0.75], { role: 'dominant', required: true }),
+          slot('added_fat_or_frying_oil', [0.1, 0.16], { role: 'fat_variable', nutritionMapping: { canonicalFoodId: 'ifct:T012', mappingStatus: 'MANUAL_OVERRIDE' } }),
+        ],
+      }),
+      uncertainty_model_json: JSON.stringify({ highImpactUnknowns: ['frying_oil_absorption', 'filling_amount', 'sauce_or_chutney', 'added_fat'] }),
+    }
+    const questions = dishClarificationQuestions(tikkiRow)
+    expect(questions.map((q) => q.id)).toEqual(['clarify_added_fat_or_frying_oil'])
+    expect(questions[0]!.questionText).toBe('Which fat was used for cooking?')
+    // The option set covers the fats Indian kitchens actually switch between.
+    const labels = questions[0]!.options.map((o) => o.label)
+    expect(labels).toContain('Ghee')
+    expect(labels).toContain('Butter')
+    expect(labels).toContain('None / Dry Roasted')
+    // Answering it closes the fat-identity unknown; absorption stays open.
+    const open = dishOpenUnknowns(tikkiRow, { clarify_added_fat_or_frying_oil: { canonicalFoodId: 'ifct:T013' } })
+    expect(open).toEqual(['frying_oil_absorption', 'filling_amount', 'sauce_or_chutney'])
   })
 
   it('amount/absorption unknowns stay open — the question does not answer them', () => {

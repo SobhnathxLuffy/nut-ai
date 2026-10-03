@@ -642,6 +642,29 @@ export default function DishComposerScreen() {
             ))}
           </Disclosure>
         </View>
+      ) : openUnknowns.length > 0 ? (
+        // Owner QA 2026-10: 251 of 362 dishes carry an uncertainty model but
+        // got ZERO clarify UI, because the engine only generated questions for
+        // two fat-slot labels (and only 111 dishes have a fat slot at all).
+        // Dishes unsure about piece weight, gravy ratio, filling amount, …
+        // never said so. When there is nothing answerable, the model's own
+        // unknown list is still shown — the estimate says what it does not
+        // know instead of silently posing as a measurement.
+        <View style={{ marginHorizontal: space.md, marginTop: space.md }}>
+          <Disclosure
+            label="What this estimate is unsure about"
+            caption={`${openUnknowns.length} open unknown${openUnknowns.length === 1 ? '' : 's'} from this recipe's uncertainty model`}
+          >
+            {openUnknowns.map((key) => (
+              <Text key={key} style={[type.body, { color: t.text, marginTop: space.xs }]}>
+                • {humanizeUnknownKey(key)}
+              </Text>
+            ))}
+            <Text style={[type.caption, { color: t.textMuted, marginTop: space.sm }]}>
+              These are the parts of the recipe a standard home version cannot pin down — the reviewed range already covers them. Edit the grams or fat below to match what you actually ate.
+            </Text>
+          </Disclosure>
+        </View>
       ) : null}
 
       {components.map((c) => (
@@ -737,6 +760,16 @@ export default function DishComposerScreen() {
 
       <View style={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border }]}>
         <Text style={[type.title, { color: t.text }]}>Nutrition ({portionG}g)</Text>
+        {/* Owner QA 2026-10: the badge and the "Open unknowns" list used to
+            disappear entirely whenever any ingredient was unresolved — a dish
+            carrying an uncertainty model stopped saying what it was unsure
+            about exactly when the estimate was least reliable. Both now render
+            in every state; the numbers simply stay hidden until resolvable. */}
+        {hasUncertaintyModel && openUnknowns.length > 0 ? (
+          <Text style={[type.caption, { color: t.textMuted, marginTop: 2 }]}>
+            Open unknowns: {openUnknowns.map(humanizeUnknownKey).join(' · ')}
+          </Text>
+        ) : null}
         {hasUnknowns ? (
           <Text style={[type.body, { color: t.safety }]}>Resolve ingredients to calculate.</Text>
         ) : (
@@ -762,11 +795,6 @@ export default function DishComposerScreen() {
               </Text>
             ) : null}
             <Text style={[type.caption, { color: t.textMuted }]}>P: {Math.round(portionP||0)}g · C: {Math.round(portionC||0)}g · F: {Math.round(portionF||0)}g</Text>
-            {openUnknowns.length > 0 ? (
-              <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>
-                Open unknowns: {openUnknowns.map(humanizeUnknownKey).join(' · ')}
-              </Text>
-            ) : null}
             <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>Raw {Math.round(totalRawMass)}g → cooked yield {Math.round(cookedYield)}g</Text>
           </View>
         )}

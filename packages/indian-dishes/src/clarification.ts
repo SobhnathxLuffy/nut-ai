@@ -12,6 +12,21 @@ export interface ClarificationQuestion {
 }
 
 /**
+ * Every fat-family slot label the shipped corpus uses (added_fat,
+ * added_fat_optional, added_fat_or_frying_oil, tadka_fat_optional,
+ * fat_optional, cooking_oil, oil_or_ghee, wrapper_cooking_oil,
+ * mustard_oil_optional, ghee_finishing_optional, butter_or_ghee). The
+ * original implementation matched only `added_fat_optional` / `cooking_oil`,
+ * so 44 frying dishes (Aloo Tikki, Samosa, Pakora, …) — whose slot is
+ * `added_fat_or_frying_oil` — never got the "which fat did you use?"
+ * question (owner QA 2026-10). Role `fat_variable` is the primary signal;
+ * the label regex catches any future fat label that forgets the role.
+ */
+export function isFatSlot(slot: { label: string; role?: string }): boolean {
+  return slot.role === 'fat_variable' || /(^|_)(fat|oil|ghee)(_|$)/.test(slot.label)
+}
+
+/**
  * Determines what clarification questions are needed for a dish, based on ambiguous slots.
  * This satisfies Part K (Clarification Engine).
  */
@@ -21,7 +36,7 @@ export function generateClarifications(dish: DishDefinition): ClarificationQuest
   const questions: ClarificationQuestion[] = []
 
   for (const slot of dish.recipeTemplate.ingredientSlots) {
-    if (slot.label === 'added_fat_optional' || slot.label === 'cooking_oil') {
+    if (isFatSlot(slot)) {
       questions.push({
         id: `clarify_${slot.label}`,
         slotLabel: slot.label,
@@ -30,6 +45,8 @@ export function generateClarifications(dish: DishDefinition): ClarificationQuest
           { label: 'Ghee', canonicalFoodId: 'ifct:T013' },
           { label: 'Mustard Oil', canonicalFoodId: 'ifct:T006' },
           { label: 'Sunflower Oil', canonicalFoodId: 'ifct:T012' },
+          { label: 'Groundnut Oil', canonicalFoodId: 'ifct:T005' },
+          { label: 'Butter', canonicalFoodId: 'usda:173430' },
           { label: 'None / Dry Roasted', canonicalFoodId: null, amountMultiplier: 0 }
         ]
       })

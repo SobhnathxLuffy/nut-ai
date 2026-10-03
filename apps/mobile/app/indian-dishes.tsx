@@ -39,7 +39,7 @@ export default function IndianDishesScreen() {
       if (!alive) return
       setDb(h); setUserDb(u)
       // The artifact's own manifest states how many identities it ships.
-      h.getFirstAsync<{ value: string }>("SELECT value FROM build_manifest WHERE key = 'dish_kb_dishes'")
+      h.get<{ value: string }>("SELECT value FROM build_manifest WHERE key = 'dish_kb_dishes'")
         .then((row) => { if (alive) setKbTotal(row?.value ? Number(row.value) : null) })
         .catch(() => { /* count stays null — UI falls back to uncounted copy */ })
       setLoading(false)
@@ -192,11 +192,11 @@ export default function IndianDishesScreen() {
                 <Text style={[type.body, { color: t.text }]}>{item.name}</Text>
                 {item.aliases ? <Text style={[type.caption, { color: t.textMuted }]}>Also known as: {item.aliases}</Text> : null}
                 <Text style={[type.caption, { color: item.status === 'CURATED' ? t.proteinText : item.status === 'HOUSEHOLD' ? t.proteinText : t.safety, marginTop: space.xs }]}>
-                  {item.status === 'CURATED' ? 'CURATED RECIPE' : item.status === 'HOUSEHOLD' ? 'MY VERSION' : 'DRAFT / NEEDS REVIEW'} \u00b7 {prettyCategory(item.category)}
+                  {item.status === 'CURATED' ? 'CURATED RECIPE' : item.status === 'HOUSEHOLD' ? 'MY VERSION' : 'DRAFT / NEEDS REVIEW'} · {prettyCategory(item.category)}
                 </Text>
                 {unknowns.length > 0 ? (
                   <Text style={[type.caption, { color: t.uncertainText, marginTop: 2 }]}>
-                    Uncertain about: {unknowns.join(' \u00b7 ')}
+                    Uncertain about: {unknowns.join(' · ')}
                   </Text>
                 ) : null}
               </View>
@@ -206,12 +206,12 @@ export default function IndianDishesScreen() {
           ListEmptyComponent={
             query.trim().length >= 2 ? (
               <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
-                No dishes match \u201c{query.trim()}\u201d. Try a shorter prefix like \u201cidli\u201d, or clear the search to browse all {filter === 'ALL' && kbTotal != null ? kbTotal : ''} identities.
+                No dishes match “{query.trim()}”. Try a shorter prefix like “idli”, or clear the search to browse all {filter === 'ALL' && kbTotal != null ? kbTotal : ''} identities.
               </Text>
             ) : filter === 'HOUSEHOLD' ? (
               <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
                 You have not saved any household versions yet.{'\n'}
-                Open any dish and use \u201cLog household variant\u201d to keep your own ingredients and portions.
+                Open any dish and use “Log household variant” to keep your own ingredients and portions.
               </Text>
             ) : filter === 'DRAFT_CURATED' ? (
               <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>

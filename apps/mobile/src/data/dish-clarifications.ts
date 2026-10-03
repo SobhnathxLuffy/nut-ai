@@ -48,7 +48,7 @@
  * ZERO React Native imports — unit-testable under bare Node.
  */
 
-import { applyClarifications, generateClarifications, type ClarificationQuestion } from '@nutai/indian-dishes'
+import { applyClarifications, generateClarifications, isFatSlot, type ClarificationQuestion } from '@nutai/indian-dishes'
 import type { DishDefinition } from '@nutai/core-schema'
 import { dishIngredientBreakdown, type DishRowLike } from './dish-ingredients'
 
@@ -92,8 +92,12 @@ export interface ClarifiedSlot {
 /**
  * The uncertainty model of a dish row, or null. Household variants and rows
  * without the column open with no clarifications (current behavior).
+ *
+ * Takes a structural MINIMUM (only the column it reads) so surfaces like the
+ * dish browser — which fetches name/status/aliases/uncertainty but no recipe
+ * template — can reuse the same parser without a cast.
  */
-export function dishUncertaintyModel(row: DishClarificationRow): DishUncertaintyModel | null {
+export function dishUncertaintyModel(row: { uncertainty_model_json?: string | null }): DishUncertaintyModel | null {
   const raw = row.uncertainty_model_json
   if (typeof raw !== 'string' || raw.trim() === '') return null
   try {
@@ -217,8 +221,9 @@ const AMOUNT_UNKNOWN = /(amount|weight|absorption|ratio|concentration|fraction|c
 
 /**
  * The uncertainty model's high-impact unknowns that remain open after the
- * user's answers. An answered fat question (added_fat_optional / cooking_oil
- * slots) resolves the fat-identity unknowns only — amount unknowns
+ * user's answers. An answered fat question (any fat-family slot — the engine
+ * now asks about every one of them, not just added_fat_optional/cooking_oil)
+ * resolves the fat-identity unknowns only — amount unknowns
  * (frying_oil_absorption, oil_ghee_amount, …) stay honestly open.
  */
 export function dishOpenUnknowns(row: DishClarificationRow, answers: DishClarificationAnswers): string[] {
@@ -226,7 +231,7 @@ export function dishOpenUnknowns(row: DishClarificationRow, answers: DishClarifi
   if (!model?.highImpactUnknowns?.length) return []
   const fatAnswered = Object.entries(answers).some(([id, answer]) => {
     const label = id.replace(/^clarify_/, '')
-    return (label === 'added_fat_optional' || label === 'cooking_oil') && answer.canonicalFoodId != null
+    return isFatSlot({ label }) && answer.canonicalFoodId != null
   })
   return model.highImpactUnknowns.filter((key) => {
     if (!fatAnswered) return true
