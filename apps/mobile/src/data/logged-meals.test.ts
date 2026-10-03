@@ -55,17 +55,25 @@ describe('Logged Meals Data Layer (Edit, Delete, Undo, Redo, Aggregate Restorati
     expect(meal?.date).toBe('2026-09-13')
     expect(meal?.slot).toBe('lunch')
     expect(meal?.items.length).toBe(2)
+    // Task 5-5: this fixture rows predate the v12 quality columns — the
+    // honest read-back is NULL visibility/band and NO snapshot, never a
+    // invented default.
+    expect(meal?.honesty).toBeNull()
     expect(meal?.items[0]).toEqual({
       id: 101,
       name: 'Cauliflower sabzi',
       grams: 150,
       kcalPer100g: 50,
+      visibility: null,
+      bandHalfPct: null,
     })
     expect(meal?.items[1]).toEqual({
       id: 102,
       name: 'Steamed rice',
       grams: 200,
       kcalPer100g: 130,
+      visibility: null,
+      bandHalfPct: null,
     })
   })
 
@@ -349,7 +357,14 @@ describe('Logged Meal row actions (Wave 3 Ch. 8.3: meal-detail duplicate / remov
     await undoOperation(db, uuid, NOW + 2000)
     const restored = await getLoggedMeal(db, 1)
     expect(restored!.items.map((i) => i.id).sort()).toEqual([101, 102])
-    expect(restored!.items.find((i) => i.id === 102)).toEqual({ id: 102, name: 'Steamed rice', grams: 200, kcalPer100g: 130 })
+    expect(restored!.items.find((i) => i.id === 102)).toEqual({
+      id: 102,
+      name: 'Steamed rice',
+      grams: 200,
+      kcalPer100g: 130,
+      visibility: null,
+      bandHalfPct: null,
+    })
   })
 
   it('refuses honestly when the item does not exist', async () => {

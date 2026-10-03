@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 11
+export const USER_SCHEMA_VERSION = 12
 
 export interface Migration {
   up?: (db: DbAdapter, now: number) => Promise<void>
@@ -741,6 +741,40 @@ ALTER TABLE user_foods ADD COLUMN serving_unit TEXT NOT NULL DEFAULT 'g'
 UPDATE user_foods SET serving_amount = serving_size_g WHERE serving_amount IS NULL;
 `
 
+/**
+ * Honesty persistence (honesty-contract round follow-up, O6).
+ *
+ * log_items gains the per-row quality disclosures the scan already computes
+ * (contract v1.3.0) and drops on the floor today: how the row earned its place
+ * (visibility), the model's qualitative amount, its own bounded mass range,
+ * and its cooking read. meals gains the meal-level honesty snapshot serialized
+ * at log time (mealBand + portion_context + major_uncertainties +
+ * highest_impact_question + summary), so a logged meal keeps what the scan
+ * actually said — the eval harness can attribute error to a pathway from
+ * history instead of losing every scan's telemetry the moment the result
+ * screen unmounts.
+ *
+ * Every column is nullable and additive, and NULL is a MEANINGFUL value —
+ * "this row carries no claim" — never a fabricated default: pre-v12 rows,
+ * barcode/label/receipt/manual rows (pathways that predate the v1.3 blocks),
+ * and non-scan writers all stay NULL, and readers render nothing rather than
+ * inventing a "visible" or "moderate" claim the model never made. The closed
+ * sets mirror the domain unions (@nutai/core-schema IngredientRow), and SQLite
+ * treats NULL as passing CHECK — so legacy rows migrate untouched while a
+ * corrupt import value is rejected loudly instead of laundered.
+ */
+export const USER_SCHEMA_V12_SQL = `
+ALTER TABLE log_items ADD COLUMN visibility TEXT
+  CHECK(visibility IN ('visible', 'likely', 'inferred'));
+ALTER TABLE log_items ADD COLUMN qualitative_amount TEXT
+  CHECK(qualitative_amount IN ('tiny', 'light', 'moderate', 'heavy', 'unknown'));
+ALTER TABLE log_items ADD COLUMN portion_min_g REAL;
+ALTER TABLE log_items ADD COLUMN portion_max_g REAL;
+ALTER TABLE log_items ADD COLUMN preparation_json TEXT;
+
+ALTER TABLE meals ADD COLUMN honesty_json TEXT;
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: USER_SCHEMA },
   { version: 2, sql: USER_SCHEMA_V2_SQL, up: backfillV2 },
@@ -753,6 +787,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 9, sql: USER_SCHEMA_V9_SQL },
   { version: 10, sql: TRAINING_SQL + OPERATIONS_V10_SQL },
   { version: 11, sql: USER_SCHEMA_V11_SQL },
+  { version: 12, sql: USER_SCHEMA_V12_SQL },
 ]
 
 export const DISH_KB_SCHEMA = `

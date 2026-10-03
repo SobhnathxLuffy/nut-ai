@@ -618,7 +618,17 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
           <Pressable
             key={off}
             disabled={flags.future}
-            onPress={() => onSelect(off)}
+            // O4 (day-detail): a strip press still selects the day here AND
+            // opens the dedicated day-detail view for that date — the exact
+            // date the chip shows (strip-anchored `now`, same arithmetic).
+            // Selection mechanics below are untouched.
+            onPress={() => {
+              onSelect(off)
+              router.push({
+                pathname: '/day-detail',
+                params: { date: localDate(now.getTime() + off * 86_400_000) },
+              } as never)
+            }}
             accessibilityRole="button"
             accessibilityLabel={flags.today ? `Today, ${DAY_LABELS[d.getDay()]} ${d.getDate()}` : undefined}
             accessibilityState={{ selected: isSel, disabled: flags.future }}

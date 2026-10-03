@@ -88,7 +88,7 @@ const ENTITY_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   }).map(([table, columns]) => [table, ['id','uuid','created_at','updated_at','revision','deleted_at','sync_state',...columns]])),
   day_status: ['local_date','completion','confirmed_at','updated_at','actor','provenance'],
   batch: ['changes'],
-  meals: ['id', 'logged_at', 'local_date', 'meal_slot', 'photo_uri', 'portion_eaten_fraction', 'analysis_status', 'retry_count', 'next_retry_at', 'engine_id', 'prompt_version', 'schema_version', 'clamp_flags_json', 'created_at', 'uuid', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
+  meals: ['id', 'logged_at', 'local_date', 'meal_slot', 'photo_uri', 'portion_eaten_fraction', 'analysis_status', 'retry_count', 'next_retry_at', 'engine_id', 'prompt_version', 'schema_version', 'clamp_flags_json', 'honesty_json', 'created_at', 'uuid', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   weight_entries: ['id', 'local_date', 'weight_kg', 'logged_at', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   exercise_entries: ['id', 'local_date', 'name', 'kcal', 'provenance', 'external_id', 'logged_at', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
   goals: ['id', 'effective_from', 'goal_type', 'rate_lb_per_week', 'target_kcal', 'target_raw_kcal', 'floor_applied', 'protein_g', 'fat_g', 'carbs_g', 'bmr', 'tdee', 'adaptive', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
@@ -98,7 +98,7 @@ const ENTITY_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   recipes: ['id', 'uuid', 'name', 'created_at', 'updated_at', 'deleted_at', 'sync_state', 'revision'],
   recipe_versions: ['id', 'uuid', 'recipe_id', 'version_number', 'preparation', 'added_oil_g', 'added_water_g', 'final_cooked_weight_g', 'servings', 'created_at', 'sync_state', 'updated_at', 'revision', 'deleted_at'],
   recipe_components: ['id', 'uuid', 'recipe_version_id', 'food_id', 'gram_weight', 'created_at', 'sync_state', 'snap_energy_kcal', 'snap_protein_g', 'snap_fat_g', 'snap_carb_g', 'snap_fiber_g', 'snap_sugar_g', 'snap_sodium_mg', 'updated_at', 'revision', 'deleted_at', 'display_name'],
-  log_items: ['id', 'meal_id', 'matched_food_id', 'matched_food_source', 'raw_model_label', 'display_name', 'grams', 'gram_pathway', 'portion_source', 'snap_energy_kcal', 'snap_protein_g', 'snap_fat_g', 'snap_carb_g', 'snap_fiber_g', 'snap_sugar_g', 'snap_sodium_mg', 'is_estimate', 'macros_user_edited', 'band_half_pct', 'assumptions_json', 'sort_order', 'logged_at', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state'],
+  log_items: ['id', 'meal_id', 'matched_food_id', 'matched_food_source', 'raw_model_label', 'display_name', 'grams', 'gram_pathway', 'portion_source', 'snap_energy_kcal', 'snap_protein_g', 'snap_fat_g', 'snap_carb_g', 'snap_fiber_g', 'snap_sugar_g', 'snap_sodium_mg', 'is_estimate', 'macros_user_edited', 'band_half_pct', 'assumptions_json', 'sort_order', 'logged_at', 'uuid', 'created_at', 'updated_at', 'revision', 'deleted_at', 'sync_state', 'visibility', 'qualitative_amount', 'portion_min_g', 'portion_max_g', 'preparation_json'],
   scan_cost_ledger: ['id', 'meal_id', 'provider', 'model', 'input_tokens', 'output_tokens', 'cost_usd', 'local_month', 'created_at'],
 }
 

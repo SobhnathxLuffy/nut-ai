@@ -124,9 +124,21 @@ test.describe('BUG-007: Historical Day Navigation Blocked', () => {
     const futureDays = page.locator('button[aria-disabled="true"]').filter({ hasText: /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s*\d+$/ });
     await expect(futureDays).toHaveCount(6 - dow);
 
-    // A past day is a real navigation target — selecting one keeps the strip
-    // stable at 56 days with today still tappable.
+    // A past day is a real navigation target — since Wave 5A (O4) pressing a
+    // strip day drills into the dedicated day-detail view for that date
+    // (Home's inline selection stays synced for when you come back). The
+    // first strip button is the oldest day in the 8-week window; its title
+    // renders as the full weekday format, and the way back is the header.
+    const oldest = await dayButtons.first().textContent();
+    const parsedDay = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s*(\d+)$/.exec((oldest ?? '').trim());
+    expect(parsedDay).not.toBeNull();
     await dayButtons.first().click();
+    await expect(page).toHaveURL(/\/day-detail\?date=/, { timeout: 15_000 });
+    await expect(
+      page.getByRole('heading', { name: /(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\w*, \w+ \d+, \d{4}/ }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Back to home' }).click();
+    await expect(page).toHaveURL('/');
     await expect(dayButtons).toHaveCount(56);
     await expect(today).toBeEnabled();
   });

@@ -1,9 +1,26 @@
 import { createSyncMetadata, recordOperation, type DbAdapter } from '@nutai/db-adapter'
 import { insertCopy } from './shortcuts'
 import { emitFoodMutation } from './food-mutations'
+import { parseMealHonesty, type MealHonestySnapshot } from './meal-honesty'
 
-export interface LoggedMealItem { id: number; name: string; grams: number; kcalPer100g: number | null }
-export interface LoggedMealDetail { id: number; date: string; slot: string; items: LoggedMealItem[] }
+export interface LoggedMealItem {
+  id: number
+  name: string
+  grams: number
+  kcalPer100g: number | null
+  /** Task 5-5: the model's scene-visibility claim, persisted since v12. Optional so edit/save round trips and pre-v12 callers compile unchanged. */
+  visibility?: string | null
+  /** Task 5-5: the row's persisted band half-width (fraction). Optional — manual/legacy rows carry NULL (no claim). */
+  bandHalfPct?: number | null
+}
+export interface LoggedMealDetail {
+  id: number
+  date: string
+  slot: string
+  items: LoggedMealItem[]
+  /** Task 5-5: the meal-level honesty snapshot parsed from meals.honesty_json; null on pre-v12/manual meals (no claim). */
+  honesty?: MealHonestySnapshot | null
+}
 
 async function aggregate(db: DbAdapter, mealId: number): Promise<Record<string, unknown>> {
   const meal = await db.get<Record<string, unknown>>('SELECT * FROM meals WHERE id = ?', [mealId])
@@ -14,10 +31,26 @@ async function aggregate(db: DbAdapter, mealId: number): Promise<Record<string, 
 }
 
 export async function getLoggedMeal(db: DbAdapter, mealId: number): Promise<LoggedMealDetail | null> {
-  const meal = await db.get<{ id:number; local_date:string; meal_slot:string | null }>('SELECT id, local_date, meal_slot FROM meals WHERE id = ?', [mealId])
+  const meal = await db.get<{ id:number; local_date:string; meal_slot:string | null; honesty_json:string | null }>('SELECT id, local_date, meal_slot, honesty_json FROM meals WHERE id = ?', [mealId])
   if (!meal) return null
-  const items = await db.all<{id:number;display_name:string;grams:number;snap_energy_kcal:number|null}>('SELECT id, display_name, grams, snap_energy_kcal FROM log_items WHERE meal_id = ? AND deleted_at IS NULL ORDER BY sort_order, id', [mealId])
-  return { id: meal.id, date: meal.local_date, slot: meal.meal_slot ?? 'snack', items: items.map(item=>({id:item.id,name:item.display_name,grams:item.grams,kcalPer100g:item.snap_energy_kcal})) }
+  const items = await db.all<{id:number;display_name:string;grams:number;snap_energy_kcal:number|null;visibility:string | null;band_half_pct:number | null}>('SELECT id, display_name, grams, snap_energy_kcal, visibility, band_half_pct FROM log_items WHERE meal_id = ? AND deleted_at IS NULL ORDER BY sort_order, id', [mealId])
+  return {
+    id: meal.id,
+    date: meal.local_date,
+    slot: meal.meal_slot ?? 'snack',
+    // Task 5-5: the persisted honesty surfaces here for meal-detail to
+    // render. NULL/absent/corrupt honesty_json parses to null — the honest
+    // "no claim" a pre-v12 or manual meal carries, never an invented snapshot.
+    honesty: parseMealHonesty(meal.honesty_json),
+    items: items.map((item) => ({
+      id: item.id,
+      name: item.display_name,
+      grams: item.grams,
+      kcalPer100g: item.snap_energy_kcal,
+      visibility: item.visibility ?? null,
+      bandHalfPct: item.band_half_pct ?? null,
+    })),
+  }
 }
 
 export async function updateLoggedMeal(db: DbAdapter, detail: LoggedMealDetail, now: number): Promise<string> {

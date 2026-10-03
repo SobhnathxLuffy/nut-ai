@@ -99,6 +99,92 @@ describe('backup round trip', () => {
     expect(w!.weight_kg).toBeCloseTo(79.4, 6)
   })
 
+  it('round-trips the v12 honesty columns byte-for-byte (Task 5-5)', async () => {
+    // A meal logged by the v12 scan path: per-row quality disclosures on
+    // log_items, the meal-level snapshot on meals. Export is SELECT *-based
+    // and import intersects with PRAGMA table_info, so the columns flow with
+    // no list to extend — this test LOCKS that, because "restore works" must
+    // stay a tested claim every time the schema grows.
+    const honesty = {
+      mealBand: { halfPct: 0.375, tier: 'wide', reasons: ['Standard portion assumed'] },
+      portionContext: {
+        wholeMealVisible: true,
+        scaleReferenceAvailable: false,
+        scaleReferenceDescription: '',
+        absolutePortionConfidence: 'low',
+      },
+      uncertaintyFactors: [{ factor: 'ghee quantity', impactOnTotalCalories: 'high' }],
+      highImpactQuestion: { question: 'How many rotis?', options: ['2', '3'] },
+      knownSummary: 'Two rotis identified',
+      unknownSummary: 'Ghee quantity',
+    }
+    const mealUuid = generateUuidV7(NOW)
+    const itemUuid = generateUuidV7(NOW + 1)
+    await db.run(
+      `INSERT INTO meals (id, logged_at, local_date, meal_slot, portion_eaten_fraction, analysis_status,
+                          engine_id, created_at, uuid, honesty_json)
+       VALUES (55, ?, '2026-08-02', 'lunch', 1.0, 'complete', 'test', ?, ?, ?)`,
+      [NOW, NOW, mealUuid, JSON.stringify(honesty)],
+    )
+    await db.run(
+      `INSERT INTO log_items (id, meal_id, matched_food_source, display_name, grams, gram_pathway,
+                              portion_source, snap_energy_kcal, is_estimate, sort_order, logged_at, uuid,
+                              visibility, qualitative_amount, portion_min_g, portion_max_g, preparation_json)
+       VALUES (550, 55, 'corpus', 'Roti', 60, 'fndds_standard_portion', 'vision_model', 300, 0, 0, ?, ?,
+               'likely', 'moderate', 45, 75, ?)`,
+      [NOW, itemUuid, JSON.stringify({ method: 'tawa', intrinsicFat: 'low', addedCookingFat: 'none', confidence: 0.6 })],
+    )
+
+    const payload = await exportOf(db)
+    const dst = openMemoryDb()
+    await dst.exec('PRAGMA foreign_keys = ON;')
+    await migrate(dst, NOW)
+    const outcome = await importBackupPayload(dst, payload, USER_SCHEMA_VERSION)
+    expect(outcome.ok).toBe(true)
+
+    const restoredMeal = await dst.get<{ honesty_json: string | null }>(
+      'SELECT honesty_json FROM meals WHERE id = 55',
+    )
+    expect(restoredMeal!.honesty_json).toBe(JSON.stringify(honesty))
+    const restoredItem = await dst.get<{
+      visibility: string | null
+      qualitative_amount: string | null
+      portion_min_g: number | null
+      portion_max_g: number | null
+      preparation_json: string | null
+    }>(
+      'SELECT visibility, qualitative_amount, portion_min_g, portion_max_g, preparation_json FROM log_items WHERE id = 550',
+    )
+    expect(restoredItem).toEqual({
+      visibility: 'likely',
+      qualitative_amount: 'moderate',
+      portion_min_g: 45,
+      portion_max_g: 75,
+      preparation_json: '{"method":"tawa","intrinsicFat":"low","addedCookingFat":"none","confidence":0.6}',
+    })
+
+    // An old-schema backup (v11 export: rows WITHOUT the honesty columns)
+    // still restores into the v12 app — the absent columns land NULL.
+    for (const row of payload.tables['log_items']!) {
+      delete row['visibility']
+      delete row['qualitative_amount']
+      delete row['portion_min_g']
+      delete row['portion_max_g']
+      delete row['preparation_json']
+    }
+    for (const row of payload.tables['meals']!) delete row['honesty_json']
+    const dst2 = openMemoryDb()
+    await migrate(dst2, NOW)
+    const legacy = await importBackupPayload(dst2, payload, USER_SCHEMA_VERSION)
+    expect(legacy.ok).toBe(true)
+    const legacyItem = await dst2.get<{ visibility: string | null; portion_min_g: number | null }>(
+      'SELECT visibility, portion_min_g FROM log_items WHERE id = 550',
+    )
+    expect(legacyItem).toEqual({ visibility: null, portion_min_g: null })
+    const legacyMeal = await dst2.get<{ honesty_json: string | null }>('SELECT honesty_json FROM meals WHERE id = 55')
+    expect(legacyMeal!.honesty_json).toBeNull()
+  })
+
   it('REPLACES pre-existing data — restore is not a merge', async () => {
     await seed(db)
     const payload = await exportOf(db)

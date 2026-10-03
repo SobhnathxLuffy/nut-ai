@@ -22,6 +22,7 @@ import {
 } from '../src/inference/pathA/assistant'
 import { runAssistantChatApi, runAssistantChatApiStream, type ChatTurn } from '../src/inference/pathA/client'
 import { LastWorkoutCard, NutritionSummaryCard, MealProposalCard, WorkoutRoutineProposalCard, ProposalStatusBadge } from '../src/components/assistant/AssistantCards'
+import { appendDeduped, createMessageIdFactory } from '../src/components/assistant/message-dedupe'
 import { Icon } from '../src/components/Icon'
 import { Button } from '../src/components/Screen'
 import { Empty } from '../src/components/Empty'
@@ -192,6 +193,11 @@ export default function AssistantScreen() {
     scrollRef.current?.scrollToEnd({ animated })
   }
   const [messages, setMessages] = useState<any[]>([])
+  // O7: every message id comes from ONE monotonic mint (see
+  // src/components/assistant/message-dedupe.ts) — bare Date.now() ids collided
+  // when two appends landed in the same millisecond, and a duplicate id is a
+  // React-key + proposal-status collision, not a cosmetic one.
+  const nextMsgId = useRef(createMessageIdFactory()).current
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   // Wave 1c (§9.2): armed when a reply is sent, cleared on the first streamed
@@ -303,20 +309,26 @@ export default function AssistantScreen() {
     const text = typeof textArg === 'string' ? textArg.trim() : input.trim()
     if (!text || loading) return
     setInput('')
-    setMessages(prev => [...prev, { id: Date.now().toString(), role: 'user', content: text }])
+    const userMsgId = nextMsgId()
+    setMessages(prev => appendDeduped(prev, { id: userMsgId, role: 'user', content: text }))
     setLoading(true)
     // P3-A2: the placeholder id is declared outside the try so the catch can
     // turn the bubble into the error bubble instead of appending a second one.
-    const aiMsgId = (Date.now() + 1).toString()
+    // O7: minted through the shared monotonic factory — never Date.now()+1,
+    // which still collided with the user message inside the same millisecond.
+    const aiMsgId = nextMsgId()
 
     try {
       const configuredProvider = (await setting('provider')) as ProviderId | 'none' | ''
       if (!configuredProvider || configuredProvider === 'none') {
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
+        // This append runs synchronously right behind the user message — the
+        // exact case where two Date.now() ids could be identical (O7).
+        const noProviderId = nextMsgId()
+        setMessages(prev => appendDeduped(prev, {
+          id: noProviderId,
           role: 'assistant',
           text: 'No AI provider is configured. Please configure an API key in Profile → AI Provider settings to use the assistant.'
-        }])
+        }))
         setLoading(false)
         return
       }
@@ -332,7 +344,7 @@ export default function AssistantScreen() {
 
       // The streaming bubble exists from the moment the send happens — deltas
       // patch it in place, word by word.
-      setMessages(prev => [...prev, { id: aiMsgId, role: 'assistant', text: '', reasoning: '', streaming: true }])
+      setMessages(prev => appendDeduped(prev, { id: aiMsgId, role: 'assistant', text: '', reasoning: '', streaming: true }))
       // §9.2 slow first byte: if nothing streams within 1.5s, the placeholder
       // swaps "Thinking…" for a three-line reply skeleton.
       firstByteTimer.current = setTimeout(() => setSlowFirstByte(true), SLOW_FIRST_BYTE_MS)
@@ -457,12 +469,15 @@ export default function AssistantScreen() {
       // — turn the placeholder ITSELF into the error bubble instead of
       // appending a second, duplicate one.
       const errText = e?.message || 'Sorry, an error occurred.'
+      // Minted OUTSIDE the updater so the state updater stays pure (React may
+      // double-invoke it in StrictMode; ids must not advance per invocation).
+      const fallbackErrId = nextMsgId()
       setMessages(prev => {
         const placeholder = prev.find(m => m.id === aiMsgId)
         if (placeholder && placeholder.streaming) {
           return prev.map(m => (m.id === aiMsgId ? { ...m, streaming: false, text: errText } : m))
         }
-        return [...prev, { id: Date.now().toString(), role: 'assistant', text: errText }]
+        return appendDeduped(prev, { id: fallbackErrId, role: 'assistant', text: errText })
       })
     } finally {
       if (firstByteTimer.current != null) {

@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { TIER_GLYPH } from '@nutai/confidence'
 import { undoOperation } from '@nutai/db-adapter'
 import { db, deleteMeal } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
@@ -12,7 +13,9 @@ import {
   updateLoggedMeal,
   type LoggedMealDetail,
 } from '../src/data/logged-meals'
+import { loggedRowBandFor, visibilityLabelFor } from '../src/data/meal-honesty'
 import { useTheme } from '../src/theme/ThemeProvider'
+import { Badge } from '../src/components/Badge'
 import { Field } from '../src/components/Field'
 import { Icon } from '../src/components/Icon'
 import { PressableFX } from '../src/components/PressableFX'
@@ -31,6 +34,9 @@ interface EditableItem {
   name: string
   gramsText: string
   kcalPer100g: number | null
+  /** Task 5-5: persisted scan honesty, rendered under the row summary. */
+  visibility?: string | null
+  bandHalfPct?: number | null
 }
 
 interface EditableMeal {
@@ -68,6 +74,8 @@ export default function MealDetail() {
         name: item.name,
         gramsText: String(item.grams),
         kcalPer100g: item.kcalPer100g,
+        visibility: item.visibility ?? null,
+        bandHalfPct: item.bandHalfPct ?? null,
       })),
     })
   }, [])
@@ -265,6 +273,12 @@ export default function MealDetail() {
               ? `${Math.round((item.kcalPer100g * validGrams) / 100)} kcal`
               : '— kcal'
           const editing = editingItemId === item.id
+          const visibilityCaption = visibilityLabelFor(item.visibility)
+          // The band range is around the SAME row preview kcal — snap × grams / 100 —
+          // so the badge and the preview never disagree about which number is banded.
+          const rowKcal =
+            item.kcalPer100g !== null && validGrams !== null ? (item.kcalPer100g * validGrams) / 100 : null
+          const rowBand = rowKcal !== null ? loggedRowBandFor(item.bandHalfPct, rowKcal) : null
 
           return (
             <View key={item.id} style={[styles.card, { borderColor: theme.border }]}>
@@ -285,6 +299,37 @@ export default function MealDetail() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={[type.bodyStrong, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
                     <Text style={[type.caption, { color: theme.textMuted }]}>{item.gramsText} g · {preview}</Text>
+                    {/* Task 5-5 (O6): the row's persisted scan honesty — the
+                        basis (how this row earned its place: the model's own
+                        visibility claim) and the band around its calories,
+                        reconstructed from the persisted half-width by the same
+                        bandTier()/rangeFor() the ConfidenceChip uses. Both
+                        degrade to nothing on NULL (pre-v12 rows, manual rows):
+                        a row that made no claim renders no claim. An inferred
+                        row is the one visibility worth violet — the same
+                        "invitation, not scold" ruling as the result screen. */}
+                    {visibilityCaption ? (
+                      <Text
+                        style={[
+                          type.caption,
+                          { color: item.visibility === 'inferred' ? theme.uncertainText : theme.textMuted },
+                        ]}
+                      >
+                        {visibilityCaption}
+                      </Text>
+                    ) : null}
+                    {rowBand && rowKcal !== null ? (
+                      <Badge
+                        variant="uncertain"
+                        size="sm"
+                        accessibilityLabel={`Estimated ${Math.round(rowKcal)} kcal, likely between ${Math.round(rowBand.low)} and ${Math.round(rowBand.high)} kcal.`}
+                      >
+                        <Text style={[type.caption, { color: theme.uncertainText }]}>{TIER_GLYPH[rowBand.tier]}</Text>
+                        <Text style={[type.caption, { color: theme.uncertainText }]}>
+                          {`${Math.round(rowBand.low)}–${Math.round(rowBand.high)} kcal`}
+                        </Text>
+                      </Badge>
+                    ) : null}
                   </View>
                   <Icon name={editing ? 'chevron' : 'pencil'} size={16} color={theme.textFaint} />
                 </PressableFX>
@@ -345,6 +390,10 @@ export default function MealDetail() {
                       name: item.name,
                       gramsText: String(item.grams),
                       kcalPer100g: item.kcalPer100g,
+                      // Task 5-5: the undo path keeps the persisted honesty on
+                      // screen — applyLoggedMeal's mapping, verbatim.
+                      visibility: item.visibility ?? null,
+                      bandHalfPct: item.bandHalfPct ?? null,
                     })),
                   })
                 }

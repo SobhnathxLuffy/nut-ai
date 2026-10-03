@@ -12,6 +12,37 @@ export interface Routine {id:number; name:string; definition_json:string}
 export type Program = Routine
 type Row = Record<string, SqlValue>
 const WRITE_TABLES = new Set(['exercises','equipment_inventory','routines','programs','workouts','workout_exercises','workout_sets','logging_shortcuts'])
+/** Tables whose writes change what a workout read-model (active workout card,
+ * history) shows. Writes to exercises/equipment/routines/programs do NOT fire
+ * the workout-change event — the registry is scoped, not a global bus. */
+const WORKOUT_WRITE_TABLES = new Set(['workouts','workout_exercises','workout_sets'])
+const workoutChangeListeners = new WeakMap<DbAdapter, Set<() => void>>()
+/**
+ * O8 (Wave 5B, UI/UX report Table 12.1 "1s polling in ActiveWorkout — battery
+ * cost for a static pill; event-driven"): subscribe to workout/workout-set
+ * writes made through THIS repo instance (the DbAdapter you pass in). Every
+ * write that goes through `mutate()` below notifies its listeners AFTER the
+ * transaction committed, so a listener may immediately re-read fresh state.
+ * Returns an unsubscribe function. No external event library — a WeakMap of
+ * per-adapter listener sets, mirroring the app-side food-mutations bus.
+ *
+ * Not covered (honest limits): raw SQL writes that bypass this repository
+ * (backup import, undo/redo of operations) emit nothing — callers that need
+ * those cases keep their own foreground/path-change re-read. Listener errors
+ * propagate after the write has already committed, same contract as
+ * emitFoodMutation.
+ */
+export function onWorkoutsChanged(db: DbAdapter, listener: () => void): () => void {
+  let listeners = workoutChangeListeners.get(db)
+  if (!listeners) { listeners = new Set(); workoutChangeListeners.set(db, listeners) }
+  listeners.add(listener)
+  return () => { listeners!.delete(listener) }
+}
+function notifyWorkoutChange(db: DbAdapter, changes: readonly BatchChange[]): void {
+  const listeners = workoutChangeListeners.get(db)
+  if (!listeners?.size || !changes.some(c => WORKOUT_WRITE_TABLES.has(c.entityType))) return
+  for (const listener of [...listeners]) listener()
+}
 /** Every write and its undo snapshot share a transaction. Keys are checked against actual schema metadata. */
 export async function writeRow(tx:DbAdapter, table:string, values:Row, now:number, changes:BatchChange[], id?:number):Promise<number> {
   if(!WRITE_TABLES.has(table)) throw new Error('Unsupported training table')
@@ -28,11 +59,15 @@ export async function writeRow(tx:DbAdapter, table:string, values:Row, now:numbe
   return id!
 }
 async function mutate<T>(db:DbAdapter,now:number,fn:(tx:DbAdapter,changes:BatchChange[])=>Promise<T>):Promise<T> {
-  return db.transaction(async tx=>{
-    const changes:BatchChange[]=[];const result=await fn(tx,changes)
+  const changes:BatchChange[]=[]
+  const result=await db.transaction(async tx=>{
+    const result=await fn(tx,changes)
     if(changes.length) await recordOperation(tx,{entityType:'batch',entityId:0,opType:'update',newJson:{changes},createdAt:now})
     return result
   })
+  // O8: notify AFTER the transaction committed (a rollback must stay silent).
+  notifyWorkoutChange(db,changes)
+  return result
 }
 function exerciseRow(e:ExerciseInput):Row {
   return {name:e.name,tracking_type:e.tracking_type,aliases_json:JSON.stringify(e.aliases),primary_muscles_json:JSON.stringify(e.primary_muscles),secondary_muscles_json:JSON.stringify(e.secondary_muscles),antagonist_muscles_json:JSON.stringify(e.antagonist_muscles),equipment_json:JSON.stringify(e.equipment),notes:e.notes,media_uri:e.media_uri}
@@ -48,12 +83,28 @@ export async function seedExercises(db:DbAdapter):Promise<void> {
     if ((count?.c ?? 0) >= EXERCISE_LIBRARY.length) return
   }
   await db.transaction(async tx=>{
+    // BUG-seed (Wave 5B, browser-reproduced in Task 5-1): a restored backup can
+    // park rows on the library's hardcoded ids with NON-library uuids — the
+    // COUNT check passes (count < library size) and the uuid de-dupe below
+    // does not recognise them, so the old INSERT with hardcoded id=i+1 died
+    // with SQLITE_CONSTRAINT_PRIMARYKEY (1555) on exercises.id and the workout
+    // screen rendered the raw error. Seed only the MISSING library rows: each
+    // insert takes its hardcoded id only when that id is FREE, otherwise the id
+    // is omitted and SQLite assigns the next free rowid. User-restored rows are
+    // never touched, and every library exercise still exists after boot.
+    const existing=await tx.all<{id:number;uuid:string}>('SELECT id,uuid FROM exercises')
+    const uuids=new Set(existing.map(r=>r.uuid))
+    const takenIds=new Set(existing.map(r=>r.id))
     for(const [i,e] of EXERCISE_LIBRARY.entries()) {
       const uuid=deterministicUuidV7(0,`nutai.exercise.v1:${e.name}`)
-      if(await tx.get('SELECT id FROM exercises WHERE uuid=?',[uuid])) continue
+      if(uuids.has(uuid)) continue
       const row:Row={...exerciseRow(e),...createSyncMetadata(0),uuid,is_custom:0,source:'Nut AI original taxonomy v1',id:i+1}
+      if(takenIds.has(i+1)) delete row['id']
       const keys=Object.keys(row) as (keyof typeof row)[]
-      await tx.run(`INSERT INTO exercises (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,keys.map(k=>row[k]!))
+      const inserted=await tx.run(`INSERT INTO exercises (${keys.join(',')}) VALUES (${keys.map(()=>'?').join(',')})`,keys.map(k=>row[k]!))
+      // Track the id this insert actually landed on: an auto-assigned rowid can
+      // occupy a LATER library row's hardcoded id within this same loop.
+      takenIds.add(Number(inserted.lastInsertRowId))
     }
   })
 }

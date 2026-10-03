@@ -32,7 +32,7 @@ function routeFileCandidates(route: string): string[] {
 
 describe('resolveDeepLink: the nutai:// alias map', () => {
   it('resolves every table entry exactly (table-mapping exactness)', () => {
-    expect(DEEP_LINK_ROUTES).toHaveLength(8)
+    expect(DEEP_LINK_ROUTES).toHaveLength(9)
     for (const entry of DEEP_LINK_ROUTES) {
       expect(resolveDeepLink(`${DEEP_LINK_SCHEME}://${entry.path}`)).toBe(entry.route)
     }
@@ -42,6 +42,7 @@ describe('resolveDeepLink: the nutai:// alias map', () => {
     expect(resolveDeepLink('nutai://scan')).toBe('/camera')
     expect(resolveDeepLink('nutai://log')).toBe('/food')
     expect(resolveDeepLink('nutai://home')).toBe('/')
+    expect(resolveDeepLink('nutai://day')).toBe('/day-detail')
     expect(resolveDeepLink('nutai://train')).toBe('/train')
     expect(resolveDeepLink('nutai://workout')).toBe('/workout')
     expect(resolveDeepLink('nutai://assistant')).toBe('/assistant')
@@ -58,6 +59,9 @@ describe('resolveDeepLink: the nutai:// alias map', () => {
 
   it('strips query strings, hashes and trailing slashes', () => {
     expect(resolveDeepLink('nutai://log?date=2026-10-05')).toBe('/food')
+    // The day alias carries its target day in the query — resolution maps the
+    // alias; the route file owns the param (a bare nutai://day lands on today).
+    expect(resolveDeepLink('nutai://day?date=2026-10-05')).toBe('/day-detail')
     expect(resolveDeepLink('nutai://scan#widget')).toBe('/camera')
     expect(resolveDeepLink('nutai://log/')).toBe('/food')
     expect(resolveDeepLink('nutai://scan/?src=widget#tap')).toBe('/camera')

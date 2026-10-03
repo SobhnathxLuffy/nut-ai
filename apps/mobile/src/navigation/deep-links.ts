@@ -61,6 +61,11 @@ export const DEEP_LINK_ROUTES: readonly DeepLinkRoute[] = [
     description: 'The Home tab.',
   },
   {
+    path: 'day',
+    route: '/day-detail',
+    description: 'Direct route — the day-detail view (AGENTS §0.2 O4); a bare tap lands on today, a ?date= targets a day.',
+  },
+  {
     path: 'train',
     route: '/train',
     description: 'Direct route — the Train tab needs no alias file.',
