@@ -54,6 +54,24 @@ and instantly. No subscription, no paywall, no account, no server.
 - **Export / import**: one JSON file with everything; restore it from the first onboarding screen on
   a new phone. Your API key never travels in it.
 
+### Deep links
+
+The app owns the `nutai://` scheme (declared in `app.config.ts`, dispatched by the router), so an
+external entry point — a notification action or a home-screen widget tap — can jump straight to a
+screen. Unknown links land on a "This link doesn't go anywhere" screen with a way home, never a dead
+end.
+
+| Alias | Screen | Example URL |
+|---|---|---|
+| `scan` | Camera | `nutai://scan` |
+| `log` | Food tab | `nutai://log` |
+| `home` | Home | `nutai://home` |
+| `train` | Train tab | `nutai://train` |
+| `workout` | Active workout | `nutai://workout` |
+| `assistant` | AI assistant | `nutai://assistant` |
+| `progress` | Progress tab | `nutai://progress` |
+| `weight` | Log weight | `nutai://weight` |
+
 ---
 
 ## Why this exists
