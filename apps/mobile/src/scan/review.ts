@@ -540,7 +540,7 @@ export function shouldShowModelQuestionCard(
  *
  * RENDER CONTRACT with result.tsx: the row's provenance subtitle chain keeps
  * its 2-d order (web citation → sourceAttribution → Confirmed → AI ESTIMATE →
- * ⚠ Estimated) as its ONE subtitle line; this fragment renders as an
+ * the warning-icon Estimated line) as its ONE subtitle line; this fragment renders as an
  * ADDITIONAL muted micro line directly under it, never replacing it. The prep
  * fact is about THIS meal's cooking; every chain entry is about where the
  * per-100 g data came from or who owns the grams — different facts, so one

@@ -14,7 +14,8 @@ This section is the current operational snapshot and must be kept honest. It is 
 ### 0.1 What is currently strong
 
 - The monorepo, strict TypeScript, SQLite foundation, migrations, operations/undo foundation, deterministic nutrition engine, IFCT/USDA integration, custom foods, recipes, and core food logging architecture are substantial.
-- The latest fully-gated automated baseline is **1,441 tests passing (0 failed)** at commit `bcbc07d` (2026-10-02, Wave 3 complete), with lint, strict typecheck, node-purity (**19/19**), Playwright e2e (24 passed + 2 pre-existing skipped), and a 28-route zero-error browser walk all green at that commit. Historical: 1,077 at `2032fb1` (2026-09-30); 1,284 at `851d7e4` (Cycle-2 QA fix wave). Re-run `npm run check` after any reinstall before quoting the number for new work.
+- The latest fully-gated automated baseline is **1,479 tests passing (0 failed)** (129 files) at the Wave 4 wrap (2026-10-03, commits `16809c2`…`0025f28` + wrap working tree), with lint, strict typecheck, node-purity (**19/19**), `check:contrast` (**100/100 pairs**), and Playwright e2e (**27 passed + 2 pre-existing skipped**) all green. Historical: 1,441 at `bcbc07d` (Wave 3, 2026-10-02); 1,077 at `2032fb1` (2026-09-30); 1,284 at `851d7e4` (Cycle-2 QA fix wave). Re-run `npm run check` after any reinstall before quoting the number for new work.
+- **The UI design system is gated, not eyeballed (UI/UX report Wave 4).** Every token pair in BOTH themes passes WCAG 2.1 via `npm run check:contrast` (100 pairs, computed from `tokens.ts` — the single source of truth, completeness-guarded so a new slot can never escape the gate); identity colours never sit in a `<Text>` style (the `*Text` grade slots do); the 7-step type scale carries the dynamic-type policy (numerals cap 1.2×, display call sites carry lineHeight 68 headroom, TextInputs state `allowFontScaling` — Android's default is OFF) with repo sweeps; `nutai://` deep links resolve through alias route files with a friendly not-found; the icon set is 64 hand-drawn glyphs on one 1.8 stroke philosophy with an in-house extension protocol (no lucide dependency, ADR-021); `react-native-reanimated` is removed (zero imports, web-export-safety architecture test-locked). The reference is **docs/design-system.md** — one primitive per family, new UI deps require an ADR.
 - The full loop — scan, review, correct, log, track — ships on **Android, iPhone, and the web**. The web build runs the same Expo Router screens and the same deterministic engine: the user DB lives on the OPFS VFS (WASM SQLite) with a guarded one-time migration, provider keys live in `localStorage`, `Alert.alert` has a DOM shim, the camera fallback exposes all four capture modes plus a manual-GTIN path, and the Playwright suite runs against the real exported bundle on every push via `.github/workflows/web-e2e.yml`.
 - The Indian Dish KB pipeline is part of the shipped artifact: `npm run data:build` bundles the 362-dish KB into `nutrition.db`, the verify gate asserts the row count plus a CURATED FTS probe, the resolver ranks the dish KB (priority 75) above generic corpora with a literal-first alias ladder, and the dish browser reaches all 362 identities.
 - **Search is genuinely multi-source.** `RouterSource.search` fans out to EVERY registered source (user foods, household recipes, saved "My Version" dishes, dish KB, IFCT, USDA, Open Food Facts), caps each corpus at 15 rows, and `normalizeBm25` normalizes per source cohort so cross-corpus BM25 scales stay incomparable-but-fair. A single query surfaces IFCT and USDA rows side by side with source labels. The auto-accept DECISION is still tier-gated to the highest-priority source present, preserving the P0-2 guarantee that a dish-KB identity or IFCT row out-decides a generic USDA row.
@@ -80,6 +81,7 @@ Fixed by recent rounds — do not re-report without fresh evidence: repeat-meal 
 #### Deferred physical checks
 - Full hardware network isolation and full device reboot persistence are currently deferred because the phone supplies internet connectivity to the development environment.
 - Process-level force-stop/relaunch is allowed and already used.
+- Wave 4 device audit (owner pass, all currently NOT TESTED (device) — see docs/design-system.md §7): the 130% font-scale layout walk (Android Settings → Display → Font size max: Home hero ring card, macro stat rows, slot-guide disclosure, set-table cells/prev/set-number columns, rest chip, tab bar labels); `adb shell am start -a android.intent.action.VIEW -d "nutai://scan"` (and `nutai://log`) deep-link taps; a native rebuild after the reanimated removal (autolinking-only risk — zero source imports); visual/screen-reader check of the 8 Wave 4 glyphs and the 12px honesty/warning icons.
 
 ### 0.3 Current priority order
 
@@ -400,6 +402,8 @@ Provide a clear recovery decision when required: resume, discard, or correct dur
 
 Treat UI quality as product correctness, not decoration.
 
+**Consume the design system — `docs/design-system.md` is the reference.** One primitive per family (Screen/Header, Button, Field ×2, Badge, ChipRow, ItemRow, Sheet/MenuSheet, Toast, Skeleton, Empty, ProgressRing, PressableFX, Disclosure, ConfidenceChip, Icon); every colour pair must pass `npm run check:contrast`; identity colours never sit in a `<Text>` style (use the `*Text` grade slots); new icons follow the in-house extension protocol (no lucide dependency); new UI dependencies require an ADR.
+
 ### 8.1 Visual hierarchy
 
 - One obvious primary action per screen/state.
@@ -530,6 +534,7 @@ npm run lint
 npm run typecheck
 npm run test
 npm run check:node-purity
+npm run check:contrast
 npm run data:verify
 npm run ifct:verify
 npm run indian-dishes:verify
@@ -537,14 +542,15 @@ npm run indian-dishes:verify-mappings
 npm run check
 ```
 
-Current reference baseline at the time of this document:
-- 83 Vitest files, 680 tests
-- 18/18 node-pure shared packages
+Current reference baseline (Wave 4 wrap, 2026-10-03):
+- 129 Vitest files, 1,479 tests
+- 19/19 node-pure shared packages
+- Contrast gate passing (100/100 pairs, light 50 + dark 50, + 24 logged)
 - USDA golden-query gate passing (26/26, 7,930 foods)
 - 542-row IFCT Table 1 corpus verification passing
 - 362 Indian dishes: 362 CURATED, 0 DRAFT_CURATED (bundled + integrity-gated)
-- 1,444/1,444 mapped dish slots resolve in the shipped corpus (mapping-verification gate, incl. graduation gates)
-- Playwright web e2e: 20 passed + 2 documented `fixme`, run on every push by GitHub Actions
+- 1,451/1,451 mapped dish slots resolve in the shipped corpus (mapping-verification gate, incl. graduation gates)
+- Playwright web e2e: 27 passed + 2 documented `fixme` (incl. wave4 deep-link specs), run on every push by GitHub Actions
 
 If counts change, update PLAN.md and VERIFICATION.md after the full gate.
 
@@ -701,6 +707,7 @@ npm run lint
 npm run typecheck
 npm run test
 npm run check:node-purity
+npm run check:contrast
 npm run data:verify
 npm run ifct:verify
 npm run indian-dishes:verify

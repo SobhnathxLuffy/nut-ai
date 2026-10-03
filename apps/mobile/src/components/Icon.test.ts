@@ -29,21 +29,30 @@ import { summaryLinesFor } from '../scan/review'
 import { lightTheme } from '../theme/tokens'
 
 /**
- * UI/UX report Ch 6 / Table 6.1 (Wave 4d) — icon set extension: the set grows
- * to 63 glyphs, gains three semantic sizes + an a11y label prop, the report's
- * Lucide passthrough becomes a documented in-house extension protocol (zero
+ * UI/UX report Ch 6 / Table 6.1 (Wave 4d) — icon set extension: the set grew
+ * to 63 glyphs, gained three semantic sizes + an a11y label prop, the report's
+ * Lucide passthrough became a documented in-house extension protocol (zero
  * new dependencies), and the report Ch 13 program DoD — "the icon audit finds
- * no text glyph standing in for a symbol anywhere" — closes on the scan
+ * no text glyph standing in for a symbol anywhere" — closed on the scan
  * honesty card, the one site the audit had left.
+ *
+ * Wave 4 wrap: the set is 64 — `warning` (Lucide triangle-alert anatomy at
+ * 1.8) kills the LAST TWO residual text glyphs: result.tsx's "⚠ Estimated"
+ * row marker and search.tsx's "✓ Selected" button label (the check rides the
+ * Button's icon slot beside the plain word "Selected").
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(here, 'Icon.tsx'), 'utf8')
 const review = readFileSync(join(here, '..', 'scan', 'review.ts'), 'utf8')
 const result = readFileSync(join(here, '..', '..', 'app', 'result.tsx'), 'utf8')
+const search = readFileSync(join(here, '..', '..', 'app', 'search.tsx'), 'utf8')
 
 /** The seven Wave 4d glyphs (report Table 6.1 gap list). */
 const WAVE_4D_GLYPHS = ['plusCircle', 'bowlPlus', 'trash', 'share', 'crown', 'uturnBack', 'uturnFwd'] as const
+
+/** The Wave 4 wrap glyph (the ⚠-marker kill). */
+const WAVE_4_WRAP_GLYPHS = ['warning'] as const
 
 // Parse the IconName union out of the source (to the first blank line). A
 // malformed union fails the length assertions below loudly instead of
@@ -51,11 +60,11 @@ const WAVE_4D_GLYPHS = ['plusCircle', 'bowlPlus', 'trash', 'share', 'crown', 'ut
 const unionBlock = source.match(/export type IconName =\n([\s\S]*?)\n\n/)
 const names = unionBlock ? [...unionBlock[1].matchAll(/'([^']+)'/g)].map((m) => m[1]) : []
 
-describe('the 63-glyph set (report Table 6.1 gaps closed)', () => {
-  it('the union parses and holds 63 unique names', () => {
+describe('the 64-glyph set (report Table 6.1 gaps closed)', () => {
+  it('the union parses and holds 64 unique names (63 from Wave 4d + warning from the wrap)', () => {
     expect(unionBlock).toBeTruthy()
-    expect(names).toHaveLength(63)
-    expect(new Set(names).size).toBe(63)
+    expect(names).toHaveLength(64)
+    expect(new Set(names).size).toBe(64)
   })
 
   it('every IconName has geometry — a name in the union without a render case is a blank glyph', () => {
@@ -66,7 +75,7 @@ describe('the 63-glyph set (report Table 6.1 gaps closed)', () => {
 
   it('every render case is declared in the union — geometry without a name is unreachable', () => {
     const cases = [...source.matchAll(/case '([^']+)':/g)].map((m) => m[1])
-    expect(cases).toHaveLength(63)
+    expect(cases).toHaveLength(64)
     for (const c of cases) {
       expect(names).toContain(c)
     }
@@ -74,6 +83,12 @@ describe('the 63-glyph set (report Table 6.1 gaps closed)', () => {
 
   it('the seven Wave 4d glyphs exist: plusCircle, bowlPlus, trash, share, crown, uturnBack, uturnFwd', () => {
     for (const name of WAVE_4D_GLYPHS) {
+      expect(names).toContain(name)
+    }
+  })
+
+  it('the Wave 4 wrap glyph exists: warning (the ⚠-Estimated kill)', () => {
+    for (const name of WAVE_4_WRAP_GLYPHS) {
       expect(names).toContain(name)
     }
   })
@@ -101,6 +116,21 @@ describe("one stroke philosophy — Lucide's grid at this set's 1.8", () => {
       expect(block).not.toMatch(/strokeWidth[=:]/)
       expect(block).not.toMatch(/stroke="/)
     }
+    // Same contract for the wrap glyph — its filled dot uses the inherited
+    // `c` (the set's existing dot convention, stroke disabled on the fill),
+    // never a hardcoded hex.
+    for (const name of WAVE_4_WRAP_GLYPHS) {
+      const start = source.indexOf(`case '${name}':`)
+      expect(start).toBeGreaterThan(-1)
+      const next = source.indexOf("case '", start + 1)
+      const block = source.slice(start, next === -1 ? undefined : next)
+      expect(block).toContain('{...s}')
+      expect(block).not.toMatch(/strokeWidth[=:]/)
+      // stroke="none" is the set's fill-only dot idiom (fish/target/sparkles);
+      // a stroke COLOUR would be the violation.
+      expect(block).not.toMatch(/stroke="#/)
+      expect(block).toMatch(/fill=\{c\} stroke="none"/)
+    }
   })
 
   it('the extension protocol is documented in the header — the no-lucide decision + revisit trigger', () => {
@@ -124,7 +154,7 @@ describe('ICON_SIZES — three semantic sizes (report Ch 6.2)', () => {
   })
 })
 
-describe('the last text glyph is dead (report Ch 13 DoD)', () => {
+describe('the last text glyphs are dead (report Ch 13 DoD)', () => {
   it('summaryLinesFor returns plain lines — no prefix template can regrow in the helper', () => {
     expect(review).not.toContain('`✓ ${')
     expect(review).not.toContain('`? ${')
@@ -140,5 +170,18 @@ describe('the last text glyph is dead (report Ch 13 DoD)', () => {
     expect(result).toMatch(/<Icon name="search" size=\{12\} color=\{theme\.uncertainText\}/)
     // …and no glyph-prefix interpolation can regrow at the render site either.
     expect(result).not.toMatch(/✓ \$\{/)
+  })
+
+  it('the ⚠ Estimated row marker is the real warning icon + the plain word (Wave 4 wrap)', () => {
+    expect(result).toMatch(/<Icon name="warning" size=\{12\} color=\{theme\.uncertainText\}/)
+    // The glyph itself cannot regrow as text — comments included, so the
+    // render-contract prose (review.ts) stays honest too.
+    expect(result).not.toContain('⚠ Estimated')
+  })
+
+  it('the ✓ Selected button label is the Button icon slot + the plain word (Wave 4 wrap)', () => {
+    expect(search).not.toContain('✓ Selected')
+    expect(search).toMatch(/label=\{isSelected \? 'Selected' : '\+ Select'\}/)
+    expect(search).toMatch(/icon=\{isSelected \? 'check' : undefined\}/)
   })
 })

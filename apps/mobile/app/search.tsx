@@ -227,7 +227,13 @@ export default function SearchScreen(){
             <Label muted>{e.tracking_type?.replaceAll('_',' + ')} · {e.muscles?.join(', ')} · {e.equipment?.join(', ')||'bodyweight'} · {e.custom?'Custom':'Built-in'}</Label>
             {mode === 'multi' && (
               <Button
-                label={isSelected ? '✓ Selected' : '+ Select'}
+                label={isSelected ? 'Selected' : '+ Select'}
+                // Wave 4 wrap (report Ch 13 DoD "no text glyph standing in for
+                // a symbol"): the selected label used to prefix a ✓ text glyph
+                // where the icon belongs — the Button's icon slot (Table 5.1)
+                // now renders the real check beside the plain word, the same
+                // pattern as the result honesty card's check/search markers.
+                icon={isSelected ? 'check' : undefined}
                 selected={isSelected}
                 onPress={() => toggleSelect(numId)}
               />

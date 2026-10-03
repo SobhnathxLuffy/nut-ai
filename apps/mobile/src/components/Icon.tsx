@@ -15,7 +15,9 @@ import { useTheme } from '../theme/ThemeProvider'
  * scale to any size without a second asset.
  *
  * Wave 4d (report Ch 6 / Table 6.1 — icon set extension): the set is 63 glyphs
- * with three semantic sizes (ICON_SIZES) and an a11y `label` prop.
+ * with three semantic sizes (ICON_SIZES) and an a11y `label` prop. Wave 4
+ * wrap adds the 64th — `warning`, the caution marker for unverified rows —
+ * killing the last text glyph (result.tsx's "⚠ Estimated").
  *
  * THE EXTENSION PROTOCOL (the report Ch 6.2 "Lucide passthrough", superseded —
  * deliberate Wave 4 deviation, spec §7): when a metaphor is missing, pick the
@@ -111,6 +113,7 @@ export type IconName =
   | 'crown'
   | 'uturnBack'
   | 'uturnFwd'
+  | 'warning'
 
 export interface IconProps {
   name: IconName
@@ -608,6 +611,19 @@ function render(name: IconName, c: string, s: Common) {
         <G>
           <Path {...s} d="M15 14 20 9l-5-5" />
           <Path {...s} d="M20 9H9.5a5.5 5.5 0 0 0-5.5 5.5 5.5 5.5 0 0 0 5.5 5.5H13" />
+        </G>
+      )
+    case 'warning':
+      // Wave 4 wrap (report Ch 6.2 + Ch 13 DoD "no text glyph standing in for
+      // a symbol"): the caution marker for unverified rows — the last "⚠"
+      // text glyph's replacement. Lucide "triangle-alert" anatomy (rounded
+      // triangle + exclamation bar + dot) on the same 24 grid, drawn in-house
+      // at 1.8 per the extension protocol above.
+      return (
+        <G>
+          <Path {...s} d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+          <Path {...s} d="M12 9v4" />
+          <Circle cx="12" cy="17" r="1.1" fill={c} stroke="none" />
         </G>
       )
   }

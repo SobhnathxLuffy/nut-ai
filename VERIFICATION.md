@@ -6,13 +6,15 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **667 passed**, 82 files |
+| Unit + property + integration tests | `npx vitest run` | **1,479 passed**, 129 files (Wave 4 gate run, 2026-10-03) |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
-| Node-purity gate | `node scripts/check-node-purity.mjs` | **18/18 packages** React-Native-free |
+| Node-purity gate | `node scripts/check-node-purity.mjs` | **19/19 packages** React-Native-free |
+| Contrast gate | `npm run check:contrast` | **100/100 pairs pass** (light 50, dark 50) + 24 logged |
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted (7,930 foods incl. 2 supplemental) |
 | IFCT corpus verification | `npm run ifct:verify` | **542-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
-| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, 1,444 slots, 0 ambiguous, 0 unresolved |
+| Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, **1,451/1,451 mapped slots** (verify-mappings), 0 hard errors, 0 sanity warnings |
+| Playwright e2e (real exported bundle, :3000) | `npm run check:e2e` | **27 passed**, 2 ticketed skips, 0 failed (2026-10-03) |
 | Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
 | Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
 | Android runtime & cold launch | `adb shell am start -n .../MainActivity` | **Clean launch**, 0 crashes in logcat |
@@ -824,3 +826,94 @@ AUTOMATICALLY VERIFIED by HTTP probing.
   origins) NOT TESTED; full `npm run check` re-run pending a fresh
   `node_modules` install in the rebuilt sandbox; per-row quality columns and
   meal-level honesty persistence deferred (repo.ts log_items).
+
+---
+
+## UI/UX Wave 4 — system hardening (2026-10-03)
+
+Wave 4 of the UI/UX Transformation Report (Ch 13 Table 13.1): computed dark
+palette + CI contrast gate, dynamic type pass, `nutai://` deep links, icon set
+extension + last text-glyph kill, dead-dep removal, primitive docs. Commits:
+`16809c2` (4a), `b415143` (4c), `79f20bc` (4b), `0025f28` (4d), plus the
+uncommitted Wave 4 wrap working tree (residuals + docs + this record). The
+component-library reference is [docs/design-system.md](docs/design-system.md);
+the two deliberate report deviations are recorded in
+[docs/adr/ADR-021-design-system.md](docs/adr/ADR-021-design-system.md).
+Evidence classes below: suite/gate items are AUTOMATICALLY VERIFIED; anything
+requiring the Android device is NOT TESTED (device) — never inferred.
+
+- **Gates at the Wave 4 wrap (2026-10-03):** full `npm run check` exit 0 —
+  lint clean, typecheck clean (root + app), vitest **1,479 passed / 0 failed**
+  (129 files), node-purity **19/19**, `check:contrast` **100/100 pairs**
+  (light 50, dark 50; 24 logged), data:verify 26/26, ifct:verify 542-row,
+  indian-dishes:verify **362/362 CURATED**, verify-mappings **1,451/1,451
+  slots, 0 hard errors, 0 sanity warnings**, density + filling audits ALL
+  PASS, composer equivalence 362/362 within 0.5 kcal. `npm run check:e2e`
+  exit 0 — **Playwright 27 passed / 2 ticketed skips / 0 failed** (was
+  24+2 pre-Wave-4; the 3 new wave4.spec.ts tests pass). Unit progression this
+  wave: 1,441 (Wave 3, `bcbc07d`) → 1,449 (4c) → 1,457 (4a) → 1,463 (4b) →
+  1,474 (4d) → **1,479 (wrap: +2 dynamic-type residual locks, +3 icon/text-glyph
+  kill locks)**.
+- **Contrast gate (AUTOMATICALLY VERIFIED):** `scripts/check-contrast.mjs`
+  (zero deps) regex-parses `tokens.ts` as the single source — NO JSON mirror —
+  computes WCAG 2.1 ratios for 100 gated pairs (text 4.5:1 / graphical 3:1,
+  mirrored across both themes, 8-digit-hex alpha compositing for tint pairs)
+  and 24 logged pairs, and hard-fails on any unresolvable `Theme` key
+  (completeness guard). Light theme was where the failures lived: identity
+  hues as text were 2.00–4.43:1. Fixes: `safety` #C13A30 (5.36:1), light
+  `carbs` #C68607 (3.08:1 graphical), five new `*Text` grade slots
+  (5.25–5.79:1), the `accent`/`accentTint` slot (Button/tab pill re-pointed,
+  zero visual change). ~55 Text-style sites + Badge fg migrated. One-time
+  adversarial proofs (captured, then reverted byte-identical): flipping light
+  `uncertainText` back to #8B7BD8 → gate exit 1 printing the 3.55:1 line; a
+  ghost `ghostSlot` in the Theme interface → gate exit 1 on
+  `unresolvable Theme key(s)`.
+- **Dynamic type (AUTOMATICALLY VERIFIED; device audit NOT TESTED):** policy —
+  prose/labels scale freely (sweep bans `allowFontScaling: false` anywhere);
+  `monoData` + `display` carry `maxFontSizeMultiplier: 1.2` on the token
+  (~30 numeral sites inherit); every `type.display` call site (incl. the
+  wrap's residual Chrome.tsx title + result.tsx's two hero-kcal spreads)
+  carries `lineHeight: 68` headroom, asserted for the complete spread list;
+  TextInputs state `allowFontScaling` explicitly (Android default is OFF) —
+  workout + log-exercise set cells capped 1.2, `Field`/`Screen.Field`/
+  `EditableValue` uncapped (user content). Adversarial: flipping workout to
+  `allowFontScaling={false}` and dropping a hero lineHeight 68→60 both
+  failed their gates, then reverted.
+- **Deep links (unit + web e2e AUTOMATICALLY VERIFIED; device taps NOT
+  TESTED):** `nutai://` resolves through alias route files
+  (src/navigation/deep-links.ts + DeepLinkRedirect + app/{scan,log,home}.tsx
+  + app/+not-found.tsx as an Empty fallback), NOT a Linking subscription
+  (404-flash race + Android double-delivery — rejected design recorded in
+  the module doc). 8 unit tests lock the map/resolver/route-file existence;
+  wave4.spec.ts passes on the exported bundle: /scan → camera, /log → Food
+  tab, /nope → not-found + Go home → Home.
+- **Icons + text-glyph kills (AUTOMATICALLY VERIFIED):** 56 → 63 glyphs in
+  Wave 4d (plusCircle, bowlPlus, trash, share, crown, uturnBack, uturnFwd —
+  24-grid, 1.8 stroke, Lucide-aligned anatomy, zero new deps; extension
+  protocol + >10-glyph revisit trigger in the Icon.tsx header) and the wrap's
+  64th `warning` (Lucide triangle-alert anatomy) killing result.tsx's
+  "⚠ Estimated" row marker; the honesty card's "✓ "/"? " prefixes and
+  search.tsx's "✓ Selected" label died the same way (Button icon slot +
+  plain word). 14 Icon tests lock union/case parity, the shared-stroke
+  contract, and every kill; an adversarial SVG path-grammar walk (throwaway
+  script) verified all endpoints in the 24 box.
+- **Dead deps (AUTOMATICALLY VERIFIED):** `react-native-reanimated` removed
+  from apps/mobile/package.json (was present with ZERO source imports; the
+  web-export-safety RN-Animated architecture is test-locked) — survives only
+  as drawer-layout's optional transitive peer; the ProgressRing test also
+  asserts the manifest is free of it. `@expo/ui` confirmed absent.
+  Platform-required no-import keeps documented in the audit appendix
+  (react-native-screens, @expo/metro-runtime, react-dom).
+- **NOT TESTED (device) — the honest list for the owner pass:**
+  1. 130% font-scale layout audit: Android Settings → Display → Font size
+     max; check Home hero ring card, macro stat rows, slot-guide disclosure,
+     set table (cells/prev/set-number columns), rest chip, tab bar labels.
+  2. Native rebuild after the reanimated removal (autolinking-only risk; no
+     source path imports it) — `./gradlew assembleRelease` + relaunch.
+  3. `nutai://` device taps: `adb shell am start -a android.intent.action.VIEW
+     -d "nutai://scan"` (and `log`) → camera/food, logcat clean.
+  4. Rendering of the 8 new glyphs + 12px honesty/warning icons on hardware;
+     icon `label` spoken by a real screen reader.
+- **Known accepted deviation (documented, not gated):** the filled-protein
+  ChipRow pair (`bg` on `theme.protein` fill, ~3.9:1) — see
+  docs/design-system.md §7.

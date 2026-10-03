@@ -1,8 +1,8 @@
 # PLAN.md — Current Nut AI Implementation Status
 
-> **Last updated:** 2026-09-28
-> **Evidence baseline:** 667 tests / 82 test files, Playwright web e2e 20 passed + 2 skipped, 18/18 node-pure packages, USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,443 slots) + dish-mapping (1,443/1,443 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round).
-> **Worktree:** Currently clean — all fix rounds are pushed. Preserve unrelated future edits; do not reset or clean them.
+> **Last updated:** 2026-10-03
+> **Evidence baseline:** 1,479 tests / 129 files, Playwright web e2e 27 passed + 2 skipped, 19/19 node-pure packages, contrast gate 100/100 pairs (light 50 + dark 50), USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,451 slots) + dish-mapping (1,451/1,451 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round), UI/UX Waves 1–4 complete (design system gated + documented — docs/design-system.md).
+> **Worktree:** Waves 4a–4d are committed (`16809c2`…`0025f28`); the Wave 4 wrap (residuals + design-system docs + records) sits uncommitted in the worktree. Preserve unrelated edits; do not reset or clean them.
 
 ## 1. Executive Status
 
@@ -31,6 +31,7 @@ The previous phase labels overstated completion in several places. Current statu
 | Home / Food UX | **Partial** | Clutter, weak hierarchy, macro visibility, recipe-contribution gaps remain; repeat timestamp, named undo, day-status wrap, dish browsing are fixed |
 | Training | **Broken in critical path (reported, unverified since)** | Exercise Library trap last reproduced on device 2026-09-14; no commit has targeted it since — re-verify on current main |
 | Web app | **Built / automated-verified** | Offline Expo web build; OPFS user DB, DOM alert shim, camera modes + manual GTIN; Playwright e2e in CI; not yet device/browser-matrix QA'd |
+| UI design system | **Strong / automated-verified; device a11y audit pending** | Waves 1–4: tokens + 7-step type scale + the full primitive library gated (eslint hex/fontSize/tap-target, type-scale sweeps, Icon/Badge locks); contrast gate 100/100 pairs; dynamic-type caps + Android TextInput scaling; `nutai://` deep links; 64-glyph icon set, zero text glyphs; docs/design-system.md is the reference. NOT TESTED (device): 130% layout walk, deep-link ADB taps, native rebuild after reanimated removal, glyph/screen-reader rendering |
 | Progress / analytics | **Partial / incompletely verified** | Engines/screens exist; visual correctness and real-data QA still required |
 | Weekly / monthly reports | **Implemented, report math hardened** | `$kg` template leak, duplicate same-day PR rows, unrounded targets fixed in the P2 round; screens still need user/device verification |
 | Check-ins | **Implemented but partial** | Discoverability and consistency with reports require verification |
@@ -45,17 +46,18 @@ The previous phase labels overstated completion in several places. Current statu
 
 ## 2. Verified Automated Baseline
 
-Latest verified gate:
+Latest verified gate (Wave 4 wrap, 2026-10-03):
 
 - ESLint: clean, 0 errors/warnings
 - TypeScript: strict, packages + mobile clean
-- Vitest: **667 passed across 82 files**
-- Node purity: **18/18** packages
+- Vitest: **1,479 passed across 129 files**
+- Node purity: **19/19** packages
+- Contrast gate (`check:contrast`): **100/100 pairs pass** (light 50, dark 50; 24 logged)
 - USDA `data:verify`: **26/26** golden queries passing
 - IFCT verification: **542-row Table 1 corpus** accepted
 - Indian dishes: **362 total, 362 CURATED, 0 DRAFT_CURATED** (draft-graduation pass), bundled + integrity-gated
-- Dish mapping verification: **1,443/1,443** mapped slots resolve in the shipped corpus (1,061 IFCT + 382 USDA), 0 errors, graduation gates active
-- Playwright web e2e: **18 passed + 2 fixme** (exported bundle, CI on every push)
+- Dish mapping verification: **1,451/1,451** mapped slots resolve in the shipped corpus (1,070 IFCT + 381 USDA), 0 errors, graduation gates active
+- Playwright web e2e: **27 passed + 2 fixme** (exported bundle, CI on every push; includes the wave4 deep-link specs)
 - `git diff --check`: clean
 
 Run `npm run check` after every substantive implementation slice.

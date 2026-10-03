@@ -338,6 +338,11 @@ export function Field({
         accessibilityLabel={label}
         placeholderTextColor={t.textFaint}
         {...props}
+        // Wave 4 wrap (report §11.1): Android's TextInput ships with font
+        // scaling OFF — the explicit prop keeps this labelled input growing
+        // with the OS font size, matching the compact Field primitive. No
+        // cap: user content grows freely; the input is minHeight, not fixed.
+        allowFontScaling
         onFocus={(event) => {
           setFocused(true)
           onFocus?.(event)

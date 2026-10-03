@@ -191,7 +191,11 @@ const styles = StyleSheet.create({
     // Wave 1a: the onboarding screen title is a display moment (report
     // Table 3.1 — 36px ad-hoc joins display 56/60/800). Tight tracking comes
     // with the token.
+    // Wave 4 wrap (report §11.1): display caps at 1.2× and 56×1.2 = 67.2
+    // outgrows the token's lineHeight 60 — the 68 headroom keeps descenders
+    // from clipping at the cap (same override as every display call site).
     ...type.display,
+    lineHeight: 68,
     marginTop: space.xs,
   },
   subtitle: { ...type.body, marginTop: space.md },

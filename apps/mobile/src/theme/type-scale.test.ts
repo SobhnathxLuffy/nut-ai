@@ -390,11 +390,29 @@ describe('Wave 4b source inspection — the scaling props actually landed', () =
     )
   })
 
-  it('every in-scope display call site carries the 68 headroom (56×1.2 = 67.2 > 60)', () => {
-    // The regexes pin the same value as DISPLAY_HEADROOM. Sites OUTSIDE this
-    // list that also spread type.display (Chrome's onboarding title,
-    // result's hero kcal — other tasks' files) are recorded as follow-ups in
-    // the Wave 4b worklog, not asserted here.
+  it('the Screen.Field labelled input states allowFontScaling explicitly (Wave 4 wrap residual)', () => {
+    // Screen.Field is the labelled-input half of the Field pair; the compact
+    // Field primitive and the onboarding EditableValue input already carried
+    // the prop — this closes the set the report's §11.1 pass named.
+    expect(read('src/components/Screen.tsx')).toMatch(
+      /<TextInput[\s\S]{0,800}?allowFontScaling/,
+    )
+  })
+
+  it('log-exercise set-cell TextInputs mirror workout.tsx: allowFontScaling + the 1.2 cap, together', () => {
+    // The log-exercise mini set table shares the workout screen's numeral
+    // cells — the same Android scaling gap and the same cap apply (Wave 4
+    // wrap residual; the cap also arrives via the monoData token spread).
+    expect(read('app/log-exercise.tsx')).toMatch(/allowFontScaling\s*\n\s*maxFontSizeMultiplier=\{1\.2\}/)
+  })
+
+  it('every display call site carries the 68 headroom (56×1.2 = 67.2 > 60)', () => {
+    // The regexes pin the same value as DISPLAY_HEADROOM. Wave 4 wrap: the
+    // three residual sites the Wave 4b agent flagged out-of-scope (Chrome's
+    // onboarding title, result's two hero-kcal spreads) now carry the
+    // override too — the list below is EVERY type.display spread in the
+    // repo, so a new site without headroom is a new deviation to record,
+    // not a silent clip.
     const sites: Array<[string, RegExp]> = [
       ['app/(tabs)/index.tsx', /hero:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
       ['app/onboarding/index.tsx', /title:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
@@ -406,9 +424,16 @@ describe('Wave 4b source inspection — the scaling props actually landed', () =
       ['src/components/onboarding/Controls.tsx', /readoutValue:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['src/components/onboarding/Controls.tsx', /readoutUnit:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['src/components/onboarding/Controls.tsx', /editInput:\s*\{[\s\S]{0,300}?\.\.\.type\.display,\s*lineHeight:\s*68/],
+      ['src/components/onboarding/Chrome.tsx', /title:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
     ]
     for (const [rel, pattern] of sites) {
       expect(read(rel), `display call site without headroom: ${rel}`).toMatch(pattern)
     }
+    // result.tsx renders the hero kcal through an inline style array (both
+    // the quick and the advanced view) — exactly TWO spreads, both pinned.
+    const heroSites = read('app/result.tsx').match(
+      /\[type\.display, \{ color: theme\.text, lineHeight: 68 \}\]/g,
+    )
+    expect(heroSites, 'result.tsx hero-kcal display spreads without headroom').toHaveLength(2)
   })
 })

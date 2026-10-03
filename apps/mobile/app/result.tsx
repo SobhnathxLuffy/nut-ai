@@ -487,7 +487,7 @@ export default function Result() {
           ) : null}
 
           <View style={{ marginTop: space.lg }}>
-            <Text style={[type.display, { color: theme.text }]}>{heroKcal}</Text>
+            <Text style={[type.display, { color: theme.text, lineHeight: 68 }]}>{heroKcal}</Text>
             <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
             {showLikelyRange ? (
               // Task 2-d: a wide band may not claim a precise integer — the
@@ -630,7 +630,7 @@ export default function Result() {
             measured range right under it — a precise-looking integer would be
             the exact fake certainty this screen exists to prevent. */}
         <View style={{ marginTop: space.lg }}>
-          <Text style={[type.display, { color: theme.text }]}>{heroKcal}</Text>
+          <Text style={[type.display, { color: theme.text, lineHeight: 68 }]}>{heroKcal}</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
           {showLikelyRange ? (
             <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
@@ -770,9 +770,15 @@ export default function Result() {
                     // nothing above already says the number is unverified. Rows
                     // showing AI ESTIMATE deliberately do NOT get this suffix —
                     // the amber badge already carries the whole message.
-                    <Text style={[type.caption, { color: theme.uncertainText, marginTop: 2 }]}>
-                      ⚠ Estimated
-                    </Text>
+                    // Wave 4 wrap (report Ch 13 DoD): the marker is the real
+                    // warning icon beside the plain word (the honesty card's
+                    // glyph-row pattern) — the "⚠" text glyph dies here.
+                    <View style={[styles.honestyLine, { marginTop: 2 }]}>
+                      <View style={styles.honestyGlyph}>
+                        <Icon name="warning" size={12} color={theme.uncertainText} />
+                      </View>
+                      <Text style={[type.caption, { color: theme.uncertainText, lineHeight: 19 }]}>Estimated</Text>
+                    </View>
                   ) : null}
                   {prepNote ? (
                     <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>{prepNote}</Text>
@@ -1456,8 +1462,8 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
     // under EVERY unmatched ingredient. The failure is now stated ONCE, in a
     // meal-level notice above (see result's failedLookupRowIds block), and
     // each failed row keeps only its provenance residue: the amber "AI
-    // ESTIMATE" badge, or a tiny "⚠ Estimated" when the row is not a bare
-    // estimate. Nothing is hidden — it is just not repeated N times.
+    // ESTIMATE" badge, or a tiny warning-icon "Estimated" line when the row is
+    // not a bare estimate. Nothing is hidden — it is just not repeated N times.
     return null
   }
 

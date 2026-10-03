@@ -459,6 +459,14 @@ function ConfigureScreen({ exercise, onBack }: { exercise: { id: number; name: s
                   key={key}
                   accessibilityLabel={`${getFieldLabels(unit)[key]} set ${i + 1}`}
                   keyboardType={key === 'tempo' ? 'default' : 'decimal-pad'}
+                  // Wave 4 wrap (report §11.1): mirrors the workout.tsx
+                  // set-cell cells — Android's TextInput default is font
+                  // scaling OFF, so the explicit prop grows the numerals with
+                  // the OS font size, and the 1.2 cap (also arriving via the
+                  // monoData token spread in the style array) stops growth
+                  // where column alignment lives.
+                  allowFontScaling
+                  maxFontSizeMultiplier={1.2}
                   value={row.text[key] ?? ''}
                   onChangeText={text => updateField(row.key, key, text)}
                   style={[styles.cellInput, type.monoData, { color: theme.text, borderColor: theme.border }]}
