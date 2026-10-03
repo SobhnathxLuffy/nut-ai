@@ -13,6 +13,7 @@ import {
   COOKING_METHOD_OPTIONS,
   type UnknownDishNutritionResult,
 } from '@nutai/indian-dishes'
+import { roundGrams } from '@nutai/recipe-engine'
 import { ifctCorpusInfo, nutritionCorpusInfo, openIfctDb, openNutritionDb, resetCorpusPromises } from '../src/db/expo-adapter'
 import { db as openUserDb } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
@@ -987,9 +988,9 @@ export default function FoodSearch() {
             if (!fatOpt.foodId) return null
             return (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.xs }}>
-                <Text style={[type.caption, { color: theme.textMuted }]}>Oil used (g):</Text>
+                <Text style={[type.caption, { color: theme.textMuted }]}>Oil in the pan (g):</Text>
                 <TextInput
-                  accessibilityLabel="Grams of cooking oil"
+                  accessibilityLabel="Grams of oil in the pan"
                   value={fatGrams}
                   onChangeText={setFatGrams}
                   keyboardType="numeric"
@@ -1037,6 +1038,11 @@ export default function FoodSearch() {
               <Text style={[type.caption, { color: theme.textFaint, marginTop: 4 }]}>
                 Raw mass: {computedDecomp.rawMassGrams}g → Cooked yield: {Math.round(computedDecomp.cookedYieldGrams)}g
               </Text>
+              {computedDecomp.oilSemantics ? (
+                <Text style={[type.caption, { color: theme.uncertainText, marginTop: 2 }]}>
+                  Oil: {roundGrams(computedDecomp.oilSemantics.usedGrams)}g in the pan → est. {roundGrams(computedDecomp.oilSemantics.absorbedLow)}–{roundGrams(computedDecomp.oilSemantics.absorbedHigh)}g absorbed ({computedDecomp.oilSemantics.confidence} confidence) — nutrition counts the absorbed share.
+                </Text>
+              ) : null}
               {computedDecomp.ingredientBreakdown.length > 0 && (
                 <View style={{ marginTop: 6 }}>
                   <Text style={[type.caption, { color: theme.textMuted, fontWeight: '700' }]}>

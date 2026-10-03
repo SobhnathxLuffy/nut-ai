@@ -48,7 +48,9 @@ function adapt(db) {
 const nutritionDb = adapt(nutrition)
 const ifctDb = adapt(ifct)
 
-const { computeDishNutrition } = await import(join(REPO, 'packages/indian-dishes/dist/index.js'))
+const indianDishesDist = await import(join(REPO, 'packages/indian-dishes/dist/index.js'))
+const { computeDishNutrition } = indianDishesDist
+const { estimateOilAbsorption } = await import(join(REPO, 'packages/recipe-engine/dist/index.js'))
 
 const FOOD_FIELDS = 'energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg'
 function loadFood(foodId) {
@@ -109,12 +111,23 @@ for (const row of dishes) {
   let hasNull = false
   let folded = false // did any fat slot fold into the selector?
   let hasUnfoldedFatSlot = false
+  // Owner QA 2026-10: fried dishes charge the ABSORBED share of their fat
+  // slot (used-vs-absorbed oil semantics) — the composer charges the same
+  // factor, so the simulation must too (post-fix mode only).
+  const usedFatMidSum = slots.reduce((acc, s) => (s.role === 'fat_variable' ? acc + (s.amountPrior?.range ? (s.amountPrior.range[0] + s.amountPrior.range[1]) / 2 : 0) : acc), 0)
+  const usedFatServingGrams = midSum > 0 ? (usedFatMidSum / midSum) * rawBatch : 0
+  const isFriedDish = !OLD_UI && (dish.cooking.methods.includes('cook_or_fry') || dish.cooking.methods.includes('deep_fried'))
+  const oilEstimate = isFriedDish && usedFatServingGrams > 0
+    ? estimateOilAbsorption({ usedGrams: usedFatServingGrams, rawFoodGrams: rawBatch - usedFatServingGrams, frying: true })
+    : null
+  const fatAbsorbFactor = oilEstimate ? oilEstimate.absorbedMid / usedFatServingGrams : 1
   slots.forEach((s, i) => {
     const foodId = s.nutritionMapping?.canonicalFoodId
     const food = foodId ? loadFood(foodId) : null
     if (!food || food.energy_kcal == null) { hasNull = true; return }
     const grams = mids[i] != null && midSum > 0 ? (mids[i] / midSum) * rawBatch : 0
     const isFatSlot = s.role === 'fat_variable'
+    const effectiveGrams = isFatSlot && oilEstimate ? grams * fatAbsorbFactor : grams
     const foldMap = OLD_UI ? OLD_FAT_OPTION_BY_FOOD : FAT_OPTION_BY_FOOD
     const foldThis = isFatSlot && !folded && foldMap[foodId] != null
     if (foldThis) {
@@ -125,10 +138,10 @@ for (const row of dishes) {
     } else {
       if (isFatSlot) hasUnfoldedFatSlot = true
     }
-    kcal += food.energy_kcal * grams / 100
-    protein += (food.protein_g || 0) * grams / 100
-    carb += (food.carb_g || 0) * grams / 100
-    fat += (food.fat_g || 0) * grams / 100
+    kcal += food.energy_kcal * effectiveGrams / 100
+    protein += (food.protein_g || 0) * effectiveGrams / 100
+    carb += (food.carb_g || 0) * effectiveGrams / 100
+    fat += (food.fat_g || 0) * effectiveGrams / 100
   })
 
   // Selector initialization, exactly as the UI does it.
@@ -154,6 +167,17 @@ for (const row of dishes) {
   const cmp = (a, b, tol) => b == null ? false : Math.abs(a - b) <= tol
   if (!cmp(cKcal, e.kcal, 0.5) || !cmp(cP, e.protein, 0.5) || !cmp(cC, e.carb, 0.5) || !cmp(cF, e.fat, 0.5)) {
     mismatches.push(`${dish.canonicalName}: composer ${cKcal.toFixed(1)}kcal/${cP.toFixed(1)}P/${cC.toFixed(1)}C/${cF.toFixed(1)}F vs engine ${e.kcal?.toFixed(1)}kcal/${e.protein?.toFixed(1)}P/${e.carb?.toFixed(1)}C/${e.fat?.toFixed(1)}F`)
+  }
+  // The engine must agree on WHEN absorption applies and what the used amount is.
+  if (!OLD_UI && usedFatServingGrams > 0) {
+    const wantAbsorption = dish.cooking.methods.includes('cook_or_fry') || dish.cooking.methods.includes('deep_fried')
+    if (wantAbsorption && !engine.oilSemantics) {
+      mismatches.push(`${dish.canonicalName}: fried dish but engine reports no oilSemantics`)
+    } else if (wantAbsorption && Math.abs(engine.oilSemantics.usedGramsPerServing - usedFatServingGrams) > 0.5) {
+      mismatches.push(`${dish.canonicalName}: engine used ${engine.oilSemantics.usedGramsPerServing}g vs composer fold ${usedFatServingGrams.toFixed(1)}g`)
+    } else if (!wantAbsorption && engine.oilSemantics) {
+      mismatches.push(`${dish.canonicalName}: non-fried dish but engine reports oilSemantics`)
+    }
   }
   if (!OLD_UI && hasUnfoldedFatSlot && !folded) {
     // informational — recipe fat kept as a row (e.g. coconut-milk "added_fat")

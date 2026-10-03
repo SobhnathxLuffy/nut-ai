@@ -1,5 +1,6 @@
 import type { DbAdapter } from '@nutai/db-adapter'
 import type { NutrientRow100g } from '@nutai/core-schema'
+import { estimateOilAbsorption, roundGrams, type OilAbsorptionEstimate } from '@nutai/recipe-engine'
 
 export interface BaseIngredientOption {
   optionId: string
@@ -19,7 +20,6 @@ export interface GenericYieldPrior {
   assumptionClass: 'GENERIC_PRIOR'
   foodFamilyFallback: 'universal' // Extensible for 'battered_vegetable', 'filled_pastry', etc.
   moistureLossFraction?: number
-  oilAbsorptionFraction?: number
   waterYieldModifier?: number
 }
 
@@ -63,7 +63,10 @@ export const COOKING_FAT_OPTIONS: FatOption[] = [
 export const COOKING_METHOD_OPTIONS: CookingMethodOption[] = [
   { label: 'Curried / Gravy (Simmered with water & spices)', method: 'curried', yieldMultiplier: 1.25, yieldPrior: { assumptionClass: 'GENERIC_PRIOR', foodFamilyFallback: 'universal', waterYieldModifier: 1.25 } },
   { label: 'Sautéed / Dry Sabzi (Stir fried)', method: 'sauteed', yieldMultiplier: 0.85, yieldPrior: { assumptionClass: 'GENERIC_PRIOR', foodFamilyFallback: 'universal', moistureLossFraction: 0.15 } },
-  { label: 'Deep Fried (Fritters, snacks)', method: 'deep_fried', yieldMultiplier: 0.80, yieldPrior: { assumptionClass: 'GENERIC_PRIOR', foodFamilyFallback: 'universal', moistureLossFraction: 0.30, oilAbsorptionFraction: 0.10 } },
+  // Owner QA 2026-10: deep-fried dishes no longer add phantom oil on top of
+  // the oil the user already counted — estimateOilAbsorption (oil.ts) charges
+  // the absorbed SUBSET of the used oil instead.
+  { label: 'Deep Fried (Fritters, snacks)', method: 'deep_fried', yieldMultiplier: 0.80, yieldPrior: { assumptionClass: 'GENERIC_PRIOR', foodFamilyFallback: 'universal', moistureLossFraction: 0.30 } },
   { label: 'Dry Roasted / Tandoor', method: 'roasted', yieldMultiplier: 0.75, yieldPrior: { assumptionClass: 'GENERIC_PRIOR', foodFamilyFallback: 'universal', moistureLossFraction: 0.25 } },
   { label: 'Boiled / Steamed', method: 'boiled', yieldMultiplier: 1.05, yieldPrior: { assumptionClass: 'GENERIC_PRIOR', foodFamilyFallback: 'universal', waterYieldModifier: 1.05 } },
 ]
@@ -98,6 +101,11 @@ export interface UnknownDishNutritionResult {
   serving: NutrientRow100g
   isEstimate: true
   assumptions: string[]
+  /**
+   * Owner QA 2026-10: used-vs-absorbed pan oil, present when the decomposition
+   * is deep-fried with an explicit fat — nutrition charges the absorbed mid.
+   */
+  oilSemantics: OilAbsorptionEstimate | null
   /**
    * Per-ingredient contribution to the REQUESTED PORTION (grams as entered;
    * kcal/macros scaled by portion/cookedYield so the breakdown sums to the
@@ -148,18 +156,21 @@ async function fetchNutrientRow(
 /**
  * The single cooked-yield model shared by the decomposer and the dish
  * composer: water-adding methods scale the pot UP, moisture-loss methods
- * shrink it, deep frying absorbs extra oil beyond what the user explicitly
- * counted. One model, two UIs, zero drift.
+ * shrink it. One model, two UIs, zero drift.
+ *
+ * Owner QA 2026-10: this model USED to add "absorbed oil beyond what the user
+ * counted" to the yield while nutrition charged the full used oil — a
+ * double-charging contradiction. Oil absorption now lives in ONE place
+ * (estimateOilAbsorption, oil.ts): the used fat is part of the pan batch for
+ * yield purposes, and only its absorbed subset is charged as eaten.
  */
 export function resolveCookedYieldGrams(
   rawMassGrams: number,
-  explicitFatGrams: number,
   method: UnknownDishDecompositionInput['cookingMethod'],
-): { cookedYieldGrams: number; absorbedOilGrams: number } {
+): { cookedYieldGrams: number } {
   const methodOpt = COOKING_METHOD_OPTIONS.find((m) => m.method === method)
   const prior = methodOpt?.yieldPrior
   let cookedYieldGrams = rawMassGrams
-  let absorbedOilGrams = 0
 
   if (prior?.waterYieldModifier) {
     cookedYieldGrams = rawMassGrams * prior.waterYieldModifier
@@ -167,15 +178,7 @@ export function resolveCookedYieldGrams(
     cookedYieldGrams = rawMassGrams * (1 - prior.moistureLossFraction)
   }
 
-  if (prior?.oilAbsorptionFraction) {
-    const absorbedOil = rawMassGrams * prior.oilAbsorptionFraction
-    if (absorbedOil > explicitFatGrams) {
-      absorbedOilGrams = absorbedOil - explicitFatGrams
-      cookedYieldGrams += absorbedOilGrams
-    }
-  }
-
-  return { cookedYieldGrams, absorbedOilGrams }
+  return { cookedYieldGrams }
 }
 
 /**
@@ -209,22 +212,29 @@ export async function computeUnknownDishNutrition(
   const rawMassGrams = ingredients.reduce((sum, ing) => sum + ing.grams, 0)
   if (rawMassGrams <= 0) throw new Error('Ingredient mass must be positive')
 
+  // Owner QA 2026-10 oil semantics: for deep-fried decompositions the user's
+  // fat is "oil in the pan", not "oil eaten" — only the absorbed subset is
+  // charged. One model everywhere: estimateOilAbsorption (oil.ts).
+  const oilAbsorption = estimateOilAbsorption({
+    usedGrams: explicitFatGrams,
+    rawFoodGrams: Math.max(rawMassGrams - explicitFatGrams, 0),
+    frying: input.cookingMethod === 'deep_fried' && explicitFatGrams > 0,
+  })
+
   let cookedYieldGrams: number
-  let absorbedOilGrams: number
   if (input.customYieldMultiplier) {
     cookedYieldGrams = rawMassGrams * input.customYieldMultiplier
-    absorbedOilGrams = 0
   } else {
-    const yieldModel = resolveCookedYieldGrams(rawMassGrams, explicitFatGrams, input.cookingMethod)
-    cookedYieldGrams = yieldModel.cookedYieldGrams
-    absorbedOilGrams = yieldModel.absorbedOilGrams
+    cookedYieldGrams = resolveCookedYieldGrams(rawMassGrams, input.cookingMethod).cookedYieldGrams
   }
-  if (absorbedOilGrams > 0) {
-    const oilId = input.fatId || 'ifct:T012'
-    addIngredient(oilId, absorbedOilGrams)
-    const existing = ingredients.find((i) => i.foodId === oilId)
-    if (existing) existing.grams += absorbedOilGrams
-    else ingredients.push({ foodId: oilId, grams: absorbedOilGrams, row: null })
+
+  // The oil ingredient's EFFECTIVE grams are the absorbed subset — the rest
+  // of the poured oil stays in the kadhai and is not eaten. The pan batch
+  // (and therefore the yield) is unchanged.
+  if (oilAbsorption.frying && oilAbsorption.absorbedMid < explicitFatGrams) {
+    const factor = oilAbsorption.absorbedMid / explicitFatGrams
+    const oilEntry = ingredients.find((i) => i.foodId === input.fatId)
+    if (oilEntry) oilEntry.grams *= factor
   }
 
   const portionGrams = input.portionGrams ?? (cookedYieldGrams > 0 ? cookedYieldGrams : 100)
@@ -295,6 +305,13 @@ export async function computeUnknownDishNutrition(
     }
   })
 
+  const assumptions = ['Nutrition is estimated from the ingredients and cooking method you selected.']
+  if (oilAbsorption.frying) {
+    assumptions.push(
+      `Oil in the pan: ${roundGrams(oilAbsorption.usedGrams)} g — an estimated ${roundGrams(oilAbsorption.absorbedLow)}–${roundGrams(oilAbsorption.absorbedHigh)} g is absorbed by the food (medium confidence); the rest stays in the kadhai and is not counted as eaten.`,
+    )
+  }
+
   return {
     dishName: input.dishName,
     rawMassGrams,
@@ -303,7 +320,8 @@ export async function computeUnknownDishNutrition(
     per100g,
     serving,
     isEstimate: true,
-    assumptions: ['Nutrition is estimated from the ingredients and cooking method you selected.'],
+    assumptions,
+    oilSemantics: oilAbsorption.frying ? oilAbsorption : null,
     ingredientBreakdown,
   }
 }

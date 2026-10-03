@@ -58958,8 +58958,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.1,
-       0.16
+       0.03,
+       0.06
       ],
       "verified": true
      },
@@ -58971,8 +58971,8 @@
       "canonicalFoodId": "ifct:T012",
       "mappingStatus": "AUTO_MAPPED",
       "mappedName": "Sunflower oil",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Samosa, Kachori, Bhel Puri); id verified against the shipped corpus."
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Griddle-shallow-fried — a tikki takes a spoon or two of oil, not the family deep-fry pour. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -59171,8 +59171,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.1,
-       0.16
+       0.04,
+       0.08
       ],
       "verified": true
      },
@@ -59184,8 +59184,8 @@
       "canonicalFoodId": "ifct:T012",
       "mappingStatus": "AUTO_MAPPED",
       "mappedName": "Sunflower oil",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Samosa, Kachori, Bhel Puri); id verified against the shipped corpus."
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Shallow-fried tikki pieces. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {

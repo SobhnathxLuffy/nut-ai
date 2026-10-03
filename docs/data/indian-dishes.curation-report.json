@@ -1,302 +1,15 @@
 {
-  "generatedAt": "2026-10-03T15:09:16.164Z",
-  "draftsBefore": 9,
-  "graduated": 9,
+  "generatedAt": "2026-10-03T15:38:04.275Z",
+  "draftsBefore": 2,
+  "graduated": 2,
   "stayedDraft": [],
   "nameDerivedSlots": 0,
-  "overrideSlots": 22,
-  "familyDefaultSlots": 14,
+  "overrideSlots": 9,
+  "familyDefaultSlots": 0,
   "perFamily": {
-    "batter_or_breakfast": 1,
-    "vegetable_preparation": 4,
-    "protein_preparation": 1,
-    "street_snack": 3
+    "street_snack": 2
   },
   "dishes": [
-    {
-      "id": "dish:in:moong-dal-chilla",
-      "name": "Moong Dal Chilla",
-      "family": "batter_or_breakfast",
-      "yield": 0.85,
-      "portion": 120,
-      "slots": [
-        {
-          "label": "grain_or_semolina",
-          "foodId": "ifct:B010",
-          "food": "Green gram, dal (Vigna radiata)",
-          "range": [
-            0.5,
-            0.6
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "water",
-          "foodId": "usda:174158",
-          "food": "Water, bottled, generic",
-          "range": [
-            0.4,
-            0.6
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "added_fat_optional",
-          "foodId": "ifct:T013",
-          "food": "Ghee",
-          "range": [
-            0.03,
-            0.07
-          ],
-          "method": "family_prior"
-        }
-      ]
-    },
-    {
-      "id": "dish:in:aloo-matar",
-      "name": "Aloo Matar",
-      "family": "vegetable_preparation",
-      "yield": 0.88,
-      "portion": 150,
-      "slots": [
-        {
-          "label": "primary_vegetable",
-          "foodId": "ifct:F006",
-          "food": "Potato, brown skin, big (Solanum tuberosum)",
-          "range": [
-            0.4,
-            0.55
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "aromatics",
-          "foodId": "ifct:G017",
-          "food": "Onion, big (Allium cepa)",
-          "range": [
-            0.1,
-            0.18
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "added_fat",
-          "foodId": "ifct:T012",
-          "food": "Sunflower oil",
-          "range": [
-            0.05,
-            0.1
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "gravy_base_optional",
-          "foodId": "ifct:D075",
-          "food": "Tomato, ripe, hybrid (Solanum lycopersicum)",
-          "range": [
-            0.15,
-            0.3
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "secondary_vegetable",
-          "foodId": "ifct:D061",
-          "food": "Peas, fresh (Pisum sativum)",
-          "range": [
-            0.2,
-            0.3
-          ],
-          "method": "reviewed_dish_override"
-        }
-      ]
-    },
-    {
-      "id": "dish:in:corn-masala",
-      "name": "Corn Masala",
-      "family": "vegetable_preparation",
-      "yield": 0.88,
-      "portion": 150,
-      "slots": [
-        {
-          "label": "primary_vegetable",
-          "foodId": "usda:169998",
-          "food": "Corn, sweet, yellow, raw",
-          "range": [
-            0.5,
-            0.65
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "aromatics",
-          "foodId": "ifct:G017",
-          "food": "Onion, big (Allium cepa)",
-          "range": [
-            0.1,
-            0.18
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "added_fat",
-          "foodId": "ifct:T012",
-          "food": "Sunflower oil",
-          "range": [
-            0.05,
-            0.1
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "gravy_base_optional",
-          "foodId": "ifct:D075",
-          "food": "Tomato, ripe, hybrid (Solanum lycopersicum)",
-          "range": [
-            0.15,
-            0.3
-          ],
-          "method": "family_prior"
-        }
-      ]
-    },
-    {
-      "id": "dish:in:sev-tameta",
-      "name": "Sev Tameta",
-      "family": "vegetable_preparation",
-      "yield": 0.88,
-      "portion": 150,
-      "slots": [
-        {
-          "label": "primary_vegetable",
-          "foodId": "ifct:D075",
-          "food": "Tomato, ripe, hybrid (Solanum lycopersicum)",
-          "range": [
-            0.7,
-            0.85
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "aromatics",
-          "foodId": "ifct:G017",
-          "food": "Onion, big (Allium cepa)",
-          "range": [
-            0.1,
-            0.18
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "added_fat",
-          "foodId": "ifct:T012",
-          "food": "Sunflower oil",
-          "range": [
-            0.05,
-            0.1
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "crunch_topping_optional",
-          "foodId": "ifct:B001",
-          "food": "Bengal gram, dal (Cicer arietinum)",
-          "range": [
-            0.05,
-            0.1
-          ],
-          "method": "reviewed_dish_override"
-        }
-      ]
-    },
-    {
-      "id": "dish:in:tomato-chokha",
-      "name": "Tomato Chokha",
-      "family": "vegetable_preparation",
-      "yield": 0.88,
-      "portion": 150,
-      "slots": [
-        {
-          "label": "primary_vegetable",
-          "foodId": "ifct:D075",
-          "food": "Tomato, ripe, hybrid (Solanum lycopersicum)",
-          "range": [
-            0.75,
-            0.9
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "aromatics",
-          "foodId": "ifct:G017",
-          "food": "Onion, big (Allium cepa)",
-          "range": [
-            0.1,
-            0.18
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "added_fat",
-          "foodId": "ifct:T012",
-          "food": "Sunflower oil",
-          "range": [
-            0.05,
-            0.1
-          ],
-          "method": "family_prior"
-        }
-      ]
-    },
-    {
-      "id": "dish:in:mutton-keema",
-      "name": "Mutton Keema",
-      "family": "protein_preparation",
-      "yield": 0.88,
-      "portion": 180,
-      "slots": [
-        {
-          "label": "animal_protein",
-          "foodId": "ifct:O001",
-          "food": "Goat, shoulder",
-          "range": [
-            0.4,
-            0.5
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "aromatics_or_gravy",
-          "foodId": "ifct:G017",
-          "food": "Onion, big (Allium cepa)",
-          "range": [
-            0.25,
-            0.35
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "added_fat",
-          "foodId": "ifct:T012",
-          "food": "Sunflower oil",
-          "range": [
-            0.05,
-            0.1
-          ],
-          "method": "family_prior"
-        },
-        {
-          "label": "dairy_or_coconut_optional",
-          "foodId": "usda:174158",
-          "food": "Water, bottled, generic",
-          "range": [
-            0.1,
-            0.2
-          ],
-          "method": "family_prior"
-        }
-      ]
-    },
     {
       "id": "dish:in:aloo-tikki",
       "name": "Aloo Tikki",
@@ -319,10 +32,10 @@
           "foodId": "ifct:T012",
           "food": "Sunflower oil",
           "range": [
-            0.1,
-            0.16
+            0.03,
+            0.06
           ],
-          "method": "family_prior"
+          "method": "reviewed_dish_override"
         },
         {
           "label": "condiments_optional",
@@ -368,10 +81,10 @@
           "foodId": "ifct:T012",
           "food": "Sunflower oil",
           "range": [
-            0.1,
-            0.16
+            0.04,
+            0.08
           ],
-          "method": "family_prior"
+          "method": "reviewed_dish_override"
         },
         {
           "label": "condiments_optional",
@@ -400,55 +113,6 @@
           "range": [
             0.03,
             0.07
-          ],
-          "method": "reviewed_dish_override"
-        }
-      ]
-    },
-    {
-      "id": "dish:in:dahi-vada",
-      "name": "Dahi Vada",
-      "family": "street_snack",
-      "yield": 0.9,
-      "portion": 130,
-      "slots": [
-        {
-          "label": "starch_or_wrapper",
-          "foodId": "ifct:B003",
-          "food": "Black gram, dal (Phaseolus mungo)",
-          "range": [
-            0.4,
-            0.5
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "filling_or_topping",
-          "foodId": "usda:171284",
-          "food": "Yogurt, plain, whole milk",
-          "range": [
-            0.35,
-            0.5
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "added_fat_or_frying_oil",
-          "foodId": "ifct:T012",
-          "food": "Sunflower oil",
-          "range": [
-            0.1,
-            0.16
-          ],
-          "method": "reviewed_dish_override"
-        },
-        {
-          "label": "condiments_optional",
-          "foodId": "usda:173468",
-          "food": "Salt, table",
-          "range": [
-            0.005,
-            0.012
           ],
           "method": "reviewed_dish_override"
         }

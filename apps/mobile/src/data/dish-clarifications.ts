@@ -49,6 +49,7 @@
  */
 
 import { applyClarifications, generateClarifications, isFatSlot, type ClarificationQuestion } from '@nutai/indian-dishes'
+import { dishIsFried } from '@nutai/recipe-engine'
 import type { DishDefinition } from '@nutai/core-schema'
 import { dishIngredientBreakdown, type DishRowLike } from './dish-ingredients'
 
@@ -213,6 +214,30 @@ export function humanizeUnknownKey(key: string): string {
   return pretty.charAt(0).toUpperCase() + pretty.slice(1)
 }
 
+/**
+ * Does this dish row FRY? Adapter over the engine's dishIsFried: corpus rows
+ * carry `cooking_methods_json` (e.g. ["assemble_or_shape","cook_or_fry"])
+ * and the uncertainty model's own frying_oil_absorption unknown is the
+ * fallback. Drives the used-vs-absorbed oil semantics in the composer.
+ */
+export function rowIsFried(row: DishRowLike): boolean {
+  let methods: string[] | null = null
+  const raw = (row as { cooking_methods_json?: string | null }).cooking_methods_json
+  if (typeof raw === 'string' && raw.trim() !== '') {
+    try {
+      const parsed = JSON.parse(raw) as unknown
+      if (Array.isArray(parsed)) methods = parsed.filter((m): m is string => typeof m === 'string')
+    } catch {
+      methods = null
+    }
+  }
+  const model = dishUncertaintyModel(row)
+  return dishIsFried({
+    cooking: methods ? { methods } : null,
+    uncertaintyModel: model ?? undefined,
+  })
+}
+
 // Unknown keys that NAME the fat itself (type/identity), not its amount:
 // answering "which fat" resolves these. Keys about absorbed or measured
 // quantities stay open — the question does not answer them.
@@ -285,6 +310,13 @@ export interface DishPriorKcalRangeInput {
   kcalPer100gBySlot: Record<string, number | null | undefined>
   /** The portion the estimate is for (the composer's current portion input). */
   portionGrams: number
+  /**
+   * Owner QA 2026-10: on fried dishes the folded fat slot contributes its
+   * ABSORBED share (absorbedMid / used) — the same factor the composer's
+   * totals use — so the band is stated in eaten-kcal, not pan-kcal. The
+   * batch mass (and the yield denominator) stays on the used grams.
+   */
+  fatAbsorptionFactor?: number
 }
 
 /**
@@ -299,7 +331,7 @@ export interface DishPriorKcalRangeInput {
  * portion, any slot's kcal unknown, or a collapsed band (point priors — a
  * fake ±0 range is false precision, not honesty).
  */
-export function dishPriorKcalRange({ row, kcalPer100gBySlot, portionGrams }: DishPriorKcalRangeInput): { low: number; high: number } | null {
+export function dishPriorKcalRange({ row, kcalPer100gBySlot, portionGrams, fatAbsorptionFactor }: DishPriorKcalRangeInput): { low: number; high: number } | null {
   const base = dishIngredientBreakdown(row, true)
   if (base.verifiedNumericYield == null || base.standardPortionGrams == null) return null
   if (!(portionGrams > 0)) return null
@@ -309,11 +341,16 @@ export function dishPriorKcalRange({ row, kcalPer100gBySlot, portionGrams }: Dis
     let kcal = 0
     let rawMass = 0
     for (const line of bd.lines) {
+      // The batch mass keeps the used fat (the yield denominator is the pan
+      // batch); the fat slot's ENERGY uses its absorbed share on fried dishes.
       rawMass += line.grams
       if (line.grams <= 0) continue
       const kcal100 = kcalPer100gBySlot[line.label]
       if (kcal100 == null || !Number.isFinite(kcal100)) return null
-      kcal += (kcal100 * line.grams) / 100
+      const effective = line.foldedIntoFat && fatAbsorptionFactor != null
+        ? line.grams * fatAbsorptionFactor
+        : line.grams
+      kcal += (kcal100 * effective) / 100
     }
     const cookedYield = rawMass * base.verifiedNumericYield!
     if (!(cookedYield > 0)) return null

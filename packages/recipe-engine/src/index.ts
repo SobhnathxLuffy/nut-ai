@@ -1,3 +1,7 @@
+import { estimateOilAbsorption } from './oil.js'
+
+export * from './oil.js'
+
 export interface RecipeIngredient {
   readonly foodId: string
   readonly gramWeight: number
@@ -87,10 +91,21 @@ export function computeRecipeServing(version: RecipeVersion): ResolvedRecipeServ
     if (ing.sodiumMg === null) known.sodium = false; else sumSodium += ing.sodiumMg * factor
   }
 
-  // Add oil nutrients
-  if (version.addedOilG > 0) {
-    sumEnergy += version.addedOilG * OIL_KCAL_PER_G
-    sumFat += version.addedOilG
+  // Add oil nutrients. Owner QA 2026-10 oil semantics: `preparation: 'fried'`
+  // means the oil was poured into a pan and only part of it stays with the
+  // food — charge the ABSORBED subset (one shared model, estimateOilAbsorption
+  // in oil.ts), not the full pour. Boiled/roasted/raw preparations consume
+  // their fat (tadka, dressing, ghee finish) and stay at 100%.
+  const ingredientMassG = version.ingredients.reduce((sum, ing) => sum + ing.gramWeight, 0)
+  const oilAbsorption = estimateOilAbsorption({
+    usedGrams: version.addedOilG,
+    rawFoodGrams: ingredientMassG,
+    frying: version.preparation === 'fried',
+  })
+  const effectiveOilG = oilAbsorption.frying ? oilAbsorption.absorbedMid : version.addedOilG
+  if (effectiveOilG > 0) {
+    sumEnergy += effectiveOilG * OIL_KCAL_PER_G
+    sumFat += effectiveOilG
   }
 
   const totalYield = version.finalCookedWeightG

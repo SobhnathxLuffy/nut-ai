@@ -91,7 +91,10 @@ describe('computeRecipeServing', () => {
     }
     const version: RecipeVersion = {
       preparation: 'fried',
-      addedOilG: 15, // 15*9.02 = 135.3
+      // Owner QA 2026-10 oil semantics: fried preparations absorb only part
+      // of the poured oil — 15 g in the pan → 7.5 g absorbed (mid of 35–65%,
+      // far under the 28%-of-food ceiling) → 7.5 * 9.02 = 67.65 kcal.
+      addedOilG: 15,
       addedWaterG: 0,
       finalCookedWeightG: 350, // lost 50g moisture
       servings: 2,
@@ -99,9 +102,33 @@ describe('computeRecipeServing', () => {
     }
     const res = computeRecipeServing(version)
     expect(res.servingSizeG).toBe(175)
-    // 154 + 50 + 135.3 = 339.3 total kcal
-    // per serving = 169.65
-    expect(res.energyKcal).toBeCloseTo(169.65, 1)
+    // 154 + 50 + 67.65 = 271.65 total kcal
+    // per serving = 135.825
+    expect(res.energyKcal).toBeCloseTo(135.83, 1)
+  })
+
+  it('fried preparation charges the absorbed oil subset, not the full pour (owner QA 2026-10)', () => {
+    const potato: RecipeIngredient = {
+      foodId: 'potato', gramWeight: 1000, energyKcal: 77, // per 100g, total 770
+      proteinG: 2, fatG: 0.1, carbG: 17, fiberG: 2.2, sugarG: 0.8, sodiumMg: 6
+    }
+    // 1000 g food + 14 g pan oil: absorbed range = 14 × 0.35–0.65 = 4.9–9.1 g
+    // (the owner's exact example), mid 7 g → 7 × 9.02 = 63.14 kcal from oil.
+    const fried = computeRecipeServing({
+      preparation: 'fried', addedOilG: 14, addedWaterG: 0, finalCookedWeightG: 900, servings: 2,
+      ingredients: [potato],
+    })
+    const base = computeRecipeServing({
+      preparation: 'boiled', addedOilG: 0, addedWaterG: 0, finalCookedWeightG: 900, servings: 2,
+      ingredients: [potato],
+    })
+    expect(fried.energyKcal! - base.energyKcal!).toBeCloseTo(63.14 / 2, 1)
+    // The same dish NOT fried consumes its tadka oil fully.
+    const boiled = computeRecipeServing({
+      preparation: 'boiled', addedOilG: 14, addedWaterG: 0, finalCookedWeightG: 900, servings: 2,
+      ingredients: [potato],
+    })
+    expect(boiled.energyKcal! - base.energyKcal!).toBeCloseTo((14 * 9.02) / 2, 1)
   })
 
   it('Given curry recipe fixture, math matches', () => {

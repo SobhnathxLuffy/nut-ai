@@ -26,11 +26,13 @@ import {
   dishPriorKcalRange,
   dishUncertaintyModel,
   humanizeUnknownKey,
+  rowIsFried,
   zeroedClarificationSlots,
   type ClarificationQuestion,
   type DishClarificationAnswer,
   type DishClarificationAnswers,
 } from '../src/data/dish-clarifications'
+import { estimateOilAbsorption, roundGrams } from '@nutai/recipe-engine'
 import { Badge } from '../src/components/Badge'
 import { Disclosure } from '../src/components/Disclosure'
 import { ChipRow } from '../src/components/ChipRow'
@@ -461,16 +463,27 @@ export default function DishComposerScreen() {
   }, [db, ifctDb, userDb, fatOptionId])
 
   const totalRawMass = components.reduce((s, c) => s + c.grams, 0) + fatG
+  // Owner QA 2026-10 oil semantics: the fat input is OIL IN THE PAN, not oil
+  // eaten. A fried dish (its own cook_or_fry/deep_fried methods, or the
+  // user's explicit Deep Fried method choice) absorbs only part of it —
+  // one shared model (estimateOilAbsorption) decides the charge everywhere.
+  const dishFried = cookingMethod === 'deep_fried' || (dishRow != null && rowIsFried(dishRow))
+  const oilAbsorption = estimateOilAbsorption({
+    usedGrams: fatG,
+    rawFoodGrams: Math.max(totalRawMass - fatG, 0),
+    frying: dishFried && fatG > 0,
+  })
+  const fatChargeGrams = oilAbsorption.frying ? oilAbsorption.absorbedMid : fatG
   // Same yield model the decomposer uses — water-adding methods scale the pot
-  // up, moisture-loss methods shrink it, deep frying absorbs extra oil. When
-  // the dish carries a verified recipe yield (curated records do), it governs
-  // instead so the composer reproduces the curated numbers exactly.
+  // up, moisture-loss methods shrink it. When the dish carries a verified
+  // recipe yield (curated records do), it governs instead so the composer
+  // reproduces the curated numbers exactly.
   const effectiveYieldMultiplier = useRecipeYield && recipeYield != null ? recipeYield : null
   const cookedYield = totalRawMass > 0
     ? (effectiveYieldMultiplier != null
         ? totalRawMass * effectiveYieldMultiplier
         // eslint-disable-next-line no-restricted-syntax -- cookingMethod arrives as free text and is funnelled through the yield engine's union
-        : resolveCookedYieldGrams(totalRawMass, fatG, cookingMethod as any).cookedYieldGrams)
+        : resolveCookedYieldGrams(totalRawMass, cookingMethod as any).cookedYieldGrams)
     : 0
 
   const portionG = parseFloat(portion) || 150
@@ -487,14 +500,16 @@ export default function DishComposerScreen() {
        totalF += (c.fat_g||0) * (c.grams/100)
      }
   }
-  // The cooking fat's nutrients are part of the dish. Previously the fat only
-  // added MASS here — its calories silently vanished from the total.
+  // The cooking fat's nutrients are part of the dish — at the ABSORBED share
+  // on fried dishes (the rest of the poured oil stays in the pan and is not
+  // counted as eaten). Previously the fat added mass here and its calories
+  // silently vanished from the total; now it is charged honestly.
   if (fatOption.foodId) {
     if (fatNutrients && fatNutrients.kcal != null) {
-      totalKcal += fatNutrients.kcal * (fatG / 100)
-      totalP += (fatNutrients.protein_g || 0) * (fatG / 100)
-      totalC += (fatNutrients.carbs_g || 0) * (fatG / 100)
-      totalF += (fatNutrients.fat_g || 0) * (fatG / 100)
+      totalKcal += fatNutrients.kcal * (fatChargeGrams / 100)
+      totalP += (fatNutrients.protein_g || 0) * (fatChargeGrams / 100)
+      totalC += (fatNutrients.carbs_g || 0) * (fatChargeGrams / 100)
+      totalF += (fatNutrients.fat_g || 0) * (fatChargeGrams / 100)
     } else {
       hasUnknowns = true
     }
@@ -521,7 +536,12 @@ export default function DishComposerScreen() {
     kcalBySlot[foldedSlotLine.label] = fatNutrients?.kcal ?? null
   }
   const priorBand = !compositionEdited && !hasUnknowns && useRecipeYield && recipeYield != null && clarifiedRow != null && hasUncertaintyModel
-    ? dishPriorKcalRange({ row: clarifiedRow, kcalPer100gBySlot: kcalBySlot, portionGrams: portionG })
+    ? dishPriorKcalRange({
+        row: clarifiedRow,
+        kcalPer100gBySlot: kcalBySlot,
+        portionGrams: portionG,
+        fatAbsorptionFactor: oilAbsorption.frying && fatG > 0 ? oilAbsorption.absorbedMid / fatG : undefined,
+      })
     : null
 
     const logDish = async () => {
@@ -715,9 +735,14 @@ export default function DishComposerScreen() {
       />
       {fatOption.foodId ? (
         <View style={[s.row, { borderColor: t.border }]}>
-          <Text style={[type.body, { color: t.text, flex: 1 }]}>Fat used (g)</Text>
-          <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={fatGrams} onChangeText={(text) => { setFatGrams(text); setCompositionEdited(true) }} keyboardType="numeric" accessibilityLabel="Grams of cooking fat" />
+          <Text style={[type.body, { color: t.text, flex: 1 }]}>Oil in the pan (g)</Text>
+          <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={fatGrams} onChangeText={(text) => { setFatGrams(text); setCompositionEdited(true) }} keyboardType="numeric" accessibilityLabel="Grams of oil in the pan" />
         </View>
+      ) : null}
+      {fatOption.foodId && oilAbsorption.frying ? (
+        <Text style={[type.caption, { color: t.textMuted, marginHorizontal: space.md, marginTop: space.xs, lineHeight: 18 }]}>
+          Estimated absorbed by the food: {roundGrams(oilAbsorption.absorbedLow)}–{roundGrams(oilAbsorption.absorbedHigh)} g (medium confidence) — nutrition counts the absorbed share, not the full pour.
+        </Text>
       ) : null}
 
       <Text style={[type.caption, { color: t.text, fontWeight: '600', marginHorizontal: space.md }]}>Cooking Method & Yield</Text>
@@ -795,6 +820,11 @@ export default function DishComposerScreen() {
               </Text>
             ) : null}
             <Text style={[type.caption, { color: t.textMuted }]}>P: {Math.round(portionP||0)}g · C: {Math.round(portionC||0)}g · F: {Math.round(portionF||0)}g</Text>
+            {oilAbsorption.frying && fatG > 0 ? (
+              <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>
+                Oil: {fatG} g in the pan → ~{roundGrams(oilAbsorption.absorbedMid)} g absorbed (medium confidence)
+              </Text>
+            ) : null}
             <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>Raw {Math.round(totalRawMass)}g → cooked yield {Math.round(cookedYield)}g</Text>
           </View>
         )}

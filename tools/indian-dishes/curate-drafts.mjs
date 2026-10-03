@@ -478,8 +478,8 @@ const OVERRIDES = {
   'Onion Pakora': { portion: 100, slots: { starch_or_wrapper: { foodId: BESAN, range: [0.3, 0.4] }, filling_or_topping: { foodId: ONION, range: [0.35, 0.45] } } },
   'Paneer Pakora': { portion: 100, slots: { starch_or_wrapper: { foodId: BESAN, range: [0.3, 0.4] }, filling_or_topping: { foodId: PANEER, range: [0.3, 0.4] } } },
   'Bread Pakora': { portion: 120, slots: { starch_or_wrapper: { foodId: BREAD, range: [0.35, 0.45], note: 'Sandwich bread slices, battered and fried.' }, filling_or_topping: { foodId: POTATO, range: [0.3, 0.4] } } },
-  'Aloo Tikki': { portion: 120, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.62, 0.72], note: 'The tikki patty is potato.' }, condiments_optional: { foodId: SALT, range: [0.005, 0.012], note: 'Salt and spice mix in the patty.' } }, removeSlots: ['filling_or_topping'], appendSlots: [{ label: 'binding_or_batter', role: 'binding', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan binder — a real tikki binds with roasted gram flour; the street_snack family prior invented a potato filling inside a potato patty.' }] },
-  'Aloo Tikki Chaat': { portion: 150, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.62, 0.72], note: 'Potato patty plus the aloo chunks scattered over the chaat.' }, condiments_optional: { foodId: YOGURT, range: [0.2, 0.32], note: 'Dahi-smothered chaat.' } }, removeSlots: ['filling_or_topping'], appendSlots: [{ label: 'binding_or_batter', role: 'binding', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan binder in the tikki plus the besan-sev sprinkle.' }, { label: 'sauce_or_chutney_optional', role: 'secondary', required: false, foodId: TAMARIND, range: [0.03, 0.07], note: 'Tamarind chutney drizzle.' }] },
+  'Aloo Tikki': { portion: 120, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.62, 0.72], note: 'The tikki patty is potato.' }, added_fat_or_frying_oil: { foodId: OIL, range: [0.03, 0.06], note: 'Griddle-shallow-fried — a tikki takes a spoon or two of oil, not the family deep-fry pour.' }, condiments_optional: { foodId: SALT, range: [0.005, 0.012], note: 'Salt and spice mix in the patty.' } }, removeSlots: ['filling_or_topping'], appendSlots: [{ label: 'binding_or_batter', role: 'binding', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan binder — a real tikki binds with roasted gram flour; the street_snack family prior invented a potato filling inside a potato patty.' }] },
+  'Aloo Tikki Chaat': { portion: 150, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.62, 0.72], note: 'Potato patty plus the aloo chunks scattered over the chaat.' }, added_fat_or_frying_oil: { foodId: OIL, range: [0.04, 0.08], note: 'Shallow-fried tikki pieces.' }, condiments_optional: { foodId: YOGURT, range: [0.2, 0.32], note: 'Dahi-smothered chaat.' } }, removeSlots: ['filling_or_topping'], appendSlots: [{ label: 'binding_or_batter', role: 'binding', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan binder in the tikki plus the besan-sev sprinkle.' }, { label: 'sauce_or_chutney_optional', role: 'secondary', required: false, foodId: TAMARIND, range: [0.03, 0.07], note: 'Tamarind chutney drizzle.' }] },
   'Papdi Chaat': { portion: 150, slots: { filling_or_topping: { foodId: POTATO, range: [0.2, 0.3] }, condiments_optional: { foodId: TAMARIND, range: [0.12, 0.2], note: 'Chutney-dressed.' } } },
   'Dahi Papdi Chaat': { portion: 170, slots: { filling_or_topping: { foodId: YOGURT, range: [0.3, 0.42], note: 'Yogurt is the dominant topping.' }, condiments_optional: { foodId: TAMARIND, range: [0.1, 0.18] } } },
   'Dahi Vada': { portion: 130, slots: { starch_or_wrapper: { foodId: URAD, range: [0.4, 0.5], note: 'Urad dal vada.' }, filling_or_topping: { foodId: YOGURT, range: [0.35, 0.5], note: 'Yogurt is the dominant topping.' }, added_fat_or_frying_oil: { foodId: OIL, range: [0.1, 0.16] }, condiments_optional: { foodId: SALT, range: [0.005, 0.012], note: 'Salt and roasted-cumin spice over the dahi — the garnish is not a second yogurt serving.' } } },
@@ -893,12 +893,18 @@ async function main() {
         continue
       }
       let replaced = []
+      const replacedLabels = new Set()
       for (const slot of existingSlots) {
+        // A previous graduation run may have appended the same label twice
+        // (pre-idempotency data) — keep the first, drop the rest, so the
+        // duplicate-slot audit can never inherit a stale duplicate.
+        if (replacedLabels.has(slot.label)) continue
         // Reviewed removals: a seed slot a specific dish genuinely does not
         // have (e.g. street_snack's potato filling on a besan-bound tikki)
         // must be droppable, not just re-mappable — otherwise the family
         // prior keeps inventing ingredients the dish never contained.
         if (override.removeSlots?.includes(slot.label)) continue
+        replacedLabels.add(slot.label)
         const familyDefault = familyModel.slots.find((s) => s.label === slot.label)
         const patch = override.slots?.[slot.label]
         if (patch?.foodId) {
@@ -949,6 +955,23 @@ async function main() {
           })
           continue
         }
+        // Idempotent re-graduation: a slot this override previously APPENDED
+        // (binding_or_batter, crunch_topping_optional, …) has no family
+        // default — resolve it from the override's appendSlots so a second
+        // --regraduate run reproduces the same record instead of crashing.
+        const appended = (override.appendSlots ?? []).find((a) => a.label === slot.label)
+        if (appended) {
+          replaced.push({
+            label: appended.label,
+            role: appended.role ?? 'secondary',
+            required: appended.required ?? false,
+            foodId: appended.foodId,
+            range: appended.range,
+            note: appended.note ?? null,
+            method: 'reviewed_dish_override',
+          })
+          continue
+        }
         // No override, no claim, no family default for this label.
         replaced.push({ label: slot.label, role: slot.role, required: slot.required, foodId: null })
       }
@@ -957,7 +980,12 @@ async function main() {
       // tameta) — appended as its own reviewed slot instead of silently
       // folded into a neighbor. Mirrors map-ingredients.mjs's append path for
       // the 50 priority dishes, now available to every graduation override.
+      // Labels already present in the slot set (a previous graduation's
+      // append, resolved idempotently above) are NOT appended twice.
+      const presentLabels = new Set(replaced.map((s) => s.label))
       for (const extra of override.appendSlots ?? []) {
+        if (presentLabels.has(extra.label)) continue
+        presentLabels.add(extra.label)
         replaced.push({
           label: extra.label,
           role: extra.role ?? 'secondary',

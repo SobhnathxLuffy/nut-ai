@@ -101,6 +101,11 @@ async function main() {
   // restored by scripts/add-missing-fillings.mjs (the missing fillings:
   // Gobi/Paneer/Mooli/Methi/Sattu Paratha, Onion Rava Dosa, Onion Uttapam)
   // = 1451.
+  // Owner QA 2026-10: net UNCHANGED at 1451 — 4 reviewed appendSlots (Aloo
+  // Tikki's besan binder; Aloo Tikki Chaat's besan binder + tamarind chutney;
+  // Sev Tameta's besan-sev topping; Aloo Matar's peas slot) and 4 reviewed
+  // removals (the tikkis' bogus potato filling, Sev Tameta's and Tomato
+  // Chokha's double-served tomato gravy slots).
   if (slots !== 1_451) errors.push(`expected 1451 ingredient slots, found ${slots}`)
 
   // P0-6: the BUNDLED artifact must actually contain the dish KB this file

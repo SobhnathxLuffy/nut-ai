@@ -25,7 +25,7 @@
     "check:e2e": "npm run build:web && npm run test:e2e",
     "check": "npm run lint && npm run typecheck && npm run test && npm run check:node-purity && npm run check:contrast && npm run data:verify && npm run ifct:verify && npm run indian-dishes:verify && npm run indian-dishes:verify-mappings && node scripts/audit-ingredient-density.mjs && node scripts/audit-filling-slots.mjs && node scripts/audit-duplicate-slots.mjs && node scripts/verify-composer-equivalence.mjs",
     "data:build": "node tools/nutrition-data/src/build.mjs && node tools/indian-dishes/build-sqlite.mjs && node tools/indian-dishes/curate-drafts.mjs && node tools/indian-dishes/build-sqlite.mjs",
-    "build:tools-pkgs": "npm --workspace @nutai/core-schema run build && npm --workspace @nutai/db-adapter run build && npm --workspace @nutai/indian-dishes run build",
+    "build:tools-pkgs": "npm --workspace @nutai/core-schema run build && npm --workspace @nutai/db-adapter run build && npm --workspace @nutai/recipe-engine run build && npm --workspace @nutai/indian-dishes run build",
     "data:verify": "node tools/nutrition-data/src/golden-queries.mjs",
     "ifct:build": "npm --workspace @nutai/ifct-import run build",
     "ifct:extract": "npm --workspace @nutai/ifct-import run extract",
