@@ -337,7 +337,7 @@ const OVERRIDES = {
   'Kadala Puttu': { portion: 100 },
   'Kuzhi Paniyaram': { portion: 100, yield: 0.9 },
   'Sabudana Vada': { portion: 80, yield: 0.85, slots: { grain_or_semolina: { foodId: TAPIOCA_PEARL, range: [0.45, 0.55] }, pulse_optional: { foodId: GROUNDNUT, range: [0.15, 0.25] }, water: { range: [0.1, 0.2] }, added_fat_optional: { foodId: OIL, range: [0.1, 0.16] } } },
-  'Moong Dal Chilla': { portion: 120, yield: 0.85, slots: { grain_or_semolina: { foodId: MOONG, range: [0.5, 0.6], note: 'Moong dal is the batter base of this chilla.' }, water: { range: [0.3, 0.45] } } },
+  'Moong Dal Chilla': { portion: 120, yield: 0.85, slots: { grain_or_semolina: { foodId: MOONG, range: [0.5, 0.6], note: 'Moong dal is the batter base of this chilla.' }, water: { range: [0.3, 0.45] } }, removeSlots: ['pulse_optional'] },
   'Besan Chilla': { portion: 120, yield: 0.85, slots: { grain_or_semolina: { foodId: BESAN, range: [0.45, 0.55] }, water: { range: [0.3, 0.45] } } },
   'Paneer Chilla': { portion: 130, yield: 0.85, slots: { grain_or_semolina: { foodId: BESAN, range: [0.45, 0.55] }, water: { range: [0.3, 0.45] } } },
   Khaman: { portion: 100, yield: 1.1, slots: { grain_or_semolina: { foodId: BESAN, range: [0.4, 0.5] }, water: { range: [0.35, 0.5] } } },
@@ -387,14 +387,14 @@ const OVERRIDES = {
   'Malai Kofta': { portion: 180, slots: { primary_vegetable: { foodId: PANEER, range: [0.3, 0.4], note: 'Malai kofta dumplings are paneer-dominant.' } } },
   'Veg Kofta Curry': { portion: 180, slots: { primary_vegetable: { foodId: POTATO, range: [0.4, 0.55], note: 'Vegetable kofta dumplings are potato-dominant.' } } },
   'Kofta Curry': { portion: 180, slots: { primary_vegetable: { foodId: POTATO, range: [0.4, 0.55], note: 'Kofta dumplings are potato-dominant.' } } },
-  'Sev Tameta': { slots: { primary_vegetable: { foodId: TOMATO, range: [0.55, 0.7], note: 'Tameta (tomatoes) are the base; sev is a topping.' } } },
+  'Sev Tameta': { slots: { primary_vegetable: { foodId: TOMATO, range: [0.7, 0.85], note: 'Tameta (tomatoes) are the base AND the gravy — one tomato mass, not two servings.' } }, removeSlots: ['gravy_base_optional'], appendSlots: [{ label: 'crunch_topping_optional', role: 'secondary', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan sev is the namesake topping.' }] },
   'Ringna no Olo': { slots: { primary_vegetable: { foodId: 'ifct:D010', range: [0.65, 0.8], note: 'Ringna no olo is roasted brinjal mash.' } } },
   'Sarson ka Saag': { portion: 130, slots: { primary_vegetable: { foodId: MUSTARD_GREENS, range: [0.6, 0.75] }, added_fat: { foodId: MUSTARD_OIL, range: [0.04, 0.08], note: 'Saag finished with mustard oil or ghee.' } } },
   'Palak Saag': { portion: 130, slots: { primary_vegetable: { foodId: SPINACH, range: [0.6, 0.75] } } },
   'Bathua Saag': { portion: 130, slots: { primary_vegetable: { foodId: BATHUA, range: [0.6, 0.75] } } },
   'Chana Saag': { portion: 150, slots: { primary_vegetable: { foodId: SPINACH, range: [0.5, 0.65] }, aromatics: { foodId: CHANA_WHOLE, range: [0.15, 0.25], note: 'Chana saag carries chickpeas with the greens.' } } },
   'Palak Corn': { slots: { primary_vegetable: { foodId: SPINACH, range: [0.45, 0.6] }, aromatics: { foodId: SWEET_CORN, range: [0.2, 0.3], note: 'Sweet corn kernels carry the second vegetable.' } } },
-  'Corn Masala': { slots: { primary_vegetable: { foodId: SWEET_CORN, range: [0.5, 0.65] } } },
+  'Corn Masala': { slots: { primary_vegetable: { foodId: SWEET_CORN, range: [0.5, 0.65] }, aromatics: { foodId: ONION, range: [0.1, 0.18], note: 'Onion-ginger base — the corn is the vegetable, not its own aromatic.' } } },
   'Beans Poriyal': { portion: 120, slots: { primary_vegetable: { foodId: 'ifct:D049', range: [0.6, 0.75] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.08], note: 'Dry poriyal carries no gravy.' } } },
   'Cabbage Poriyal': { portion: 120, slots: { primary_vegetable: { foodId: CABBAGE, range: [0.6, 0.75] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.08], note: 'Dry poriyal carries no gravy.' } } },
   'Beetroot Poriyal': { portion: 120, slots: { primary_vegetable: { foodId: BEETROOT, range: [0.6, 0.75] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.08], note: 'Dry poriyal carries no gravy.' } } },
@@ -404,10 +404,11 @@ const OVERRIDES = {
   Undhiyu: { portion: 200, slots: { primary_vegetable: { foodId: MIXED_VEG, range: [0.5, 0.65] } } },
   'Aloo Chokha': { slots: { primary_vegetable: { foodId: POTATO, range: [0.7, 0.85] }, added_fat: { foodId: MUSTARD_OIL, range: [0.04, 0.08], note: 'Chokha is finished with mustard oil.' } } },
   'Baingan Chokha': { slots: { primary_vegetable: { foodId: 'ifct:D010', range: [0.7, 0.85] }, added_fat: { foodId: MUSTARD_OIL, range: [0.04, 0.08], note: 'Chokha is finished with mustard oil.' } } },
-  'Tomato Chokha': { slots: { primary_vegetable: { foodId: TOMATO, range: [0.65, 0.8] }, added_fat: { foodId: MUSTARD_OIL, range: [0.04, 0.08], note: 'Chokha is finished with mustard oil.' } } },
+  'Tomato Chokha': { slots: { primary_vegetable: { foodId: TOMATO, range: [0.75, 0.9], note: 'Roasted tomato mash — chokha is tomato throughout; the previous primary+gravy split double-served the same tomatoes.' } }, removeSlots: ['gravy_base_optional'], added_fat: { foodId: MUSTARD_OIL, range: [0.04, 0.08], note: 'Chokha is finished with mustard oil.' } },
   'Sukhi Aloo Sabzi': { slots: { primary_vegetable: { foodId: POTATO, range: [0.7, 0.85] }, gravy_base_optional: { foodId: WATER, range: [0.0, 0.06], note: 'Dry sabzi carries no gravy.' } } },
   'Lauki Chana Dal': { slots: { primary_vegetable: { foodId: 'ifct:D008', range: [0.4, 0.55] }, aromatics: { foodId: BESAN, range: [0.15, 0.25], note: 'Chana dal carries the pulse component.' } } },
   'Matar Mushroom': { slots: { primary_vegetable: { foodId: 'ifct:J001', range: [0.4, 0.55] }, aromatics: { foodId: 'ifct:D061', range: [0.15, 0.25], note: 'Peas carry the second vegetable.' } } },
+  'Aloo Matar': { slots: { primary_vegetable: { foodId: POTATO, range: [0.4, 0.55], note: 'Aloo — the potato half of the dish; the old name-claim left BOTH vegetable slots as peas.' }, aromatics: { foodId: ONION, range: [0.1, 0.18], note: 'Onion-ginger base.' } }, appendSlots: [{ label: 'secondary_vegetable', role: 'secondary', required: false, foodId: 'ifct:D061', range: [0.2, 0.3], note: 'Matar — green peas.' }] },
   'Gobi Matar': { slots: { aromatics: { foodId: 'ifct:D061', range: [0.15, 0.25], note: 'Peas carry the second vegetable.' } } },
   'Mushroom Do Pyaza': { slots: { primary_vegetable: { foodId: 'ifct:J001', range: [0.45, 0.6] } } },
   'Mushroom Masala': { slots: { primary_vegetable: { foodId: 'ifct:J001', range: [0.45, 0.6] } } },
@@ -445,7 +446,7 @@ const OVERRIDES = {
   'Champaran Mutton': { portion: 200, slots: { animal_protein: { foodId: GOAT } } },
   'Laal Maas': { portion: 180, slots: { animal_protein: { foodId: GOAT }, dairy_or_coconut_optional: { foodId: YOGURT, range: [0.1, 0.18], note: 'Laal maas gravy is yogurt based.' } } },
   'Keema Matar': { portion: 180, slots: { animal_protein: { foodId: GOAT, range: [0.4, 0.5], note: 'Minced goat meat (keema).' }, aromatics_or_gravy: { foodId: 'ifct:D061', range: [0.15, 0.25], note: 'Peas carry the secondary.' } } },
-  'Mutton Keema': { portion: 180, slots: { animal_protein: { foodId: GOAT, range: [0.4, 0.5], note: 'Minced goat meat (keema).' } } },
+  'Mutton Keema': { portion: 180, slots: { animal_protein: { foodId: GOAT, range: [0.4, 0.5], note: 'Minced goat meat (keema).' }, aromatics_or_gravy: { foodId: ONION, range: [0.25, 0.35], note: 'Keema bhunao is onion-dominant — the mince is the meat, not its own aromatic.' } } },
   Nihari: { portion: 250, yield: 1.4, slots: { animal_protein: { foodId: GOAT } } },
   Haleem: { portion: 250, yield: 1.6, slots: { animal_protein: { foodId: GOAT, range: [0.3, 0.4] }, aromatics_or_gravy: { foodId: MOONG, range: [0.2, 0.3], note: 'Haleem is a dal-meat porridge; lentils carry the base.' } } },
   'Pork Vindaloo': { slots: { animal_protein: { foodId: PORK }, dairy_or_coconut_optional: { foodId: WATER, range: [0.05, 0.1], note: 'Vindaloo relies on vinegar-spice gravy, not dairy.' } } },
@@ -477,11 +478,11 @@ const OVERRIDES = {
   'Onion Pakora': { portion: 100, slots: { starch_or_wrapper: { foodId: BESAN, range: [0.3, 0.4] }, filling_or_topping: { foodId: ONION, range: [0.35, 0.45] } } },
   'Paneer Pakora': { portion: 100, slots: { starch_or_wrapper: { foodId: BESAN, range: [0.3, 0.4] }, filling_or_topping: { foodId: PANEER, range: [0.3, 0.4] } } },
   'Bread Pakora': { portion: 120, slots: { starch_or_wrapper: { foodId: BREAD, range: [0.35, 0.45], note: 'Sandwich bread slices, battered and fried.' }, filling_or_topping: { foodId: POTATO, range: [0.3, 0.4] } } },
-  'Aloo Tikki': { portion: 120, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.65, 0.75], note: 'The tikki patty is potato.' } } },
-  'Aloo Tikki Chaat': { portion: 150, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.55, 0.65] }, condiments_optional: { foodId: YOGURT, range: [0.2, 0.32], note: 'Dahi-smothered chaat.' } } },
+  'Aloo Tikki': { portion: 120, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.62, 0.72], note: 'The tikki patty is potato.' }, condiments_optional: { foodId: SALT, range: [0.005, 0.012], note: 'Salt and spice mix in the patty.' } }, removeSlots: ['filling_or_topping'], appendSlots: [{ label: 'binding_or_batter', role: 'binding', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan binder — a real tikki binds with roasted gram flour; the street_snack family prior invented a potato filling inside a potato patty.' }] },
+  'Aloo Tikki Chaat': { portion: 150, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.62, 0.72], note: 'Potato patty plus the aloo chunks scattered over the chaat.' }, condiments_optional: { foodId: YOGURT, range: [0.2, 0.32], note: 'Dahi-smothered chaat.' } }, removeSlots: ['filling_or_topping'], appendSlots: [{ label: 'binding_or_batter', role: 'binding', required: false, foodId: BESAN, range: [0.05, 0.1], note: 'Besan binder in the tikki plus the besan-sev sprinkle.' }, { label: 'sauce_or_chutney_optional', role: 'secondary', required: false, foodId: TAMARIND, range: [0.03, 0.07], note: 'Tamarind chutney drizzle.' }] },
   'Papdi Chaat': { portion: 150, slots: { filling_or_topping: { foodId: POTATO, range: [0.2, 0.3] }, condiments_optional: { foodId: TAMARIND, range: [0.12, 0.2], note: 'Chutney-dressed.' } } },
   'Dahi Papdi Chaat': { portion: 170, slots: { filling_or_topping: { foodId: YOGURT, range: [0.3, 0.42], note: 'Yogurt is the dominant topping.' }, condiments_optional: { foodId: TAMARIND, range: [0.1, 0.18] } } },
-  'Dahi Vada': { portion: 130, slots: { starch_or_wrapper: { foodId: URAD, range: [0.4, 0.5], note: 'Urad dal vada.' }, filling_or_topping: { foodId: YOGURT, range: [0.35, 0.5], note: 'Yogurt is the dominant topping.' }, added_fat_or_frying_oil: { foodId: OIL, range: [0.1, 0.16] } } },
+  'Dahi Vada': { portion: 130, slots: { starch_or_wrapper: { foodId: URAD, range: [0.4, 0.5], note: 'Urad dal vada.' }, filling_or_topping: { foodId: YOGURT, range: [0.35, 0.5], note: 'Yogurt is the dominant topping.' }, added_fat_or_frying_oil: { foodId: OIL, range: [0.1, 0.16] }, condiments_optional: { foodId: SALT, range: [0.005, 0.012], note: 'Salt and roasted-cumin spice over the dahi — the garnish is not a second yogurt serving.' } } },
   'Sev Puri': { portion: 150, slots: { condiments_optional: { foodId: TAMARIND, range: [0.1, 0.18] } } },
   'Dahi Puri': { portion: 150, slots: { filling_or_topping: { foodId: YOGURT, range: [0.25, 0.35] }, condiments_optional: { foodId: TAMARIND, range: [0.08, 0.15] } } },
   'Ragda Pattice': { portion: 200, slots: { starch_or_wrapper: { foodId: POTATO, range: [0.45, 0.55], note: 'The pattice is potato.' }, filling_or_topping: { foodId: PEAS_DRY, range: [0.35, 0.45], note: 'Ragda is dried-white-pea curry.' }, condiments_optional: { foodId: TAMARIND, range: [0.05, 0.1] } } },
@@ -784,6 +785,13 @@ function collectReferencedIds() {
 }
 
 async function main() {
+  // --regraduate="Name A,Name B" — re-run the graduation pass on named
+  // already-CURATED dishes (see the reset at the top of the walk below).
+  const regraduateArg = process.argv.find((a) => a.startsWith('--regraduate='))
+  const regraduateNames = new Set(
+    regraduateArg ? regraduateArg.slice('--regraduate='.length).split(',').map((s) => s.trim()).filter(Boolean) : [],
+  )
+
   const nutrition = openNodeDb(join(REPO, 'apps/mobile/assets/nutrition.db'), { readonly: true })
   const ifct = openNodeDb(join(REPO, 'apps/mobile/assets/ifct.db'), { readonly: true })
 
@@ -835,6 +843,16 @@ async function main() {
   }
 
   for (const dish of dishes) {
+    // --regraduate="Name A,Name B": reset named dishes to DRAFT_CURATED so a
+    // reviewed override change actually re-runs on already-graduated records.
+    // Without it the graduation pass (by design) only touches drafts, and a
+    // corrected override would ship to no dish. Names are matched exactly
+    // against canonicalName; the reset ONLY flips the status back — the
+    // graduation loop below rebuilds every slot from the family model,
+    // name claims and the (updated) OVERRIDES table.
+    if (regraduateNames.size > 0 && regraduateNames.has(dish.canonicalName)) {
+      dish.provenance.recordStatus = 'DRAFT_CURATED'
+    }
     if (dish.provenance?.recordStatus !== 'DRAFT_CURATED') continue
     report.draftsBefore += 1
 
@@ -876,6 +894,11 @@ async function main() {
       }
       let replaced = []
       for (const slot of existingSlots) {
+        // Reviewed removals: a seed slot a specific dish genuinely does not
+        // have (e.g. street_snack's potato filling on a besan-bound tikki)
+        // must be droppable, not just re-mappable — otherwise the family
+        // prior keeps inventing ingredients the dish never contained.
+        if (override.removeSlots?.includes(slot.label)) continue
         const familyDefault = familyModel.slots.find((s) => s.label === slot.label)
         const patch = override.slots?.[slot.label]
         if (patch?.foodId) {
@@ -928,6 +951,22 @@ async function main() {
         }
         // No override, no claim, no family default for this label.
         replaced.push({ label: slot.label, role: slot.role, required: slot.required, foodId: null })
+      }
+      // Reviewed appends: a key ingredient the seed template's slot vocabulary
+      // lacks (the besan binder in an aloo tikki, the besan-sev on sev
+      // tameta) — appended as its own reviewed slot instead of silently
+      // folded into a neighbor. Mirrors map-ingredients.mjs's append path for
+      // the 50 priority dishes, now available to every graduation override.
+      for (const extra of override.appendSlots ?? []) {
+        replaced.push({
+          label: extra.label,
+          role: extra.role ?? 'secondary',
+          required: extra.required ?? false,
+          foodId: extra.foodId,
+          range: extra.range,
+          note: extra.note ?? null,
+          method: 'reviewed_dish_override',
+        })
       }
       replacedSlots = replaced
     }

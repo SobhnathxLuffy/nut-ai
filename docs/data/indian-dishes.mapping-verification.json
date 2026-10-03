@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-03T07:58:37.303Z",
+  "generatedAt": "2026-10-03T15:09:48.508Z",
   "totalDishes": 362,
   "curatedDishes": 362,
   "draftDishes": 0,
@@ -9,8 +9,8 @@
   "verifiedYieldDishes": 362,
   "mappedSlots": 1451,
   "checkedSlots": 1451,
-  "ifctMapped": 1070,
-  "usdaMapped": 381,
+  "ifctMapped": 1071,
+  "usdaMapped": 380,
   "hardErrorCount": 0,
   "sanityWarningCount": 0,
   "hardErrors": [],

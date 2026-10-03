@@ -21872,30 +21872,6 @@
      }
     },
     {
-     "label": "pulse_optional",
-     "role": "secondary",
-     "required": false,
-     "amountPrior": {
-      "kind": "CURATED_PRIOR",
-      "range": [
-       0.15,
-       0.2
-      ],
-      "verified": true
-     },
-     "nutritionMapping": {
-      "preferredSources": [
-       "ifct",
-       "USDA_FDC"
-      ],
-      "canonicalFoodId": "ifct:B010",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Green gram, dal (Vigna radiata)",
-      "mappingMethod": "name_derived_corpus_verified",
-      "reviewNote": "Ingredient read from the dish name (\"moong\"); pin verified against the shipped corpus. Ingredient read from the dish name; id verified against the shipped corpus."
-     }
-    },
-    {
      "label": "water",
      "role": "process",
      "required": false,
@@ -32207,8 +32183,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.55,
-       0.7
+       0.4,
+       0.55
       ],
       "verified": true
      },
@@ -32217,11 +32193,11 @@
        "ifct",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:D061",
+      "canonicalFoodId": "ifct:F006",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Peas, fresh (Pisum sativum)",
-      "mappingMethod": "name_derived_corpus_verified",
-      "reviewNote": "Ingredient read from the dish name (\"matar\"); pin verified against the shipped corpus. Ingredient read from the dish name; id verified against the shipped corpus."
+      "mappedName": "Potato, brown skin, big (Solanum tuberosum)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Aloo — the potato half of the dish; the old name-claim left BOTH vegetable slots as peas. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -32241,11 +32217,11 @@
        "ifct",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:D061",
+      "canonicalFoodId": "ifct:G017",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Peas, fresh (Pisum sativum)",
-      "mappingMethod": "name_derived_corpus_verified",
-      "reviewNote": "Ingredient read from the dish name (\"matar\"); pin verified against the shipped corpus. Ingredient read from the dish name; id verified against the shipped corpus."
+      "mappedName": "Onion, big (Allium cepa)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Onion-ginger base. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -32294,6 +32270,30 @@
       "mappedName": "Tomato, ripe, hybrid (Solanum lycopersicum)",
       "mappingMethod": "family_prior_corpus_verified",
       "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Chokha, Pav Bhaji family priors); id verified against the shipped corpus."
+     }
+    },
+    {
+     "label": "secondary_vegetable",
+     "role": "secondary",
+     "required": false,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.2,
+       0.3
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "ifct",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:D061",
+      "mappingStatus": "AUTO_MAPPED",
+      "mappedName": "Peas, fresh (Pisum sativum)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Matar — green peas. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     }
    ],
@@ -38842,14 +38842,14 @@
      },
      "nutritionMapping": {
       "preferredSources": [
-       "USDA_FDC",
-       "ifct"
+       "ifct",
+       "USDA_FDC"
       ],
-      "canonicalFoodId": "usda:169998",
+      "canonicalFoodId": "ifct:G017",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Corn, sweet, yellow, raw",
-      "mappingMethod": "name_derived_corpus_verified",
-      "reviewNote": "Ingredient read from the dish name (\"corn\"); pin verified against the shipped corpus. Ingredient read from the dish name; id verified against the shipped corpus."
+      "mappedName": "Onion, big (Allium cepa)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Onion-ginger base — the corn is the vegetable, not its own aromatic. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -41589,8 +41589,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.55,
-       0.7
+       0.7,
+       0.85
       ],
       "verified": true
      },
@@ -41603,7 +41603,7 @@
       "mappingStatus": "AUTO_MAPPED",
       "mappedName": "Tomato, ripe, hybrid (Solanum lycopersicum)",
       "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Tameta (tomatoes) are the base; sev is a topping. Reviewed per-dish mapping; id verified against the shipped corpus."
+      "reviewNote": "Tameta (tomatoes) are the base AND the gravy — one tomato mass, not two servings. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -41655,14 +41655,14 @@
      }
     },
     {
-     "label": "gravy_base_optional",
+     "label": "crunch_topping_optional",
      "role": "secondary",
      "required": false,
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.15,
-       0.3
+       0.05,
+       0.1
       ],
       "verified": true
      },
@@ -41671,11 +41671,11 @@
        "ifct",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:D075",
+      "canonicalFoodId": "ifct:B001",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Tomato, ripe, hybrid (Solanum lycopersicum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Chokha, Pav Bhaji family priors); id verified against the shipped corpus."
+      "mappedName": "Bengal gram, dal (Cicer arietinum)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Besan sev is the namesake topping. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     }
    ],
@@ -42844,8 +42844,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.65,
-       0.8
+       0.75,
+       0.9
       ],
       "verified": true
      },
@@ -42858,7 +42858,7 @@
       "mappingStatus": "AUTO_MAPPED",
       "mappedName": "Tomato, ripe, hybrid (Solanum lycopersicum)",
       "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
+      "reviewNote": "Roasted tomato mash — chokha is tomato throughout; the previous primary+gravy split double-served the same tomatoes. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -42892,8 +42892,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.04,
-       0.08
+       0.05,
+       0.1
       ],
       "verified": true
      },
@@ -42902,33 +42902,9 @@
        "ifct",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:T006",
+      "canonicalFoodId": "ifct:T012",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Mustard oil",
-      "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Chokha is finished with mustard oil. Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
-    },
-    {
-     "label": "gravy_base_optional",
-     "role": "secondary",
-     "required": false,
-     "amountPrior": {
-      "kind": "CURATED_PRIOR",
-      "range": [
-       0.15,
-       0.3
-      ],
-      "verified": true
-     },
-     "nutritionMapping": {
-      "preferredSources": [
-       "ifct",
-       "USDA_FDC"
-      ],
-      "canonicalFoodId": "ifct:D075",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Tomato, ripe, hybrid (Solanum lycopersicum)",
+      "mappedName": "Sunflower oil",
       "mappingMethod": "family_prior_corpus_verified",
       "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Chokha, Pav Bhaji family priors); id verified against the shipped corpus."
      }
@@ -51976,8 +51952,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.3,
-       0.42
+       0.25,
+       0.35
       ],
       "verified": true
      },
@@ -51986,11 +51962,11 @@
        "ifct",
        "USDA_FDC"
       ],
-      "canonicalFoodId": "ifct:O001",
+      "canonicalFoodId": "ifct:G017",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Goat, shoulder",
-      "mappingMethod": "name_derived_corpus_verified",
-      "reviewNote": "Ingredient read from the dish name (\"keema\"); pin verified against the shipped corpus. Ingredient read from the dish name; id verified against the shipped corpus."
+      "mappedName": "Onion, big (Allium cepa)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Keema bhunao is onion-dominant — the mince is the meat, not its own aromatic. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -58958,8 +58934,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.65,
-       0.75
+       0.62,
+       0.72
       ],
       "verified": true
      },
@@ -58973,30 +58949,6 @@
       "mappedName": "Potato, brown skin, big (Solanum tuberosum)",
       "mappingMethod": "reviewed_dish_override",
       "reviewNote": "The tikki patty is potato. Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
-    },
-    {
-     "label": "filling_or_topping",
-     "role": "secondary",
-     "required": false,
-     "amountPrior": {
-      "kind": "CURATED_PRIOR",
-      "range": [
-       0.4,
-       0.5
-      ],
-      "verified": true
-     },
-     "nutritionMapping": {
-      "preferredSources": [
-       "ifct",
-       "USDA_FDC"
-      ],
-      "canonicalFoodId": "ifct:F006",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Potato, brown skin, big (Solanum tuberosum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Samosa, Kachori, Bhel Puri); id verified against the shipped corpus."
      }
     },
     {
@@ -59030,8 +58982,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.01,
-       0.02
+       0.005,
+       0.012
       ],
       "verified": true
      },
@@ -59043,8 +58995,32 @@
       "canonicalFoodId": "usda:173468",
       "mappingStatus": "AUTO_MAPPED",
       "mappedName": "Salt, table",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Samosa, Kachori, Bhel Puri); id verified against the shipped corpus."
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Salt and spice mix in the patty. Reviewed per-dish mapping; id verified against the shipped corpus."
+     }
+    },
+    {
+     "label": "binding_or_batter",
+     "role": "binding",
+     "required": false,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.05,
+       0.1
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "ifct",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:B001",
+      "mappingStatus": "AUTO_MAPPED",
+      "mappedName": "Bengal gram, dal (Cicer arietinum)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Besan binder — a real tikki binds with roasted gram flour; the street_snack family prior invented a potato filling inside a potato patty. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     }
    ],
@@ -59171,8 +59147,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.55,
-       0.65
+       0.62,
+       0.72
       ],
       "verified": true
      },
@@ -59185,31 +59161,7 @@
       "mappingStatus": "AUTO_MAPPED",
       "mappedName": "Potato, brown skin, big (Solanum tuberosum)",
       "mappingMethod": "reviewed_dish_override",
-      "reviewNote": "Reviewed per-dish mapping; id verified against the shipped corpus."
-     }
-    },
-    {
-     "label": "filling_or_topping",
-     "role": "secondary",
-     "required": false,
-     "amountPrior": {
-      "kind": "CURATED_PRIOR",
-      "range": [
-       0.4,
-       0.5
-      ],
-      "verified": true
-     },
-     "nutritionMapping": {
-      "preferredSources": [
-       "ifct",
-       "USDA_FDC"
-      ],
-      "canonicalFoodId": "ifct:F006",
-      "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Potato, brown skin, big (Solanum tuberosum)",
-      "mappingMethod": "family_prior_corpus_verified",
-      "reviewNote": "Family prior adopted from reviewed CURATED dishes in this family (Samosa, Kachori, Bhel Puri); id verified against the shipped corpus."
+      "reviewNote": "Potato patty plus the aloo chunks scattered over the chaat. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     },
     {
@@ -59258,6 +59210,54 @@
       "mappedName": "Yogurt, plain, whole milk",
       "mappingMethod": "reviewed_dish_override",
       "reviewNote": "Dahi-smothered chaat. Reviewed per-dish mapping; id verified against the shipped corpus."
+     }
+    },
+    {
+     "label": "binding_or_batter",
+     "role": "binding",
+     "required": false,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.05,
+       0.1
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "ifct",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:B001",
+      "mappingStatus": "AUTO_MAPPED",
+      "mappedName": "Bengal gram, dal (Cicer arietinum)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Besan binder in the tikki plus the besan-sev sprinkle. Reviewed per-dish mapping; id verified against the shipped corpus."
+     }
+    },
+    {
+     "label": "sauce_or_chutney_optional",
+     "role": "secondary",
+     "required": false,
+     "amountPrior": {
+      "kind": "CURATED_PRIOR",
+      "range": [
+       0.03,
+       0.07
+      ],
+      "verified": true
+     },
+     "nutritionMapping": {
+      "preferredSources": [
+       "ifct",
+       "USDA_FDC"
+      ],
+      "canonicalFoodId": "ifct:E064",
+      "mappingStatus": "AUTO_MAPPED",
+      "mappedName": "Tamarind, pulp (Tamarindus indica)",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Tamarind chutney drizzle. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     }
    ],
@@ -59882,8 +59882,8 @@
      "amountPrior": {
       "kind": "CURATED_PRIOR",
       "range": [
-       0.01,
-       0.02
+       0.005,
+       0.012
       ],
       "verified": true
      },
@@ -59892,11 +59892,11 @@
        "USDA_FDC",
        "ifct"
       ],
-      "canonicalFoodId": "usda:171284",
+      "canonicalFoodId": "usda:173468",
       "mappingStatus": "AUTO_MAPPED",
-      "mappedName": "Yogurt, plain, whole milk",
-      "mappingMethod": "name_derived_corpus_verified",
-      "reviewNote": "Ingredient read from the dish name (\"dahi\"); pin verified against the shipped corpus. Ingredient read from the dish name; id verified against the shipped corpus."
+      "mappedName": "Salt, table",
+      "mappingMethod": "reviewed_dish_override",
+      "reviewNote": "Salt and roasted-cumin spice over the dahi — the garnish is not a second yogurt serving. Reviewed per-dish mapping; id verified against the shipped corpus."
      }
     }
    ],
