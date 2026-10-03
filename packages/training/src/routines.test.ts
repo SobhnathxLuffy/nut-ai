@@ -11,6 +11,10 @@ import {
   scheduledRoutine,
   launchRoutine,
   workoutDetail,
+  weekdayOfLocalDate,
+  weekdayToCycleDay,
+  cycleDayToWeekday,
+  programDayStatus,
 } from './index.js'
 
 describe('TRN-005: Routines and Programs', () => {
@@ -84,6 +88,91 @@ describe('TRN-005: Routines and Programs', () => {
     expect(scheduledRoutine(progDef, '2026-09-08')).toBe(r1)
     // After 12 weeks: null
     expect(scheduledRoutine(progDef, '2027-01-01')).toBeNull()
+
+    await db.close()
+  })
+
+  // Owner QA 2026-10: the editor stored calendar weekday indexes while the
+  // engine reads cycle days — "I scheduled Wed and nothing ever ran". The
+  // conversion helpers below are the contract the UI now sits on: the user
+  // picks real weekdays, save/load converts at that single boundary.
+  it('interconverts calendar weekdays and cycle days (schedule bug regression)', () => {
+    // 2026-09-01 is a Tuesday.
+    expect(weekdayOfLocalDate('2026-09-01')).toBe(2)
+    // "Wednesday" with a Tuesday start is cycle day 1 — not the raw index 3.
+    expect(weekdayToCycleDay(3, '2026-09-01')).toBe(1)
+    // Sunday with a Tuesday start wraps forward to cycle day 5.
+    expect(weekdayToCycleDay(0, '2026-09-01')).toBe(5)
+    // The start date's own weekday is always cycle day 0.
+    expect(weekdayToCycleDay(2, '2026-09-01')).toBe(0)
+    // Round trip: cycle day back to the weekday it was picked from.
+    expect(cycleDayToWeekday(1, '2026-09-01')).toBe(3)
+    expect(cycleDayToWeekday(5, '2026-09-01')).toBe(0)
+    // End-to-end: a user who assigns a routine to Wednesday on a program
+    // starting Tuesday 2026-09-01 gets a workout on real Wednesdays.
+    const plan = {
+      name: 'Wed Plan',
+      start_date: '2026-09-01',
+      weeks: 4,
+      schedule: [{ day: weekdayToCycleDay(3, '2026-09-01'), routine_id: 1 }],
+    }
+    expect(scheduledRoutine(plan, '2026-09-02')).toBe(1) // Wed, week 1
+    expect(scheduledRoutine(plan, '2026-09-01')).toBeNull() // Tue, start day: rest
+    expect(scheduledRoutine(plan, '2026-09-09')).toBe(1) // Wed, week 2
+  })
+
+  it('reports program day status for before/rest/scheduled/finished', () => {
+    const plan = {
+      name: 'Block',
+      start_date: '2026-09-01',
+      weeks: 2,
+      schedule: [{ day: 0, routine_id: 7 }],
+    }
+    expect(programDayStatus(plan, '2026-08-30')).toEqual({ kind: 'before', daysUntil: 2 })
+    expect(programDayStatus(plan, '2026-09-01')).toEqual({ kind: 'scheduled', routineId: 7 })
+    expect(programDayStatus(plan, '2026-09-02')).toEqual({ kind: 'rest' })
+    expect(programDayStatus(plan, '2026-09-15')).toEqual({ kind: 'finished' })
+  })
+
+  it('updates an existing program when saveProgram is called with an id', async () => {
+    const db = openMemoryDb()
+    await migrate(db, 1000)
+    await seedExercises(db)
+    const ex = (await listExercises(db))[0]!
+    const r1 = await saveRoutine(db, {
+      name: 'Full Body',
+      exercises: [
+        {
+          exercise_id: ex.id,
+          group: null,
+          sets: [{ load_kg: 50, reps: 10, duration_s: null, distance_m: null, assistance_kg: null, rir: null, rpe: null, tempo: null }],
+          rule: { kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12, target_rir: 2 },
+        },
+      ],
+    })
+
+    const progId = await saveProgram(db, {
+      name: 'Old Name',
+      start_date: '2026-09-01',
+      weeks: 8,
+      schedule: [{ day: 0, routine_id: r1 }],
+    })
+    // Edit: same id, new name and weeks.
+    await saveProgram(
+      db,
+      {
+        name: 'Edited Block',
+        start_date: '2026-09-01',
+        weeks: 12,
+        schedule: [{ day: 0, routine_id: r1 }],
+      },
+      progId,
+    )
+    const programs = await listPrograms(db)
+    expect(programs).toHaveLength(1)
+    const def = JSON.parse(programs[0]!.definition_json)
+    expect(programs[0]!.name).toBe('Edited Block')
+    expect(def.weeks).toBe(12)
 
     await db.close()
   })

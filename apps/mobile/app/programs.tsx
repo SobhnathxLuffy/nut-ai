@@ -6,7 +6,9 @@ import {
   listPrograms,
   saveProgram,
   listRoutines,
-  scheduledRoutine,
+  programDayStatus,
+  cycleDayToWeekday,
+  weekdayToCycleDay,
   launchRoutine,
   type Program,
   type Routine,
@@ -22,16 +24,24 @@ import { space } from '../src/theme/tokens'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
 
+/** What the editor's schedule state holds: a real calendar weekday (0 = Sun)
+ * plus the routine. Cycle-day conversion happens once, at save/load — the
+ * user never sees the engine's internal offsets. */
+type ScheduleSlot = { weekday: number; routine_id: number }
+
+const EMPTY_FORM = { name: '', startDate: localDate(Date.now()), weeks: '8', schedule: [] as ScheduleSlot[] }
+
 export default function ProgramsScreen() {
   const t = useTheme()
   const [programs, setPrograms] = useState<Program[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
 
   const [editing, setEditing] = useState(false)
-  const [name, setName] = useState('')
-  const [startDate, setStartDate] = useState(localDate(Date.now()))
-  const [weeks, setWeeks] = useState('8')
-  const [schedule, setSchedule] = useState<Array<{ day: number; routine_id: number }>>([])
+  const [editId, setEditId] = useState<number | null>(null)
+  const [name, setName] = useState(EMPTY_FORM.name)
+  const [startDate, setStartDate] = useState(EMPTY_FORM.startDate)
+  const [weeks, setWeeks] = useState(EMPTY_FORM.weeks)
+  const [schedule, setSchedule] = useState<ScheduleSlot[]>(EMPTY_FORM.schedule)
 
   const refresh = useCallback(async () => {
     const h = await db()
@@ -48,40 +58,78 @@ export default function ProgramsScreen() {
     }, [refresh]),
   )
 
+  const resetForm = () => {
+    setEditId(null)
+    setName(EMPTY_FORM.name)
+    setStartDate(EMPTY_FORM.startDate)
+    setWeeks(EMPTY_FORM.weeks)
+    setSchedule([])
+    setEditing(false)
+  }
+
   const handleSave = async () => {
     if (!name.trim()) throw new Error('Enter a program name')
     const w = Number(weeks)
     if (!Number.isInteger(w) || w < 1 || w > 104) throw new Error('Weeks must be between 1 and 104')
     if (!schedule.length) throw new Error('Assign at least one routine to a day of the week')
+    if (!isValidLocalDate(startDate)) throw new Error('Choose a real calendar date in YYYY-MM-DD format, like 2026-02-27')
 
+    // The engine stores cycle days (0 = the start date itself); the user
+    // picked real weekdays. Convert here — the single boundary — so "Wed"
+    // means the calendar Wednesday no matter which weekday the block starts.
     const input: ProgramInputType = {
       name: name.trim(),
       start_date: startDate,
       weeks: w,
-      schedule,
+      schedule: schedule.map((s) => ({ day: weekdayToCycleDay(s.weekday, startDate), routine_id: s.routine_id })),
     }
     // P1-6: the start date is typed by hand — reject impossible dates with a
     // sentence instead of letting the schema throw raw zod JSON at the user.
-    if (!isValidLocalDate(startDate)) throw new Error('Choose a real calendar date in YYYY-MM-DD format, like 2026-02-27')
     try {
       ProgramInput.parse(input)
     } catch (error) {
       throw new Error(friendlySetValueError(error))
     }
     const h = await db()
-    await saveProgram(h, input)
-    setEditing(false)
-    setName('')
-    setSchedule([])
+    // saveProgram accepts an id for updates — the edit flow is the only caller.
+    await saveProgram(h, input, editId ?? undefined)
+    resetForm()
   }
 
-  const handleToggleDayRoutine = (day: number, routineId: number) => {
-    const filtered = schedule.filter((s) => s.day !== day)
-    const current = schedule.find((s) => s.day === day)
+  const startCreate = () => {
+    setEditId(null)
+    setName('')
+    setStartDate(localDate(Date.now()))
+    setWeeks('8')
+    setSchedule([])
+    setEditing(true)
+  }
+
+  const handleEdit = (p: Program) => {
+    let plan: ProgramInputType | null = null
+    try {
+      plan = ProgramInput.parse(JSON.parse(p.definition_json))
+    } catch {
+      return
+    }
+    if (!plan) return
+    setEditId(p.id)
+    setName(p.name)
+    setStartDate(plan.start_date)
+    setWeeks(String(plan.weeks))
+    // Stored cycle days → weekdays for the form, using the program's own
+    // start date, so the editor shows exactly what the user originally picked.
+    setSchedule(plan.schedule.map((s) => ({ weekday: cycleDayToWeekday(s.day, plan!.start_date), routine_id: s.routine_id })))
+    setEditing(true)
+  }
+
+  const handleToggleDayRoutine = (weekday: number, routineId: number) => {
+    const filtered = schedule.filter((s) => s.weekday !== weekday)
+    const current = schedule.find((s) => s.weekday === weekday)
     if (current && current.routine_id === routineId) {
       setSchedule(filtered)
     } else {
-      setSchedule([...filtered, { day, routine_id: routineId }])
+      setSchedule([...filtered, { weekday, routine_id: routineId }])
     }
   }
 
@@ -106,27 +154,17 @@ export default function ProgramsScreen() {
   return (
     <Screen title="Programs & Schedule" back>
       <Label muted>
-        Multi-week training blocks with explicit weekly schedule mapping and auto-launching.
+        Multi-week blocks that map each weekday to one routine. The Train tab shows today's session — you start it with one tap.
       </Label>
       {action.feedback}
 
       {!editing && programs.length > 0 && (
-        <Button
-          label="Create new program"
-          selected
-          onPress={() => {
-            setName('')
-            setStartDate(today)
-            setWeeks('8')
-            setSchedule([])
-            setEditing(true)
-          }}
-        />
+        <Button label="Create new program" selected onPress={startCreate} />
       )}
 
       {editing && (
         <Card>
-          <Label>Create Training Program</Label>
+          <Label>{editId ? 'Edit Program' : 'Create Training Program'}</Label>
           <Field label="Program Name" value={name} onChangeText={setName} placeholder="e.g. 8-Week Hypertrophy" />
           <Row>
             <View style={{ flex: 1 }}>
@@ -138,21 +176,29 @@ export default function ProgramsScreen() {
           </Row>
 
           <Label>Assign Weekly Schedule</Label>
+          <Label muted>
+            Pick the weekday each routine runs. The week repeats from the start date — changing the start date keeps your weekday plan.
+          </Label>
           {routines.length === 0 ? (
-            <Label muted>You must create at least one routine before configuring a program schedule.</Label>
+            <>
+              <Label muted>You need at least one routine before a program has anything to schedule.</Label>
+              <Button label="Create a routine first" onPress={() => router.push('/routines' as never)} />
+            </>
           ) : (
-            DAYS.map((dayName, dayIdx) => {
-              const assigned = schedule.find((s) => s.day === dayIdx)
+            DAYS.map((dayName, weekday) => {
+              const assigned = schedule.find((s) => s.weekday === weekday)
               return (
                 <View key={dayName} style={{ gap: 6 }}>
-                  <Label>{dayName}: {assigned ? (routines.find((r) => r.id === assigned.routine_id)?.name ?? 'Assigned') : 'Rest Day'}</Label>
+                  <Label>
+                    {dayName}: {assigned ? (routines.find((r) => r.id === assigned.routine_id)?.name ?? 'Assigned') : 'Rest Day'}
+                  </Label>
                   <Row>
                     {routines.map((r) => (
                       <Button
                         key={r.id}
                         label={r.name}
                         selected={assigned?.routine_id === r.id}
-                        onPress={() => handleToggleDayRoutine(dayIdx, r.id)}
+                        onPress={() => handleToggleDayRoutine(weekday, r.id)}
                       />
                     ))}
                   </Row>
@@ -162,8 +208,8 @@ export default function ProgramsScreen() {
           )}
 
           <Row>
-            <Button label="Save program" selected disabled={!routines.length} onPress={() => void action.run(handleSave)} />
-            <Button label="Cancel" onPress={() => setEditing(false)} />
+            <Button label={editId ? 'Save changes' : 'Save program'} selected disabled={!routines.length} onPress={() => void action.run(handleSave)} />
+            <Button label="Cancel" onPress={resetForm} />
           </Row>
         </Card>
       )}
@@ -175,17 +221,8 @@ export default function ProgramsScreen() {
         <Empty
           icon="calendar"
           title="No active programs"
-          message="A program schedules your routines across weeks, so the right session launches on the right day automatically."
-          action={{
-            label: 'Create new program',
-            onPress: () => {
-              setName('')
-              setStartDate(today)
-              setWeeks('8')
-              setSchedule([])
-              setEditing(true)
-            },
-          }}
+          message="A program maps each weekday to one of your routines, so the Train tab always shows today's session."
+          action={{ label: 'Create new program', onPress: startCreate }}
         />
       )}
 
@@ -197,28 +234,40 @@ export default function ProgramsScreen() {
           // ignore
         }
         if (!plan) return null
-        const todayRoutineId = scheduledRoutine(plan, today)
-        const routineName = todayRoutineId
-          ? routines.find((r) => r.id === todayRoutineId)?.name
-          : null
+        const status = programDayStatus(plan, today)
+        const weekdays = plan.schedule.length
+          ? plan.schedule
+              .map((s) => DAYS[cycleDayToWeekday(s.day, plan!.start_date)])
+              .sort((a, b) => DAYS.indexOf(a as (typeof DAYS)[number]) - DAYS.indexOf(b as (typeof DAYS)[number]))
+              .join(' · ')
+          : ''
 
         return (
           <View key={p.id} style={{ gap: space.sm }}>
             {/* UI/UX report Ch. 8.5 (Wave 3): the program row collapses to
-                icon + label + value; today's session and Delete ride below. */}
+                icon + label + value; today's session and Delete ride below.
+                Owner QA 2026-10: the row is now pressable — editing a program
+                is possible, not just deleting it. */}
             <ItemRow
               icon="calendar"
               label={p.name}
-              value={`Started ${plan.start_date} · ${plan.weeks} weeks · ${plan.schedule.length} days/week`}
+              value={`Starts ${plan.start_date} · ${plan.weeks} weeks · ${weekdays || 'no days assigned'}`}
+              onPress={() => handleEdit(p)}
+              accessibilityLabel={`Edit program ${p.name}`}
             />
-            {todayRoutineId && (
+            {status.kind === 'scheduled' && (
               <View style={{ padding: 10, borderRadius: 10, backgroundColor: t.affirmTint }}>
-                <Label>Today's Scheduled Workout: {routineName ?? 'Routine'}</Label>
-                <Button label="Launch today's workout" selected onPress={() => void action.run(() => handleLaunch(todayRoutineId))} />
+                <Label>Today's Scheduled Workout: {routines.find((r) => r.id === status.routineId)?.name ?? 'Routine'}</Label>
+                <Button label="Launch today's workout" selected onPress={() => void action.run(() => handleLaunch(status.routineId))} />
               </View>
             )}
-            {!todayRoutineId && <Label muted>Rest day scheduled for today</Label>}
+            {status.kind === 'rest' && <Label muted>Rest day scheduled for today</Label>}
+            {status.kind === 'before' && (
+              <Label muted>Starts in {status.daysUntil === 1 ? '1 day' : `${status.daysUntil} days`} — no sessions before {plan.start_date}</Label>
+            )}
+            {status.kind === 'finished' && <Label muted>Program finished — all {plan.weeks} weeks ran. Edit it to set a new start date, or create a new block.</Label>}
             <Row>
+              <Button label="Edit program" onPress={() => handleEdit(p)} />
               <Button label="Delete Program" onPress={() => void action.run(() => handleDelete(p.id))} />
             </Row>
           </View>

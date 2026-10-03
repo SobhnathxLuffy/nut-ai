@@ -296,6 +296,49 @@ export function scheduledRoutine(program:ProgramInput,date:string):number|null {
   const days=Math.floor((Date.parse(date)-Date.parse(program.start_date))/86400000)
   return days<0||days>=program.weeks*7?null:program.schedule.find(s=>s.day===days%7)?.routine_id??null
 }
+/** Calendar weekday of a YYYY-MM-DD date: 0 = Sunday … 6 = Saturday.
+ * Built from date parts — never `new Date(bareString)`, whose UTC reading of
+ * an unstated timezone can shift the calendar day behind a UTC− offset. */
+export function weekdayOfLocalDate(date:string):number {
+  validateLocalDate(date)
+  const [y,m,d]=date.split('-').map(Number)
+  return new Date(y!,m!-1,d!).getDay()
+}
+/**
+ * Programs speak TWO day languages and the UI must never mix them up (owner
+ * QA 2026-10: "I scheduled Wed and nothing ever ran" — the editor stored
+ * calendar weekday indexes while this engine reads cycle days, so the two
+ * only agreed when a program started on a Sunday).
+ *
+ * Stored semantics: `schedule[].day` is a CYCLE day — 0 is the start date
+ * itself, whatever weekday it falls on; `days_from_start % 7` selects the
+ * session. User semantics: "Wednesday = leg day", a real calendar weekday.
+ * Because `days_from_start % 7` is exactly the weekday difference between
+ * the date and the start date, the two models interconvert losslessly:
+ */
+export function weekdayToCycleDay(weekday:number,startDate:string):number {
+  return (weekday-weekdayOfLocalDate(startDate)+7)%7
+}
+export function cycleDayToWeekday(day:number,startDate:string):number {
+  return (day+weekdayOfLocalDate(startDate))%7
+}
+export type ProgramDayStatus =
+  | { kind:'scheduled';routineId:number }
+  | { kind:'rest' }
+  | { kind:'before';daysUntil:number }
+  | { kind:'finished' }
+/** Today's relationship to a program, for UI cards: a scheduled routine, a
+ * rest day inside the block, a block that has not started yet, or one that
+ * already ran out of weeks. Cards can stop calling a finished block a
+ * "rest day". */
+export function programDayStatus(program:ProgramInput,date:string):ProgramDayStatus {
+  validateLocalDate(date);validateLocalDate(program.start_date)
+  const days=Math.floor((Date.parse(date)-Date.parse(program.start_date))/86400000)
+  if(days<0)return { kind:'before',daysUntil:-days }
+  if(days>=program.weeks*7)return { kind:'finished' }
+  const id=scheduledRoutine(program,date)
+  return id===null?{ kind:'rest'}:{ kind:'scheduled',routineId:id }
+}
 export async function launchRoutine(db:DbAdapter,id:number,date:string,now=Date.now()):Promise<number> {
   validateLocalDate(date)
   return mutate(db,now,async(tx,c)=>{
