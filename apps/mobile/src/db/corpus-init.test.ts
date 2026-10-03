@@ -20,6 +20,9 @@ const mockSQLite = vi.hoisted(() => ({
 }
 
 vi.mock('expo-sqlite', () => mockSQLite)
+// The adapter compares the on-disk corpus revision against this GENERATED
+// constant; pin the mock so tests control both sides of the comparison.
+vi.mock('../data/corpus-revision', () => ({ REQUIRED_CORPUS_REVISION: 'test-revision' }))
 
 import {
   ifctCorpusInfo,
@@ -34,7 +37,11 @@ describe('corpus initialization & retry logic', () => {
   vi.clearAllMocks()
   resetCorpusPromises()
   mockSQLite.openDatabaseAsync.mockResolvedValue(mockDbInstance)
-  mockDbInstance.getFirstAsync.mockResolvedValue({ c: 1 })
+  // Default: a fresh on-disk corpus whose revision matches the bundled one.
+  mockDbInstance.getFirstAsync.mockImplementation(async (sql: string) => {
+    if (sql.includes('corpus_revision')) return { value: 'test-revision' }
+    return { c: 1 }
+  })
 })
 
 
@@ -43,6 +50,45 @@ describe('corpus initialization & retry logic', () => {
     const second = await openNutritionDb()
     expect(first).toBe(second)
     expect(mockSQLite.importDatabaseFromAssetAsync).toHaveBeenCalledTimes(1)
+    // No forced overwrite when the revision matches.
+    expect(mockSQLite.importDatabaseFromAssetAsync).toHaveBeenCalledWith(
+      'nutrition.db',
+      expect.objectContaining({ forceOverwrite: false }),
+    )
+  })
+
+  // Owner QA 2026-10: an install that ever imported an early/partial corpus
+  // kept it forever — the dish browser showed a handful of rows under a "362
+  // identities" headline. A stale (or missing) corpus_revision must force a
+  // fresh import of the bundled asset.
+  it('force-reimports when the on-disk corpus revision does not match the bundle', async () => {
+    mockDbInstance.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('corpus_revision')) return { value: 'stale-old-corpus' }
+      return { c: 1 }
+    })
+
+    const db = await openNutritionDb()
+    expect(db).toBeDefined()
+    expect(mockSQLite.importDatabaseFromAssetAsync).toHaveBeenCalledTimes(2)
+    expect(mockSQLite.importDatabaseFromAssetAsync).toHaveBeenLastCalledWith(
+      'nutrition.db',
+      expect.objectContaining({ forceOverwrite: true }),
+    )
+  })
+
+  it('force-reimports when the on-disk copy has no corpus revision at all', async () => {
+    mockDbInstance.getFirstAsync.mockImplementation(async (sql: string) => {
+      if (sql.includes('corpus_revision')) throw new Error('no such table: build_manifest')
+      return { c: 1 }
+    })
+
+    const db = await openNutritionDb()
+    expect(db).toBeDefined()
+    expect(mockSQLite.importDatabaseFromAssetAsync).toHaveBeenCalledTimes(2)
+    expect(mockSQLite.importDatabaseFromAssetAsync).toHaveBeenLastCalledWith(
+      'nutrition.db',
+      expect.objectContaining({ forceOverwrite: true }),
+    )
   })
 
   it('clears nutrition promise on error so retry is not stuck in error/loading state', async () => {
@@ -81,6 +127,7 @@ describe('corpus initialization & retry logic', () => {
 
   it('reads nutrition corpus info row counts and metadata correctly', async () => {
     mockDbInstance.getFirstAsync.mockImplementation(async (sql) => {
+      if (sql.includes('corpus_revision')) return { value: 'test-revision' }
       if (sql.includes("sqlite_master")) return { c: 1 }
       if (sql.includes("FROM foods")) return { c: 8520 }
       if (sql.includes("food_portions")) return { c: 14200 }
@@ -120,6 +167,7 @@ describe('corpus initialization & retry logic', () => {
 
   it('P1-10: older bundles without dish_kb_* manifest keys report a null honesty split, never a guess', async () => {
     mockDbInstance.getFirstAsync.mockImplementation(async (sql) => {
+      if (sql.includes('corpus_revision')) return { value: 'test-revision' }
       if (sql.includes("sqlite_master")) return { c: 1 }
       if (sql.includes("FROM foods")) return { c: 8520 }
       if (sql.includes("food_portions")) return { c: 14200 }

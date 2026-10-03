@@ -5,9 +5,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { radius, space, type, MIN_TAP_TARGET } from '../src/theme/tokens'
 import { openNutritionDb, openUserDb } from '../src/db/expo-adapter'
+import { dishUncertaintyModel, humanizeUnknownKey } from '../src/data/dish-clarifications'
 import type { DbAdapter } from '@nutai/db-adapter'
 
-type DishRow = { id: string, name: string, category: string, status: string, aliases: string }
+type DishRow = { id: string, name: string, category: string, status: string, aliases: string, uncertainty_model_json?: string | null }
 
 // P2-6: dish rows showed raw snake-case codes like "street_food_snack".
 const prettyCategory = (category: string): string =>
@@ -25,13 +26,23 @@ export default function IndianDishesScreen() {
   const [filter, setFilter] = useState<'ALL' | 'CURATED' | 'DRAFT_CURATED' | 'HOUSEHOLD'>('ALL')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Owner QA 2026-10: the placeholder and empty-state used to hardcode "362"
+  // while the list could hold anything a stale on-device corpus still had.
+  // The headline count now comes from the shipped artifact itself.
+  const [kbTotal, setKbTotal] = useState<number | null>(null)
 
   useEffect(() => {
     let alive = true
     // WEB-003: household variants the user saved live in the writable user DB
     // and must appear alongside the curated corpus entries.
     Promise.all([openNutritionDb(), openUserDb()]).then(([h, u]) => {
-      if (alive) { setDb(h); setUserDb(u); setLoading(false) }
+      if (!alive) return
+      setDb(h); setUserDb(u)
+      // The artifact's own manifest states how many identities it ships.
+      h.getFirstAsync<{ value: string }>("SELECT value FROM build_manifest WHERE key = 'dish_kb_dishes'")
+        .then((row) => { if (alive) setKbTotal(row?.value ? Number(row.value) : null) })
+        .catch(() => { /* count stays null — UI falls back to uncounted copy */ })
+      setLoading(false)
     }).catch(e => {
       if (alive) { setError(e.message); setLoading(false) }
     })
@@ -44,7 +55,8 @@ export default function IndianDishesScreen() {
     const search = async () => {
       let sql = `
         SELECT d.id, d.canonical_name as name, d.category, d.record_status as status,
-               COALESCE((SELECT GROUP_CONCAT(alias, ', ') FROM dish_aliases WHERE dish_id = d.id), '') as aliases
+               COALESCE((SELECT GROUP_CONCAT(alias, ', ') FROM dish_aliases WHERE dish_id = d.id), '') as aliases,
+               d.uncertainty_model_json
         FROM dish_definitions d
       `
       const args: any[] = []
@@ -151,7 +163,7 @@ export default function IndianDishesScreen() {
         style={[s.input, { color: t.text, borderColor: t.border, backgroundColor: t.bgSunken }]}
         value={query}
         onChangeText={setQuery}
-        placeholder="Search 362 identities (e.g. litti, idli)"
+        placeholder={kbTotal != null ? `Search ${kbTotal} identities (e.g. litti, idli)` : 'Search identities (e.g. litti, idli)'}
         placeholderTextColor={t.textFaint}
         accessibilityLabel="Search dishes"
       />
@@ -166,8 +178,15 @@ export default function IndianDishesScreen() {
           style={s.scroll}
           data={dishes}
           keyExtractor={(item) => item.id}
-          initialNumToRender={12}
-          renderItem={({ item }) => (
+          initialNumToRender={20}
+          renderItem={({ item }) => {
+            // Owner QA 2026-10: records carry an uncertainty model ("what this
+            // estimate is honestly unsure about") but the browser never showed
+            // it — the model column was not even fetched. Every uncertain dish
+            // now says so, in words, right on the row.
+            const model = dishUncertaintyModel(item)
+            const unknowns = (model?.highImpactUnknowns ?? []).slice(0, 3).map(humanizeUnknownKey)
+            return (
             <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.name}`} onPress={() => openDish(item)} style={[s.row, { borderColor: t.border }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[type.body, { color: t.text }]}>{item.name}</Text>
@@ -175,13 +194,19 @@ export default function IndianDishesScreen() {
                 <Text style={[type.caption, { color: item.status === 'CURATED' ? t.proteinText : item.status === 'HOUSEHOLD' ? t.proteinText : t.safety, marginTop: space.xs }]}>
                   {item.status === 'CURATED' ? 'CURATED RECIPE' : item.status === 'HOUSEHOLD' ? 'MY VERSION' : 'DRAFT / NEEDS REVIEW'} \u00b7 {prettyCategory(item.category)}
                 </Text>
+                {unknowns.length > 0 ? (
+                  <Text style={[type.caption, { color: t.uncertainText, marginTop: 2 }]}>
+                    Uncertain about: {unknowns.join(' \u00b7 ')}
+                  </Text>
+                ) : null}
               </View>
             </Pressable>
-          )}
+            )
+          }}
           ListEmptyComponent={
             query.trim().length >= 2 ? (
               <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl }]}>
-                No dishes match \u201c{query.trim()}\u201d. Try a shorter prefix like \u201cidli\u201d, or clear the search to browse all {filter === 'ALL' ? '362' : ''} identities.
+                No dishes match \u201c{query.trim()}\u201d. Try a shorter prefix like \u201cidli\u201d, or clear the search to browse all {filter === 'ALL' && kbTotal != null ? kbTotal : ''} identities.
               </Text>
             ) : filter === 'HOUSEHOLD' ? (
               <Text style={[type.body, { color: t.textMuted, textAlign: 'center', marginTop: space.xl, lineHeight: 22 }]}>
