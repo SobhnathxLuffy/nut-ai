@@ -39,7 +39,10 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['packages/**/*.test.ts', 'eval/**/*.test.ts', 'apps/mobile/src/**/*.test.ts'],
+    // apps/mobile/e2e/fixtures: node-side invariants over the Playwright
+    // fixture files (fixture-invariant.test.ts). The .spec.ts e2e files stay
+    // OUT — they run under Playwright, not vitest.
+    include: ['packages/**/*.test.ts', 'eval/**/*.test.ts', 'apps/mobile/src/**/*.test.ts', 'apps/mobile/e2e/fixtures/**/*.test.ts'],
     environment: 'node',
   },
 })

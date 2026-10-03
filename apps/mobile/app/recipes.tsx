@@ -22,6 +22,7 @@ import {
   type RecipeListItem,
   type RecipePreparation,
 } from '../src/data/recipes'
+import { formatIngredientContribution, ingredientContributions } from '../src/data/recipes-contributions'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/repo'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
@@ -55,6 +56,19 @@ interface RecipeFormSnapshot {
 }
 
 const PREPARATIONS: RecipePreparation[] = ['boiled', 'fried', 'roasted', 'raw']
+
+/**
+ * Wave 5A (AGENTS.md §0.2): tolerant parse for the live contribution caption.
+ * Blank text is "not entered yet" → null (NOT zero — `Number('')` is 0, which
+ * would fabricate a known zero), invalid text also null, and neither may
+ * explode into NaN state (AGENTS.md §8.3).
+ */
+function looseNumber(value: string): number | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+}
 
 function blankIngredient(): IngredientForm {
   return { foodId: '', displayName: '', grams: '', kcal: '', protein: '', fat: '', carbs: '', fiber: '' }
@@ -168,6 +182,27 @@ export default function Recipes() {
     }
     return JSON.stringify(currentSnap) !== JSON.stringify(initialSnapshot)
   }, [editingId, name, preparation, oil, water, yieldGrams, servings, ingredients, initialSnapshot])
+
+  // Wave 5A (AGENTS.md §0.2): live per-ingredient contributed macros for the
+  // caption line under each ingredient row. Derived state only — no new
+  // inputs: it recomputes as grams / per-100g / servings / yield are typed.
+  // Blank grams weigh nothing (0); blank per-100g macros read as unknown.
+  // The frame is one serving, exactly like the totals the recipe screen
+  // displays and logs, so the captions reconcile with them (plus the oil share).
+  const liveServings = looseNumber(servings) ?? 1
+  const liveContributions = useMemo(() => ingredientContributions({
+    servings: liveServings,
+    finalCookedWeightG: looseNumber(yieldGrams) ?? 0,
+    ingredients: ingredients.map((ingredient) => ({
+      foodId: ingredient.foodId,
+      displayName: ingredient.displayName,
+      gramWeight: looseNumber(ingredient.grams) ?? 0,
+      energyKcal: looseNumber(ingredient.kcal),
+      proteinG: looseNumber(ingredient.protein),
+      carbG: looseNumber(ingredient.carbs),
+      fatG: looseNumber(ingredient.fat),
+    })),
+  }), [ingredients, liveServings, yieldGrams])
 
   const handleCancel = useCallback(() => {
     if (isDirty) {
@@ -395,6 +430,12 @@ export default function Recipes() {
             <Icon name="plus" size={18} color={theme.text} />
           </Pressable>
         </View>
+        {/* Wave 5A: the per-ingredient captions below are in the ONE-SERVING
+            frame — the same numbers the Log button writes — so they state the
+            frame the way the decomposer's breakdown does ("in your Xg serving"). */}
+        <Text style={[type.caption, { color: theme.textFaint, marginTop: 2 }]}>
+          Each ingredient's contribution to one serving · recipe serves {liveServings}
+        </Text>
 
         {ingredients.map((ingredient, index) => (
           <View key={index} style={[styles.ingredient, { borderColor: theme.border }]}>
@@ -433,6 +474,13 @@ export default function Recipes() {
               </Pressable>
             )) : null}
             <Field containerStyle={FIELD_CONTAINER} label="Amount (g)" value={ingredient.grams} onValueChange={(value) => updateIngredient(index, 'grams', value, setIngredients)} numeric />
+            {/* Wave 5A (AGENTS.md §0.2): live contributed macros for this
+                ingredient — the decomposer's caption-line pattern, updating as
+                grams / per-100g / servings change. Unknown macros degrade like
+                the totals do ('kcal unknown'), zero grams contribute zero. */}
+            <Text style={[type.caption, styles.contribution, { color: theme.textMuted, marginTop: space.xs }]}>
+              {formatIngredientContribution(liveContributions[index]!)}
+            </Text>
             <Pressable onPress={()=>setShowDetails(value=>!value)} style={styles.details}><Text style={[type.caption,{color:theme.textMuted}]}>{showDetails?'Hide nutrition details':'Nutrition details'}</Text></Pressable>
             {showDetails ? <View style={styles.twoCol}>
               <Field containerStyle={FIELD_CONTAINER} label="Source ID" value={ingredient.foodId} onValueChange={(value) => updateIngredient(index, 'foodId', value, setIngredients)} placeholder="Selected automatically" />
@@ -509,6 +557,20 @@ export default function Recipes() {
               <Text style={[type.caption, { color: theme.textMuted, marginTop: 2 }]}>
                 v{recipe.versionNumber} · {Math.round(recipe.servingSizeG)} g · {recipe.energyKcal === null ? 'calories unknown' : `${Math.round(recipe.energyKcal)} kcal`}
               </Text>
+              {/* Wave 5A (AGENTS.md §0.2): the same per-ingredient contribution
+                  captions in the read-only context — one serving, the frame the
+                  totals line above already displays ("150 g · 215 kcal"). */}
+              <Text style={[type.caption, styles.contribution, { color: theme.textFaint, fontWeight: '700', marginTop: 2 }]}>
+                By ingredient (per serving):
+              </Text>
+              {recipe.contributions.map((contribution, index) => (
+                <Text
+                  key={`${contribution.id}:${index}`}
+                  style={[type.caption, styles.contribution, { color: theme.textFaint, marginTop: 2 }]}
+                >
+                  {contribution.name} · {Math.round(contribution.grams)} g {formatIngredientContribution(contribution)}
+                </Text>
+              ))}
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${recipe.name}`} onPress={() => void beginEdit(recipe.id)} style={styles.rowCommand}>
               <Icon name="pencil" size={18} color={theme.textMuted} />
@@ -541,6 +603,11 @@ function updateIngredient(
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   input: { minHeight: MIN_TAP_TARGET, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.sm, paddingHorizontal: space.md, marginTop: space.xs },
+  // Wave 5A: tabular figures (tokens.ts §4.2 — the monoData digit-alignment
+  // rationale) on the live per-ingredient contribution captions, which update
+  // on every keystroke and would otherwise jitter digit-width to digit-width.
+  // Size/leading/color stay the caption tier; the digits align.
+  contribution: { fontVariant: ['tabular-nums'] },
   segmented: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs, marginTop: space.sm },
   segment: { minHeight: MIN_TAP_TARGET, paddingHorizontal: space.md, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.sm },
   twoCol: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },

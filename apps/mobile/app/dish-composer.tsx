@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -17,13 +17,28 @@ import {
 
 import { encodeFoodReview } from '../src/data/food-review'
 import { per100Snapshot } from '../src/data/dish-snapshot'
-import { dishIngredientBreakdown } from '../src/data/dish-ingredients'
+import { dishIngredientBreakdown, humanizeSlotLabel, type DishRowLike } from '../src/data/dish-ingredients'
+import {
+  applyDishClarifications,
+  clarifiedSlotLines,
+  dishClarificationQuestions,
+  dishOpenUnknowns,
+  dishPriorKcalRange,
+  dishUncertaintyModel,
+  humanizeUnknownKey,
+  zeroedClarificationSlots,
+  type ClarificationQuestion,
+  type DishClarificationAnswer,
+  type DishClarificationAnswers,
+} from '../src/data/dish-clarifications'
+import { Badge } from '../src/components/Badge'
+import { Disclosure } from '../src/components/Disclosure'
 import { ChipRow } from '../src/components/ChipRow'
 import { NewIngredientForm } from '../src/components/NewIngredientForm'
 import { Icon } from '../src/components/Icon'
 
 type DishDef = any
-interface Component { id: string, name: string, foodId: string | null, resolvedName: string | null, source: string, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null }
+interface Component { id: string, name: string, foodId: string | null, resolvedName: string | null, source: string, grams: number, protein_g: number|null, carbs_g: number|null, fat_g: number|null, kcal: number|null, /** Recipe-template slot this row was derived from; null for ingredients the user added. */ slotLabel?: string | null }
 
 // WEB-003: household variants are persisted in the writable user DB. The table
 // mirrors the corpus schema columns this screen reads and writes.
@@ -104,6 +119,20 @@ export default function DishComposerScreen() {
   const [recipeYield, setRecipeYield] = useState<number | null>(null)
   const [useRecipeYield, setUseRecipeYield] = useState(true)
 
+  // O5 (AGENTS.md §0.2): clarification questions from the dish uncertainty
+  // model. The raw DB row feeds the adapter; answers live in THIS component's
+  // state only — they are never persisted to the dish record (the household
+  // save stores the user's confirmed grams, not the answers).
+  const [dishRow, setDishRow] = useState<DishRowLike | null>(null)
+  const [answers, setAnswers] = useState<DishClarificationAnswers>({})
+  const [skippedIds, setSkippedIds] = useState<Record<string, boolean>>({})
+  // True once the user edits the composition (grams, fat, rows) — the shown
+  // estimate stops being the pure reviewed prior, so the prior band hides.
+  const [compositionEdited, setCompositionEdited] = useState(false)
+  // The template JSON the component rows were last derived from — the
+  // re-derive effect skips when nothing changed (skip = current behavior).
+  const derivedTemplateRef = useRef<string | null>(null)
+
   // Ingredient search across user foods + IFCT + USDA, plus the create-new
   // flow for ingredients no database knows — now owned PER COMPONENT by
   // <IngredientResolver> (QA P2-21): one shared query state used to make
@@ -124,9 +153,83 @@ export default function DishComposerScreen() {
     return () => { alive = false }
   }, [])
 
-  const newComponent = (name: string, foodId: string | null, source: string, grams: number): Component => ({
-    id: nextComponentKey(), name, foodId, resolvedName: null, source, grams, kcal: null, protein_g: null, carbs_g: null, fat_g: null,
+  const newComponent = (name: string, foodId: string | null, source: string, grams: number, slotLabel: string | null = null): Component => ({
+    id: nextComponentKey(), name, foodId, resolvedName: null, source, grams, kcal: null, protein_g: null, carbs_g: null, fat_g: null, slotLabel,
   })
+
+  // The ONE component-derivation path, shared by the load AND the
+  // clarification re-derive: verified prior fractions → per-serving grams via
+  // dishIngredientBreakdown, the fat_variable fold into the Cooking Fat / Oil
+  // selector, per-slot nutrient fetch. Clarifications change the INPUT row
+  // (slot mapping / prior range), never this code — the estimate re-derives
+  // exactly as it does today.
+  const buildComponentsFromRow = async (
+    nutritionDb: DbAdapter,
+    ifct: DbAdapter,
+    user: DbAdapter,
+    rowLike: DishRowLike,
+    zeroedLabels: string[],
+  ): Promise<{
+    comps: Component[]
+    fatOptionId: string | null
+    fatGrams: string | null
+    fatDefaultApplied: boolean
+    standardPortionGrams: number | null
+  }> => {
+    // Build components from the template. The template's own slots win. (P2-11:
+    // the name-derived "ingredientSuggestions" fallback was deleted — the
+    // mechanism was provably inert for the all-CURATED corpus and never
+    // produced a single suggestion.)
+    const slots: any[] = JSON.parse(rowLike.recipe_template_json || '{}').ingredientSlots ?? []
+
+    // FRACTION -> GRAMS: verified slot ranges are mass fractions of the raw
+    // batch. dishIngredientBreakdown converts them to the SAME per-serving
+    // grams the deterministic engine uses — mid(range)/SUM(mids) x
+    // (standardPortionGrams / verifiedNumericYield). A roti opens with 1.1 g
+    // ghee, never the old flat 50 g fallback.
+    const breakdown = dishIngredientBreakdown(rowLike, true)
+
+    const comps: Component[] = []
+    let foldOptionId: string | null = null
+    let foldGrams: string | null = null
+    let fatDefaultApplied = false
+    for (const slot of slots) {
+      // A multiplier-0 answer ("None / Dry Roasted") REMOVES the ingredient —
+      // no row, no fold, and never the 30 g fallback below.
+      if (zeroedLabels.includes(slot.label)) continue
+      const foodId = slot.nutritionMapping?.canonicalFoodId || null
+      const line = breakdown.lines.find((candidate) => candidate.label === slot.label)
+      // FOLDING RULE: a fat_variable slot whose mapped food the Cooking
+      // Fat / Oil selector represents (ghee, mustard, sunflower, groundnut,
+      // butter) is NOT rendered twice. It becomes the selector's preselected
+      // option with the fraction-derived grams.
+      if (line?.foldedIntoFat && breakdown.fatFold) {
+        const option = COOKING_FAT_OPTIONS.find((f) => f.optionId === breakdown.fatFold!.optionId)
+        if (option) {
+          foldOptionId = option.optionId
+          foldGrams = String(Math.round(breakdown.fatFold.grams * 10) / 10)
+          fatDefaultApplied = true
+          continue
+        }
+      }
+      const grams = line && line.grams > 0
+        ? line.grams
+        : (typeof slot.amountPrior?.grams === 'number' && slot.amountPrior.grams > 0 ? slot.amountPrior.grams : 30)
+      const comp = newComponent(line?.display ?? slot.label, foodId, foodId ? foodId.split(':')[0] : '', grams, slot.label)
+      if (foodId) {
+        const nutrients = await fetchFoodNutrients(nutritionDb, ifct, user, foodId)
+        if (nutrients) {
+          comp.resolvedName = nutrients.name
+          comp.kcal = nutrients.kcal
+          comp.protein_g = nutrients.protein_g
+          comp.carbs_g = nutrients.carbs_g
+          comp.fat_g = nutrients.fat_g
+        }
+      }
+      comps.push(comp)
+    }
+    return { comps, fatOptionId: foldOptionId, fatGrams: foldGrams, fatDefaultApplied, standardPortionGrams: breakdown.standardPortionGrams }
+  }
 
   useEffect(() => {
     if (!db || !ifctDb || !userDb) return
@@ -145,6 +248,11 @@ export default function DishComposerScreen() {
                  recordStatus: 'HOUSEHOLD',
                  recipeTemplate: { ingredientSlots: [] }
               })
+              setDishRow(null)
+              setAnswers({})
+              setSkippedIds({})
+              setCompositionEdited(false)
+              derivedTemplateRef.current = null
               setComponents([])
               setLoading(false)
            }
@@ -169,6 +277,9 @@ export default function DishComposerScreen() {
            portionModel: JSON.parse(row.portion_model_json || '{}')
         }
         if (alive) setDish(parsed)
+        // The RAW row (incl. uncertainty_model_json) feeds the clarification
+        // adapter — `parsed` above drops the columns the adapter needs.
+        if (alive) setDishRow(row)
 
         // Portion + yield come from the reviewed record, not flat defaults:
         // a roti opens at its verified 40 g standard portion with the verified
@@ -183,20 +294,6 @@ export default function DishComposerScreen() {
           setRecipeYield(null)
         }
 
-        // Build components from the saved template. The template's own slots
-        // win. (P2-11: the name-derived "ingredientSuggestions" fallback was
-        // deleted — the mechanism was provably inert for the all-CURATED
-        // corpus and never produced a single suggestion.)
-        const slots: any[] = parsed.recipeTemplate.ingredientSlots ?? []
-
-        // FRACTION -> GRAMS: verified slot ranges are mass fractions of the
-        // raw batch. dishIngredientBreakdown converts them to the SAME
-        // per-serving grams the deterministic engine uses — mid(range)/SUM(mids)
-        // x (standardPortionGrams / verifiedNumericYield). A roti opens with
-        // 1.1 g ghee, never the old flat 50 g fallback.
-        const breakdown = dishIngredientBreakdown(row, true)
-
-        const comps: Component[] = []
         // REFLECTIVE FAT DEFAULT. Priority order:
         //   1. A fat_variable slot whose mapped food the selector represents
         //      (ghee, mustard, sunflower, groundnut, butter) FOLDS into the
@@ -206,44 +303,14 @@ export default function DishComposerScreen() {
         //      (template.addedFat) is restored exactly as saved.
         //   3. Otherwise the selector opens at No Added Oil (0 g) — the
         //      recipe's own named fat rows are the single source of truth.
-        let fatDefaultApplied = false
-        for (const slot of slots) {
-            const foodId = slot.nutritionMapping?.canonicalFoodId || null
-            const line = breakdown.lines.find((candidate) => candidate.label === slot.label)
-            // FOLDING RULE: a fat_variable slot whose mapped food the Cooking
-            // Fat / Oil selector represents (ghee, mustard, sunflower,
-            // groundnut, butter) is NOT rendered twice. It becomes the
-            // selector's preselected option with the fraction-derived grams.
-            if (line?.foldedIntoFat && breakdown.fatFold) {
-              const option = COOKING_FAT_OPTIONS.find((f) => f.optionId === breakdown.fatFold!.optionId)
-              if (option) {
-                if (alive) {
-                  setFatOptionId(option.optionId)
-                  setFatGrams(String(Math.round(breakdown.fatFold.grams * 10) / 10))
-                }
-                fatDefaultApplied = true
-                continue
-              }
-            }
-            const grams = line && line.grams > 0
-              ? line.grams
-              : (typeof slot.amountPrior?.grams === 'number' && slot.amountPrior.grams > 0 ? slot.amountPrior.grams : 30)
-            const comp = newComponent(line?.display ?? slot.label, foodId, foodId ? foodId.split(':')[0] : '', grams)
-            if (foodId) {
-              const nutrients = await fetchFoodNutrients(db, ifctDb, userDb, foodId)
-              if (nutrients) {
-                comp.resolvedName = nutrients.name
-                comp.kcal = nutrients.kcal
-                comp.protein_g = nutrients.protein_g
-                comp.carbs_g = nutrients.carbs_g
-                comp.fat_g = nutrients.fat_g
-              }
-            }
-            comps.push(comp)
-        }
+        const built = await buildComponentsFromRow(db, ifctDb, userDb, row, [])
         if (alive) {
-          if (breakdown.standardPortionGrams != null) setPortion(String(breakdown.standardPortionGrams))
-          if (!fatDefaultApplied) {
+          if (built.fatOptionId && built.fatGrams != null) {
+            setFatOptionId(built.fatOptionId)
+            setFatGrams(built.fatGrams)
+          }
+          if (built.standardPortionGrams != null) setPortion(String(built.standardPortionGrams))
+          if (!built.fatDefaultApplied) {
             // Reflect the recipe: restore an explicitly saved household fat,
             // else open with no added fat. Never a silent 14 g.
             const savedFat = parsed.recipeTemplate?.addedFat
@@ -258,7 +325,13 @@ export default function DishComposerScreen() {
               setFatGrams('0')
             }
           }
-          setComponents(comps)
+          setComponents(built.comps)
+          // Fresh record: no stale answers, no manual edits, and the derive
+          // baseline is THIS template so the clarify effect below stays idle.
+          setAnswers({})
+          setSkippedIds({})
+          setCompositionEdited(false)
+          derivedTemplateRef.current = row.recipe_template_json ?? null
           setLoading(false)
         }
       } catch (e) {
@@ -269,23 +342,96 @@ export default function DishComposerScreen() {
     return () => { alive = false }
   }, [db, ifctDb, userDb, params.dishId])
 
+  // CLARIFICATIONS (O5): an answer re-runs the SAME derivation on the
+  // clarified row — the answer changes the INPUT (slot mapping / prior
+  // range), never the arithmetic. `applyDishClarifications` returns a NEW row
+  // (the engine is immutable), so `dishRow` — and the household save below —
+  // never see the answers. No answers (skip) → the row itself, byte-for-byte
+  // the load-time template.
+  const clarifiedRow = dishRow && Object.keys(answers).length > 0
+    ? applyDishClarifications(dishRow, answers)
+    : dishRow
+
+  useEffect(() => {
+    if (!clarifiedRow || !db || !ifctDb || !userDb) return
+    const templateJson = clarifiedRow.recipe_template_json ?? null
+    if (templateJson == null || templateJson === derivedTemplateRef.current) return
+    let alive = true
+    const rederive = async () => {
+      try {
+        const zeroed = zeroedClarificationSlots(answers)
+        const built = await buildComponentsFromRow(db, ifctDb, userDb, clarifiedRow, zeroed)
+        if (!alive) return
+        // Slot rows re-derive from the model; ingredients the user added
+        // themselves (slotLabel == null) are preserved — answering never
+        // deletes user input.
+        setComponents((prev) => [...built.comps, ...prev.filter((c) => c.slotLabel == null)])
+        derivedTemplateRef.current = templateJson
+        if (built.fatOptionId && built.fatGrams != null) {
+          // The clarified fat (e.g. mustard instead of the recipe's ghee)
+          // becomes the selector's preselected option with the same
+          // fraction-derived grams.
+          setFatOptionId(built.fatOptionId)
+          setFatGrams(built.fatGrams)
+        } else if (zeroed.length > 0) {
+          // "None / Dry Roasted": the recipe's fat was answered away — the
+          // selector resets to none rather than keeping a stale option.
+          setFatOptionId('no-added-oil')
+          setFatGrams('0')
+        }
+      } catch {
+        // A failed re-derive keeps the previous derivation on screen — the
+        // user can still edit everything by hand.
+      }
+    }
+    void rederive()
+    return () => { alive = false }
+  }, [clarifiedRow, db, ifctDb, userDb])
+
+  // The questions come from the RAW record (the question set is fixed at
+  // load); answers stay changeable while the screen is open.
+  const clarifyQuestions = useMemo(() => (dishRow ? dishClarificationQuestions(dishRow) : []), [dishRow])
+  const clarifiedLines = useMemo(() => (clarifiedRow ? clarifiedSlotLines(clarifiedRow) : []), [clarifiedRow])
+  const openUnknowns = useMemo(() => (dishRow ? dishOpenUnknowns(dishRow, answers) : []), [dishRow, answers])
+  const hasUncertaintyModel = dishRow != null && dishUncertaintyModel(dishRow) != null
+  const unansweredCount = clarifyQuestions.filter((q) => !answers[q.id] && !skippedIds[q.id]).length
+
+  const answerQuestion = (question: ClarificationQuestion, option: ClarificationQuestion['options'][number]) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [question.id]: option.amountMultiplier !== undefined
+        ? { canonicalFoodId: option.canonicalFoodId, amountMultiplier: option.amountMultiplier }
+        : { canonicalFoodId: option.canonicalFoodId },
+    }))
+    setSkippedIds((prev) => ({ ...prev, [question.id]: false }))
+  }
+
+  const skipQuestion = (question: ClarificationQuestion) => {
+    setSkippedIds((prev) => ({ ...prev, [question.id]: true }))
+  }
+
   const addIngredient = () => {
+    setCompositionEdited(true)
     setComponents([...components, newComponent('New Ingredient', null, '', 100)])
   }
 
   const removeComponent = (id: string) => {
+    setCompositionEdited(true)
     setComponents(components.filter(c => c.id !== id))
   }
 
   const updateName = (id: string, text: string) => {
+    setCompositionEdited(true)
     setComponents(components.map(c => c.id === id ? { ...c, name: text, foodId: null, resolvedName: null, kcal: null, protein_g: null, carbs_g: null, fat_g: null } : c))
   }
 
   const updateGrams = (id: string, text: string) => {
+    setCompositionEdited(true)
     setComponents(components.map(c => c.id === id ? { ...c, grams: parseFloat(text) || 0 } : c))
   }
 
   const attachCandidate = (id: string, option: IngredientOption, nutrients: NutrientFetch | null) => {
+    setCompositionEdited(true)
     setComponents(components.map(c => c.id === id ? {
       ...c,
       foodId: option.foodId,
@@ -358,6 +504,25 @@ export default function DishComposerScreen() {
   const portionP = hasUnknowns ? null : totalP * multiplier
   const portionC = hasUnknowns ? null : totalC * multiplier
   const portionF = hasUnknowns ? null : totalF * multiplier
+
+  // O5 (report Ch 10 "uncertainty stays visible"): the estimate's range from
+  // the model's OWN numbers — the reviewed fraction priors clamped low/high
+  // and re-derived through the same breakdown path. Honest only while the
+  // composition is still the prior (no manual gram/fat edits), fully
+  // resolved, and under the verified yield; a collapsed band renders nothing
+  // rather than fake precision.
+  const kcalBySlot: Record<string, number | null> = {}
+  for (const c of components) {
+    if (c.slotLabel) kcalBySlot[c.slotLabel] = c.kcal
+  }
+  const foldedSlotLine = clarifiedLines.find((line) => line.foldedIntoFat)
+  if (foldedSlotLine && fatOption.foodId) {
+    // The folded fat slot's kcal comes from the selector's nutrient row.
+    kcalBySlot[foldedSlotLine.label] = fatNutrients?.kcal ?? null
+  }
+  const priorBand = !compositionEdited && !hasUnknowns && useRecipeYield && recipeYield != null && clarifiedRow != null && hasUncertaintyModel
+    ? dishPriorKcalRange({ row: clarifiedRow, kcalPer100gBySlot: kcalBySlot, portionGrams: portionG })
+    : null
 
     const logDish = async () => {
     // UI/UX report §10.1 (Wave 1b): reversible validation and save failures
@@ -448,6 +613,37 @@ export default function DishComposerScreen() {
         <Text style={[s.alert, { color: t.safety }]}>Draft Recipe. Review ingredients and quantities before logging.</Text>
       )}
 
+      {/* O5 (AGENTS.md §0.2): the dish uncertainty model's high-impact
+          clarification questions, ABOVE the slot list. Inline cards on the
+          working surface — no modal walls; every question stays answerable
+          (chips remain tappable after an answer), and Skip proceeds with the
+          recipe defaults exactly as the load-time behavior. */}
+      {clarifyQuestions.length > 0 ? (
+        <View style={{ marginHorizontal: space.md, marginTop: space.md }}>
+          <Disclosure
+            label="Clarify this estimate"
+            caption={
+              unansweredCount > 0
+                ? `${unansweredCount} question${unansweredCount === 1 ? '' : 's'} from this recipe's uncertainty model — answers refine the grams below`
+                : 'All questions answered or skipped'
+            }
+            defaultOpen
+          >
+            {clarifyQuestions.map((question) => (
+              <ClarifyQuestionCard
+                key={question.id}
+                question={question}
+                answer={answers[question.id]}
+                skipped={Boolean(skippedIds[question.id])}
+                appliedGrams={clarifiedLines.find((line) => line.label === question.slotLabel)?.grams ?? null}
+                onAnswer={(option) => answerQuestion(question, option)}
+                onSkip={() => skipQuestion(question)}
+              />
+            ))}
+          </Disclosure>
+        </View>
+      ) : null}
+
       {components.map((c) => (
         <View key={c.id} style={[s.row, { borderColor: t.border, flexDirection: 'column', alignItems: 'stretch' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -490,14 +686,14 @@ export default function DishComposerScreen() {
         label={(item) => item.label}
         a11yLabel={(item) => `Select ${item.label}`}
         isActive={(item) => fatOptionId === item.optionId}
-        onPress={(item) => { setFatOptionId(item.optionId); setFatGrams(String(item.defaultGrams)) }}
+        onPress={(item) => { setFatOptionId(item.optionId); setFatGrams(String(item.defaultGrams)); setCompositionEdited(true) }}
         innerStyle={{ marginHorizontal: space.md }}
         chipStyle={s.chip}
       />
       {fatOption.foodId ? (
         <View style={[s.row, { borderColor: t.border }]}>
           <Text style={[type.body, { color: t.text, flex: 1 }]}>Fat used (g)</Text>
-          <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={fatGrams} onChangeText={setFatGrams} keyboardType="numeric" accessibilityLabel="Grams of cooking fat" />
+          <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={fatGrams} onChangeText={(text) => { setFatGrams(text); setCompositionEdited(true) }} keyboardType="numeric" accessibilityLabel="Grams of cooking fat" />
         </View>
       ) : null}
 
@@ -545,8 +741,32 @@ export default function DishComposerScreen() {
           <Text style={[type.body, { color: t.safety }]}>Resolve ingredients to calculate.</Text>
         ) : (
           <View>
-            <Text style={[type.body, { color: t.proteinText, fontWeight: 'bold' }]}>{Math.round(portionKcal||0)} kcal</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, flexWrap: 'wrap' }}>
+              <Text style={[type.body, { color: t.proteinText, fontWeight: 'bold' }]}>{Math.round(portionKcal||0)} kcal</Text>
+              {hasUncertaintyModel ? (
+                <Badge
+                  variant="uncertain"
+                  size="sm"
+                  label={openUnknowns.length > 0 ? `${openUnknowns.length} unknowns open` : 'Prior — not measured'}
+                  accessibilityLabel={
+                    openUnknowns.length > 0
+                      ? `Estimate with ${openUnknowns.length} open unknowns: ${openUnknowns.map(humanizeUnknownKey).join(', ')}`
+                      : 'Estimate from a curated prior, not a measurement'
+                  }
+                />
+              ) : null}
+            </View>
+            {priorBand ? (
+              <Text style={[type.caption, { color: t.uncertainText, marginTop: 2 }]}>
+                Reviewed prior range {Math.round(priorBand.low)}–{Math.round(priorBand.high)} kcal at {Math.round(portionG)} g
+              </Text>
+            ) : null}
             <Text style={[type.caption, { color: t.textMuted }]}>P: {Math.round(portionP||0)}g · C: {Math.round(portionC||0)}g · F: {Math.round(portionF||0)}g</Text>
+            {openUnknowns.length > 0 ? (
+              <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>
+                Open unknowns: {openUnknowns.map(humanizeUnknownKey).join(' · ')}
+              </Text>
+            ) : null}
             <Text style={[type.caption, { color: t.textFaint, marginTop: 2 }]}>Raw {Math.round(totalRawMass)}g → cooked yield {Math.round(cookedYield)}g</Text>
           </View>
         )}
@@ -699,6 +919,68 @@ function IngredientResolver({
   )
 }
 
+/**
+ * O5: one inline clarification card — the engine's question text, the
+ * model's answer options as ChipRow chips, and a visible Skip that proceeds
+ * with the recipe defaults. An answered card shows what the answer applied
+ * (per-serving grams from the clarified derivation); the chips stay tappable
+ * so the question stays answerable later. No modals — the composer is a
+ * working surface.
+ */
+function ClarifyQuestionCard({
+  question,
+  answer,
+  skipped,
+  appliedGrams,
+  onAnswer,
+  onSkip,
+}: {
+  question: ClarificationQuestion
+  answer: DishClarificationAnswer | undefined
+  skipped: boolean
+  appliedGrams: number | null
+  onAnswer: (option: ClarificationQuestion['options'][number]) => void
+  onSkip: () => void
+}) {
+  const t = useTheme()
+  const chosenLabel = answer
+    ? question.options.find((o) => o.canonicalFoodId === answer.canonicalFoodId && o.amountMultiplier === answer.amountMultiplier)?.label ?? null
+    : null
+  return (
+    <View style={{ gap: space.xs }}>
+      <View style={{ gap: 2 }}>
+        <Text style={[type.body, { color: t.text }]}>{question.questionText}</Text>
+        <Text style={[type.caption, { color: t.textMuted }]}>{humanizeSlotLabel(question.slotLabel)}</Text>
+      </View>
+      <ChipRow
+        items={question.options}
+        keyOf={(option) => option.label}
+        label={(option) => option.label}
+        a11yLabel={(option) => `${question.questionText}: ${option.label}`}
+        isActive={(option) => chosenLabel === option.label}
+        onPress={(option) => onAnswer(option)}
+      />
+      {chosenLabel ? (
+        <Text style={[type.caption, { color: t.affirmText }]}>
+          {chosenLabel} applied — {appliedGrams != null && appliedGrams > 0 ? `about ${appliedGrams} g per serving` : 'removed from the recipe'}
+        </Text>
+      ) : skipped ? (
+        <Text style={[type.caption, { color: t.textMuted }]}>Skipped — keeping the recipe default.</Text>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Skip: ${question.questionText}`}
+          onPress={onSkip}
+          hitSlop={space.sm}
+          style={s.skipBtn}
+        >
+          <Text style={[type.caption, { color: t.textMuted }]}>Skip — keep the recipe default</Text>
+        </Pressable>
+      )}
+    </View>
+  )
+}
+
 const s = StyleSheet.create({
   container: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: space.md },
@@ -707,6 +989,7 @@ const s = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: radius.sm, width: 60, textAlign: 'center', paddingVertical: space.xs, minHeight: MIN_TAP_TARGET },
   searchInput: { borderWidth: 1, borderRadius: radius.sm, paddingVertical: space.xs, paddingHorizontal: 8, marginTop: 4, minHeight: MIN_TAP_TARGET },
   chip: { paddingHorizontal: space.sm, paddingVertical: 6, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, minHeight: MIN_TAP_TARGET, justifyContent: 'center' },
+  skipBtn: { minHeight: MIN_TAP_TARGET, justifyContent: 'center', alignSelf: 'flex-start' },
   btn: { margin: space.md, padding: space.md, borderWidth: 1, borderRadius: radius.md, alignItems: 'center' },
   summary: { margin: space.md, padding: space.md, borderWidth: 1, borderRadius: radius.md },
   saveBtn: { margin: space.md, padding: space.md, borderRadius: radius.md, borderWidth: 1 }

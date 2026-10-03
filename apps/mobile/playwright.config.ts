@@ -11,6 +11,11 @@ import { defineConfig } from '@playwright/test'
  */
 export default defineConfig({
   testDir: './e2e',
+  // Wave 5A: Playwright owns the .spec.ts journeys; the .test.ts file under
+  // e2e/fixtures is the vitest-side fixture invariant (root vitest.config.ts
+  // includes it). Without this, Playwright's default testMatch also picks up
+  // *.test.ts and fails to load it as a CommonJS spec.
+  testMatch: '**/*.spec.ts',
   timeout: 60_000,
   fullyParallel: false,
   // A green e2e suite in CI is the point of WEB-009; retries exist to absorb

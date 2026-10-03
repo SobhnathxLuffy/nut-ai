@@ -7,6 +7,7 @@ import {
   type OperationRecord,
 } from '@nutai/db-adapter'
 import { computeRecipeServing, validateRecipeVersion, type RecipeVersion } from '@nutai/recipe-engine'
+import { ingredientContributions, type RecipeIngredientContribution } from './recipes-contributions'
 import { logManualFood, type ManualFoodSelection, type ManualMealOptions } from './manual-food'
 import { emitFoodMutation } from './food-mutations'
 
@@ -42,6 +43,12 @@ export interface RecipeListItem {
   versionNumber: number
   servingSizeG: number
   energyKcal: number | null
+  /**
+   * Wave 5A (AGENTS.md §0.2): per-ingredient contributed macros in the same
+   * one-serving frame as `servingSizeG`/`energyKcal`, derived by
+   * `ingredientContributions` — the list row's inline caption data.
+   */
+  contributions: RecipeIngredientContribution[]
 }
 
 export interface EditableRecipe extends RecipeDraft {
@@ -269,6 +276,7 @@ export async function listRecipes(db: DbAdapter): Promise<RecipeListItem[]> {
       versionNumber: recipe.versionNumber,
       servingSizeG: serving.servingSizeG,
       energyKcal: serving.energyKcal,
+      contributions: ingredientContributions(recipe),
     })
   }
   return items

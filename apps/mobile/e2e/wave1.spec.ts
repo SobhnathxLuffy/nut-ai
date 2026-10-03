@@ -1,8 +1,35 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+import * as path from 'path';
 
 // ==================================================
 // WAVE 1 FIX VALIDATION E2E (Playwright Snippets)
 // ==================================================
+//
+// BUG-007 and BUG-009 were P2-13 ticketed skips (QA Wave 4 triage): both were
+// blocked on a state-seeding harness, not on missing app behaviour. Wave 5A
+// closed them: the enriched qa-backup.json fixture (see
+// e2e/fixtures/fixture-invariant.test.ts for its invariants) restores a
+// completed profile — goals, an ACTIVE workout, lb units — so both journeys
+// now run against the restored state through the app's real paths.
+
+const BACKUP = path.join(__dirname, 'fixtures', 'qa-backup.json')
+
+/** The restore-backup state-seeding harness (wave3/wave4 pattern). */
+async function restoreOnboarding(page: Page): Promise<void> {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Restore from a backup' }).click();
+  const [chooser] = await Promise.all([
+    page.waitForEvent('filechooser', { timeout: 20_000 }),
+    page.getByText('Choose backup file').click(),
+  ]);
+  await chooser.setFiles(BACKUP);
+  await expect(page.getByText('Backup found')).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Restore', exact: true }).click();
+  const dialog = page.locator('[role="alertdialog"]');
+  await expect(dialog).toBeVisible({ timeout: 10_000 });
+  await dialog.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible({ timeout: 30_000 });
+}
 
 test.describe('BUG-002: Onboarding Dead End', () => {
   test('Continue button has a hint label when disabled on the merged activity screen', async ({ page }) => {
@@ -54,49 +81,94 @@ test.describe('BUG-004: Silent Failure on Bad Deep Links', () => {
 });
 
 test.describe('BUG-007: Historical Day Navigation Blocked', () => {
-  // P2-13 triage (QA Wave 4): ticketed skip, not a silent fixme. Blocker:
-  // reaching Home requires a COMPLETED onboarding state, and a fresh
-  // Playwright profile is redirected into onboarding before '/' ever renders
-  // the DayStrip. Activation condition: a state-seeding harness (drive the
-  // real onboarding flow, or seed the user DB kv flag from qa-backup.json).
-  // Until then the DayStrip history is guarded by unit tests, and the skip
-  // stays visible in every report as `test.skip` with this reason.
-  test.skip('Home screen DayStrip includes 56 days of history instead of just 7', async ({ page }) => {
-    await page.goto('/');
+  // P2-13 ticket CLOSED (Wave 5A). Old blocker: a fresh Playwright profile
+  // was redirected into onboarding before '/' ever rendered the DayStrip —
+  // reaching Home requires a completed onboarding state. The restore-backup
+  // harness (wave3/wave4 pattern) now marks onboarding complete, and the
+  // restored goals row gives Home a real target to render (fixture shape
+  // locked by e2e/fixtures/fixture-invariant.test.ts).
+  test('Home DayStrip renders 56 days of history with a Today marker and disabled future days', async ({ page }) => {
+    await restoreOnboarding(page);
 
-    // We can't easily scroll horizontally in simple assertions, but we can assert
-    // that there are many more days rendered than a single week.
-    const _dayButtons = page.locator('div[role="button"]:has-text("Sun"), div[role="button"]:has-text("Mon")').first();
-    // Assuming Playwright treats the Pressables as accessible roles
-    const allDays = page.getByRole('button');
-    const dayCount = await allDays.count();
-    
-    // There should be > 7 day buttons rendered in the new DayStrip
-    expect(dayCount).toBeGreaterThan(7);
+    // A COLD visit to '/' lands on Home, not onboarding — the gate the skip
+    // was blocked on.
+    await page.goto('/');
+    await expect(page).toHaveURL('/');
+    await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible({ timeout: 30_000 });
+
+    // The restored goals row is live: the hero reads a real target instead
+    // of the skeleton placeholders.
+    await expect(page.getByText(/kcal target/)).toBeVisible({ timeout: 15_000 });
+
+    // The strip: 56 weekday-labelled day buttons — 8 Monday-first weeks, not
+    // the 7 the ticket reported. Today's own textContent matches the same
+    // weekday pattern; it is one of the 56.
+    const dayButtons = page.getByRole('button').filter({ hasText: /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s*\d+$/ });
+    await expect(dayButtons.first()).toBeVisible({ timeout: 15_000 });
+    await expect(dayButtons).toHaveCount(56);
+
+    // Today carries the explicit "Today, <Dow> <date>" accessibility label
+    // and stays tappable.
+    const today = page.getByRole('button', { name: /^Today, (Sun|Mon|Tue|Wed|Thu|Fri|Sat) \d+$/ });
+    await expect(today).toBeVisible();
+    await expect(today).toBeEnabled();
+
+    // Days after today render (the current week renders whole) but are
+    // dimmed and disabled — you cannot log tomorrow. The expected count is
+    // derived from the strip's own Today label, so a run that crosses
+    // midnight between mount and assertion stays correct.
+    const todayLabel = await today.getAttribute('aria-label');
+    const parsed = /^Today, (Sun|Mon|Tue|Wed|Thu|Fri|Sat) (\d+)$/.exec(todayLabel ?? '');
+    expect(parsed).not.toBeNull();
+    const dow = (['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parsed![1]!) + 6) % 7;
+    const futureDays = page.locator('button[aria-disabled="true"]').filter({ hasText: /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s*\d+$/ });
+    await expect(futureDays).toHaveCount(6 - dow);
+
+    // A past day is a real navigation target — selecting one keeps the strip
+    // stable at 56 days with today still tappable.
+    await dayButtons.first().click();
+    await expect(dayButtons).toHaveCount(56);
+    await expect(today).toBeEnabled();
   });
 });
 
 test.describe('BUG-009: Workout Load Units', () => {
-  // P2-13 triage (QA Wave 4): ticketed skip, not a silent fixme. Blockers:
-  // (a) an active workout session — the set editor only exists after
-  // launching a routine — and (b) an accessibility label on the load input
-  // ('Load (lb)') the current editor does not expose. Activation condition: a
-  // workout-seeding harness (qa-backup.json) + the a11y label. The kg
-  // conversion itself IS covered by workout-units unit tests.
-  test.skip('Workout set editor converts user lb input into canonical kg storage seamlessly', async ({ page }) => {
-    // Note: Since this is an E2E snippet, we're stubbing the flow for the test logic.
-    await page.goto('/workout');
+  // P2-13 ticket CLOSED (Wave 5A). Old blockers: (a) no 'Load (lb)'
+  // accessibility label — the Wave 3 set-table rewrite had already added
+  // unit-aware labels ('Load (lb) set N', mirrored in workout.tsx and
+  // log-exercise.tsx via getFieldLabels(unit)); (b) no workout-seeded state —
+  // the enriched qa-backup.json now restores an ACTIVE workout (id 1: Barbell
+  // Bench Press, one completed + one open set) plus the lb unit preference.
+  // The kg conversion arithmetic stays locked by the workout-units unit
+  // tests; this journey proves the DISPLAY round-trip: lb in, canonical kg
+  // stored, same lb digits back out.
+  test('Workout set editor converts user lb input into canonical kg storage seamlessly', async ({ page }) => {
+    await restoreOnboarding(page);
 
-    // Assume weight unit preference is already set to lb
-    const loadInput = page.getByLabel('Load (lb)');
-    await expect(loadInput).toBeVisible();
+    // The seeded workout opens directly — the same screen the Train tab's
+    // Resume button routes to.
+    await page.goto('/workout?id=1');
+    await expect(page.getByRole('heading', { name: 'QA Upper Day' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Barbell Bench Press', { exact: true })).toBeVisible();
 
-    // Fill the input with '100' lb
-    await loadInput.fill('100');
-    
-    // Check that the input still displays '100' (instead of dropping digits or re-converting weirdly)
-    await expect(loadInput).toHaveValue('100');
+    // The set editor exposes unit-aware a11y labels (blocker (a)).
+    const load = page.getByLabel('Load (lb) set 2', { exact: true });
+    await expect(load).toBeVisible();
+    await expect(page.getByLabel('Reps set 2', { exact: true })).toBeVisible();
 
-    // Further E2E checks would submit and verify the SQLite storage, which our Vitest unit test already covers!
+    // The seeded set carries 60 kg canonical; in lb units the editor READS it
+    // back as 132.28 — display converts, storage stays kg.
+    await expect(load).toHaveValue('132.28');
+
+    // Filling 100 lb keeps '100' in the field — no digit-dropping, no
+    // mid-typing reconversion.
+    await load.fill('100');
+    await expect(load).toHaveValue('100');
+
+    // Completing the set writes through the real save path (lb → kg
+    // canonical), and the refreshed row round-trips back to the same digits.
+    await page.getByRole('button', { name: 'Complete set 2' }).click();
+    await expect(load).toHaveValue('100');
+    await expect(page.getByText('2/2 sets complete')).toBeVisible({ timeout: 15_000 });
   });
 });
