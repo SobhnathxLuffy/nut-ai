@@ -110,6 +110,10 @@ const config: ExpoConfig = {
     // Every builder signs with their own free Apple ID — see the plugin doc
     // comment for why this can only ever set the MODE (automatic), never a team.
     './plugins/withAutomaticSigning',
+    // Android: sign release builds with the builder's own upload keystore when
+    // ~/.gradle/gradle.properties provides NUTAI_UPLOAD_* credentials; fall
+    // back to the debug keystore otherwise so a fresh clone still builds.
+    './plugins/withAndroidReleaseSigning',
   ],
 
   // GitHub Pages project sites host the app under /<repo>/ — scripts/
