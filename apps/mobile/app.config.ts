@@ -30,7 +30,7 @@ const SKIP_HEALTHKIT = process.env.SKIP_HEALTHKIT === '1'
 const config: ExpoConfig = {
   name: NAME,
   slug: SLUG,
-  version: '0.1.0',
+  version: '0.1.1',
   // The mark: a white peanut silhouette inside four scan-frame corners on
   // near-black. Source of truth is assets/icon.svg; the PNGs are rendered
   // from it (rsvg-convert), never hand-edited.
@@ -63,7 +63,7 @@ const config: ExpoConfig = {
     package: BUNDLE_ID,
     // First release build baseline; EAS production profile uses autoIncrement
     // so store/update builds never collide.
-    versionCode: 1,
+    versionCode: 2,
     // Native static config: one fixed colour baked into the APK at build time —
     // the runtime theme system cannot apply here. Must stay a literal (QA P2-20
     // exemption), and matches palette.ink900 in src/theme/tokens.ts.

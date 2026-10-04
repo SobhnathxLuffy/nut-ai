@@ -1,7 +1,7 @@
 import { formatWeightKg, kgToLb, type PeriodReport, type WeightUnit } from '@nutai/analytics'
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Badge } from '../../src/components/Badge'
 import { BarChart, LineChart } from '../../src/components/Charts'
@@ -10,6 +10,8 @@ import { localDate, db } from '../../src/data/repo'
 import { readWeightUnit } from '../../src/data/weight-units'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { Skeleton, SkeletonCard } from '../../src/components/Skeleton'
+import { useTabBarBottomInset } from '../../src/theme/layout'
+import { metricCardWidthFor } from '../../src/theme/responsive-grid'
 import { radius, space, type } from '../../src/theme/tokens'
 
 const SECTIONS = ['Overview', 'Body', 'Nutrition', 'Strength', 'Training'] as const
@@ -32,6 +34,12 @@ function displayWeight(kg: number, unit: WeightUnit): number { return unit === '
 export default function Progress() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
+  // Android release QA 2026-10: metric cards used width:'48%' inside a
+  // flexWrap+gap container — the same Yoga measurement class that collapsed
+  // Food's quick-action tiles on device. Computed pixel widths instead.
+  const { width: windowWidth } = useWindowDimensions()
+  const tabBarInset = useTabBarBottomInset()
+  const metricCardWidth = metricCardWidthFor(windowWidth)
   const [section, setSection] = useState<Section>('Overview')
   const [window, setWindow] = useState<WindowKey>('30D')
   const [report, setReport] = useState<PeriodReport | null>(null)
@@ -53,12 +61,16 @@ export default function Progress() {
   useFocusEffect(useCallback(() => { void refresh() }, [refresh]))
 
   return (
-    <ScrollView style={{ backgroundColor: theme.bg }} contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 150, gap: space.md }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ backgroundColor: theme.bg }} contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: tabBarInset, gap: space.md }} showsVerticalScrollIndicator={false}>
       <Text accessibilityRole="header" style={[type.title, { color: theme.text }]}>Progress</Text>
       <Text style={[type.caption, { color: theme.textMuted }]}>Stored data only. Incomplete nutrition days stay out of averages.</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+      {/* Android release QA 2026-10: the section row used to be a horizontal
+          ScrollView with the indicator suppressed — five 44pt chips sum wider
+          than a 412px phone, so "Training" rendered hard-clipped ("Tr…"). A
+          wrapping chip row keeps every label fully readable at any width. */}
+      <View style={styles.tabs}>
         {SECTIONS.map((item) => <Chip key={item} label={item} selected={section === item} onPress={() => setSection(item)} />)}
-      </ScrollView>
+      </View>
       <View style={styles.windows}>
         {WINDOWS.map((item) => <Chip key={item.key} label={item.key} selected={window === item.key} onPress={() => setWindow(item.key)} compact />)}
       </View>
@@ -69,7 +81,7 @@ export default function Progress() {
         <View style={{ gap: space.md }}>
           <View style={styles.metricGrid}>
             {[0, 1, 2, 3, 4, 5].map((i) => (
-              <Skeleton key={i} width="48%" height={120} radius={radius.lg} />
+              <Skeleton key={i} width={metricCardWidth} height={120} radius={radius.lg} />
             ))}
           </View>
           <SkeletonCard height={180} lines={1} />
@@ -77,11 +89,11 @@ export default function Progress() {
       ) : null}
       {error ? <Text accessibilityRole="alert" style={[type.body, { color: theme.safety }]}>{error}</Text> : null}
       {!loading && report ? <>
-        {section === 'Overview' ? <Overview report={report} unit={weightUnit} /> : null}
+        {section === 'Overview' ? <Overview report={report} unit={weightUnit} metricCardWidth={metricCardWidth} /> : null}
         {section === 'Body' ? <Body report={report} unit={weightUnit} /> : null}
         {section === 'Nutrition' ? <Nutrition report={report} /> : null}
         {section === 'Strength' ? <Strength report={report} unit={weightUnit} /> : null}
-        {section === 'Training' ? <Training report={report} /> : null}
+        {section === 'Training' ? <Training report={report} metricCardWidth={metricCardWidth} /> : null}
       </> : null}
       <View style={styles.reportRow}>
         <Chip label="Weekly report" selected={false} onPress={() => router.push('/weekly-report' as never)} />
@@ -91,15 +103,15 @@ export default function Progress() {
   )
 }
 
-function Overview({ report, unit }: { report: PeriodReport; unit: WeightUnit }) {
+function Overview({ report, unit, metricCardWidth }: { report: PeriodReport; unit: WeightUnit; metricCardWidth: number }) {
   return <>
     <View style={styles.metricGrid}>
-      <MetricCard label="Weight trend" value={report.body.change_kg === null ? '—' : signedWeight(report.body.change_kg, unit)} detail={`${report.body.points.length} weigh-ins`} />
-      <MetricCard label="Average calories" value={metric(report.nutrition.avg_kcal)} detail={`${report.nutrition.days_included} valid days`} />
-      <MetricCard label="Average protein" value={metric(report.nutrition.avg_protein_g, ' g')} detail="valid days only" />
-      <MetricCard label="Workouts" value={String(report.training.session_count)} detail={`${report.training.sessions_per_week.toFixed(1)} per week`} />
-      <MetricCard label="Recent PRs" value={String(report.prs.length)} detail="completed working sets" />
-      <MetricCard label="Complete nutrition days" value={String(report.nutrition.complete_days)} detail={`${report.data_quality.incomplete_nutrition_days} incomplete`} />
+      <MetricCard width={metricCardWidth} label="Weight trend" value={report.body.change_kg === null ? '—' : signedWeight(report.body.change_kg, unit)} detail={`${report.body.points.length} weigh-ins`} />
+      <MetricCard width={metricCardWidth} label="Average calories" value={metric(report.nutrition.avg_kcal)} detail={`${report.nutrition.days_included} valid days`} />
+      <MetricCard width={metricCardWidth} label="Average protein" value={metric(report.nutrition.avg_protein_g, ' g')} detail="valid days only" />
+      <MetricCard width={metricCardWidth} label="Workouts" value={String(report.training.session_count)} detail={`${report.training.sessions_per_week.toFixed(1)} per week`} />
+      <MetricCard width={metricCardWidth} label="Recent PRs" value={String(report.prs.length)} detail="completed working sets" />
+      <MetricCard width={metricCardWidth} label="Complete nutrition days" value={String(report.nutrition.complete_days)} detail={`${report.data_quality.incomplete_nutrition_days} incomplete`} />
     </View>
     <Warnings report={report} />
   </>
@@ -156,14 +168,14 @@ function Strength({ report, unit }: { report: PeriodReport; unit: WeightUnit }) 
   </>
 }
 
-function Training({ report }: { report: PeriodReport }) {
+function Training({ report, metricCardWidth }: { report: PeriodReport; metricCardWidth: number }) {
   const theme = useTheme(); const muscles = Object.entries(report.training.muscle_group_sets).sort((a, b) => b[1] - a[1])
   return <>
     <View style={styles.metricGrid}>
-      <MetricCard label="Sessions" value={String(report.training.session_count)} detail={`${report.training.sessions_per_week.toFixed(1)} / week`} />
-      <MetricCard label="Working sets" value={String(report.training.working_sets)} detail={`${report.training.working_sets_per_week.toFixed(1)} / week`} />
-      <MetricCard label="Session duration" value={report.training.average_session_duration_min === null ? '—' : `${Math.round(report.training.average_session_duration_min)} min`} detail="average completed session" />
-      <MetricCard label="Exercises" value={String(report.training.exercise_trends.length)} detail="with working sets" />
+      <MetricCard width={metricCardWidth} label="Sessions" value={String(report.training.session_count)} detail={`${report.training.sessions_per_week.toFixed(1)} / week`} />
+      <MetricCard width={metricCardWidth} label="Working sets" value={String(report.training.working_sets)} detail={`${report.training.working_sets_per_week.toFixed(1)} / week`} />
+      <MetricCard width={metricCardWidth} label="Session duration" value={report.training.average_session_duration_min === null ? '—' : `${Math.round(report.training.average_session_duration_min)} min`} detail="average completed session" />
+      <MetricCard width={metricCardWidth} label="Exercises" value={String(report.training.exercise_trends.length)} detail="with working sets" />
     </View>
     <Card title="Muscle-group sets">
       <BarChart points={muscles.map(([name, sets], index) => ({ x: index, y: sets, id: name, label: name }))} color={theme.fat} emptyText="No working-set muscle data in this period." formatValue={(value) => `${value.toFixed(1)} sets`} />
@@ -175,7 +187,7 @@ function Training({ report }: { report: PeriodReport }) {
 
 function Warnings({ report }: { report: PeriodReport }) { return report.data_quality.warnings.length > 0 ? <Card title="Data quality">{report.data_quality.warnings.map((warning) => <Muted key={warning}>{warning}</Muted>)}</Card> : null }
 function Card({ title, children }: { title: string; children: React.ReactNode }) { const t = useTheme(); return <View style={[styles.card, { backgroundColor: t.bgElevated, borderColor: t.border }]}><Text style={[type.heading, { color: t.text }]}>{title}</Text>{children}</View> }
-function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) { const t = useTheme(); return <View style={[styles.metricCard, { backgroundColor: t.bgSunken }]}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[styles.metricValue, { color: t.text }]}>{value}</Text><Text style={[type.caption, { color: t.textFaint }]}>{detail}</Text></View> }
+function MetricCard({ label, value, detail, width }: { label: string; value: string; detail: string; width: number }) { const t = useTheme(); return <View style={[styles.metricCard, { width, backgroundColor: t.bgSunken }]}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[styles.metricValue, { color: t.text }]}>{value}</Text><Text style={[type.caption, { color: t.textFaint }]}>{detail}</Text></View> }
 function SmallMetric({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={{ minWidth: '44%' }}><Text style={[type.caption, { color: t.textMuted }]}>{label}</Text><Text style={[type.bodyStrong, { color: t.text }]}>{value}</Text></View> }
 function DataRow({ label, value }: { label: string; value: string }) { const t = useTheme(); return <View style={styles.dataRow}><Text style={[type.body, { color: t.text, flex: 1 }]}>{label}</Text><Text style={[type.bodyStrong, { color: t.text }]}>{value}</Text></View> }
 function Muted({ children }: { children: React.ReactNode }) { const t = useTheme(); return <Text style={[type.caption, { color: t.textMuted, lineHeight: 19 }]}>{children}</Text> }
@@ -190,8 +202,11 @@ function signedWeight(kg: number, unit: WeightUnit): string {
 }
 
 const styles = StyleSheet.create({
-  tabs: { gap: space.sm, paddingRight: space.lg }, windows: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
+  // Android release QA 2026-10: the section chips wrap (2 rows on phones,
+  // 1 row on wide screens) — every label stays fully visible without a hidden
+  // horizontal scroll affordance.
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }, windows: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   card: { borderWidth: 1, borderRadius: radius.xl, padding: space.lg, gap: space.md }, metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
-  metricCard: { width: '48%', minHeight: 120, borderRadius: radius.lg, padding: space.md, gap: space.xs }, metricValue: { ...type.title },
+  metricCard: { minHeight: 120, borderRadius: radius.lg, padding: space.md, gap: space.xs }, metricValue: { ...type.title },
   dataRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }, reportRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
 })

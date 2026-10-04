@@ -32,21 +32,25 @@ async function restoreOnboarding(page: Page): Promise<void> {
 }
 
 test.describe('BUG-002: Onboarding Dead End', () => {
-  test('Continue button has a hint label when disabled on the merged activity screen', async ({ page }) => {
-    // Wave 3 (Ch 8.1): the old sex + workouts (+ professional) screens merged
-    // into the single activity screen — three card groups, one Continue.
-    await page.goto('/onboarding/activity');
+  test('the single-page form gates its CTA until every required question is answered', async ({ page }) => {
+    // Owner QA 2026-10: onboarding is ONE page — every question from the old
+    // 12-step flow is a section with ONE Continue ("See my plan"). The gate
+    // semantics survive: the CTA stays disabled until EVERY required field
+    // has an answer, with the hint visible the whole time. Same-labelled
+    // Yes/No pairs (professional vs rollover) are scoped by radiogroup.
+    await page.goto('/onboarding');
 
     // Button should be visible but disabled initially
-    const continueBtn = page.getByRole('button', { name: 'Continue' });
+    const continueBtn = page.getByRole('button', { name: 'See my plan' });
     await expect(continueBtn).toBeDisabled();
 
-    // Explicitly check for the new hint label (every group must be answered)
+    // Explicitly check for the gate hint (every required question must be answered)
     const hintLabel = page.getByText('Answer every question to continue');
     await expect(hintLabel).toBeVisible();
 
-    // Selecting one option is not enough on a merged screen: the button stays
-    // disabled until every group has an answer.
+    const aboutYou = page.getByRole('radiogroup', { name: /personal trainer or registered dietitian/ }).first();
+    // Selecting one option is not enough: the button stays disabled until
+    // every required group has an answer.
     await page.getByRole('radio', { name: 'Female' }).click();
     await expect(continueBtn).toBeDisabled();
 
@@ -54,10 +58,21 @@ test.describe('BUG-002: Onboarding Dead End', () => {
     await expect(continueBtn).toBeDisabled();
 
     // Options render with accessibilityRole="radio", not "button". NOTE
-    // exact: 'No' is a substring of "Workouts now and then" under Playwright's
-    // default case-insensitive partial match, which would click the wrong
-    // radio and leave the professional group unanswered.
-    await page.getByRole('radio', { name: 'No', exact: true }).click();
+    // exact + radiogroup scope: 'No' is a substring of "Workouts now and
+    // then" under Playwright's default partial match, and the single page
+    // has a SECOND No (the rollover group).
+    await aboutYou.getByRole('radio', { name: 'No', exact: true }).click();
+    // About-you done — but diet, accomplish, rollover and provider are still open.
+    await expect(continueBtn).toBeDisabled();
+
+    await page.getByRole('radio', { name: 'Balanced' }).click();
+    await page.getByRole('radio', { name: 'Lack of consistency' }).click();
+    await page.getByRole('radio', { name: 'Eat and live healthier' }).click();
+    await page
+      .getByRole('radiogroup', { name: /Rollover/ })
+      .getByRole('radio', { name: 'Yes', exact: true })
+      .click();
+    await page.getByRole('radio', { name: 'No key for now' }).click();
     await expect(continueBtn).toBeEnabled();
   });
 });

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type GestureResponderEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -39,6 +40,8 @@ import {
 import { subscribeFoodMutations } from '../../src/data/food-mutations'
 import { selectionAsync } from '../../src/utils/haptics'
 import { useMotionScale, useTheme } from '../../src/theme/ThemeProvider'
+import { useTabBarBottomInset } from '../../src/theme/layout'
+import { dayColumnWidthFor } from '../../src/theme/responsive-grid'
 import { radius, space, type } from '../../src/theme/tokens'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -73,6 +76,11 @@ const PULL_THRESHOLD = 72
  * copy; the strip gains a today-pulse dot and future-dimmed days.
  */
 export default function Home() {
+  // Android release QA 2026-10: the scroll bottom pad is DERIVED from the
+  // real floating tab-bar + FAB + navigation-bar overlay, not a magic 150 —
+  // timeline rows no longer slide underneath the bar/FAB on the Samsung
+  // gesture-nav layout.
+  const tabBarInset = useTabBarBottomInset()
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const motionScale = useMotionScale()
@@ -274,7 +282,7 @@ export default function Home() {
     return (
       <ScrollView
         style={{ backgroundColor: theme.bg }}
-        contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: 150 }}
+        contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: tabBarInset }}
         showsVerticalScrollIndicator={false}
         {...pullProps}
         refreshControl={
@@ -362,7 +370,7 @@ export default function Home() {
   return (
     <ScrollView
       style={{ backgroundColor: theme.bg }}
-      contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: 150 }}
+      contentContainerStyle={{ paddingTop: insets.top + space.sm, paddingBottom: tabBarInset }}
       showsVerticalScrollIndicator={false}
       {...pullProps}
       refreshControl={
@@ -575,6 +583,13 @@ function PullIndicator({
 function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: number) => void }) {
   const theme = useTheme()
   const motionScale = useMotionScale()
+  // Android release QA 2026-10: day columns used `flex: 1` (basis 0) AND a
+  // fixed width in the MAIN axis of a horizontal ScrollView — Yoga resolves
+  // main-axis flexBasis over width, so column measurement was edge-dependent
+  // and the strip clipped left/right on device. Columns now take an exact
+  // computed width (~7 visible days) with no flex competition.
+  const { width: windowWidth } = useWindowDimensions()
+  const dayWidth = dayColumnWidthFor(windowWidth)
   // The strip is anchored to the moment Home mounted — it must not re-derive
   // its weeks mid-session and slide the calendar under the user's finger.
   const now = useMemo(() => new Date(), [])
@@ -608,7 +623,7 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
       showsHorizontalScrollIndicator={false}
       onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: false })}
       style={{ marginTop: space.lg }}
-      contentContainerStyle={{ paddingHorizontal: space.md }}
+      contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.xs }}
     >
       {days.map((off) => {
         const d = new Date(now.getTime() + off * 86_400_000)
@@ -632,9 +647,12 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
             accessibilityRole="button"
             accessibilityLabel={flags.today ? `Today, ${DAY_LABELS[d.getDay()]} ${d.getDate()}` : undefined}
             accessibilityState={{ selected: isSel, disabled: flags.future }}
-            style={[styles.dayCol, { width: 50 }, isSel && { backgroundColor: theme.bgElevated }]}
+            style={[styles.dayCol, { width: dayWidth }, isSel && { backgroundColor: theme.bgElevated }]}
           >
-            <Text style={[type.caption, { color: flags.future ? theme.textFaint : theme.textMuted }]}>
+            <Text
+              maxFontSizeMultiplier={1.2}
+              style={[type.caption, { color: flags.future ? theme.textFaint : theme.textMuted }]}
+            >
               {DAY_LABELS[d.getDay()]}
             </Text>
             <View
@@ -649,7 +667,10 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
                 },
               ]}
             >
-              <Text style={[type.bodyStrong, { color: flags.future ? theme.textFaint : theme.text }]}>
+              <Text
+                maxFontSizeMultiplier={1.2}
+                style={[type.bodyStrong, { color: flags.future ? theme.textFaint : theme.text }]}
+              >
                 {d.getDate()}
               </Text>
             </View>
@@ -750,8 +771,10 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     borderRadius: radius.pill,
   },
-  strip: { flexDirection: 'row', paddingHorizontal: space.md, marginTop: space.lg },
-  dayCol: { flex: 1, alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.lg, gap: space.sm },
+  strip: { flexDirection: 'row', paddingHorizontal: space.lg, marginTop: space.lg },
+  // No flex here — width comes from the caller (see DayStrip) so horizontal
+  // main-axis measurement is exact instead of basis-0 + grow.
+  dayCol: { alignItems: 'center', paddingVertical: space.sm, borderRadius: radius.lg, gap: space.sm },
   dayCircle: {
     width: 40, height: 40, borderRadius: radius.pill, borderWidth: 1.5,
     alignItems: 'center', justifyContent: 'center',

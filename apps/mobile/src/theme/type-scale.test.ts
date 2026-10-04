@@ -415,17 +415,18 @@ describe('Wave 4b source inspection — the scaling props actually landed', () =
     // not a silent clip.
     const sites: Array<[string, RegExp]> = [
       ['app/(tabs)/index.tsx', /hero:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
-      ['app/onboarding/index.tsx', /title:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
-      ['app/onboarding/health.tsx', /heading:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['app/onboarding/plan.tsx', /goal:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
       // bigNum is monoData raised to the display size — same cap math, same 68.
       ['app/onboarding/plan.tsx', /bigNum:\s*\{[^}]*lineHeight:\s*68/],
-      ['app/onboarding/rollover.tsx', /big:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['src/components/onboarding/Controls.tsx', /readoutValue:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['src/components/onboarding/Controls.tsx', /readoutUnit:\s*\{[^}]*\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['src/components/onboarding/Controls.tsx', /editInput:\s*\{[\s\S]{0,300}?\.\.\.type\.display,\s*lineHeight:\s*68/],
       ['src/components/onboarding/Chrome.tsx', /title:\s*\{[\s\S]{0,500}?\.\.\.type\.display,[\s\S]{0,300}?lineHeight:\s*68/],
     ]
+    // Owner QA 2026-10 note: app/onboarding/index.tsx (welcome hero) and
+    // app/onboarding/{health,rollover}.tsx carried display spreads that went
+    // with their screens in the single-page collapse; Chrome's onboarding
+    // title (used by the single page) and plan.tsx keep the headroom pinned.
     for (const [rel, pattern] of sites) {
       expect(read(rel), `display call site without headroom: ${rel}`).toMatch(pattern)
     }

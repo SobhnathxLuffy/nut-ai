@@ -32,6 +32,14 @@ apps/mobile/src/inference/pathB/models/*.tflite
 *.mobileprovision
 *.keystore
 
+# The CI upload key is the ONE deliberate exception (owner QA 2026-10):
+# v0.1.0 shipped with an ephemeral CI debug key, which made every later build
+# uninstall-only. A stable, committed CI key keeps the public Release APKs
+# upgrade-safe forever. It guards nothing secret (a personal offline tracker,
+# no server, no provider keys) and the REAL release keystore stays outside the
+# repo — local builds keep using NUTAI_UPLOAD_* from ~/.gradle.
+!apps/mobile/ci/ci-upload.keystore
+
 # Golden set / eval working data — lives in its own repo (CC BY 4.0), and the
 # non-commercial supplements (NutritionVerse, FPB, MetaFood3D) must NEVER be
 # redistributed from here. See PLAN-ADDENDUM-2026-07-31.md §3.3.

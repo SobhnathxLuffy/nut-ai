@@ -6,48 +6,38 @@ import { FLOW, nextRoute, stepIndex, TOTAL_STEPS } from './flow'
 import type { OnboardingAnswers } from './store'
 
 /**
- * Wave 3 — UI/UX report Ch 8.1: "Onboarding: 22 screens to 12".
+ * Owner QA 2026-10 — onboarding collapsed to a SINGLE PAGE.
  *
- * This file pins the CONTRACT of the merge, not the pixels:
+ * "Why is the onboarding giving three things in one page so many times? Don't
+ * do that — give everything one single page."
  *
- *   1. The flow is exactly the twelve steps, in the report's order (plan is the
- *      terminal step because its CTA persists and exits — notifications sits
- *      just before it, as in the pre-merge flow).
- *   2. The progress rail is continuous: every next hop is the next FLOW entry,
- *      and the last step is the reveal. No screen can reset the count.
- *   3. DATA INTEGRITY — the non-negotiable: the merged flow captures EXACTLY
- *      the same answer fields the plan generation consumes as the 22-screen
- *      flow did. Enumerated from the store type, asserted from the screens'
- *      own source (setAnswer / field: / field= forms), before-vs-after diff
- *      encoded as an exact set.
- *   4. The twelve dead routes are actually dead — nothing in app/, src/ or
- *      e2e/ deep-links to a screen that no longer exists.
+ * This file pins the CONTRACT of that collapse, not the pixels:
+ *
+ *   1. The flow is exactly TWO pages: the single form (index) and the plan
+ *      reveal (plan, which persists and exits). No interstitials.
+ *   2. The progress rail is continuous: the form is 1/2, the reveal 2/2.
+ *   3. DATA INTEGRITY — the non-negotiable: the single page captures EXACTLY
+ *      the same answer fields the twelve-step flow captured. The harvest now
+ *      walks BOTH the route files and the shared onboarding components, since
+ *      the question controls live in src/components/onboarding/.
+ *   4. The dead routes are actually dead — nothing in app/, src/ or e2e/
+ *      deep-links to a screen that no longer exists.
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
 const APP_ROOT = join(here, '../..')
 const ONBOARDING_DIR = join(APP_ROOT, 'app/onboarding')
+const COMPONENTS_DIR = join(APP_ROOT, 'src/components/onboarding')
 
-/** The twelve screens + the uncounted alternate entry, as files on disk. */
-const EXPECTED_FILES = [
-  '_layout.tsx',
-  'accomplish.tsx',
-  'activity.tsx',
-  'body.tsx',
-  'desired-weight.tsx',
-  'diet.tsx',
-  'health.tsx',
-  'index.tsx',
-  'notifications.tsx',
-  'plan.tsx',
-  'projection.tsx',
-  'provider.tsx',
-  'restore.tsx',
-  'rollover.tsx',
-].sort()
+/** The single form + the reveal + the uncounted alternate entry. */
+const EXPECTED_FILES = ['_layout.tsx', 'index.tsx', 'plan.tsx', 'restore.tsx'].sort()
 
-/** Screens absorbed by a merge or cut as motivational interstitials. */
+/** Screens absorbed into the single page, plus the older merge casualties. */
 const DEAD_ROUTES = [
+  // absorbed by the single-page collapse (owner QA 2026-10):
+  'activity', 'diet', 'accomplish', 'body', 'desired-weight', 'provider',
+  'health', 'projection', 'rollover', 'notifications',
+  // absorbed by the original 22→12 merge:
   'sex', 'workouts', 'birth', 'height', 'weight', 'professional',
   'blocker', 'apikey', 'trend', 'potential', 'thanks', 'generate',
 ] as const
@@ -90,14 +80,18 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-/** Fields the onboarding screens write, harvested from their own source. */
+/**
+ * Fields the onboarding surfaces write, harvested from their own source —
+ * route files AND the shared section components (the single page moved the
+ * controls into src/components/onboarding/OnboardingSections.tsx).
+ */
 function capturedFields(): Set<string> {
-  const files = walk(ONBOARDING_DIR)
+  const files = [...walk(ONBOARDING_DIR), ...walk(COMPONENTS_DIR)]
   const fields = new Set<string>()
   for (const file of files) {
     const source = readFileSync(file, 'utf8')
-    // Three capture forms, one per screen family:
-    //   setAnswer('field', …)                 — imperative screens
+    // Three capture forms:
+    //   setAnswer('field', …)                 — imperative screens/sections
     //   field: 'field'                        — questionGroup/yesNoGroup specs
     //   field="field"                         — OptionScreen JSX prop
     for (const m of source.matchAll(/setAnswer\(\s*'([A-Za-z]+)'/g)) fields.add(m[1]!)
@@ -107,23 +101,19 @@ function capturedFields(): Set<string> {
   return fields
 }
 
-describe('Ch 8.1: the flow is twelve steps', () => {
-  it('FLOW is exactly the twelve screens, in the report order', () => {
-    expect([...FLOW]).toEqual([
-      'index', 'activity', 'diet', 'accomplish', 'body', 'desired-weight',
-      'provider', 'health', 'projection', 'rollover', 'notifications', 'plan',
-    ])
-    expect(TOTAL_STEPS).toBe(12)
+describe('owner QA 2026-10: the flow is ONE page + the reveal', () => {
+  it('FLOW is exactly the form and the reveal', () => {
+    expect([...FLOW]).toEqual(['index', 'plan'])
+    expect(TOTAL_STEPS).toBe(2)
   })
 
-  it('the onboarding directory is exactly the 12 screens + restore + layout', () => {
+  it('the onboarding directory is exactly the form + plan + restore + layout', () => {
     expect(readdirSync(ONBOARDING_DIR).sort()).toEqual(EXPECTED_FILES)
   })
 
-  it('the rail runs 1..12 with no gaps — welcome counts, the reveal finishes', () => {
+  it('the rail runs 1..2 — the form is 1/2, the reveal finishes at 2/2', () => {
     expect(stepIndex('index')).toBe(1)
-    expect(stepIndex('activity')).toBe(2)
-    expect(stepIndex('plan')).toBe(12)
+    expect(stepIndex('plan')).toBe(2)
     for (const step of FLOW) expect(stepIndex(step)).toBeGreaterThan(0)
   })
 
@@ -134,10 +124,28 @@ describe('Ch 8.1: the flow is twelve steps', () => {
     // The terminal step's fallback is the plan itself (it never routes on).
     expect(nextRoute('plan')).toBe('/onboarding/plan')
   })
+
+  it('the single page renders every section — no question was dropped from the page', () => {
+    const form = readFileSync(join(ONBOARDING_DIR, 'index.tsx'), 'utf8')
+    for (const section of [
+      'AboutYouSection',
+      'DietSection',
+      'AccomplishSection',
+      'BodySection',
+      'DesiredWeightSection',
+      'ProviderSection',
+      'PreferencesSection',
+      'HealthSection',
+    ]) {
+      expect(form, `${section} on the single page`).toContain(section)
+    }
+    // The one Continue opens the plan reveal — no per-section navigation.
+    expect(form).toContain("'/onboarding/plan'")
+  })
 })
 
-describe('Ch 8.1: data integrity — the merge drops zero fields', () => {
-  it('the screens capture EXACTLY the fields the plan generation consumes', () => {
+describe('data integrity — the collapse drops zero fields', () => {
+  it('the single page captures EXACTLY the fields the plan generation consumes', () => {
     const captured = capturedFields()
     expect([...captured].sort()).toEqual([...EXPECTED_FIELDS].sort())
   })
@@ -148,7 +156,7 @@ describe('Ch 8.1: data integrity — the merge drops zero fields', () => {
     expect(capturedFields().has('goal')).toBe(false)
   })
 
-  it('the twelve dead routes are referenced nowhere in app/, src/ or e2e/', () => {
+  it('the dead routes are referenced nowhere in app/, src/ or e2e/', () => {
     const trees = ['app', 'src', 'e2e'].map((t) => join(APP_ROOT, t))
     const offenders: string[] = []
     for (const route of DEAD_ROUTES) {
@@ -166,6 +174,8 @@ describe('Ch 8.1: data integrity — the merge drops zero fields', () => {
 
   it('the deleted chart components went with their screens', () => {
     const charts = readFileSync(join(here, '../components/onboarding/Charts.tsx'), 'utf8')
+    // ProjectionChart survives the collapse — it renders inline on the single
+    // page (DesiredWeightSection) instead of owning a screen.
     expect(charts).toContain('export function ProjectionChart')
     expect(charts).not.toContain('TrendComparisonChart')
     expect(charts).not.toContain('TransitionChart')

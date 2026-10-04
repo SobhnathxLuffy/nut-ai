@@ -1,56 +1,24 @@
 /**
  * The onboarding flow, as data.
  *
- * Keeping the order in one place is what makes the progress bar honest: every
- * screen derives its own position from this array rather than hardcoding a
- * number, so inserting or removing a screen can never leave the bar lying.
+ * Owner QA 2026-10: "give everything one single page." The flow collapsed from
+ * twelve pushed screens to TWO pages:
  *
- * Wave 3 (UI/UX report Ch. 8.1): the flow is TWELVE steps, down from twenty
- * plus interstitials. The merge map, screen by screen:
+ *   index — the SINGLE-PAGE FORM: every question from the old steps 2–11
+ *           (about-you, diet, accomplish, body pickers, desired weight,
+ *           provider + key, health, projection preview, rollover, reminders
+ *           copy) rendered as sections with ONE Continue. The controls are the
+ *           same widgets extracted verbatim into
+ *           src/components/onboarding/OnboardingSections.tsx.
+ *   plan  — the reveal — computes the target from the store, persists through
+ *           persistOnboarding (the single writer of user.db + the completion
+ *           marker), and replaces to the tabs. Untouched by this merge.
  *
- *   index        welcome — the live scan demo (step 1; renders no rail, it is
- *                the landing, but it counts — the rail on the next screen
- *                starts at 2/12, never a per-screen reset)
- *   activity     sex + workouts + professional (three grouped card questions;
- *                'professional' folded here because its field IS consumed by
- *                the plan reveal and persistOnboarding)
- *   diet         diet + blocker (two grouped card questions)
- *   accomplish   kept as-is
- *   body         birth + height + weight (the combined picker screen; the
- *                ruler/wheel pickers and their selection haptics kept verbatim)
- *   desired-weight kept as-is
- *   provider     provider + API key on one screen (CredentialForm inline)
- *   health       Apple Health permission (kept as-is)
- *   projection   trend + potential FUSED into one chart moment
- *   rollover     kept as-is
- *   notifications kept as-is
- *   plan         the reveal — the hero moment and the final step
- *
- * CUT entirely: thanks, generate (pure motivational interstitials), trend,
- * potential (fused into 'projection'), and the single-question screens the
- * merges absorbed. `restore` remains an alternate entry from the landing page
- * and is deliberately not a step.
+ * `restore` remains an alternate entry from the landing page and is
+ * deliberately not a step. The progress rail is honest at 2 steps: the form is
+ * 1/2, the reveal is 2/2.
  */
-export const FLOW = [
-  'index',
-  'activity',
-  'diet',
-  'accomplish',
-  'body',
-  // No 'goal' screen. Direction is DERIVED from current vs desired weight — see
-  // inferredGoal(). Asking after both numbers are known can only produce
-  // agreement or a contradiction the app then has to resolve silently.
-  'desired-weight',
-  // 'projection' sits after the weights so its curve can follow the real
-  // direction. The reference draws a decline unconditionally, which is wrong
-  // for a bulk.
-  'provider',
-  'health',
-  'projection',
-  'rollover',
-  'notifications',
-  'plan',
-] as const
+export const FLOW = ['index', 'plan'] as const
 
 export type Step = (typeof FLOW)[number]
 

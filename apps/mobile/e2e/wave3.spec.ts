@@ -80,17 +80,29 @@ test.describe('P2-15: web dirty-guard on custom-food', () => {
 })
 
 test.describe('P2-17..19 smoke: onboarding chrome still works after tokenization', () => {
-  test('merged activity screen renders, gates its CTA, and unlocks only when every group is answered', async ({ page }) => {
-    // Wave 3 (Ch 8.1): the old sex screen merged into the activity screen.
-    await page.goto('/onboarding/activity')
-    const continueBtn = page.getByRole('button', { name: 'Continue' })
+  test('the single-page form renders, gates its CTA, and unlocks when every required answer is in', async ({ page }) => {
+    // Owner QA 2026-10: the 12-step flow collapsed to ONE page. Same gate,
+    // same hint, same option cards — scoped by radiogroup where labels repeat.
+    await page.goto('/onboarding')
+    const continueBtn = page.getByRole('button', { name: 'See my plan' })
     await expect(continueBtn).toBeDisabled()
     await expect(page.getByText('Answer every question to continue')).toBeVisible()
     await page.getByRole('radio', { name: 'Female' }).click()
     await expect(continueBtn).toBeDisabled()
     await page.getByRole('radio', { name: '3-5' }).click()
     await expect(continueBtn).toBeDisabled()
-    await page.getByRole('radio', { name: 'No', exact: true }).click()
+    await page
+      .getByRole('radiogroup', { name: /personal trainer or registered dietitian/ })
+      .getByRole('radio', { name: 'No', exact: true })
+      .click()
+    await page.getByRole('radio', { name: 'Balanced' }).click()
+    await page.getByRole('radio', { name: 'Lack of consistency' }).click()
+    await page.getByRole('radio', { name: 'Eat and live healthier' }).click()
+    await page
+      .getByRole('radiogroup', { name: /Rollover/ })
+      .getByRole('radio', { name: 'Yes', exact: true })
+      .click()
+    await page.getByRole('radio', { name: 'No key for now' }).click()
     await expect(continueBtn).toBeEnabled()
   })
 })

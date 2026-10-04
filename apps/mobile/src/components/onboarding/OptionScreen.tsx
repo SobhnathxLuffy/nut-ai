@@ -122,6 +122,59 @@ export function yesNoGroup<K extends keyof OnboardingAnswers>(
   return { field: spec.field, label: spec.label, hint: spec.hint, options: opts }
 }
 
+/**
+ * Render question groups — the ONE group primitive, shared by
+ * GroupedOptionScreen (step pages) and the single-page onboarding form
+ * (OnboardingSections). Owns the heading/hint rhythm and the option cards.
+ */
+export function QuestionGroups({
+  groups,
+  compactTop = false,
+}: {
+  groups: ReadonlyArray<QuestionGroup>
+  /** The first group sits directly beneath a section heading — trim its top gap. */
+  compactTop?: boolean
+}) {
+  const theme = useTheme()
+  const answers = useAnswers()
+  return (
+    <View>
+      {groups.map((g, gi) => (
+        // radiogroup semantics: screen readers announce the question with its
+        // options, and e2e can scope same-labelled Yes/No pairs (professional
+        // vs rollover on the single-page form).
+        <View
+          key={String(g.field)}
+          accessibilityRole="radiogroup"
+          accessibilityLabel={g.label}
+          style={gi > 0 || !compactTop ? styles.groupGap : undefined}
+        >
+          <Text style={[type.heading, { color: theme.text }]}>{g.label}</Text>
+          {g.hint ? (
+            <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
+              {g.hint}
+            </Text>
+          ) : (
+            <View style={{ height: space.md }} />
+          )}
+          {g.options.map((o) => (
+            <OptionCard
+              key={String(o.value)}
+              label={o.label}
+              {...(o.sublabel ? { sublabel: o.sublabel } : {})}
+              glyph={o.glyph}
+              selected={answers[g.field] === o.value}
+              // The one type-erasure point: the builders above already pinned
+              // each option set to its field's union at compile time.
+              onPress={() => setAnswer(g.field, o.value as OnboardingAnswers[keyof OnboardingAnswers])}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  )
+}
+
 export function GroupedOptionScreen({
   step,
   title,
@@ -135,7 +188,6 @@ export function GroupedOptionScreen({
   groups: ReadonlyArray<QuestionGroup>
   scroll?: boolean
 }) {
-  const theme = useTheme()
   const answers = useAnswers()
   // Every question must be answered before Continue unlocks — a merged screen
   // that lets one of its fields through unset would silently feed the plan
@@ -154,30 +206,7 @@ export function GroupedOptionScreen({
       onCta={() => router.push(nextRoute(step) as never)}
     >
       <ScrollView scrollEnabled={false} contentContainerStyle={{ paddingBottom: 8 }}>
-        {groups.map((g, gi) => (
-          <View key={String(g.field)} style={gi > 0 ? styles.groupGap : undefined}>
-            <Text style={[type.heading, { color: theme.text }]}>{g.label}</Text>
-            {g.hint ? (
-              <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
-                {g.hint}
-              </Text>
-            ) : (
-              <View style={{ height: space.md }} />
-            )}
-            {g.options.map((o) => (
-              <OptionCard
-                key={String(o.value)}
-                label={o.label}
-                {...(o.sublabel ? { sublabel: o.sublabel } : {})}
-                glyph={o.glyph}
-                selected={answers[g.field] === o.value}
-                // The one type-erasure point: the builders above already pinned
-                // each option set to its field's union at compile time.
-                onPress={() => setAnswer(g.field, o.value as OnboardingAnswers[keyof OnboardingAnswers])}
-              />
-            ))}
-          </View>
-        ))}
+        <QuestionGroups groups={groups} />
       </ScrollView>
     </OnboardingScreen>
   )

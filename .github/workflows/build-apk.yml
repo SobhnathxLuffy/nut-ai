@@ -49,45 +49,89 @@ jobs:
         working-directory: apps/mobile/android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-scan --console=plain
+          # STABLE CI SIGNING (owner QA 2026-10): the committed CI upload key
+          # (apps/mobile/ci/ci-upload.keystore) makes every release APK
+          # upgrade-safe — same signing key on every build, so versionCode N+1
+          # installs as an update over N. The REAL release keystore stays
+          # outside the repo; local builds keep using ~/.gradle credentials.
+          ./gradlew assembleRelease --no-scan --console=plain \
+            -PNUTAI_UPLOAD_STORE_FILE="$GITHUB_WORKSPACE/apps/mobile/ci/ci-upload.keystore" \
+            -PNUTAI_UPLOAD_STORE_PASSWORD=nutai-ci-2026 \
+            -PNUTAI_UPLOAD_KEY_ALIAS=nut-ai-ci \
+            -PNUTAI_UPLOAD_KEY_PASSWORD=nutai-ci-2026
+
+      - name: Verify release signature (fail if the debug fallback slipped in)
+        run: |
+          keytool -printcert -jarfile apps/mobile/android/app/build/outputs/apk/release/app-release.apk | grep -q "CN=Nut AI CI Upload" \
+            && echo "Signed by the stable CI upload key" \
+            || { echo 'APK is NOT signed with the stable CI key — upgrade installs would break'; exit 1; }
 
       - name: Rename APK
         run: |
           mkdir -p out
-          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk out/nut-ai-v0.1.0.apk
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk out/nut-ai-v0.1.1.apk
           ls -lh out/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: nut-ai-apk
-          path: out/nut-ai-v0.1.0.apk
+          path: out/nut-ai-v0.1.1.apk
 
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: apk-v0.1.0
-          name: "Nut AI v0.1.0 — Android APK"
+          tag_name: apk-v0.1.1
+          name: "Nut AI v0.1.1 — Android APK"
           body: |
-            ## Nut AI — Android release APK (v0.1.0, versionCode 1)
+            ## Nut AI — Android release APK (v0.1.1, versionCode 2)
 
-            Everything from the full QA sweep is in this build:
+            Real-device QA fixes (Samsung physical device, release build):
 
-            **Train**
-            - Programs & Schedule fully working (create/edit programs, weekday & cycle-day scheduling)
+            **Database (fixed the Progress / Routines crash)**
+            - Progress → Overview and Train → Routines crashed with a native
+              `NativeDatabase.prepareAsync` NullPointerException on Android.
+              Root cause: duplicate SQLite handles for user.db were opened per
+              screen (onboarding persist, scan recents, assistant, dish
+              composer); when Android's JS garbage collector collected one of
+              the throwaway wrappers, expo-sqlite destroyed the SHARED native
+              database for the whole app. All handles are now process-wide
+              singletons and retained for the app's lifetime; queries can no
+              longer run against a destroyed handle.
+            - DB errors now surface with the database, operation and statement
+              named (plus an explanation when the released-handle signature is
+              detected) instead of a raw Java NPE.
+            - Regression locks added: cold boot, upgrade/migration, repeated
+              queries, screen interleaving, background/resume, singleton
+              identity — plus width-sweep UI tests at 360/384/390/412/432 px.
 
-            **Food**
-            - Honest counts — Indian tab shows real dish totals ("Showing 362 dishes"), version-gated corpus
-            - Uncertainty is specific — every uncertain slot says *what* it is unsure about
-            - Recipe fixes — besan back in the aloo tikki, no more aloo-inside-aloo, duplicate-food audit gate
+            **Food quick actions (fixed one-character vertical pills)**
+            - "Scan food / Indian dishes / Recipes / …" collapsed to ~0 width on
+              device (percentage widths inside a wrap+gap container measured
+              wrong under Yoga). Tiles now take exact computed widths: 2
+              columns on phones, 3 on tablets, with a hard readable floor.
 
-            **Oil semantics**
-            - Pan oil vs absorbed oil are separate numbers ("Oil in the pan: 7.5 g → Estimated absorbed: 2.6–4.9 g (medium confidence)")
-            - Nutrition charges the absorbed share, not the full pour
+            **Progress top navigation (fixed clipped "Training" tab)**
+            - The section row now wraps to a second line on narrow screens —
+              every label fully visible, nothing clipped, no hidden scroll.
+
+            **Home (fixed bottom overlap + date strip clipping)**
+            - Scroll content clears the floating tab bar + FAB + Android
+              gesture bar by real measured insets, not magic numbers.
+            - Day strip columns are exact-width (~7 visible), no more
+              left/right clipping; labels cap at 1.2× so large font scales
+              wrap instead of clip (font scaling itself stays ON).
+
+            **Onboarding is ONE page**
+            - The 12-screen flow (three questions per page, page after page)
+              is now a single scrollable form with one "See my plan" button,
+              then the plan reveal. Every control is the same widget as before.
 
             ## Install on your phone
-            1. Tap `nut-ai-v0.1.0.apk` below and download it.
-            2. Android will warn about unknown apps — choose **Install anyway / Allow from this source**.
-            3. Requires Android 7.0+ (arm64-v8a devices).
-          files: out/nut-ai-v0.1.0.apk
+            1. If v0.1.0 is installed, UNINSTALL it first — v0.1.0 shipped with
+               a one-off CI debug key, and Android forbids updating across
+               signing keys (one-time step; future updates install over each other).
+            2. Tap `nut-ai-v0.1.1.apk` below and download it.
+            3. Android will warn about unknown apps — choose **Install anyway / Allow from this source**.
+          files: out/nut-ai-v0.1.1.apk
           fail_on_unmatched_files: true

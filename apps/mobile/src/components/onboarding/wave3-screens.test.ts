@@ -4,62 +4,62 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
- * Wave 3 — UI/UX report Ch 8.1 source pins for the rebuilt onboarding screens.
+ * Owner QA 2026-10 source pins for the SINGLE-PAGE onboarding.
  *
- * app/ screens sit behind expo-router/react-native imports the plain-Node
- * vitest environment cannot load (the established wave3.test.ts /
- * model-hint.test.ts pattern), so their behaviour contracts are pinned against
- * source. The runtime side is covered by the Playwright e2e walk.
+ * "Give everything one single page." The 12-step flow collapsed to one form
+ * (app/onboarding/index.tsx) whose sections live in
+ * src/components/onboarding/OnboardingSections.tsx with the controls extracted
+ * VERBATIM from the old steps. app/ routes and RN component modules sit behind
+ * expo-router/react-native imports the plain-Node vitest environment cannot
+ * load (the established pattern), so their contracts are pinned against
+ * source; the runtime side is covered by the Playwright e2e walk.
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
 const screen = (name: string): string => readFileSync(join(here, '../../../app/onboarding', name), 'utf8')
+const section = (name: string): string => readFileSync(join(here, name), 'utf8')
 
-describe('welcome — the live scan demo replaces the tilted phone mock', () => {
-  const src = screen('index.tsx')
+const FORM = screen('index.tsx')
+const SECTIONS = section('OnboardingSections.tsx')
 
-  it('plays the scan flow: photo → scanning (skeleton rows) → result, on a loop', () => {
-    expect(src).toContain("'photo' | 'scanning' | 'result'")
-    expect(src).toMatch(/PHASE_MS/)
-    expect(src).toContain('Skeleton')
-    expect(src).toContain('Scanning your photo')
+describe('single page — one form, one Continue, no interstitials', () => {
+  it('every former step renders as a section on the page', () => {
+    for (const section of [
+      'AboutYouSection',
+      'DietSection',
+      'AccomplishSection',
+      'BodySection',
+      'DesiredWeightSection',
+      'ProviderSection',
+      'PreferencesSection',
+      'HealthSection',
+    ]) {
+      expect(FORM, `${section} is on the page`).toContain(section)
+    }
   })
 
-  it('the demo result keeps the ONE ProgressRing and the count-up twin', () => {
-    expect(src).toMatch(/<ProgressRing value=\{0\.68\} size=\{104\} stroke=\{9\} \/>/)
-    expect(src).toContain('<CountUp')
+  it('the one CTA opens the plan reveal; the restore entry survives', () => {
+    expect(FORM).toContain("'/onboarding/plan'")
+    expect(FORM).toContain('Restore from a backup')
+    expect(FORM).toContain('Answer every question to continue')
   })
 
-  it('the tilted static phone mock is gone — no rotation anywhere', () => {
-    expect(src).not.toMatch(/rotate/)
-  })
-
-  it('reduce-motion renders the finished demo directly — no loop, no sweep', () => {
-    expect(src).toMatch(/reduced \? 'result' : phase/)
-    expect(src).toMatch(/if \(reduced\) return/)
-  })
-
-  it('it stays a labelled demo, and the restore + get-started entries survive', () => {
-    expect(src).toContain('your photos and your numbers will be yours')
-    expect(src).toContain("router.push('/onboarding/activity'")
-    expect(src).toContain('Restore from a backup')
+  it('the old welcome demo loop is gone from the form page', () => {
+    expect(FORM).not.toMatch(/PHASE_MS/)
+    expect(FORM).not.toContain('Scanning your photo')
   })
 })
 
-describe('merged card-group screens (sex + workouts + professional, diet + blocker)', () => {
-  it('activity folds all three questions into one GroupedOptionScreen', () => {
-    const src = screen('activity.tsx')
-    expect(src).toContain('GroupedOptionScreen')
-    expect(src).toMatch(/field: 'sex'/)
-    expect(src).toMatch(/field: 'workoutsPerWeek'/)
-    expect(src).toMatch(/field: 'worksWithProfessional'/)
+describe('sections keep the merged question groups and the grouped gate', () => {
+  it('about-you folds all three questions (sex, workouts, professional)', () => {
+    expect(SECTIONS).toMatch(/field: 'sex'/)
+    expect(SECTIONS).toMatch(/field: 'workoutsPerWeek'/)
+    expect(SECTIONS).toMatch(/field: 'worksWithProfessional'/)
   })
 
-  it('diet + blocker are one screen with two groups', () => {
-    const src = screen('diet.tsx')
-    expect(src).toContain('GroupedOptionScreen')
-    expect(src).toMatch(/field: 'dietStyle'/)
-    expect(src).toMatch(/field: 'blocker'/)
+  it('diet + blocker are one section with two groups', () => {
+    expect(SECTIONS).toMatch(/field: 'dietStyle'/)
+    expect(SECTIONS).toMatch(/field: 'blocker'/)
   })
 
   it('the grouped gate demands every answer before Continue unlocks', () => {
@@ -67,54 +67,57 @@ describe('merged card-group screens (sex + workouts + professional, diet + block
     expect(src).toContain('Answer every question to continue')
     expect(src).toMatch(/groups\.every\(\(g\) => answers\[g\.field\] != null\)/)
   })
+
+  it('question groups carry radiogroup semantics (a11y + e2e scoping)', () => {
+    const src = readFileSync(join(here, 'OptionScreen.tsx'), 'utf8')
+    expect(src).toContain('accessibilityRole="radiogroup"')
+    expect(src).toContain('accessibilityLabel={g.label}')
+  })
 })
 
-describe('body — the combined picker screen keeps the pickers verbatim', () => {
-  const src = screen('body.tsx')
-
-  it('one screen carries the birth wheels, the height wheels and the weight ruler', () => {
-    expect(src).toContain('WheelHighlight')
-    expect(src).toMatch(/label="Month"/)
-    expect(src).toMatch(/label="Feet"/)
-    expect(src).toContain('RulerPicker')
-    expect(src).toContain('EditableValue')
+describe('body section — the combined pickers stay verbatim', () => {
+  it('one section carries the birth wheels, the height wheels and the weight ruler', () => {
+    expect(SECTIONS).toContain('WheelHighlight')
+    expect(SECTIONS).toMatch(/label="Month"/)
+    expect(SECTIONS).toMatch(/label="Feet"/)
+    expect(SECTIONS).toContain('RulerPicker')
+    expect(SECTIONS).toContain('EditableValue')
   })
 
   it('one unit toggle drives both height and weight (converting, not resetting)', () => {
-    expect(src).toContain("value: 'imperial', label: 'lb · ft, in'")
-    expect(src).toContain("value: 'metric', label: 'kg · cm'")
-    expect(src).toMatch(/setAnswer\('units', u\)/)
+    expect(SECTIONS).toContain("value: 'imperial', label: 'lb · ft, in'")
+    expect(SECTIONS).toContain("value: 'metric', label: 'kg · cm'")
+    expect(SECTIONS).toMatch(/setAnswer\('units', u\)/)
   })
 
   it('every numeric field is written; defaults fill on Continue like the old screens', () => {
     for (const field of ['birthYear', 'birthMonth', 'birthDay', 'heightCm', 'weightKg']) {
-      expect(src).toMatch(new RegExp(`setAnswer\\('${field}'`))
+      expect(SECTIONS).toMatch(new RegExp(`setAnswer\\('${field}'`))
     }
+    expect(FORM).toMatch(/setAnswer\('heightCm', BODY_DEFAULT_CM\)/)
+    expect(FORM).toMatch(/setAnswer\('weightKg', BODY_DEFAULT_KG\)/)
   })
 })
 
-describe('provider + key merged onto one screen', () => {
-  const src = screen('provider.tsx')
-
-  it('the shared CredentialForm is embedded inline, remounting per provider', () => {
-    expect(src).toContain('CredentialForm')
-    expect(src).toMatch(/key=\{realProvider\}/)
+describe('provider section — the shared CredentialForm stays inline', () => {
+  it('the form is embedded, remounting per provider', () => {
+    expect(SECTIONS).toContain('CredentialForm')
+    expect(SECTIONS).toMatch(/key=\{realProvider\}/)
   })
 
-  it('a verified key reports the model id; skip and no-key both mean provider none', () => {
-    expect(src).toMatch(/setAnswer\('providerModel', modelId\)/)
-    expect(src).toMatch(/putSetting\('provider', 'none'\)/)
-    expect(src).toContain('Skip for now')
+  it('a verified key reports the model id; no-key means provider none, persisted eagerly', () => {
+    expect(SECTIONS).toMatch(/setAnswer\('providerModel', modelId\)/)
+    expect(SECTIONS).toMatch(/putSetting\('provider', 'none'\)/)
+    expect(SECTIONS).toContain('No key for now')
   })
 })
 
-describe('projection — trend + potential fused into one chart moment', () => {
-  it('one screen, one chart, following the real goal direction', () => {
-    const src = screen('projection.tsx')
-    expect(src).toContain('ProjectionChart')
-    expect(src).toMatch(/inferredGoal\(a\) === 'gain'/)
-    expect(src).not.toContain('TrendComparisonChart')
-    expect(src).not.toContain('TransitionChart')
+describe('projection — the direction chart now renders inline in the body section', () => {
+  it('one chart, following the real goal direction', () => {
+    expect(SECTIONS).toContain('ProjectionChart')
+    expect(SECTIONS).toMatch(/inferredGoal\(a\) === 'gain'/)
+    expect(SECTIONS).not.toContain('TrendComparisonChart')
+    expect(SECTIONS).not.toContain('TransitionChart')
   })
 
   it('the fused chart carries BOTH moments: the comparison and the early milestones', () => {
@@ -128,7 +131,20 @@ describe('projection — trend + potential fused into one chart moment', () => {
   })
 })
 
-describe('plan reveal — the hero moment (Ch 8.1)', () => {
+describe('rollover + reminders — one preferences section', () => {
+  it('the rollover question is a real group; the cap copy survives', () => {
+    expect(SECTIONS).toMatch(/field: 'rolloverCalories'/)
+    expect(SECTIONS).toContain('restrict-then-binge')
+    expect(SECTIONS).toMatch(/ROLLOVER_CAP_KCAL/)
+  })
+
+  it('the reminders copy keeps its honesty (permission requested later, not now)', () => {
+    expect(SECTIONS).toContain("A nudge when you'd usually log")
+    expect(SECTIONS).toContain('worth sending, not now')
+  })
+})
+
+describe('plan reveal — the hero moment (Ch 8.1, unchanged by the merge)', () => {
   const src = screen('plan.tsx')
 
   it('the hero numbers count up in monoData tabular figures via CountUp', () => {

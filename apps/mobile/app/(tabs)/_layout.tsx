@@ -208,7 +208,12 @@ function TabBarPill({
               hitSlop={space.sm}
             >
               <Icon name={tab.icon} size={21} color={focused ? theme.text : theme.textFaint} />
-              <Text style={[type.caption, { color: focused ? theme.text : theme.textFaint, marginTop: 1 }]}>
+              {/* Fixed-geometry chrome (44pt pill, 4-across): the label caps
+                  at the numeral-chrome policy (1.2×) so 130%+ system font
+                  scales wrap instead of clipping — scaling itself stays ON
+                  (AGENTS.md dynamic-type policy; disabling it outright is
+                  test-banned). */}
+              <Text maxFontSizeMultiplier={1.2} style={[type.caption, { color: focused ? theme.text : theme.textFaint, marginTop: 1 }]}>
                 {tab.label}
               </Text>
             </Pressable>

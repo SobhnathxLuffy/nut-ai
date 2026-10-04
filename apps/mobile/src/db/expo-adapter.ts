@@ -16,31 +16,90 @@ import { REQUIRED_CORPUS_REVISION } from '../data/corpus-revision'
  * interface, which is what makes "it worked in the harness" mean something on
  * device.
  */
+/**
+ * Which logical database an adapter talks to — used only for diagnostics so a
+ * native failure names the file and the statement instead of surfacing a raw
+ * Java NPE (device QA 2026-10: NativeDatabase.prepareAsync NPE on Android).
+ */
+type DbLabel = 'user.db' | 'nutrition.db' | 'ifct.db'
+
+/**
+ * Turn a raw expo-sqlite rejection into one that names the database, the
+ * operation and the statement. The original message is always preserved.
+ *
+ * The Android release NPE has a specific known shape (prepareAsync on a native
+ * handle whose JS wrapper was garbage-collected — expo-sqlite 57 destroys the
+ * SHARED native database when ANY JS wrapper is collected, see the retention
+ * note below), so we recognize it and say what it means instead of letting a
+ * bare "NullPointerException" reach a screen.
+ */
+function describeDbError(label: DbLabel, op: string, sql: string | null, error: unknown): Error {
+  const raw = error instanceof Error ? error.message : String(error)
+  const statement = sql == null ? '' : `("${sql.length > 120 ? `${sql.slice(0, 120)}…` : sql}")`
+  const isReleasedHandleNpe =
+    /NullPointerException/i.test(raw) &&
+    /NativeDatabase|NativeStatement/i.test(raw) &&
+    !/closed/i.test(raw)
+  const hint = isReleasedHandleNpe
+    ? ' — the native SQLite handle was destroyed while this connection was still in use ' +
+      '(a duplicate JS wrapper for the same file was garbage-collected). ' +
+      'All app handles are retained via openXxxDb() singletons; if you see this, ' +
+      'a new SQLite.openDatabaseAsync call path was added without retention.'
+    : ''
+  return new Error(`[nut-ai/db] ${label} ${op}${statement} failed: ${raw}${hint}`)
+}
+
 class ExpoDbAdapter implements DbAdapter {
-  constructor(private readonly db: SQLite.SQLiteDatabase) {}
+  constructor(
+    private readonly db: SQLite.SQLiteDatabase,
+    private readonly label: DbLabel,
+  ) {}
 
   async all<T = Record<string, SqlValue>>(sql: string, params: readonly SqlValue[] = []): Promise<T[]> {
-    return (await this.db.getAllAsync(sql, params as SQLite.SQLiteBindValue[])) as T[]
+    try {
+      return (await this.db.getAllAsync(sql, params as SQLite.SQLiteBindValue[])) as T[]
+    } catch (error) {
+      throw describeDbError(this.label, 'all', sql, error)
+    }
   }
 
   async get<T = Record<string, SqlValue>>(sql: string, params: readonly SqlValue[] = []): Promise<T | null> {
-    return ((await this.db.getFirstAsync(sql, params as SQLite.SQLiteBindValue[])) as T | null) ?? null
+    try {
+      return ((await this.db.getFirstAsync(sql, params as SQLite.SQLiteBindValue[])) as T | null) ?? null
+    } catch (error) {
+      throw describeDbError(this.label, 'get', sql, error)
+    }
   }
 
   async run(sql: string, params: readonly SqlValue[] = []): Promise<RunResult> {
-    const r = await this.db.runAsync(sql, params as SQLite.SQLiteBindValue[])
-    return { changes: r.changes, lastInsertRowId: r.lastInsertRowId }
+    try {
+      const r = await this.db.runAsync(sql, params as SQLite.SQLiteBindValue[])
+      return { changes: r.changes, lastInsertRowId: r.lastInsertRowId }
+    } catch (error) {
+      throw describeDbError(this.label, 'run', sql, error)
+    }
   }
 
   async exec(sql: string): Promise<void> {
-    await this.db.execAsync(sql)
+    try {
+      await this.db.execAsync(sql)
+    } catch (error) {
+      throw describeDbError(this.label, 'exec', sql, error)
+    }
   }
 
   async transaction<T>(fn: (tx: DbAdapter) => Promise<T>): Promise<T> {
     let result!: T
-    await this.db.withTransactionAsync(async () => {
-      result = await fn(this)
-    })
+    try {
+      await this.db.withTransactionAsync(async () => {
+        result = await fn(this)
+      })
+    } catch (error) {
+      // Errors thrown by `fn` itself may arrive here too; describeDbError keeps
+      // the original message, so the innermost cause stays legible.
+      if (error instanceof Error && error.message.startsWith('[nut-ai/db]')) throw error
+      throw describeDbError(this.label, 'transaction', null, error)
+    }
     return result
   }
 
@@ -49,14 +108,62 @@ class ExpoDbAdapter implements DbAdapter {
   }
 }
 
-/** The writable user database. */
+/**
+ * GC-retention guard for every SQLite handle this adapter ever opens (Android
+ * release QA 2026-10).
+ *
+ * expo-sqlite 57 dedupes native databases per file: every JS
+ * SQLiteDatabase wrapper for the same path wraps ONE Kotlin NativeDatabase.
+ * When a JS wrapper is garbage-collected, expo-modules-core fires
+ * sharedObjectDidRelease() — which calls ref.close() with NO refcount check —
+ * destroying the shared native handle for every other wrapper. Any later
+ * prepareAsync then dies with a raw java.lang.NullPointerException.
+ *
+ * The app previously created throwaway wrappers via direct openUserDb() calls
+ * (onboarding persist, scan recents, assistant, dish composer); collecting one
+ * of those killed user.db for Progress/Routines mid-session.
+ *
+ * Two layers of defense:
+ * 1. openUserDb() is now itself a promise-deduped singleton — duplicate
+ *    wrappers are no longer created in the first place.
+ * 2. Every opened handle is retained here for the process lifetime (the app
+ *    opens exactly three databases; the memory cost is the handles only), so
+ *    even a future duplicate-open path can never be garbage-collected.
+ */
+const retainedHandles = new Set<SQLite.SQLiteDatabase>()
+
+function retain(db: SQLite.SQLiteDatabase): SQLite.SQLiteDatabase {
+  retainedHandles.add(db)
+  return db
+}
+
+/**
+ * The writable user database.
+ *
+ * Promise-deduped process-wide singleton (Android release QA 2026-10): every
+ * direct call used to open a NEW JS wrapper over the SAME native handle (the
+ * native side dedupes by path), and garbage-collecting any throwaway wrapper
+ * destroyed the native database for the whole app — surfacing as the
+ * NativeDatabase.prepareAsync NPE on Progress/Routines. Callers may keep
+ * awaiting this function freely; they all share one retained handle.
+ */
+let userOpenPromise: Promise<DbAdapter> | null = null
+
 export async function openUserDb(): Promise<DbAdapter> {
-  const db = await SQLite.openDatabaseAsync('user.db')
-  await db.execAsync('PRAGMA foreign_keys = ON;')
-  // P3-D10: align with the node adapter — WAL gives the single-connection
-  // write path the same journal-mode behavior on native as in tests/tools.
-  await db.execAsync('PRAGMA journal_mode = WAL;')
-  return new ExpoDbAdapter(db)
+  if (!userOpenPromise) {
+    userOpenPromise = (async () => {
+      const db = retain(await SQLite.openDatabaseAsync('user.db'))
+      await db.execAsync('PRAGMA foreign_keys = ON;')
+      // P3-D10: align with the node adapter — WAL gives the single-connection
+      // write path the same journal-mode behavior on native as in tests/tools.
+      await db.execAsync('PRAGMA journal_mode = WAL;')
+      return new ExpoDbAdapter(db, 'user.db') as DbAdapter
+    })().catch((error) => {
+      userOpenPromise = null
+      throw error
+    })
+  }
+  return userOpenPromise
 }
 
 /**
@@ -85,7 +192,7 @@ export async function openNutritionDb(): Promise<DbAdapter> {
         // visible delay for nothing.
         forceOverwrite: false,
       })
-      const db = await SQLite.openDatabaseAsync('nutrition.db')
+      const db = retain(await SQLite.openDatabaseAsync('nutrition.db'))
       // Owner QA 2026-10: "table exists" was the only freshness probe, so an
       // install that ever imported an early/partial corpus kept it forever —
       // the dish browser showed a handful of rows under a "362 identities"
@@ -109,10 +216,10 @@ export async function openNutritionDb(): Promise<DbAdapter> {
           assetId: require('../../assets/nutrition.db'),
           forceOverwrite: true,
         })
-        const freshDb = await SQLite.openDatabaseAsync('nutrition.db')
-        return new ExpoDbAdapter(freshDb)
+        const freshDb = retain(await SQLite.openDatabaseAsync('nutrition.db'))
+        return new ExpoDbAdapter(freshDb, 'nutrition.db')
       }
-      return new ExpoDbAdapter(db)
+      return new ExpoDbAdapter(db, 'nutrition.db')
     })().catch((error) => {
       nutritionOpenPromise = null
       throw error
@@ -132,8 +239,8 @@ export async function openIfctDb(): Promise<DbAdapter> {
         assetId: require('../../assets/ifct.db'),
         forceOverwrite: true,
       })
-      const db = await SQLite.openDatabaseAsync('ifct.db')
-      return new ExpoDbAdapter(db)
+      const db = retain(await SQLite.openDatabaseAsync('ifct.db'))
+      return new ExpoDbAdapter(db, 'ifct.db')
     })().catch((error) => {
       ifctOpenPromise = null
       throw error
@@ -145,6 +252,11 @@ export async function openIfctDb(): Promise<DbAdapter> {
 export function resetCorpusPromises(): void {
   nutritionOpenPromise = null
   ifctOpenPromise = null
+}
+
+/** Test-only: forget the cached singletons (handles stay retained). */
+export function resetUserDbPromiseForTests(): void {
+  userOpenPromise = null
 }
 
 /**

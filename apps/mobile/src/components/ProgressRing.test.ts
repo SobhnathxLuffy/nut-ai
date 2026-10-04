@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -135,11 +135,13 @@ describe('the Home migration (highest-traffic ring)', () => {
   })
 
   it('the other two audited rings joined too: welcome demo + onboarding rollover', () => {
+    // Owner QA 2026-10: the onboarding collapse removed the welcome demo loop
+    // and the rollover screen — their rings go with them. The ring audit
+    // pins what remains: no svg import may appear in the surviving surfaces.
     const welcome = readFileSync(join(here, '../../app/onboarding/index.tsx'), 'utf8')
-    const rollover = readFileSync(join(here, '../../app/onboarding/rollover.tsx'), 'utf8')
-    expect(welcome).toMatch(/<ProgressRing value=\{0\.68\} size=\{104\} stroke=\{9\} \/>/)
     expect(welcome).not.toContain("from 'react-native-svg'")
-    expect(rollover).toMatch(/<ProgressRing value=\{0\.82\} size=\{size\} stroke=\{7\} \/>/)
-    expect(rollover).not.toContain("from 'react-native-svg'")
+    // The rollover ring's MiniRing component was deleted with its screen; the
+    // ProgressRing itself survives via Home/plan (pinned above).
+    expect(existsSync(join(here, '../../app/onboarding/rollover.tsx'))).toBe(false)
   })
 })

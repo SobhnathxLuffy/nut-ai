@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { Screen, Button, Card, Label, useAction } from '../../src/components/Screen'
 import { ChipRow } from '../../src/components/ChipRow'
 import { Icon, type IconName } from '../../src/components/Icon'
@@ -24,6 +24,11 @@ import {
 // UI/UX report Table 9.2 (Wave 1c): "Log meal → Success (notification)" — the
 // core reward moment fires with the one-tap log, never instead of the toast.
 import { selectionAsync, success as hapticSuccess } from '../../src/utils/haptics'
+
+// Screen.tsx's scroll content pads `space.lg + 4` on every side — the real
+// horizontal inset the quick-action grid lives inside. The grid math itself
+// lives in src/theme/responsive-grid.ts (pure + width-sweep tested).
+import { quickActionTileWidthFor } from '../../src/theme/responsive-grid'
 
 type ShortcutMode = 'Recent' | 'Frequent' | 'Favorites' | 'Usual' | 'Saved'
 
@@ -51,6 +56,14 @@ export default function Food() {
   const [loaded, setLoaded] = useState(false)
   const [menuCard, setMenuCard] = useState<OneTapCard | null>(null)
   const isLoggingRef = useRef(false)
+  // Android release QA 2026-10: the quick-action grid used percentage widths
+  // (width: '31%') inside a flexWrap+gap container, which Yoga resolves
+  // against an under-determined line width on device — tiles collapsed to ~0
+  // and labels wrapped one character per line. The grid is now COMPUTED:
+  // exact per-tile pixel widths from the real window width, 2 columns on
+  // phones (3 on tablets), so no tile can ever measure below its floor.
+  const { width: windowWidth } = useWindowDimensions()
+  const quickActionTileWidth = quickActionTileWidthFor(windowWidth)
 
   const refresh = useCallback(async () => {
     const h = await db()
@@ -160,11 +173,18 @@ export default function Food() {
       <Label muted>Search every database — IFCT, USDA, the dish library, your own foods.</Label>
 
       {/* Quick actions — the icon grid (Ch. 7 / Ch. 8.3). Distinct glyphs per
-          Table 6.1; each tile is a 44pt+ target with press feedback. */}
+          Table 6.1; each tile is a 44pt+ target with press feedback. Tile
+          widths are computed pixels (see note in Food()), never percentages. */}
       <Label>Quick actions</Label>
       <View style={styles.grid}>
         {QUICK_ACTIONS.map((qa) => (
-          <QuickActionTile key={qa.label} label={qa.label} icon={qa.icon} onPress={qa.onPress} />
+          <QuickActionTile
+            key={qa.label}
+            label={qa.label}
+            icon={qa.icon}
+            width={quickActionTileWidth}
+            onPress={qa.onPress}
+          />
         ))}
       </View>
 
@@ -331,17 +351,42 @@ function OneTapCardRow({
 }
 
 /** One quick-action tile — icon + label, theme-resolved at render time. */
-function QuickActionTile({ label, icon, onPress }: { label: string; icon: IconName; onPress: () => void }) {
+function QuickActionTile({
+  label,
+  icon,
+  width,
+  onPress,
+}: {
+  label: string
+  icon: IconName
+  /** Exact computed pixel width — flexShrink: 0, so the label can never be
+   * squeezed into one-character vertical wrapping on narrow Android screens. */
+  width: number
+  onPress: () => void
+}) {
   const theme = useTheme()
   return (
     <PressableFX
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      style={[styles.tile, { borderColor: theme.border, backgroundColor: theme.bgElevated }]}
+      style={[
+        styles.tile,
+        {
+          width,
+          flexShrink: 0,
+          borderColor: theme.border,
+          backgroundColor: theme.bgElevated,
+        },
+      ]}
     >
       <Icon name={icon} size={24} color={theme.text} />
-      <Text style={[type.caption, { color: theme.text, marginTop: space.xs }]}>{label}</Text>
+      <Text
+        style={[type.caption, { color: theme.text, marginTop: space.xs, textAlign: 'center' }]}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
     </PressableFX>
   )
 }
@@ -353,8 +398,10 @@ const styles = StyleSheet.create({
     gap: space.sm,
   },
   tile: {
-    width: '31%',
-    flexGrow: 1,
+    // Width arrives as an exact computed pixel value from the caller (2/3
+    // columns by window width) with flexShrink: 0 — the Android collapse into
+    // vertical one-character pills came from width:'31%' + flexGrow inside a
+    // wrap+gap container, which Yoga can measure as ~0 on device.
     minHeight: 88,
     alignItems: 'center',
     justifyContent: 'center',
