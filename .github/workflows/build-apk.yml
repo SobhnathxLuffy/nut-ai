@@ -62,7 +62,12 @@ jobs:
 
       - name: Verify release signature (fail if the debug fallback slipped in)
         run: |
-          keytool -printcert -jarfile apps/mobile/android/app/build/outputs/apk/release/app-release.apk | grep -q "CN=Nut AI CI Upload" \
+          # AGP disables v1 JAR signing at minSdk>=24, so `keytool -printcert
+          # -jarfile` sees nothing on a perfectly-signed APK. apksigner reads
+          # the v2/v3 signature scheme block that release builds actually use.
+          APK=apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs --verbose "$APK" | tee /tmp/certs.txt
+          grep -q "CN=Nut AI CI Upload" /tmp/certs.txt \
             && echo "Signed by the stable CI upload key" \
             || { echo 'APK is NOT signed with the stable CI key — upgrade installs would break'; exit 1; }
 
