@@ -1,0 +1,93 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "apk-*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install workspace dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build workspace packages
+        run: npm run build --workspaces --if-present || true
+
+      - name: Build nutrition.db corpus
+        working-directory: tools/indian-dishes
+        run: node build-sqlite.mjs
+
+      - name: Expo prebuild (android)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Gradle assembleRelease
+        working-directory: apps/mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-scan --console=plain
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk out/nut-ai-v0.1.0.apk
+          ls -lh out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nut-ai-apk
+          path: out/nut-ai-v0.1.0.apk
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-v0.1.0
+          name: "Nut AI v0.1.0 — Android APK"
+          body: |
+            ## Nut AI — Android release APK (v0.1.0, versionCode 1)
+
+            Everything from the full QA sweep is in this build:
+
+            **Train**
+            - Programs & Schedule fully working (create/edit programs, weekday & cycle-day scheduling)
+
+            **Food**
+            - Honest counts — Indian tab shows real dish totals ("Showing 362 dishes"), version-gated corpus
+            - Uncertainty is specific — every uncertain slot says *what* it is unsure about
+            - Recipe fixes — besan back in the aloo tikki, no more aloo-inside-aloo, duplicate-food audit gate
+
+            **Oil semantics**
+            - Pan oil vs absorbed oil are separate numbers ("Oil in the pan: 7.5 g → Estimated absorbed: 2.6–4.9 g (medium confidence)")
+            - Nutrition charges the absorbed share, not the full pour
+
+            ## Install on your phone
+            1. Tap `nut-ai-v0.1.0.apk` below and download it.
+            2. Android will warn about unknown apps — choose **Install anyway / Allow from this source**.
+            3. Requires Android 7.0+ (arm64-v8a devices).
+          files: out/nut-ai-v0.1.0.apk
+          fail_on_unmatched_files: true
