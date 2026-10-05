@@ -157,7 +157,10 @@ export default function ExerciseDetailScreen() {
               />
             ) : (
               <Button
-                label="Start quick workout"
+                // Task 2-c (mode vocabulary): the same startWorkout call, an
+                // honest label — this opens an empty workout containing this
+                // exercise ("quick" collided with the food-scan modes).
+                label="Start workout with this exercise"
                 selected
                 disabled={action.busy}
                 onPress={() => void action.run(handleStartQuickWorkout)}

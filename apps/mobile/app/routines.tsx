@@ -1,7 +1,7 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { BackHandler, View } from 'react-native'
-import { RoutineInput, type ProgressionRule, type SetValues, type RoutineInput as RoutineInputType } from '@nutai/core-schema'
+import { RoutineInput, TRACKING_FIELDS, type ProgressionRule, type SetValues, type RoutineInput as RoutineInputType } from '@nutai/core-schema'
 import {
   listRoutines,
   saveRoutine,
@@ -17,10 +17,45 @@ import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
+import { getFieldLabels } from '../src/data/workout-load'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { space } from '../src/theme/tokens'
 
 const PROGRESSION_KINDS = ['double', 'fixed', 'percentage', 'rir', 'manual'] as const
+
+/** The SetValues fields one planned-set row edits (the tracked numeric keys). */
+type SetFieldKey = 'load_kg' | 'reps' | 'duration_s' | 'distance_m' | 'assistance_kg'
+
+/**
+ * T1-b jitter helper: a cheap fingerprint of exactly what this screen renders
+ * per row (id + name + payload). refresh() compares it before setState, so a
+ * re-fired refresh (focus re-run, useAction's trailing refresh) can no longer
+ * hand the lists fresh array identities — the fuel of the focus-effect loop
+ * this screen used to have.
+ */
+function rowsFingerprint(rows: Array<{ id: number; name: string; definition_json?: string }>): string {
+  return rows.map((r) => `${r.id}:${r.name}:${r.definition_json ?? ''}`).join('|')
+}
+
+/** SetValues copy with one tracked field replaced (boring, type-safe). */
+function withSetField(set: SetValues, key: SetFieldKey, value: number | null): SetValues {
+  const next = { ...set }
+  if (key === 'load_kg') next.load_kg = value
+  else if (key === 'reps') next.reps = value
+  else if (key === 'duration_s') next.duration_s = value
+  else if (key === 'distance_m') next.distance_m = value
+  else next.assistance_kg = value
+  return next
+}
+
+/** SetValues copy with one planned extra (rir/rpe/tempo) replaced. */
+function withPlannedExtra(set: SetValues, key: 'rir' | 'rpe' | 'tempo', value: number | string | null): SetValues {
+  const next = { ...set }
+  if (key === 'rir') next.rir = typeof value === 'number' ? value : null
+  else if (key === 'rpe') next.rpe = typeof value === 'number' ? value : null
+  else next.tempo = typeof value === 'string' ? value : null
+  return next
+}
 
 export default function RoutinesScreen() {
   const t = useTheme()
@@ -61,12 +96,26 @@ export default function RoutinesScreen() {
     return () => sub.remove()
   }, [editing])
 
+  // T1-b: last-rendered fingerprints per list (see rowsFingerprint).
+  const rowsRef = useRef({ routines: '', exercises: '' })
+
   const refresh = useCallback(async () => {
     const h = await db()
     const rList = await listRoutines(h)
     const eList = await listExercises(h)
-    setRoutines(rList)
-    setExercises(eList)
+    // T1-b: setState only when the rows actually changed — a refired refresh
+    // (focus re-run, useAction's trailing refresh) no longer re-renders the
+    // whole list with fresh array identities.
+    const rFp = rowsFingerprint(rList)
+    const eFp = rowsFingerprint(eList)
+    if (rFp !== rowsRef.current.routines) {
+      rowsRef.current.routines = rFp
+      setRoutines(rList)
+    }
+    if (eFp !== rowsRef.current.exercises) {
+      rowsRef.current.exercises = eFp
+      setExercises(eList)
+    }
 
     if (params.id && !initialLoadedRef.current) {
       initialLoadedRef.current = true
@@ -87,12 +136,14 @@ export default function RoutinesScreen() {
 
   const handleAddExercise = useCallback(
     async (exerciseId: number) => {
-      let ex = exercises.find((e) => e.id === exerciseId)
-      if (!ex) {
-        const h = await db()
-        const fetched = await getExercise(h, exerciseId)
-        if (fetched) ex = fetched
-      }
+      // T1-b jitter ROOT CAUSE fix: this callback sat in the useFocusEffect
+      // deps with an [exercises] dependency — every refresh re-created it,
+      // the focus callback identity changed, and expo-router's useFocusEffect
+      // re-fired the refresh WHILE FOCUSED (an unbounded loop). Stable
+      // identity instead: one indexed fetch per USER add; list state is
+      // never read here (deps must stay []).
+      const h = await db()
+      const ex = await getExercise(h, exerciseId)
       if (!ex) return
       const defaultSet: SetValues = {
         load_kg: ex.tracking_type === 'weight_reps' ? 20 : null,
@@ -126,7 +177,9 @@ export default function RoutinesScreen() {
         ]
       })
     },
-    [exercises],
+    // Stable on purpose — see the T1-b note above. The useFocusEffect deps
+    // lock (src/components/routines-screen.test.ts) pins this array empty.
+    [],
   )
 
   const action = useAction(refresh)
@@ -178,6 +231,46 @@ export default function RoutinesScreen() {
     router.push({ pathname: '/workout', params: { id: workoutId } } as never)
   }
 
+  // Task 2-c: the schema-backed planned controls. All three are pure
+  // setSelectedExercises updates — nothing writes until Save (which rides
+  // action.run's busy guard), so rapid taps cannot duplicate writes (§8.3).
+  const updateSetField = (ei: number, si: number, key: SetFieldKey, text: string) => {
+    let value: number | null = null
+    if (text !== '') {
+      const n = Number(text)
+      if (!Number.isFinite(n) || n < 0) return
+      if (key === 'reps' && !Number.isInteger(n)) return
+      value = n
+    }
+    setSelectedExercises((prev) => prev.map((se, i) => {
+      if (i !== ei) return se
+      const sets = [...se.sets]
+      sets[si] = withSetField(sets[si]!, key, value)
+      return { ...se, sets }
+    }))
+  }
+
+  const updatePlannedExtra = (ei: number, key: 'rir' | 'rpe' | 'tempo', text: string) => {
+    let value: number | string | null = null
+    if (text !== '') {
+      if (key === 'tempo') {
+        if (!/^(\d+|X)-(\d+|X)-(\d+|X)-(\d+|X)$/.test(text)) return
+        value = text
+      } else {
+        const n = Number(text)
+        if (!Number.isFinite(n) || n < 0 || n > 10 || (key === 'rpe' && n < 1)) return
+        value = n
+      }
+    }
+    setSelectedExercises((prev) => prev.map((se, i) => (
+      i !== ei ? se : { ...se, sets: se.sets.map((s) => withPlannedExtra(s, key, value)) }
+    )))
+  }
+
+  const updateSupersetGroup = (ei: number, group: string | null) => {
+    setSelectedExercises((prev) => prev.map((se, i) => (i !== ei ? se : { ...se, group })))
+  }
+
   const handleAddSet = (index: number) => {
     const current = selectedExercises[index]
     if (!current) return
@@ -216,7 +309,7 @@ export default function RoutinesScreen() {
   return (
     <Screen title={editing ? (editId ? 'Edit Routine' : 'New Routine') : 'Routines'} back>
       <Label muted>
-        Create reusable workout routines with planned targets and automatic progressive overload.
+        A routine is a reusable workout template: pick exercises, plan the sets and progression, then start it any day from the Train tab.
       </Label>
       {action.feedback}
 
@@ -262,6 +355,12 @@ export default function RoutinesScreen() {
           <Label>Planned Exercises ({selectedExercises.length})</Label>
           {selectedExercises.map((se, idx) => {
             const exInfo = exercises.find((e) => e.id === se.exercise_id)
+            // Task 2-c: per-set planned inputs follow the exercise's tracked
+            // fields (TRACKING_FIELDS values are always tracked numeric keys).
+            const tracked = (exInfo
+              ? TRACKING_FIELDS[exInfo.tracking_type]
+              : ['load_kg', 'reps']) as readonly SetFieldKey[]
+            const fieldLabels = getFieldLabels('kg')
             return (
               <View key={`${se.exercise_id}-${idx}`} style={{ gap: 8, padding: 12, borderRadius: 12, backgroundColor: t.rowRaised }}>
                 <Row>
@@ -336,8 +435,105 @@ export default function RoutinesScreen() {
                   </Row>
                 )}
 
+                {/* Task 2-c: increment/target_rir are schema fields the editor
+                    never exposed (they previously rendered only under the
+                    double gate). fixed/percentage step by increment, rir
+                    escalates when the last set's RIR reaches target_rir. */}
+                {(se.rule.kind === 'fixed' || se.rule.kind === 'percentage' || se.rule.kind === 'rir') && (
+                  <Row>
+                    <View style={{ flex: 1 }}>
+                      <Field
+                        label={se.rule.kind === 'percentage' ? 'Increment (%)' : 'Increment (kg)'}
+                        keyboardType="decimal-pad"
+                        value={String(se.rule.increment)}
+                        onChangeText={(text) => {
+                          const n = Number(text)
+                          if (Number.isFinite(n) && n >= 0) {
+                            const next = [...selectedExercises]
+                            next[idx] = { ...se, rule: { ...se.rule, increment: n } }
+                            setSelectedExercises(next)
+                          }
+                        }}
+                      />
+                    </View>
+                    {se.rule.kind === 'rir' && (
+                      <View style={{ flex: 1 }}>
+                        <Field
+                          label="Target RIR (0-10)"
+                          keyboardType="decimal-pad"
+                          value={String(se.rule.target_rir)}
+                          onChangeText={(text) => {
+                            const n = Number(text)
+                            if (Number.isFinite(n) && n >= 0 && n <= 10) {
+                              const next = [...selectedExercises]
+                              next[idx] = { ...se, rule: { ...se.rule, target_rir: n } }
+                              setSelectedExercises(next)
+                            }
+                          }}
+                        />
+                      </View>
+                    )}
+                  </Row>
+                )}
+
+                {/* Task 2-c: planned RIR/RPE/tempo (SetValues.rir/rpe/tempo).
+                    Scope choice: ONE value per exercise, written into every
+                    planned set — per-set RIR planning here would triple the
+                    inputs; the live workout already edits RIR per set. */}
                 <Row>
-                  <Button label={`Add Set (${se.sets.length + 1})`} onPress={() => handleAddSet(idx)} />
+                  {(['rir', 'rpe'] as const).map((key) => (
+                    <View key={key} style={{ flex: 1, minWidth: 90 }}>
+                      <Field
+                        label={`Planned ${fieldLabels[key]}`}
+                        keyboardType="decimal-pad"
+                        value={se.sets[0]?.[key] == null ? '' : String(se.sets[0]![key])}
+                        onChangeText={(text) => updatePlannedExtra(idx, key, text)}
+                      />
+                    </View>
+                  ))}
+                  <View style={{ flex: 1, minWidth: 130 }}>
+                    <Field
+                      label="Planned tempo (e.g. 3-1-2-0)"
+                      value={se.sets[0]?.tempo ?? ''}
+                      onChangeText={(text) => updatePlannedExtra(idx, 'tempo', text)}
+                    />
+                  </View>
+                </Row>
+
+                {/* Task 2-c: superset grouping (exercises[].group →
+                    superset_group_id at launch). Consecutive same-group
+                    exercises launch linked as a circuit. */}
+                <Row>
+                  <Label muted>Superset group:</Label>
+                  {(['none', 'A', 'B', 'C'] as const).map((g) => (
+                    <Button
+                      key={g}
+                      label={g}
+                      selected={(se.group ?? 'none') === g}
+                      onPress={() => updateSupersetGroup(idx, g === 'none' ? null : g)}
+                    />
+                  ))}
+                </Row>
+                {se.group ? <Label muted>Consecutive exercises sharing a group launch linked as a circuit.</Label> : null}
+
+                {/* Task 2-c: planned values per set (RoutineInput.sets[]). */}
+                {se.sets.map((set, si) => (
+                  <Row key={si}>
+                    {tracked.map((key) => (
+                      <View key={key} style={{ flex: 1, minWidth: 90 }}>
+                        <Field
+                          label={`${fieldLabels[key]} · set ${si + 1}`}
+                          keyboardType="decimal-pad"
+                          value={set[key] == null ? '' : String(set[key])}
+                          onChangeText={(text) => updateSetField(idx, si, key, text)}
+                        />
+                      </View>
+                    ))}
+                  </Row>
+                ))}
+
+                <Row>
+                  <Button label={`Add Set (${se.sets.length + 1}, same as last)`} onPress={() => handleAddSet(idx)} />
                 </Row>
               </View>
             )

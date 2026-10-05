@@ -19,6 +19,7 @@ import { friendlySetValueError } from '../src/data/workout-errors'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
+import { Badge } from '../src/components/Badge'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { space } from '../src/theme/tokens'
 
@@ -28,6 +29,23 @@ const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
  * plus the routine. Cycle-day conversion happens once, at save/load — the
  * user never sees the engine's internal offsets. */
 type ScheduleSlot = { weekday: number; routine_id: number }
+
+/** Task 2-c (program IA): the start date is entered as three friendly number
+ * fields (day/month/year) instead of a raw typed YYYY-MM-DD string — no new
+ * dependency, composed back to the canonical ISO string at the boundary. */
+type DateParts = { day: string; month: string; year: string }
+
+function partsOfDate(iso: string): DateParts {
+  const [y, m, d] = iso.split('-')
+  return { day: String(Number(d)), month: String(Number(m)), year: y ?? '' }
+}
+
+function composeDate(p: DateParts): string {
+  const d = Number(p.day)
+  const m = Number(p.month)
+  if (!/^\d{4}$/.test(p.year) || !Number.isInteger(d) || !Number.isInteger(m)) return ''
+  return `${p.year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
 
 const EMPTY_FORM = { name: '', startDate: localDate(Date.now()), weeks: '8', schedule: [] as ScheduleSlot[] }
 
@@ -39,7 +57,7 @@ export default function ProgramsScreen() {
   const [editing, setEditing] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [name, setName] = useState(EMPTY_FORM.name)
-  const [startDate, setStartDate] = useState(EMPTY_FORM.startDate)
+  const [dateParts, setDateParts] = useState<DateParts>(() => partsOfDate(EMPTY_FORM.startDate))
   const [weeks, setWeeks] = useState(EMPTY_FORM.weeks)
   const [schedule, setSchedule] = useState<ScheduleSlot[]>(EMPTY_FORM.schedule)
 
@@ -61,7 +79,7 @@ export default function ProgramsScreen() {
   const resetForm = () => {
     setEditId(null)
     setName(EMPTY_FORM.name)
-    setStartDate(EMPTY_FORM.startDate)
+    setDateParts(partsOfDate(EMPTY_FORM.startDate))
     setWeeks(EMPTY_FORM.weeks)
     setSchedule([])
     setEditing(false)
@@ -72,7 +90,8 @@ export default function ProgramsScreen() {
     const w = Number(weeks)
     if (!Number.isInteger(w) || w < 1 || w > 104) throw new Error('Weeks must be between 1 and 104')
     if (!schedule.length) throw new Error('Assign at least one routine to a day of the week')
-    if (!isValidLocalDate(startDate)) throw new Error('Choose a real calendar date in YYYY-MM-DD format, like 2026-02-27')
+    const startDate = composeDate(dateParts)
+    if (!isValidLocalDate(startDate)) throw new Error('Choose a real calendar date — day 1–31, month 1–12, and a four-digit year.')
 
     // The engine stores cycle days (0 = the start date itself); the user
     // picked real weekdays. Convert here — the single boundary — so "Wed"
@@ -83,7 +102,7 @@ export default function ProgramsScreen() {
       weeks: w,
       schedule: schedule.map((s) => ({ day: weekdayToCycleDay(s.weekday, startDate), routine_id: s.routine_id })),
     }
-    // P1-6: the start date is typed by hand — reject impossible dates with a
+    // P1-6: the start date is user-entered — reject impossible dates with a
     // sentence instead of letting the schema throw raw zod JSON at the user.
     try {
       ProgramInput.parse(input)
@@ -99,7 +118,7 @@ export default function ProgramsScreen() {
   const startCreate = () => {
     setEditId(null)
     setName('')
-    setStartDate(localDate(Date.now()))
+    setDateParts(partsOfDate(localDate(Date.now())))
     setWeeks('8')
     setSchedule([])
     setEditing(true)
@@ -115,7 +134,7 @@ export default function ProgramsScreen() {
     if (!plan) return
     setEditId(p.id)
     setName(p.name)
-    setStartDate(plan.start_date)
+    setDateParts(partsOfDate(plan.start_date))
     setWeeks(String(plan.weeks))
     // Stored cycle days → weekdays for the form, using the program's own
     // start date, so the editor shows exactly what the user originally picked.
@@ -153,9 +172,14 @@ export default function ProgramsScreen() {
 
   return (
     <Screen title="Programs & Schedule" back>
-      <Label muted>
-        Multi-week blocks that map each weekday to one routine. The Train tab shows today's session — you start it with one tap.
-      </Label>
+      {/* Task 2-c (program IA): the chain was never explained anywhere — one
+          short card states it in the order the user builds it. */}
+      <Card>
+        <Label>How programs work</Label>
+        <Label muted>
+          Exercises → Routine (a reusable workout) → Program (which routine runs on which weekday, for N weeks) → the Train tab shows today's session.
+        </Label>
+      </Card>
       {action.feedback}
 
       {!editing && programs.length > 0 && (
@@ -167,8 +191,17 @@ export default function ProgramsScreen() {
           <Label>{editId ? 'Edit Program' : 'Create Training Program'}</Label>
           <Field label="Program Name" value={name} onChangeText={setName} placeholder="e.g. 8-Week Hypertrophy" />
           <Row>
+            {/* Task 2-c (program IA): three-part date entry replaces the raw
+                typed YYYY-MM-DD field (no new dependency; validation still
+                happens once at the save boundary). */}
             <View style={{ flex: 1 }}>
-              <Field label="Start Date (YYYY-MM-DD)" value={startDate} onChangeText={setStartDate} />
+              <Field label="Start day" keyboardType="number-pad" maxLength={2} value={dateParts.day} onChangeText={(day) => setDateParts({ ...dateParts, day })} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label="Start month" keyboardType="number-pad" maxLength={2} value={dateParts.month} onChangeText={(month) => setDateParts({ ...dateParts, month })} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label="Start year" keyboardType="number-pad" maxLength={4} value={dateParts.year} onChangeText={(year) => setDateParts({ ...dateParts, year })} />
             </View>
             <View style={{ flex: 1 }}>
               <Field label="Duration (Weeks)" keyboardType="number-pad" value={weeks} onChangeText={setWeeks} />
@@ -263,7 +296,12 @@ export default function ProgramsScreen() {
             )}
             {status.kind === 'rest' && <Label muted>Rest day scheduled for today</Label>}
             {status.kind === 'before' && (
-              <Label muted>Starts in {status.daysUntil === 1 ? '1 day' : `${status.daysUntil} days`} — no sessions before {plan.start_date}</Label>
+              // Task 2-c (program IA): 'before' gets a visible Starts chip, not
+              // only muted text.
+              <Row>
+                <Badge label={`Starts ${plan.start_date}`} variant="outline" size="sm" accessibilityLabel={`Program starts ${plan.start_date}`} />
+                <Label muted>{status.daysUntil === 1 ? 'tomorrow' : `in ${status.daysUntil} days`} — no sessions before then</Label>
+              </Row>
             )}
             {status.kind === 'finished' && <Label muted>Program finished — all {plan.weeks} weeks ran. Edit it to set a new start date, or create a new block.</Label>}
             <Row>

@@ -354,8 +354,17 @@ export default function WorkoutScreen() {
         {active && (
           <Row>
             <Button label="Add exercise" onPress={() => router.push({ pathname: '/search', params: { scope: 'exercise', workoutId: w.id } } as never)} />
-            <Button label={advanced ? 'Simple mode' : 'Advanced mode'} onPress={() => run(async () => { await putSetting('training.advanced', String(!advanced)); setAdvanced(!advanced) })} />
+            {/* Task 2-c (mode vocabulary): these are per-SET fields, not modes —
+                "quick/advanced mode" collided with the food-scan vocabulary. */}
+            <Button label={advanced ? 'Simple set fields' : 'Advanced set fields'} onPress={() => run(async () => { await putSetting('training.advanced', String(!advanced)); setAdvanced(!advanced) })} />
           </Row>
+        )}
+        {active && (
+          <Label muted>
+            {advanced
+              ? 'Advanced set fields on: RIR · RPE · tempo · set types (warmup, drop, failure…).'
+              : 'Advanced set fields add RIR · RPE · tempo · set types per set.'}
+          </Label>
         )}
 
         {!exercises.length && <Label muted>Add an exercise to begin. Search or create your own.</Label>}

@@ -29,6 +29,9 @@ export interface HeaderAction {
 /** How far the content must scroll before the large title fully collapses. */
 const COLLAPSE_THRESHOLD = 48
 
+/** Fixed height of the useAction busy slot (see `feedback` in useAction). */
+const FEEDBACK_SLOT_HEIGHT = 24
+
 /**
  * Reusable screen wrapper with safe areas, scrolling, and the ONE header.
  *
@@ -419,7 +422,14 @@ export function useAction(refresh?: () => Promise<void>) {
     busy,
     feedback: (
       <>
-        {busy && <ActivityIndicator accessibilityLabel="Saving" />}
+        {/* T1-b (routines.tsx jitter amplifier): the busy spinner mounts and
+            unmounts INSIDE a constant-height slot, so per-action busy
+            toggling can never shift the gap-based scroll content below it.
+            Additive: every caller already renders {action.feedback}; the
+            slot costs a constant 24px row, never a height change. */}
+        <View style={{ height: FEEDBACK_SLOT_HEIGHT, alignItems: 'center', justifyContent: 'center' }}>
+          {busy && <ActivityIndicator accessibilityLabel="Saving" />}
+        </View>
         {!!error && (
           <View style={{ gap: 8, paddingVertical: 4 }}>
             <Text accessibilityRole="alert" style={[type.body, { color: t.safety }]}>
