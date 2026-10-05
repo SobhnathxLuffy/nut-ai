@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { cmToFtIn, ftInToCm } from '../../data/height-units'
 
 /**
  * Owner mandate 2026-10 source pins for the STEPWISE onboarding rebuild
@@ -116,6 +117,36 @@ describe('independent units — height decoupled from weight', () => {
     expect(persist).toMatch(/\['height\.displayUnit', answers\.heightUnit\]/)
     // The weight path is untouched.
     expect(persist).toMatch(/answers\.units === 'imperial' \? 'lb' : 'kg'/)
+  })
+})
+
+describe('height clamp consistency — one canonical range for every commit path (T5-fix2, review nice-to-have 6)', () => {
+  // The bug: the ft/in EditableValue accepted 8 ft 11 in = 271.8 cm while the
+  // step's Continue clamps to 250 cm — the committed value silently differed
+  // from the shown one at the extremes.
+  it('the ft/in EditableValue commit clamps with the SAME bounds the host Continue clamps', () => {
+    // Single source of truth: the bounds live in OnboardingSections (next to
+    // the sections that commit heights); the host imports them.
+    expect(SECTIONS).toMatch(/export const HEIGHT_MIN_CM = 60\.96/)
+    expect(SECTIONS).toMatch(/export const HEIGHT_MAX_CM = 250/)
+    expect(HOST).toMatch(/import \{[^}]*HEIGHT_MIN_CM,[^}]*\} from '\.\.\/\.\.\/src\/components\/onboarding\/OnboardingSections'/)
+    expect(HOST).toMatch(/import \{[^}]*HEIGHT_MAX_CM,[^}]*\} from '\.\.\/\.\.\/src\/components\/onboarding\/OnboardingSections'/)
+    expect(SECTIONS).toMatch(
+      /setAnswer\('heightCm', clamp\(ftInToCm\(Math\.floor\(total \/ 12\), total % 12\), HEIGHT_MIN_CM, HEIGHT_MAX_CM\)\)/,
+    )
+    // The host's Continue clamp is unchanged (the flow pins already cover its
+    // shape) — the two paths now share the constants instead of diverging.
+    expect(HOST).toMatch(/clamp\(Number\.isFinite\(raw\) \? raw : BODY_DEFAULT_CM, HEIGHT_MIN_CM, HEIGHT_MAX_CM\)/)
+  })
+
+  it('the bounds are coherent with the ft/in conversion math they clamp', () => {
+    // The floor IS the ft wheel's bottom (2 ft); the ceiling stays the cm
+    // wheel's top, and the ft/in input range (24–107 in) can no longer commit
+    // past it: 8 ft 2 in fits, 8 ft 3 in clamps back.
+    expect(ftInToCm(2, 0)).toBeCloseTo(60.96, 10)
+    expect(cmToFtIn(250)).toEqual({ ft: 8, inch: 2 })
+    expect(ftInToCm(8, 2)).toBeLessThanOrEqual(250)
+    expect(ftInToCm(8, 3)).toBeGreaterThan(250)
   })
 })
 
@@ -264,6 +295,19 @@ describe('health step — Android honesty (T4-b / T5-a)', () => {
     const healthCase = HOST.slice(HOST.indexOf("case 'health':"))
     expect(healthCase).toContain('iOS-only for now')
     expect(healthCase).not.toContain('Connect Apple Health')
+  })
+
+  it('the "See my plan" push is guarded against double-taps like the plan CTA (T5-fix2, review nice-to-have 5)', () => {
+    // The push used to be unguarded: a double-tap stacked /onboarding/plan
+    // twice (plan's own busy ref kept the persist single, but the stack was
+    // wrong). Same busy-ref pattern; the ref re-arms on focus, because the way
+    // back here is RETURNING from the plan screen — that must leave the CTA
+    // usable (a push cannot fail the way a persist can, so plan.tsx's
+    // catch-re-arm has no counterpart here).
+    const healthCase = HOST.slice(HOST.indexOf("case 'health':"))
+    expect(healthCase).toMatch(/if \(planNavBusy\.current\) return/)
+    expect(healthCase).toContain('planNavBusy.current = true')
+    expect(HOST).toMatch(/useFocusEffect\(useCallback\(\(\) => \{ planNavBusy\.current = false \}, \[\]\)\)/)
   })
 })
 

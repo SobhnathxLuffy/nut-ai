@@ -1,8 +1,8 @@
 # PLAN.md — Current Nut AI Implementation Status
 
-> **Last updated:** 2026-10-03
-> **Evidence baseline:** 1,595 tests / 140 files, Playwright web e2e 36 passed / 0 skipped / 0 failed at `1eef079` (the parallel browser-emulation specs land separately), 19/19 node-pure packages, contrast gate 104/104 pairs (light 52 + dark 52), USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,451 slots) + dish-mapping (1,451/1,451 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round), UI/UX Waves 1–4 complete (design system gated + documented — docs/design-system.md), Wave 5 QA-completion closed (day-detail view, recipe contributions, composer clarifications, honesty persistence v12, event-driven workout card, assistant write-path e2e, protein-chip AA fix).
-> **Worktree:** Waves 4a–4d + Wave 5A/5B are committed (`16809c2`…`0025f28`, `a06ad42`, `1eef079`); the Wave 5C wrap (protein-chip AA fix + this record refresh) sits uncommitted in the worktree. Preserve unrelated edits; do not reset or clean them.
+> **Last updated:** 2026-10-05
+> **Evidence baseline:** 1,883 tests / 158 files, Playwright web e2e 46 passed / 0 skipped / 0 failed (re-run at the T5-fix2 tree on `e6e3274`), 19/19 node-pure packages, contrast gate 104/104 pairs (light 52 + dark 52), USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,451 slots) + dish-mapping (1,451/1,451 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round), UI/UX Waves 1–4 complete (design system gated + documented — docs/design-system.md), Wave 5 QA-completion closed (day-detail view, recipe contributions, composer clarifications, honesty persistence v12, event-driven workout card, assistant write-path e2e, protein-chip AA fix), v0.2.0 wave complete at the automated layer (stepwise onboarding, tutorial, notifications, widgets, Codex bridge — device wave pending).
+> **Worktree:** Waves 4a–4d + Wave 5A/5B are committed (`16809c2`…`0025f28`, `a06ad42`, `1eef079`); the v0.2.0 wave + release prep (T6-prep: version bump + parametrized build-apk.yml + draft) + the T5-fix2 review fixes sit uncommitted in the worktree on `e6e3274`. Preserve unrelated edits; do not reset or clean them.
 
 ## 1. Executive Status
 
@@ -29,35 +29,40 @@ The previous phase labels overstated completion in several places. Current statu
 | Indian Dish KB | **Partial / pipeline shipped + clarifications** | 362 dishes bundled + integrity-gated; browser reaches all; household variants persist AND are searchable; composer asks the uncertainty models' clarification questions (answers never persist); drafts still not nutrition-ready as-is (none left) |
 | Unknown dish fallback | **Strong / deterministic** | Multi-ingredient decomposer: cross-corpus ingredient picker, editable grams/oil, shared yield model, per-ingredient breakdown, custom-ingredient creation, save-to-foods; still an estimate, not semantic KB nutrition |
 | Home / Food UX | **Improved / two owner-QA gaps closed** | Wave 5: dedicated day-detail view (`/day-detail`, DayStrip drill-in with synced selection, `nutai://day`), recipe per-ingredient contributions, composer clarifications; the 2026-09 owner-QA visual-hierarchy items (clutter, eaten-vs-remaining, macro visibility) remain open |
-| Training | **Partial / device verification outstanding** | Wave 5B: restored-backup boot crash (seedExercises id collision) fixed + regression-locked, active-workout card event-driven (`onWorkoutsChanged`); the Exercise Library 2026-09-14 device findings still need re-verification on current main before any fix work |
+| Training | **Partial / device verification outstanding** | Wave 5B: restored-backup boot crash (seedExercises id collision) fixed + regression-locked, active-workout card event-driven (`onWorkoutsChanged`); v0.2.0 cleanup AUTOMATICALLY VERIFIED (routines jitter root-caused + fixed red-first, routine editor advanced controls, dirty-exit guards on every exit incl. Launch + deep links, programs editable with weekday↔cycle conversion); the Exercise Library 2026-09-14 device findings still need re-verification on current main before any fix work |
 | Web app | **Built / automated-verified** | Offline Expo web build; OPFS user DB, DOM alert shim, camera modes + manual GTIN; Playwright e2e in CI; not yet device/browser-matrix QA'd |
 | UI design system | **Strong / automated-verified; device a11y audit pending** | Waves 1–4 + 5C: tokens + 7-step type scale + the full primitive library gated (eslint hex/fontSize/tap-target, type-scale sweeps, Icon/Badge/ChipRow locks); contrast gate 104/104 pairs (the filled-chip deviation is closed and gate-locked); dynamic-type caps + Android TextInput scaling; `nutai://` deep links (incl. `day`); 64-glyph icon set, zero text glyphs; docs/design-system.md is the reference. NOT TESTED (device): 130% layout walk, deep-link ADB taps, native rebuild after reanimated removal, glyph/screen-reader rendering (browser-verifiable halves covered by the in-flight emulation specs) |
 | Progress / analytics | **Partial / incompletely verified** | Engines/screens exist; visual correctness and real-data QA still required |
 | Weekly / monthly reports | **Implemented, report math hardened** | `$kg` template leak, duplicate same-day PR rows, unrounded targets fixed in the P2 round; screens still need user/device verification |
 | Check-ins | **Implemented but partial** | Discoverability and consistency with reports require verification |
 | Profile / Settings | **Partial** | Important profile/preferences workflows remain incomplete or unverified |
-| Onboarding | **Partial** | Routes exist; persistence/promises/UX need dedicated pass |
 | Backup/export | **Foundation exists** | Non-destructive export should be reverified; destructive restore deferred |
 | AI assistant / semantic text | **Write path e2e-locked (web build)** | Route-mocked OpenAI-compatible gateway: confirm → persisted 359 kcal → undo, cancel no-op, honest 500 failure; provider seeded through the app's settings screen; message dedupe + monotonic ids locked. Native paths + live-provider behavior NOT TESTED (AGENTS §9.1) |
 | Photo AI | **Live-probed + honesty-contract verified; browser CORS open** | Provider credentials configured (AGENTS §0.2); v1.3.0 honesty contract live-probed (thali/pizza fixtures); browser-side scan (gateway CORS from web origins) NOT TESTED |
+| Onboarding | **Rebuilt (v0.2.0) / AUTOMATICALLY VERIFIED; device pass owed** | Stepwise 12-step flow with per-step gates, kill-safe resumable draft, busy-guarded plan reveal; independent height/weight units (all 4 combos, canonical cm/kg, unit-locked + Playwright-locked); NOT TESTED (device): hardware journey, TalkBack, 130% on the new screens |
+| Post-onboarding tutorial | **Built (v0.2.0) / AUTOMATICALLY VERIFIED** | 5 cards, replayable from Profile, Skip never traps; content source-locked to real features; NOT TESTED (device) |
+| Local notifications | **Built (v0.2.0) / AUTOMATICALLY VERIFIED (suites); device pending** | On-device scheduling (meal reminders + rest-timer notices), contextual Android 13+ permission (call sites locked), dedupe + tap routing locked incl. the T5-fix2 dirty-editor confirm; NOT TESTED (device): delivery, reboot, on-device taps |
+| Android widgets (3) | **Built (v0.2.0) / AUTOMATICALLY VERIFIED (seams); device pending** | Today / Quick Action / Training from an honest on-device snapshot; ~2s debounced publish on food/workout/goal-override events (seam-locked); stale state honest; NOT TESTED (device): launcher placement, render, tap routing |
+| Codex CLI local bridge | **Built (v0.2.0) / failure honesty live-verified; success NOT TESTED** | OpenAI-compatible → `codex exec` translation, 36 server tests, real-CLI 0.160.0 failure probes (401/403/429 envelopes); plain-HTTP LAN-only; completions/model routing/image understanding need credentials (NOT TESTED) |
+| v0.2.0 release engineering | **Prepared, NOT CI-verified** | versionCode 3 + version derivation, parametrized build-apk.yml, SHA-256 checksum asset, `apk-*-rc*` prerelease support (T6-prep); release body drafted in docs/release-notes-draft-v0.2.0.md; the pipeline itself is NOT TESTED until the first `apk-v0.2.0*` tag run — the release must not be described as device-verified anywhere |
 | Cloud sync / health integrations / local AI | **Not built / deferred** | Not current priority (web is built — see its row above) |
 
 ---
 
 ## 2. Verified Automated Baseline
 
-Latest verified gate (Wave 5C wrap, 2026-10-03):
+Latest verified gate (T5-fix2 review-fix wrap, 2026-10-05, working tree on `e6e3274`):
 
-- ESLint: clean, 0 errors/warnings
+- ESLint: clean, 0 errors/warnings (`--max-warnings=0`)
 - TypeScript: strict, packages + mobile clean
-- Vitest: **1,595 passed across 140 files**
+- Vitest: **1,883 passed across 158 files** (the +8 over the wave's 1,875 are the T5-fix2 regression locks)
 - Node purity: **19/19** packages
 - Contrast gate (`check:contrast`): **104/104 pairs pass** (light 52, dark 52; 24 logged — includes the filled option-chip pairs)
 - USDA `data:verify`: **26/26** golden queries passing
 - IFCT verification: **542-row Table 1 corpus** accepted
 - Indian dishes: **362 total, 362 CURATED, 0 DRAFT_CURATED** (draft-graduation pass), bundled + integrity-gated
 - Dish mapping verification: **1,451/1,451** mapped slots resolve in the shipped corpus (1,070 IFCT + 381 USDA), 0 errors, graduation gates active
-- Playwright web e2e: **36 passed / 0 skipped / 0 failed** at `1eef079` (exported bundle, CI on every push; includes the day-detail + assistant-write specs; the parallel browser-emulation specs land separately)
+- Playwright web e2e: **46 passed / 0 skipped / 0 failed** (exported bundle, CI on every push; includes the stepwise-onboarding walk, the unit-independence journey, the day-detail + assistant-write specs and the browser-emulation specs), re-run at this tree
 - `git diff --check`: clean
 
 Run `npm run check` after every substantive implementation slice.
@@ -248,7 +253,7 @@ AI must never become the source of authoritative nutrition numbers.
 
 ## 10. Prioritized Implementation Roadmap
 
-Closed while this roadmap has been in force (do not re-plan): web app + e2e CI, QA rounds web-P0 / B / C / D, rest-timer controls, contextual undo labels, dish-KB pipeline + browsing, tap-gated combos, recoverable dates, friendly workout errors, Wave 5 (day-detail view + DayStrip drill-in, recipe ingredient contributions, composer clarifications, honesty persistence v12, event-driven workout card + seedExercises crash fix, assistant message dedupe, assistant write-path e2e incl. BUG-007/009 ticket closure, protein-chip AA fix).
+Closed while this roadmap has been in force (do not re-plan): web app + e2e CI, QA rounds web-P0 / B / C / D, rest-timer controls, contextual undo labels, dish-KB pipeline + browsing, tap-gated combos, recoverable dates, friendly workout errors, Wave 5 (day-detail view + DayStrip drill-in, recipe ingredient contributions, composer clarifications, honesty persistence v12, event-driven workout card + seedExercises crash fix, assistant message dedupe, assistant write-path e2e incl. BUG-007/009 ticket closure, protein-chip AA fix), and the v0.2.0 wave at the automated layer (stepwise onboarding rebuild + independent units + draft resume, post-onboarding tutorial, local notifications, three widgets, Codex CLI bridge, Home bounce mechanism fix, workout-mode/routine/program UX cleanup + jitter fix + dirty-exit guards on every exit, offline barcode honesty, a11y audit remediations — each with its evidence class in the table above and VERIFICATION.md; the device pass for all of it is still owed).
 
 ### Slice 1 — Training Core Reliability **NEXT**
 

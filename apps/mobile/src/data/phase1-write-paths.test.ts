@@ -13,6 +13,13 @@ vi.mock('expo-sqlite/kv-store', () => ({
   default: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() },
 }))
 vi.mock('../inference/credentials', () => ({ clearCredential: vi.fn() }))
+// T5-fix2: overrideTargets now schedules a widget publish through a DYNAMIC
+// import (the resetEverything seam) — mock it so this node suite never loads
+// the expo/react-native module graph either.
+vi.mock('../widgets/publish', () => ({
+  publishResetSnapshot: vi.fn(),
+  scheduleWidgetPublish: vi.fn(),
+}))
 
 import { logExercise, logMeal, logWeight, overrideTargets } from './repo'
 

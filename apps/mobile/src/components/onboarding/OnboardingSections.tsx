@@ -14,6 +14,7 @@ import {
 } from './OptionScreen'
 import { putSetting, setting } from '../../data/repo'
 import { cmToFtIn, ftInToCm } from '../../data/height-units'
+import { clamp } from '../../utils/clamp'
 import { availability, requestPermissions, type HealthAvailability } from '../../health/healthkit'
 import {
   inferredGoal,
@@ -57,6 +58,19 @@ function daysIn(month: number, year: number): number {
 
 export const BODY_DEFAULT_CM = 168 // 5 ft 6 in, the reference default
 export const BODY_DEFAULT_KG = 88.4 // ~194.9 lbs, matching the reference default
+
+/**
+ * The canonical height range EVERY height commit path must respect (T5-fix2,
+ * review nice-to-have 6): the cm wheel spans 100–250, but the ft/in controls
+ * could commit 8 ft 11 in = 271.8 cm — beyond the host's 250 cm Continue
+ * clamp, so the stored value silently diverged from the shown one at the
+ * extremes. The bounds live HERE (next to the sections that commit heights)
+ * and the step host imports them, so the EditableValue commit and the host's
+ * CTA clamp are the SAME clamp, not two near-misses.
+ *   60.96 cm = 2 ft (the ft wheel's floor); 250 cm = the cm wheel's ceiling.
+ */
+export const HEIGHT_MIN_CM = 60.96
+export const HEIGHT_MAX_CM = 250
 
 /** Section heading — one rhythm for the whole page. */
 export function SectionHeading({ title, hint }: { title: string; hint?: string }) {
@@ -348,7 +362,10 @@ export function HeightSection() {
             max={8 * 12 + 11}
             onCommit={(v) => {
               const total = Math.round(v)
-              setAnswer('heightCm', ftInToCm(Math.floor(total / 12), total % 12))
+              // T5-fix2 (review nice-to-have 6): clamp to the SAME canonical
+              // range the cm wheel and the host's Continue clamp enforce — an
+              // ft/in commit can no longer store 271.8 cm while showing it.
+              setAnswer('heightCm', clamp(ftInToCm(Math.floor(total / 12), total % 12), HEIGHT_MIN_CM, HEIGHT_MAX_CM))
             }}
           />
         ) : (

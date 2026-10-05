@@ -164,3 +164,27 @@ describe('the routine editor exposes the schema-backed controls (Task 2-c)', () 
     expect(source).toMatch(/kind === 'fixed' \|\| se\.rule\.kind === 'percentage' \|\| se\.rule\.kind === 'rir'/)
   })
 })
+
+describe('T5-fix2 — dirty-editor exits outside the screen tree (review SHOULD-FIX #1)', () => {
+  it('"Launch workout" routes through confirmDiscardThen like every other exit', () => {
+    // The saved-routine rows stay interactive BELOW the live editor; the
+    // launch button used to navigate unguarded, silently discarding unsaved
+    // planned-set work (§8.3). The guard is confirmDiscardThen itself, so a
+    // clean editor (closed or untouched) still launches with no dialog.
+    const launchAt = source.indexOf('label="Launch workout"')
+    expect(launchAt).toBeGreaterThan(-1)
+    const launch = source.slice(launchAt, source.indexOf('/>', launchAt))
+    expect(launch).toContain('onPress={() => confirmDiscardThen(() => void action.run(() => handleLaunch(r.id)))}')
+  })
+
+  it('the editor publishes its dirty state for the notification/deep-link router', () => {
+    // src/notifications/handler.ts consults isRoutineEditorDirty() before
+    // router.navigate — the seam lives in src/ui/editor-dirty.ts (see its
+    // header). The publish must mirror the SAME `dirty` the local exits use.
+    expect(source).toContain("from '../src/ui/editor-dirty'")
+    expect(source).toMatch(/setRoutineEditorDirty\(dirty\)/)
+    // Unmount clears the flag: a dismissed editor can never leave it stuck
+    // true (which would block every future deep link).
+    expect(source).toMatch(/useEffect\(\(\) => \(\) => setRoutineEditorDirty\(false\), \[\]\)/)
+  })
+})

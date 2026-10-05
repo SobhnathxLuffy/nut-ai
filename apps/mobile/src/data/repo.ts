@@ -241,6 +241,21 @@ export async function overrideTargets(
       actor: 'user', createdAt: now,
     })
   })
+
+  // T5-fix2 (review SHOULD-FIX #2): a goal edit changes exactly what the Today
+  // widget renders (kcal remaining + protein vs target), but it emits NO food
+  // mutation — the widget kept the OLD target until the next food write or app
+  // restart. Debounced schedule (~2s trailing, never an immediate publish)
+  // after the transaction COMMITS, mirroring resetEverything's dynamic-import
+  // seam: repo.ts's module graph stays free of expo/react-native for the
+  // plain-Node tests, and the try/catch keeps the goal write unbreakable —
+  // the widget is cosmetic.
+  try {
+    const { scheduleWidgetPublish } = await import('../widgets/publish')
+    scheduleWidgetPublish()
+  } catch {
+    /* widget publish is best-effort */
+  }
 }
 
 // ---------------------------------------------------------------------------

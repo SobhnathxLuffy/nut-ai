@@ -6,6 +6,8 @@ import { onWorkoutsChanged } from '@nutai/training'
 import { db } from '../data/repo'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
 import { routeFromNotificationUrl } from '../navigation/deep-links'
+import { isRoutineEditorDirty } from '../ui/editor-dirty'
+import { confirmDialog } from '../ui/alert-web'
 import { syncAllReminders, syncWorkoutReminders } from './scheduler'
 
 /**
@@ -56,6 +58,26 @@ export function initNotifications(): void {
   // follows the alias map.
   let lastRoutedUrl: string | null = null
   let lastRoutedAt = 0
+  const navigateGuarded = (target: string): void => {
+    // T5-fix2 (review SHOULD-FIX #1): a tap that pops the router back past the
+    // routine editor dismisses the editor WITH its unsaved work — the same
+    // silent discard the screen's own exits guard against. Consult the
+    // editor's published dirty state (src/ui/editor-dirty.ts) and route
+    // through the ONE confirm helper with the editor's exact dialog copy.
+    // Only the dirty-editor state is gated: every other deep link navigates
+    // exactly as before.
+    if (!isRoutineEditorDirty()) {
+      router.navigate(target as never)
+      return
+    }
+    confirmDialog({
+      title: 'Discard changes?',
+      message: 'The routine editor has unsaved changes — discarding them cannot be undone.',
+      confirmLabel: 'Discard',
+      destructive: true,
+      onConfirm: () => router.navigate(target as never),
+    })
+  }
   const route = (response: Notifications.NotificationResponse | null): void => {
     if (!response) return
     const target = routeFromNotificationUrl(response.notification.request.content.data?.url)
@@ -64,7 +86,7 @@ export function initNotifications(): void {
     if (target === lastRoutedUrl && now - lastRoutedAt < 2000) return // double-delivery guard
     lastRoutedUrl = target
     lastRoutedAt = now
-    router.navigate(target as never)
+    navigateGuarded(target)
   }
   // Cold start first (the tap that LAUNCHED the app), then warm taps.
   void Notifications.getLastNotificationResponseAsync().then(route)

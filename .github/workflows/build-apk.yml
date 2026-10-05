@@ -16,6 +16,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Single source of truth for the release version is apps/mobile/app.config.ts
+      # (expo prebuild consumes the same values), so cutting a release never
+      # requires editing this workflow again: the APK filename, artifact paths,
+      # release title/body and the versionCode note all derive from VERSION /
+      # VERSION_CODE below. The step hard-fails if the parse ever comes up
+      # empty, instead of silently shipping a misnamed APK.
+      - name: Derive version from app.config.ts
+        run: |
+          VERSION=$(grep -oP "version: '\\K[0-9.]+" apps/mobile/app.config.ts | head -1)
+          VERSION_CODE=$(grep -oP "versionCode: \\K[0-9]+" apps/mobile/app.config.ts | head -1)
+          if [ -z "$VERSION" ] || [ -z "$VERSION_CODE" ]; then
+            echo "Could not parse version/versionCode from apps/mobile/app.config.ts" >&2
+            exit 1
+          fi
+          # Prerelease: any tag matching the apk-*-rc* glob (e.g. apk-v0.2.0-rc1)
+          # publishes as a GitHub pre-release. Normal apk-* tags are unchanged.
+          IS_PRERELEASE=false
+          if [[ "$GITHUB_REF_NAME" == apk-*-rc* ]]; then
+            IS_PRERELEASE=true
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> "$GITHUB_ENV"
+          echo "Building nut-ai v$VERSION (versionCode $VERSION_CODE), prerelease=$IS_PRERELEASE (ref: $GITHUB_REF_NAME)"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -74,22 +99,50 @@ jobs:
       - name: Rename APK
         run: |
           mkdir -p out
-          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk out/nut-ai-v0.1.1.apk
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "out/nut-ai-v$VERSION.apk"
           ls -lh out/
 
-      - name: Upload artifact
+      # The checksum file is generated from inside out/ so it references the
+      # bare APK filename — `sha256sum -c nut-ai-v$VERSION.apk.sha256` then
+      # works in whatever directory both release assets are downloaded to.
+      - name: SHA-256 checksum
+        run: |
+          (cd out && sha256sum "nut-ai-v$VERSION.apk" > "nut-ai-v$VERSION.apk.sha256")
+          cat "out/nut-ai-v$VERSION.apk.sha256"
+          SHA=$(cut -d' ' -f1 "out/nut-ai-v$VERSION.apk.sha256")
+          echo "SHA256=$SHA" >> "$GITHUB_ENV"
+
+      - name: Upload artifact (APK)
         uses: actions/upload-artifact@v4
         with:
           name: nut-ai-apk
-          path: out/nut-ai-v0.1.1.apk
+          path: out/nut-ai-v${{ env.VERSION }}.apk
 
+      - name: Upload artifact (SHA-256 checksum)
+        uses: actions/upload-artifact@v4
+        with:
+          name: nut-ai-apk-sha256
+          path: out/nut-ai-v${{ env.VERSION }}.apk.sha256
+
+      # tag_name and the title follow the pushed tag (github.ref_name), so the
+      # release can never be attached to a stale hardcoded tag. NOTE: on
+      # workflow_dispatch github.ref_name is the BRANCH name, not a tag —
+      # dispatch runs are for smoke builds; cut real releases by pushing an
+      # apk-* tag (apk-*-rc* publishes as a pre-release, see the derive step).
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: apk-v0.1.1
-          name: "Nut AI v0.1.1 — Android APK"
+          tag_name: ${{ github.ref_name }}
+          name: "Nut AI ${{ github.ref_name }} — Android APK"
+          prerelease: ${{ env.IS_PRERELEASE }}
+          # Per-release changelog: the bullets below still describe v0.1.1 and
+          # MUST be replaced with the new release's notes before tagging
+          # (draft: docs/release-notes-draft-v0.2.0.md). Do not ship them
+          # stale — e.g. "Onboarding is ONE page" is no longer true in v0.2.0,
+          # which reintroduces the step-by-step flow. Version strings are
+          # derived — do not hardcode them back.
           body: |
-            ## Nut AI — Android release APK (v0.1.1, versionCode 2)
+            ## Nut AI — Android release APK (v${{ env.VERSION }}, versionCode ${{ env.VERSION_CODE }})
 
             Real-device QA fixes (Samsung physical device, release build):
 
@@ -136,7 +189,18 @@ jobs:
             1. If v0.1.0 is installed, UNINSTALL it first — v0.1.0 shipped with
                a one-off CI debug key, and Android forbids updating across
                signing keys (one-time step; future updates install over each other).
-            2. Tap `nut-ai-v0.1.1.apk` below and download it.
+            2. Tap `nut-ai-v${{ env.VERSION }}.apk` below and download it.
             3. Android will warn about unknown apps — choose **Install anyway / Allow from this source**.
-          files: out/nut-ai-v0.1.1.apk
+
+            ## SHA-256 checksum
+            Verify your download: the file `nut-ai-v${{ env.VERSION }}.apk.sha256`
+            is attached to this release (run `sha256sum -c` next to it), or
+            compare the APK against:
+
+            ```
+            ${{ env.SHA256 }}  nut-ai-v${{ env.VERSION }}.apk
+            ```
+          files: |
+            out/nut-ai-v${{ env.VERSION }}.apk
+            out/nut-ai-v${{ env.VERSION }}.apk.sha256
           fail_on_unmatched_files: true

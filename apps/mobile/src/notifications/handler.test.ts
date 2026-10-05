@@ -33,6 +33,15 @@ vi.mock('expo-notifications', () => ({
 const navigate = vi.fn()
 vi.mock('expo-router', () => ({ router: { navigate: navigate } }))
 
+// T5-fix2 — the ONE confirm helper (the editor's own exits use the same
+// copy via confirmDiscardThen) and the dirty seam it consults.
+const confirmDialog = vi.fn()
+vi.mock('../ui/alert-web', () => ({ confirmDialog }))
+const editorDirty = vi.hoisted(() => ({ dirty: false }))
+vi.mock('../ui/editor-dirty', () => ({
+  isRoutineEditorDirty: () => editorDirty.dirty,
+}))
+
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },
   AppState: {
@@ -78,6 +87,7 @@ beforeEach(() => {
   warmTapListener = null
   appStateListener = null
   coldStartResponse = null
+  editorDirty.dirty = false
   for (const key of Object.keys(kvRows)) delete kvRows[key]
 })
 
@@ -148,5 +158,42 @@ describe('initNotifications — install, routing and the onboarding gate', () =>
     appStateListener!('background')
     await flush()
     expect(syncAll).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('T5-fix2 — the dirty routine editor gates deep-link navigation', () => {
+  it('routes DIRECTLY while the routine editor is closed or clean (no dialog, ever)', async () => {
+    editorDirty.dirty = false
+    const { initNotifications } = await load()
+    initNotifications()
+    await flush()
+    warmTapListener!(tapped('nutai://train'))
+    expect(navigate).toHaveBeenCalledWith('/train')
+    expect(confirmDialog).not.toHaveBeenCalled()
+  })
+
+  it('a dirty editor gets the "Discard changes?" confirm INSTEAD of navigation, and confirming navigates', async () => {
+    editorDirty.dirty = true
+    const { initNotifications } = await load()
+    initNotifications()
+    await flush()
+    warmTapListener!(tapped('nutai://train'))
+    // The silent discard is gone: navigation waits for the user.
+    expect(navigate).not.toHaveBeenCalled()
+    expect(confirmDialog).toHaveBeenCalledTimes(1)
+    const options = confirmDialog.mock.calls[0]![0] as {
+      title: string
+      message: string
+      confirmLabel: string
+      destructive: boolean
+      onConfirm: () => void
+    }
+    expect(options.title).toBe('Discard changes?')
+    expect(options.message).toContain('unsaved changes')
+    expect(options.confirmLabel).toBe('Discard')
+    expect(options.destructive).toBe(true)
+    // Accepting the discard completes exactly the navigation the tap asked for.
+    options.onConfirm()
+    expect(navigate).toHaveBeenCalledWith('/train')
   })
 })

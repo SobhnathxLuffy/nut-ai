@@ -14,6 +14,7 @@ import {
 import { db, localDate } from '../src/data/repo'
 import { consumePendingRoutineExercises } from '../src/data/routine-draft'
 import { confirmDialog } from '../src/ui/alert-web'
+import { setRoutineEditorDirty } from '../src/ui/editor-dirty'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
 import { ChipRow } from '../src/components/ChipRow'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
@@ -153,6 +154,16 @@ export default function RoutinesScreen() {
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
   const hasInvalidDrafts = Object.keys(invalidDrafts).length > 0
+
+  // T5-fix2 (review SHOULD-FIX #1): publish the dirty state for the ONE exit
+  // outside this screen's tree — notification/deep-link taps route through
+  // src/notifications/handler.ts, which consults isRoutineEditorDirty() and
+  // runs the same "Discard changes?" confirm before navigating. Same
+  // render-body sync as dirtyRef above. The unmount cleanup clears it: a
+  // dismissed editor can never leave the flag stuck true (which would block
+  // every deep link).
+  setRoutineEditorDirty(dirty)
+  useEffect(() => () => setRoutineEditorDirty(false), [])
 
   // P2-15/P3-47 + T4-b #5: reload and tab close get the browser
   // leave-confirmation while the editor holds UNSAVED work (clean editors no
@@ -774,7 +785,16 @@ export default function RoutinesScreen() {
               accessibilityLabel={`Edit routine ${r.name}`}
             />
             <Row>
-              <Button label="Launch workout" selected onPress={() => void action.run(() => handleLaunch(r.id))} />
+              {/* T5-fix2 (review SHOULD-FIX #1): Launch navigates away while the
+                  saved rows stay interactive BELOW the live editor — unguarded,
+                  it discarded dirty editor work exactly like every other exit
+                  path (§8.3). Clean state (editor closed or untouched) launches
+                  directly; only an actually-dirty editor gets the confirm. */}
+              <Button
+                label="Launch workout"
+                selected
+                onPress={() => confirmDiscardThen(() => void action.run(() => handleLaunch(r.id)))}
+              />
               <Button label="Edit" onPress={() => confirmDiscardThen(() => openRoutine(r))} />
               <Button
                 label="Delete"

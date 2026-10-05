@@ -1,5 +1,5 @@
-import { router } from 'expo-router'
-import { useEffect, useState, type ReactNode } from 'react'
+import { router, useFocusEffect } from 'expo-router'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { BackHandler } from 'react-native'
 import Storage from 'expo-sqlite/kv-store'
 import { clamp } from '../../src/utils/clamp'
@@ -13,6 +13,8 @@ import {
   DietSection,
   HealthSection,
   HeightSection,
+  HEIGHT_MAX_CM,
+  HEIGHT_MIN_CM,
   isRealBirthDate,
   PreferencesSection,
   ProviderSection,
@@ -50,11 +52,10 @@ import { lbToKg, replaceAnswers, setAnswer, useAnswers } from '../../src/onboard
  * and the underweight note on goal weight stays visible but non-blocking.
  */
 
-// The pickers' absolute bounds, mirroring the wheels/ruler ranges: the cm
-// wheel starts at 100 but the ft wheel bottoms out at 2 ft (~61 cm); the
-// weight ruler spans 30–227 kg (60–500 lb).
-const HEIGHT_MIN_CM = 60.96
-const HEIGHT_MAX_CM = 250
+// The pickers' absolute bounds, mirroring the wheels/ruler ranges. The height
+// bounds are OWNED by OnboardingSections (T5-fix2: the ft/in EditableValue
+// commit clamps with the SAME constants — one clamp, not two near-misses);
+// the weight ruler spans 30–227 kg (60–500 lb).
 const WEIGHT_MIN_KG = lbToKg(60)
 const WEIGHT_MAX_KG = 227
 
@@ -68,6 +69,13 @@ export default function OnboardingFlow() {
   // that sees the CredentialForm's onSaved. Everything else gates off the
   // store directly.
   const [providerReady, setProviderReady] = useState(false)
+  // T5-fix2 (review nice-to-have 5): the health step's "See my plan" push had
+  // no guard — a double-tap stacked /onboarding/plan twice. Same busy-ref
+  // pattern as plan.tsx's persist CTA; the ref re-arms on focus, because a
+  // push cannot fail the way a persist can — the way back here is RETURNING
+  // from the plan screen (Android back), and that must leave the CTA usable.
+  const planNavBusy = useRef(false)
+  useFocusEffect(useCallback(() => { planNavBusy.current = false }, []))
 
   const position = stepIndex(step)
 
@@ -311,7 +319,13 @@ export default function OnboardingFlow() {
           title="Last thing"
           subtitle="Health sync is optional and iOS-only for now — or go straight to your plan."
           cta="See my plan"
-          onCta={() => router.push('/onboarding/plan' as never)}
+          onCta={() => {
+            // T5-fix2 (review nice-to-have 5): one tap = one push (plan.tsx's
+            // busy-ref pattern; re-armed by the focus effect above).
+            if (planNavBusy.current) return
+            planNavBusy.current = true
+            router.push('/onboarding/plan' as never)
+          }}
           onBack={goPrev}
           scroll
         >

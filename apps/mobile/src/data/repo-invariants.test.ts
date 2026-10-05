@@ -27,8 +27,12 @@ vi.mock('expo-sqlite/kv-store', () => ({
 vi.mock('../inference/credentials', () => ({ clearCredential: vi.fn() }))
 // Task 3-c: resetEverything publishes the widget reset sentinel through a
 // DYNAMIC import — mock it so the node suite never loads the expo/react-native
-// module graph, and lock the seam below.
-vi.mock('../widgets/publish', () => ({ publishResetSnapshot: vi.fn() }))
+// module graph, and lock the seam below. T5-fix2: overrideTargets rides the
+// same seam with the DEBOUNCED scheduler, so the mock carries it too.
+vi.mock('../widgets/publish', () => ({
+  publishResetSnapshot: vi.fn(),
+  scheduleWidgetPublish: vi.fn(),
+}))
 // Food-mutation events are UI bus noise the invariants do not depend on.
 vi.mock('./food-mutations', () => ({
   emitFoodMutation: vi.fn(),
@@ -38,16 +42,18 @@ vi.mock('./food-mutations', () => ({
 
 import {
   compactHistory,
+  currentGoal,
   deleteMeal,
   logMeal,
   logWeight,
   mealsForDay,
+  overrideTargets,
   redoLastOperation,
   resetEverything,
   undoLastOperation,
   updateMealSlot,
 } from './repo'
-import { publishResetSnapshot } from '../widgets/publish'
+import { publishResetSnapshot, scheduleWidgetPublish } from '../widgets/publish'
 
 const NOW = 1_754_300_000_000
 // localDate(NOW) in UTC — the repo's localDate is test-stable in the CI TZ.
@@ -258,5 +264,28 @@ describe('P1-9 repo invariants: compaction + reset', () => {
     vi.mocked(publishResetSnapshot).mockClear()
     await resetEverything()
     expect(publishResetSnapshot).toHaveBeenCalledTimes(1)
+  })
+
+  it('overrideTargets schedules the debounced widget publish after the goal write (T5-fix2)', async () => {
+    // Review SHOULD-FIX #2: a goal edit changes exactly what the Today widget
+    // renders but emits no food mutation — the widget kept the OLD kcal/protein
+    // target until the next food write or restart. The seam is the DEBOUNCED
+    // scheduler (never an immediate publish) and it fires exactly once per
+    // override, only AFTER the append-only goal row is committed.
+    vi.mocked(scheduleWidgetPublish).mockClear()
+    await overrideTargets(
+      { targetKcal: 2400, macros: { protein_g: 150, fat_g: 75, carbs_g: 270, carbsFloored: false } },
+      {
+        goalType: 'maintain', targetKcal: 2200, targetRawKcal: 2200,
+        floorApplied: false, protein_g: 140, fat_g: 70, carbs_g: 252.5,
+        bmr: 1700, tdee: 2200, adaptive: false, effectiveFrom: NOW,
+      },
+      NOW + 40,
+    )
+    expect(scheduleWidgetPublish).toHaveBeenCalledTimes(1)
+    // The write itself still landed: the newest goal row IS the override.
+    const goal = await currentGoal()
+    expect(goal?.targetKcal).toBe(2400)
+    expect(goal?.protein_g).toBe(150)
   })
 })

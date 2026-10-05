@@ -6,7 +6,7 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **1,595 passed**, 140 files (Wave 5C gate run, 2026-10-03) |
+| Unit + property + integration tests | `npx vitest run` | **1,883 passed**, 158 files (T5-fix2 gate run, 2026-10-05) |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **19/19 packages** React-Native-free |
@@ -14,7 +14,7 @@ Reproduce with `npm run check`.
 | Corpus golden queries | `npm run data:verify` | **26/26 passed**, corpus accepted (7,930 foods incl. 2 supplemental) |
 | IFCT corpus verification | `npm run ifct:verify` | **542-row corpus accepted**; ragi, rice, atta, paneer, rohu golden queries passed |
 | Indian dishes verification | `npm run indian-dishes:verify` | **362 total dishes**, 362 CURATED, **1,451/1,451 mapped slots** (verify-mappings), 0 hard errors, 0 sanity warnings |
-| Playwright e2e (real exported bundle, :3000) | `npm run check:e2e` | **36 passed**, 0 skipped, 0 failed at the Wave 5B commit `1eef079` (2026-10-03; the two ticketed BUG-007/009 skips are closed) |
+| Playwright e2e (real exported bundle, :3000) | `npm run check:e2e` | **46 passed**, 0 skipped, 0 failed at the T5-fix2 tree on `e6e3274` (2026-10-05; includes the stepwise-onboarding walk, the unit-independence journey and the browser-emulation specs) |
 | Android release build | `./gradlew assembleRelease` | **built 142MB release APK** (`app-release.apk`) using Java 17 LTS |
 | Android physical-device install | `adb install -r .../app-release.apk` | **Success** on Samsung Galaxy M14 5G (SM-M146B) |
 | Android runtime & cold launch | `adb shell am start -n .../MainActivity` | **Clean launch**, 0 crashes in logcat |
@@ -1112,3 +1112,118 @@ provider gateway is NOT TESTED (device) — never inferred.
   "Review & log dish" action and the NewIngredientForm save button) —
   buttons, not chips, outside this task's chip scope; recorded in
   docs/design-system.md §7 for the next a11y pass.
+
+---
+
+## v0.2.0 wave — stepwise onboarding, tutorial, notifications, widgets, Codex bridge + the T5-fix2 review fixes (2026-10-05)
+
+The v0.2.0 feature wave (`c732bed..e6e3274`, 100 files) shipped five new
+subsystems plus a QA-batch fix round, followed by an independent hostile
+review (T5-review) and this fix pass (T5-fix2). Evidence discipline per
+AGENTS §3: every claim below names its class, and NOTHING here is
+device-verified — no device or emulator exists in the development
+environment. The full automated gate was re-run at this tree: 1,883 tests /
+158 files / 0 failed, typecheck (root + mobile) clean, ESLint
+`--max-warnings=0` clean, node-purity 19/19, contrast 104/104, Playwright
+web e2e 46/46.
+
+### Per-feature evidence
+
+| Feature | Evidence class | What is actually proven |
+|---|---|---|
+| Stepwise onboarding rebuild (12 steps, per-step gates) | AUTOMATICALLY VERIFIED | Flow-machine + screens unit-locked (`flow.test.ts`, `wave3-screens.test.ts`); the web journey is walked by Playwright; the draft is kill-safe by persist order (transaction → done key → clear) and resume is unit-locked |
+| Independent height/weight units | AUTOMATICALLY VERIFIED | All four kg/cm × lb/ft+in combos unit-locked; canonical cm/kg never rewritten by a unit switch; conversions happen only at the picker boundary |
+| Post-onboarding tutorial | AUTOMATICALLY VERIFIED (content + flow) | Card content source-locked to real feature names; replay-once/skip semantics locked. Rendering on hardware NOT TESTED |
+| Local notifications (meal reminders, rest-timer notices) | AUTOMATICALLY VERIFIED (scheduling/dedupe/routing logic) | Handler + scheduler + categories + settings suites; contextual permission (no request without user intent, call sites locked); deterministic ids + stale-cancel dedupe. Delivery, reboot persistence, on-device taps: NOT TESTED |
+| Android widgets ×3 (Today / Quick Action / Training) | AUTOMATICALLY VERIFIED (snapshot + seams) | Snapshot shape locked; publish seams locked (food mutations, workout writes, reset sentinel, goal override); native publish failure = silent no-op + one warn. Launcher placement, RemoteViews rendering, tap routing: NOT TESTED |
+| Codex CLI local bridge | AUTOMATICALLY VERIFIED (server, 36 tests) + live-verified failure mapping (real codex-cli 0.160.0: truthful 401/403/429 envelopes end-to-end) | No shell execution vector, prompt never logged, malformed request → 400. Successful completions, model routing, image understanding, schema enforcement: NOT TESTED (needs credentials). Plain HTTP/no TLS on LAN — documented limitation |
+| Home calorie-card close-bounce fix | AUTOMATICALLY VERIFIED (mechanism locks) | Single `setExpanded` writer, critically damped spring, rounded onLayout — locked in `wave3-home.test.ts`. The duplicate-press root cause is INFERRED, not observed; Samsung device confirmation owed |
+| Routines jitter fix | AUTOMATICALLY VERIFIED (red-first) | Test reproduced 25 focus-effect refires, then proved 1 after the fix (stable callbacks + change fingerprint) |
+| Routine editor / programs UX cleanup | AUTOMATICALLY VERIFIED (node locks) | Advanced controls, weekday↔cycle conversion, delete confirms, dirty-exit guards — locked in `routines.test.ts` / `routines-screen.test.ts` / `programs` locks |
+| Offline barcode honesty (`BARCODE_OFFLINE`) | AUTOMATICALLY VERIFIED (decision locks) | Off-source outcome API wired end-to-end through the orchestrator; retryable offline taxonomy locked in `decisions.test.ts` |
+| a11y audit remediations | AUTOMATICALLY VERIFIED | allowFontScaling 31/31 sweep (compiler-verified), ItemRow label composition, chip hitSlops, notification-settings disabled-state semantics — all source/behavior locked |
+
+### T5-fix2 — the independent review's SHOULD-FIX + NICE-TO-HAVE fixes
+
+- **Dirty routine editor: the last two unguarded exits closed (SHOULD-FIX
+  #1, AUTOMATICALLY VERIFIED).** The saved-routine rows' "Launch workout"
+  button and the notification tap router (`src/notifications/handler.ts`)
+  could both dismiss a dirty editor with no confirm, silently discarding
+  planned-set work (§8.3). Launch now routes through the editor's own
+  `confirmDiscardThen` (clean state launches with no dialog); the tap router
+  consults the editor's published dirty state via the new minimal seam
+  `src/ui/editor-dirty.ts` (a module-level boolean the editor mirrors per
+  render and clears on unmount — no store, no bus) and shows the SAME
+  "Discard changes?" confirm before navigating. Locked behaviorally in
+  `handler.test.ts` (dirty → confirm + confirm-navigates; clean → direct
+  navigate) and structurally in `routines-screen.test.ts`. Deep links from
+  every other state are untouched.
+- **Goal edits reach the Today widget (SHOULD-FIX #2, AUTOMATICALLY
+  VERIFIED).** `overrideTargets` (the edit-goals write) emitted nothing, so
+  the widget kept the OLD kcal/protein target until the next food mutation
+  or restart. It now schedules the debounced widget publish (~2s trailing —
+  never an immediate publish) AFTER the goal transaction commits, via the
+  same dynamic-import seam `resetEverything` uses (repo.ts's module graph
+  stays expo/react-native-free; failure is swallowed — the widget is
+  cosmetic). Locked in `repo-invariants.test.ts` (exactly one schedule per
+  override + the override row really persisted).
+- **ft/in height clamp consistency (NICE-TO-HAVE #6, AUTOMATICALLY
+  VERIFIED).** The ft/in EditableValue accepted 8 ft 11 in = 271.8 cm while
+  the step's Continue clamps to 250 cm — the committed value silently
+  diverged from the shown one. The canonical bounds now live in
+  `OnboardingSections.tsx` (`HEIGHT_MIN_CM`/`HEIGHT_MAX_CM`), the ft/in
+  commit clamps through them, and the host imports the SAME constants (one
+  clamp, not two near-misses). Locked in `wave3-screens.test.ts` (source
+  pins + coherence with the conversion math: 2 ft = the floor, 8 ft 2 in
+  fits, 8 ft 3 in clamps back).
+- **Health-step "See my plan" double-push guard (NICE-TO-HAVE #5,
+  AUTOMATICALLY VERIFIED).** Same busy-ref pattern as the plan CTA; the ref
+  re-arms on focus, because the way back to the step is RETURNING from the
+  plan screen (a push cannot fail the way a persist can). Source-locked in
+  `wave3-screens.test.ts`.
+- **Accepted notes (review NICE-TO-HAVES 4/7/8/9 — deliberately NOT fixed
+  here):** (4) workout-reminder DST caveat is CODE-INSPECTED reality, left
+  as a documented caveat for the device wave; (7) the exercise fingerprint
+  lacks `tracking_type` — latent only, no in-place exercise editor ships;
+  (8) the scheduler no-op guard compares the pre-cancel id set — redundant
+  identical native writes, never duplicates; (9) `resetEverything` leaves
+  already-scheduled native notifications until the next foreground sync —
+  a surviving rest tap lands on the honest "Workout not found" screen. Each
+  is a real but small wart; none blocks release, and none was silently
+  relabeled fixed.
+
+### Release engineering (T6-prep) — recorded as prepared, NOT CI-verified
+
+- `app.config.ts`: `version: '0.2.0'`, `android.versionCode: 3`
+  (upgrade-safe over the released versionCode 2).
+- `.github/workflows/build-apk.yml`: version/versionCode derived from
+  `app.config.ts` at run time; APK name, artifact paths, tag/title/body
+  parametrized; SHA-256 checksum generated and attached (asset + release
+  body); `apk-*-rc*` tags publish as pre-releases. Evidence: CODE-INSPECTED
+  + locally simulated (YAML parses to the expected 15 steps via PyYAML; the
+  `sha256sum -c` flow simulated against a local file). The workflow itself
+  is NOT TESTED until the first `apk-v0.2.0*` tag run on GitHub Actions.
+- The changelog bullets inside the workflow body still describe v0.1.1 and
+  MUST be replaced from `docs/release-notes-draft-v0.2.0.md` §2 before
+  tagging ("Onboarding is ONE page" is false in v0.2.0).
+
+### NOT TESTED — the device/emulator wave still owed for v0.2.0
+
+1. TalkBack on all new surfaces (onboarding wheels + step announcements,
+   notification settings, tutorial, widget RemoteViews content).
+2. 130% font-scale on the new screens (restore screen after the scroll
+   wrap, the height typed-input, notification settings, widget layouts).
+3. Widget placement on a real launcher, snapshot publish latency, and tap
+   routing (the top native risk; `exported="false"` matches current
+   official samples but the binding path is unexercised).
+4. Notification delivery + on-device tap routing + rest-timer alerts;
+   notification reboot persistence.
+5. The full onboarding + tutorial journey on hardware (the web walk is
+   automated; the device journey is not).
+6. Samsung duplicate-press confirmation for the Home calorie card (the
+   mechanism fix is locked; the root cause stays INFERRED).
+7. Codex CLI success path — completions, model routing, image
+   understanding, schema enforcement (needs API credentials).
+8. The release pipeline itself — version derivation, SHA-256 asset, and
+   prerelease flag run on GitHub Actions for the first time with the
+   v0.2.0 tag.
