@@ -25,6 +25,10 @@ vi.mock('expo-sqlite/kv-store', () => ({
   default: { getItem: vi.fn(), setItem: vi.fn(), removeItem: vi.fn() },
 }))
 vi.mock('../inference/credentials', () => ({ clearCredential: vi.fn() }))
+// Task 3-c: resetEverything publishes the widget reset sentinel through a
+// DYNAMIC import — mock it so the node suite never loads the expo/react-native
+// module graph, and lock the seam below.
+vi.mock('../widgets/publish', () => ({ publishResetSnapshot: vi.fn() }))
 // Food-mutation events are UI bus noise the invariants do not depend on.
 vi.mock('./food-mutations', () => ({
   emitFoodMutation: vi.fn(),
@@ -43,6 +47,7 @@ import {
   undoLastOperation,
   updateMealSlot,
 } from './repo'
+import { publishResetSnapshot } from '../widgets/publish'
 
 const NOW = 1_754_300_000_000
 // localDate(NOW) in UTC — the repo's localDate is test-stable in the CI TZ.
@@ -232,5 +237,26 @@ describe('P1-9 repo invariants: compaction + reset', () => {
     expect(meals).toHaveLength(0)
     const items = await database.all('SELECT * FROM log_items')
     expect(items).toHaveLength(0)
+  })
+
+  it('resetEverything clears the onboarding done key, the stale draft and the tutorial seen marker', async () => {
+    // T2-a2 leftover (owner item #3 blast radius): reset kept the onboarding
+    // draft, so a post-reset re-onboarding resumed PRE-reset answers. The
+    // tutorial's seen marker must go too, so a re-completed onboarding can
+    // offer the walkthrough again.
+    const { default: Storage } = await import('expo-sqlite/kv-store')
+    await resetEverything()
+    expect(Storage.removeItem).toHaveBeenCalledWith('onboarding.completed.v1')
+    expect(Storage.removeItem).toHaveBeenCalledWith('onboarding.draft.v1')
+    expect(Storage.removeItem).toHaveBeenCalledWith('tutorial.seen.v1')
+  })
+
+  it('resetEverything publishes the widget reset snapshot (T3-c)', async () => {
+    // The home-screen widget must not keep showing the wiped day's numbers;
+    // the sentinel's SHAPE is locked in widget-snapshot tests — here only the
+    // seam is: a reset always triggers one publishResetSnapshot.
+    vi.mocked(publishResetSnapshot).mockClear()
+    await resetEverything()
+    expect(publishResetSnapshot).toHaveBeenCalledTimes(1)
   })
 })

@@ -13,6 +13,7 @@ import { ProgressChart } from '../../src/components/onboarding/Charts'
 import { CountUp } from '../../src/components/ProgressRing'
 import { useReducedMotion } from '../../src/components/PressableFX'
 import { persistOnboarding } from '../../src/onboarding/persist'
+import { readTutorialSeen, shouldAutoShowTutorial } from '../../src/tutorial/key'
 import {
   activityFor,
   ageFrom,
@@ -312,9 +313,21 @@ export default function PlanScreen() {
             // Persist BEFORE navigating. A plan the user saw but the app forgot
             // is worse than no plan: they would arrive at a Today screen whose
             // targets contradict the screen they just approved.
-            void persistOnboarding(a, plan.target, plan.macros).then(() => {
-              router.replace('/(tabs)' as never)
-            })
+            void persistOnboarding(a, plan.target, plan.macros)
+              .then(() => {
+                router.replace('/(tabs)' as never)
+              })
+              .then(async () => {
+                // The optional walkthrough (owner item #3): fresh completions
+                // ONLY. Replace-then-push keeps the tabs below the tour, so
+                // Skip and hardware Back both land on Home — it can never
+                // trap. The restore path (finishRestore) never routes here,
+                // so restoring users are never ambushed; a re-play from the
+                // Profile About group is explicit and never re-arms this.
+                if (shouldAutoShowTutorial(await readTutorialSeen())) {
+                  router.push('/tutorial' as never)
+                }
+              })
           }}
           style={[styles.cta, { backgroundColor: theme.text }]}
         >

@@ -63,6 +63,15 @@ export const PROFILE_GROUPS: readonly ProfileGroupDef[] = [
         label: 'Units & health',
         route: '/settings-units-health',
       },
+      {
+        // Task 3-b: local notification preferences (reminders + rest timer).
+        // Same app-preferences family as units/haptics; the screen itself
+        // owns the honest permission and per-category switches.
+        key: 'notifications',
+        icon: 'clock',
+        label: 'Notifications',
+        route: '/notification-settings',
+      },
     ],
   },
   {
@@ -90,6 +99,15 @@ export const PROFILE_GROUPS: readonly ProfileGroupDef[] = [
         icon: 'bowl',
         label: 'How food & dish data works',
         route: '/data-methods',
+      },
+      {
+        // The optional post-onboarding walkthrough (owner item #3) — replay
+        // entry. Shown once automatically at onboarding completion; this row
+        // is the only other way in.
+        key: 'tutorial',
+        icon: 'bookOpen',
+        label: 'Replay the tutorial',
+        route: '/tutorial',
       },
       { key: 'about', icon: 'heart', label: 'About Nut AI', route: '/settings-about' },
     ],

@@ -26,6 +26,8 @@ import {
 import Storage from 'expo-sqlite/kv-store'
 import { seedExercises } from '@nutai/training'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
+import { ONBOARDING_DRAFT_KEY } from '../onboarding/draft'
+import { TUTORIAL_SEEN_KEY } from '../tutorial/key'
 import { EXPORT_TABLES, WIPE_ONLY_TABLES } from './backup-core'
 import { parseCheckinAcceptedAt } from './home-instrument'
 import { localDate, slotFor } from './date-utils'
@@ -98,6 +100,26 @@ export async function resetEverything(): Promise<void> {
   }
 
   await Storage.removeItem(ONBOARDING_DONE_KEY)
+  // A reset is a FRESH START, so two more kv keys must go with the done flag:
+  // the onboarding draft (a leftover draft would resume PRE-reset answers —
+  // the resume path only honors a draft while onboarding is unfinished, and
+  // reset just un-finished it) and the walkthrough's seen marker (a
+  // re-completed onboarding may offer the tutorial again).
+  await Storage.removeItem(ONBOARDING_DRAFT_KEY)
+  await Storage.removeItem(TUTORIAL_SEEN_KEY)
+
+  // Task 3-c (widget): after a wipe the home-screen widget must show an
+  // empty/reset state — never the pre-reset numbers. The sentinel snapshot
+  // (everything null, todayStatus 'reset', stale:true) is defined in
+  // src/widgets/publish.ts. Dynamic import keeps repo.ts's module graph free
+  // of expo/react-native for the plain-Node tests, and the try/catch keeps
+  // the reset itself unbreakable — the widget is cosmetic.
+  try {
+    const { publishResetSnapshot } = await import('../widgets/publish')
+    publishResetSnapshot()
+  } catch {
+    /* widget publish is best-effort */
+  }
 }
 
 // ---------------------------------------------------------------------------
