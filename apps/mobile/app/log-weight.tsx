@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { EditableValue, RulerPicker } from '../src/components/onboarding/Controls'
 import { lbToKg, weightValueFromKg, type WeightUnit } from '@nutai/analytics'
 import { db, logWeight, weightHistory } from '../src/data/repo'
+import { scheduleWidgetPublish } from '../src/widgets/publish'
 import { readWeightUnit } from '../src/data/weight-units'
 // UI/UX report Table 9.2 (Wave 1c): "Log weight → Success" — a dated point is
 // the quiet reward moment of this screen.
@@ -62,6 +63,10 @@ export default function LogWeight() {
     setError(null)
     try {
       await logWeight(kg, Date.now())
+      // Task 3-c (widget): refresh the home-screen widget after the successful
+      // weigh-in write. Debounced + coalesced; a silent no-op without the
+      // native module — it must never block or fail the save that just landed.
+      scheduleWidgetPublish()
       // Table 9.2: log weight → success haptic.
       void hapticSuccess()
       router.back()

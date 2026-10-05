@@ -1,0 +1,10 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.nutai.app'
+
+android {
+  namespace 'com.nutai.app.widget'
+}

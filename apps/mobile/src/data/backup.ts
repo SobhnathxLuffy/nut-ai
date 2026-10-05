@@ -5,6 +5,7 @@ import * as Sharing from 'expo-sharing'
 import Storage from 'expo-sqlite/kv-store'
 import { currentVersion } from '@nutai/db-adapter'
 import { ONBOARDING_DONE_KEY } from '../onboarding/done-key'
+import { scheduleWidgetPublish } from '../widgets/publish'
 import { db } from './repo'
 import {
   buildBackupPayload,
@@ -103,4 +104,8 @@ export async function importBackup(payload: BackupPayload): Promise<ImportOutcom
 
 export async function finishRestore(): Promise<void> {
   await Storage.setItem(ONBOARDING_DONE_KEY, 'true')
+  // Task 3-c (widget): a restore rewrites every table behind the events the
+  // widget publisher listens to, so schedule one debounced publish here.
+  // Silent no-op without the native module; never blocks the restore result.
+  scheduleWidgetPublish()
 }
