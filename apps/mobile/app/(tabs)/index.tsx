@@ -53,6 +53,13 @@ const TODAY_PULSE_MS = 1200
 const PULL_THRESHOLD = 72
 
 /**
+ * Duplicate-press guard window for the hero disclosure (see toggleDetail):
+ * a single tap on Samsung/OneUI can arrive as two onPress events, and presses
+ * inside this window count as one.
+ */
+const HERO_TOGGLE_GUARD_MS = 300
+
+/**
  * Home — an instrument, not a dashboard (UI/UX report §8.2, Wave 3).
  *
  * Three rules this screen will not break, all of them about not moralising:
@@ -153,16 +160,38 @@ export default function Home() {
   // §8.2 press-for-detail: a spring opens/closes the measured height of the
   // slot breakdown (Table 9.1 — springs for anything position-based). Reduce
   // motion (motionScale 0) collapses to the instant state.
+  //
+  // Android release QA 2026-10 (owner item #5): closing used to visibly bounce
+  // open-close-open on the Samsung device. Friction 9 at tension 84 is
+  // under-damped (ζ≈0.7) and this effect RESTARTS the spring from the current
+  // position on every dep change, so a mid-flight reversal (duplicate toggle —
+  // guarded in toggleDetail) or a contentH identity change (guarded in the
+  // onLayout below) re-entered the spring displaced and oscillated. Friction 13
+  // at tension 84 is critical damping and overshootClamping hard-stops at the
+  // target, so a restarted spring converges without bouncing. Card-scoped — no
+  // global animation change.
   useEffect(() => {
     const target = expanded && contentH > 0 ? contentH : 0
     if (motionScale === 0 || contentH === 0) {
       detailH.setValue(contentH > 0 ? target : 0)
       return
     }
-    Animated.spring(detailH, { toValue: target, friction: 9, tension: 84, useNativeDriver: false }).start()
+    Animated.spring(detailH, { toValue: target, friction: 13, tension: 84, overshootClamping: true, useNativeDriver: false }).start()
   }, [expanded, contentH, motionScale, detailH])
 
+  // Duplicate-press guard: a single tap on Samsung/OneUI can deliver two
+  // onPress events; the second one used to reverse the close mid-spring — the
+  // open-close-open bounce (owner item #5). Re-presses inside the window are
+  // swallowed whole (no haptic, no state write). Cost, deliberately accepted:
+  // a genuine open→close→open flick now needs ≥300ms between presses — slower
+  // than ghost delivery (~50-100ms) and about the fastest anyone re-taps a
+  // disclosure on purpose, so real intent survives; only same-gesture ghosts
+  // are dropped.
+  const lastHeroToggleAt = useRef(0)
   const toggleDetail = useCallback(() => {
+    const now = Date.now()
+    if (now - lastHeroToggleAt.current < HERO_TOGGLE_GUARD_MS) return
+    lastHeroToggleAt.current = now
     // Table 9.2: a disclosure toggle lands the selection tick — feedback for a
     // state change, not a reward (that stays reserved for logging).
     selectionAsync()
@@ -458,8 +487,14 @@ export default function Home() {
             <View
               style={styles.detailInner}
               onLayout={(e) => {
-                const h = e.nativeEvent.layout.height
-                if (h > 0) setContentH(h)
+                // Whole-px + equality-bail: re-measure passes during the height
+                // animation deliver fractional floats that differ by noise
+                // (214.00001 vs 214); every identity change re-ran the spring
+                // effect, restarting it mid-flight. Rounding makes the value
+                // stable across passes; the bail keeps same-value passes from
+                // touching state at all.
+                const h = Math.round(e.nativeEvent.layout.height)
+                if (h > 0 && h !== contentH) setContentH(h)
               }}
             >
               <View style={[styles.detailDivider, { backgroundColor: theme.border }]} />

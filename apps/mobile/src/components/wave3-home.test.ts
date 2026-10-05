@@ -31,7 +31,7 @@ describe('§8.2 item 1 — the hero ring counts up on focus and presses open per
     expect(home).toMatch(/Animated\.spring\(detailH,/)
     expect(home).toMatch(/useNativeDriver: false/)
     expect(home).toContain('onLayout={(e) => {')
-    expect(home).toContain('const h = e.nativeEvent.layout.height')
+    expect(home).toContain('const h = Math.round(e.nativeEvent.layout.height)')
   })
 
   it('the expansion respects motionScale (reduce motion collapses to the instant state)', () => {
@@ -158,5 +158,54 @@ describe('§8.2 items 6-7 — skeletons, pull-to-refresh, and the timeline stays
   it('the DayTimeline read surface (Ch 7.1) is still rendered, untouched in function', () => {
     expect(home).toMatch(/<DayTimeline selectedDate=\{localDate\(selected\)\} hideDateControls hideTotals \/>/)
     expect(home).toContain("from '../../src/components/DayTimeline'")
+  })
+})
+
+describe('Android release QA (owner item #5) — the hero-card close-bounce fix', () => {
+  // Mechanism (T1-c audit): a single Samsung/OneUI tap can deliver two onPress
+  // events → the second toggle reverses the close mid-spring → each dep change
+  // RESTARTS the spring from the current position → visible open-close-open.
+  // The screen cannot mount in the node environment, so the fix is locked at
+  // the same source-sweep seam as the rest of this file.
+  const toggleBody = () => {
+    const start = home.indexOf('const toggleDetail = useCallback(')
+    const end = home.indexOf('const onRefresh = useCallback(', start)
+    expect(start).toBeGreaterThan(-1)
+    return home.slice(start, end)
+  }
+
+  it('setExpanded has exactly ONE call site — the guarded hero toggle (no second writer can flip it)', () => {
+    expect((home.match(/setExpanded\(/g) ?? []).length).toBe(1)
+  })
+
+  it('the duplicate-press guard lives inside toggleDetail, before haptic and state write', () => {
+    const body = toggleBody()
+    expect(body).toContain('if (now - lastHeroToggleAt.current < HERO_TOGGLE_GUARD_MS) return')
+    expect(body).toContain('lastHeroToggleAt.current = now')
+    // Guard fires BEFORE the haptic and the toggle — a ghost press costs nothing.
+    expect(body.indexOf('HERO_TOGGLE_GUARD_MS) return')).toBeLessThan(body.indexOf('selectionAsync()'))
+    expect(body.indexOf('selectionAsync()')).toBeLessThan(body.indexOf('setExpanded('))
+  })
+
+  it('the guard window is 300ms — slower than ghost delivery, fast enough for real re-taps', () => {
+    expect(home).toMatch(/const HERO_TOGGLE_GUARD_MS = 300/)
+  })
+
+  it('the detail spring is critically damped + overshoot-clamped (friction 13 at tension 84)', () => {
+    expect(home).toMatch(
+      /Animated\.spring\(detailH, \{ toValue: target, friction: 13, tension: 84, overshootClamping: true, useNativeDriver: false \}\)/,
+    )
+  })
+
+  it('contentH is whole-px rounded + equality-bailed so re-measures cannot restart the spring', () => {
+    expect(home).toContain('const h = Math.round(e.nativeEvent.layout.height)')
+    expect(home).toContain('if (h > 0 && h !== contentH) setContentH(h)')
+  })
+
+  it('the fix stays card-scoped: every other animation config in the file is untouched', () => {
+    expect(home).toMatch(/Animated\.spring\(pullY, \{ toValue: to, friction: 7, tension: 120/)
+    expect(home).toMatch(/Animated\.spring\(pullY, \{ toValue: PULL_THRESHOLD, friction: 7, tension: 120/)
+    expect(home).toMatch(/Animated\.timing\(pulse, \{ toValue: 0\.3, duration: TODAY_PULSE_MS/)
+    expect(home).toMatch(/Animated\.timing\(pulse, \{ toValue: 1, duration: TODAY_PULSE_MS/)
   })
 })
