@@ -42,7 +42,8 @@ export default defineConfig({
     // apps/mobile/e2e/fixtures: node-side invariants over the Playwright
     // fixture files (fixture-invariant.test.ts). The .spec.ts e2e files stay
     // OUT — they run under Playwright, not vitest.
-    include: ['packages/**/*.test.ts', 'eval/**/*.test.ts', 'apps/mobile/src/**/*.test.ts', 'apps/mobile/e2e/fixtures/**/*.test.ts'],
+    // tools/codex-bridge: integration tests for the local Codex CLI bridge.
+    include: ['packages/**/*.test.ts', 'eval/**/*.test.ts', 'apps/mobile/src/**/*.test.ts', 'apps/mobile/e2e/fixtures/**/*.test.ts', 'tools/**/*.test.mjs'],
     environment: 'node',
   },
 })

@@ -205,7 +205,11 @@ export function CredentialForm({
           Keys from OpenAI-compatible resellers work here for every provider —
           aicredits.in, OpenRouter, a proxy. Paste the base URL their dashboard
           shows (ends in /v1), and the exact model ID if it differs from the
-          default. Leave empty for the official {PROVIDER_NAME[provider]} endpoint.
+          default. Leave empty for the official {PROVIDER_NAME[provider]}{' '}
+          endpoint. Running our local Codex CLI bridge on a computer (setup:
+          tools/codex-bridge/README.md)? Point this at http://localhost:8471/v1
+          with model ID "codex" — any key works unless the bridge was started
+          with a token.
         </Text>
         {/* UI/UX report Table 5.1 / Table 12.2 (Wave 2): the two reseller
             inputs join the ONE labelled Field — its error + hint slots and
