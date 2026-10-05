@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import kotlin.math.abs
 import org.json.JSONObject
@@ -29,7 +30,7 @@ internal const val SNAPSHOT_KEY = "snapshot_json"
  * apps/mobile/plugins/withAndroidWidgets.js. Static (not inner) classes are
  * mandatory: the system instantiates receivers reflectively.
  */
-internal enum class WidgetKind(val providerClass: Class<out NutaiWidgetsProvider>) {
+enum class WidgetKind(val providerClass: Class<out NutaiWidgetsProvider>) {
   TODAY(NutaiWidgetsProvider.Today::class.java),
   QUICK_ACTION(NutaiWidgetsProvider.QuickAction::class.java),
   TRAINING(NutaiWidgetsProvider.Training::class.java),
@@ -132,7 +133,7 @@ internal object WidgetViews {
     if (live == null || kcalRemaining == null) {
       views.setTextViewText(remainingId, REFRESH_TEXT)
       views.setTextViewText(eatenId, "")
-      views.setViewVisibility(barId, RemoteViews.GONE)
+      views.setViewVisibility(barId, View.GONE)
       views.setTextViewText(proteinId, "")
       views.setTextViewText(statusId, "")
       views.setContentDescription(rootId, REFRESH_TEXT)
@@ -163,16 +164,16 @@ internal object WidgetViews {
       val proteinTargetG = number(live, "proteinTargetG")
       if (proteinG != null && proteinTargetG != null && proteinTargetG > 0) {
         val percent = (proteinG / proteinTargetG * 100.0).coerceIn(0.0, 100.0)
-        views.setViewVisibility(barId, RemoteViews.VISIBLE)
+        views.setViewVisibility(barId, View.VISIBLE)
         views.setProgressBar(barId, 100, Math.round(percent).toInt(), false)
         views.setTextViewText(proteinId, "Protein ${fmt(proteinG)} / ${fmt(proteinTargetG)} g")
       } else if (proteinTargetG != null) {
         // Target set but nothing logged — a fabricated zero would violate
         // AGENTS.md §19 ("missing nutrition silently converted to zero").
-        views.setViewVisibility(barId, RemoteViews.GONE)
+        views.setViewVisibility(barId, View.GONE)
         views.setTextViewText(proteinId, "Protein not logged yet")
       } else {
-        views.setViewVisibility(barId, RemoteViews.GONE)
+        views.setViewVisibility(barId, View.GONE)
         views.setTextViewText(proteinId, "No protein target set")
       }
 
