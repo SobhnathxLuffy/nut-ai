@@ -135,67 +135,117 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Nut AI ${{ github.ref_name }} — Android APK"
           prerelease: ${{ env.IS_PRERELEASE }}
-          # Per-release changelog: the bullets below still describe v0.1.1 and
-          # MUST be replaced with the new release's notes before tagging
-          # (draft: docs/release-notes-draft-v0.2.0.md). Do not ship them
-          # stale — e.g. "Onboarding is ONE page" is no longer true in v0.2.0,
-          # which reintroduces the step-by-step flow. Version strings are
-          # derived — do not hardcode them back.
+          # Per-release changelog: the body below is the v0.2.0 release notes
+          # (drafted in docs/release-notes-draft-v0.2.0.md §2). Version strings
+          # are derived — do not hardcode them back.
           body: |
-            ## Nut AI — Android release APK (v${{ env.VERSION }}, versionCode ${{ env.VERSION_CODE }})
+            > Tag: `${{ github.ref_name }}` · versionCode ${{ env.VERSION_CODE }} · upgrade-installs over apk-v0.1.1
 
-            Real-device QA fixes (Samsung physical device, release build):
+            ## Nut AI v${{ env.VERSION }} — Android APK
 
-            **Database (fixed the Progress / Routines crash)**
-            - Progress → Overview and Train → Routines crashed with a native
-              `NativeDatabase.prepareAsync` NullPointerException on Android.
-              Root cause: duplicate SQLite handles for user.db were opened per
-              screen (onboarding persist, scan recents, assistant, dish
-              composer); when Android's JS garbage collector collected one of
-              the throwaway wrappers, expo-sqlite destroyed the SHARED native
-              database for the whole app. All handles are now process-wide
-              singletons and retained for the app's lifetime; queries can no
-              longer run against a destroyed handle.
-            - DB errors now surface with the database, operation and statement
-              named (plus an explanation when the released-handle signature is
-              detected) instead of a raw Java NPE.
-            - Regression locks added: cold boot, upgrade/migration, repeated
-              queries, screen interleaving, background/resume, singleton
-              identity — plus width-sweep UI tests at 360/384/390/412/432 px.
+            ### New
 
-            **Food quick actions (fixed one-character vertical pills)**
-            - "Scan food / Indian dishes / Recipes / …" collapsed to ~0 width on
-              device (percentage widths inside a wrap+gap container measured
-              wrong under Yoga). Tiles now take exact computed widths: 2
-              columns on phones, 3 on tablets, with a hard readable floor.
+            **Step-by-step onboarding, rebuilt**
+            - The single-page form is gone: 12 guided steps (about you → body
+              metrics → units → provider → plan), a gated Continue on each
+              step, keyboard-friendly numeric entry, and a final "See my plan"
+              reveal. Your answers persist as a draft, so an interrupted
+              onboarding resumes where you left off.
+            - Height and weight units are now independent: choose cm or ft/in
+              for height and kg or lb for weight separately — in onboarding
+              and later in Profile → Units & Health. Everything is stored
+              canonically (kg, cm) and converted only for display.
+            - A short optional tutorial after onboarding (5 cards, replayable
+              from Profile, Skip always visible — it never traps you).
 
-            **Progress top navigation (fixed clipped "Training" tab)**
-            - The section row now wraps to a second line on narrow screens —
-              every label fully visible, nothing clipped, no hidden scroll.
+            **Local notifications (no cloud, no accounts)**
+            - Meal reminders learned from your plan and rest-timer completion
+              notices, scheduled entirely on the device via AlarmManager. No
+              FCM, no push token.
+            - The Android 13+ notification permission is asked CONTEXTUALLY —
+              when you first enable a reminder or start a rest timer — never
+              at app startup, and the app works fine if you decline. Manage
+              everything in Profile → Notifications.
 
-            **Home (fixed bottom overlap + date strip clipping)**
-            - Scroll content clears the floating tab bar + FAB + Android
-              gesture bar by real measured insets, not magic numbers.
-            - Day strip columns are exact-width (~7 visible), no more
-              left/right clipping; labels cap at 1.2× so large font scales
-              wrap instead of clip (font scaling itself stays ON).
+            **Three Android home-screen widgets**
+            - **Today** (calories remaining + protein progress), **Quick
+              Action** (one-tap log/scan/train), **Training** (your next
+              scheduled session). They update from the app's own data
+              on-device; if the snapshot goes stale they say "Open Nut AI to
+              refresh" instead of guessing. Taps deep-link straight into the
+              right screen.
 
-            **Onboarding is ONE page**
-            - The 12-screen flow (three questions per page, page after page)
-              is now a single scrollable form with one "See my plan" button,
-              then the plan reveal. Every control is the same widget as before.
+            **Codex CLI as an AI provider (local bridge)**
+            - Run `tools/codex-bridge` on your computer (requires the
+              [Codex CLI](https://github.com/openai/codex) installed and
+              logged in) and add a provider in the app pointing at the
+              bridge's local URL. It exposes the OpenAI-compatible endpoints
+              the app already speaks and translates them to `codex exec`.
+            - What we verified by installing and probing real codex-cli
+              0.160.0: the headless surface (`exec`, `-m` model, `-i` image
+              files, `--json` event stream, `--output-schema`/`-o`,
+              `--ephemeral`, sandbox flags) exists and parses, and failures
+              map honestly — exit-code 1 + a truthful 401/403/429 envelope
+              reaches the app instead of a generic "server error" (verified
+              end-to-end through the real bridge/CLI).
+            - What is NOT verified (needs API credentials): successful
+              completions, model routing, image understanding quality, and
+              JSON-schema enforcement — those shapes are documented by the
+              CLI but not exercised by us.
+            - Limitations: the bridge is plain HTTP on your local network (no
+              TLS yet) — use it only on a network you trust; `codex exec` has
+              no timeout flag; your Codex auth lives on your computer, never
+              inside the APK.
+
+            ### Fixed
+
+            - **Home calorie breakdown animation:** the calorie card could
+              open-close-open when tapped (duplicate press delivery on some
+              Samsung/OneUI devices, amplified by the height spring restarting
+              mid-flight). One tap now flips it exactly once, the spring is
+              critically damped with overshoot clamping, and content
+              re-measures can no longer restart the animation.
+              Regression-locked in tests; the on-device tap behavior still
+              needs the owner device pass.
+            - **Routines screen jitter:** Create/New Routine re-fetched its
+              lists in a focus-effect loop (4 SQLite round-trips per cycle,
+              busy spinner flicker). Root cause fixed (stable callbacks +
+              change fingerprint) with a red-first regression test that
+              proves 25 refires before → 1 after.
+            - **Workout modes, routines and programs, cleaned up:** honest
+              "Start empty workout" wording, Simple/Advanced set fields named
+              consistently, real advanced controls in the routine editor
+              (progression labels, superset chips, per-exercise context),
+              programs actually editable with a weekday↔cycle-day fix
+              (schedules starting mid-week used to never fire), delete
+              confirmations, dirty-exit guards, and an explainer for the
+              program schedule.
+            - **Android APK QA pass:** font-scaling contract enforced on every
+              text input (31/31), screen-reader labels composed correctly on
+              report rows, larger tap targets on dish chips, notification
+              settings disabled-state made screen-reader-visible, barcode
+              offline vs not-found told apart honestly, restore screen scrolls
+              on small displays, and the onboarding plan button can no longer
+              double-fire (double-tap previously double-persisted your goals).
+              Health-step copy now says plainly that Health Connect for
+              Android isn't built yet.
 
             ## Install on your phone
+
             1. If v0.1.0 is installed, UNINSTALL it first — v0.1.0 shipped with
                a one-off CI debug key, and Android forbids updating across
-               signing keys (one-time step; future updates install over each other).
-            2. Tap `nut-ai-v${{ env.VERSION }}.apk` below and download it.
-            3. Android will warn about unknown apps — choose **Install anyway / Allow from this source**.
+               signing keys (one-time step; releases from v0.1.1 on install as
+               updates over each other).
+            2. Download `nut-ai-v${{ env.VERSION }}.apk` below and tap it.
+            3. Android will warn about unknown apps — choose **Install anyway /
+               Allow from this source**.
 
             ## SHA-256 checksum
+
             Verify your download: the file `nut-ai-v${{ env.VERSION }}.apk.sha256`
-            is attached to this release (run `sha256sum -c` next to it), or
-            compare the APK against:
+            is attached to this release — put both files in one folder and run
+            `sha256sum -c nut-ai-v${{ env.VERSION }}.apk.sha256`, or compare
+            the APK hash against the value printed in the release body:
 
             ```
             ${{ env.SHA256 }}  nut-ai-v${{ env.VERSION }}.apk

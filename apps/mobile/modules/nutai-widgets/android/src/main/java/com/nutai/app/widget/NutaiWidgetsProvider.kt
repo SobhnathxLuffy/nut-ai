@@ -85,7 +85,7 @@ abstract class NutaiWidgetsProvider : AppWidgetProvider() {
  * id is resolved by name at runtime. A resolved-zero id means the plugin did
  * not run; that fails loudly rather than rendering a blank widget.
  *
- * Styling: dark text on light, framework colors only (@android:color/*) —
+ * Styling: dark text on light, framework colors only —
  * no new resource dependencies. Secondary text uses black at alpha 0.55
  * (≈4.9:1 on white) because @android:color/darker_gray is too low-contrast.
  * Tap targets are ≥48dp; the tappable root of each widget gets an honest

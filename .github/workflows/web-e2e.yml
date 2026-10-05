@@ -25,11 +25,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Build nutrition corpus
+        run: npm run build:tools-pkgs && npm run data:build
 
       - name: Typecheck
         run: npm run typecheck
@@ -51,7 +54,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
