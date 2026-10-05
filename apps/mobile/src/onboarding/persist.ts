@@ -2,6 +2,7 @@ import Storage from 'expo-sqlite/kv-store'
 import { createSyncMetadata, migrate, recordOperation, type DbAdapter } from '@nutai/db-adapter'
 import type { CalorieTarget, MacroTargets } from '@nutai/goals'
 import { openUserDb } from '../db/expo-adapter'
+import { clearDraft } from './draft'
 import { ONBOARDING_DONE_KEY } from './done-key'
 import {
   activityFor,
@@ -149,6 +150,9 @@ export async function persistOnboarding(
       ['provider_model', answers.providerModel ?? ''],
       ['age.years', String(ageFrom(answers, now))],
       ['weight.displayUnit', answers.units === 'imperial' ? 'lb' : 'kg'],
+      // Height units are independent of weight (2026-10 rebuild): the display
+      // choice rides its own settings key; height_cm itself stays canonical cm.
+      ['height.displayUnit', answers.heightUnit],
     ]
 
     for (const [key, value] of settings) {
@@ -163,4 +167,8 @@ export async function persistOnboarding(
   // Nothing else in the app closes it either; reset keeps the handle and only
   // deletes rows.
   await Storage.setItem(ONBOARDING_DONE_KEY, 'true')
+  // Completion ends the draft: a done onboarding must never resume. Cleared
+  // AFTER the done key so a kill between the two writes leaves resume intact
+  // (the resume path checks the done key first, so a leftover draft is inert).
+  await clearDraft()
 }

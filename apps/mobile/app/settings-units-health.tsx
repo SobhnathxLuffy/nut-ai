@@ -4,6 +4,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-nati
 import type { WeightUnit } from '@nutai/analytics'
 import { availability, requestPermissions } from '../src/health/healthkit'
 import { db } from '../src/data/repo'
+import { readHeightUnit, writeHeightUnit, type HeightUnit } from '../src/data/height-units'
 import { readWeightUnit, writeWeightUnit } from '../src/data/weight-units'
 import { hapticsEnabled, setHapticsEnabled } from '../src/utils/haptics'
 import { ItemRow } from '../src/components/ItemRow'
@@ -21,10 +22,15 @@ import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
  * the native Apple Health connect/manage-access flow. On web the Health group
  * renders nothing — P2-10: it had no web implementation, so showing it would
  * be a dead control.
+ *
+ * 2026-10: a HEIGHT unit row joins the bodyweight one — height display is
+ * decoupled from weight (cm | ft+in, its own settings key); stored heights
+ * remain in centimetres.
  */
 export default function UnitsHealthSettings() {
   const theme = useTheme()
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
+  const [heightUnit, setHeightUnit] = useState<HeightUnit>('cm')
   const [hapticsOn, setHapticsOn] = useState(true)
   const [healthAvail, setHealthAvail] = useState<'available' | 'not-ios' | 'unavailable' | 'checking'>('checking')
   const [healthBusy, setHealthBusy] = useState(false)
@@ -35,13 +41,15 @@ export default function UnitsHealthSettings() {
       void (async () => {
         try {
           const handle = await db()
-          const [unit, haptics, avail] = await Promise.all([
+          const [unit, heightUnit, haptics, avail] = await Promise.all([
             readWeightUnit(handle),
+            readHeightUnit(handle),
             hapticsEnabled(),
             availability(),
           ])
           if (!alive) return
           setWeightUnit(unit)
+          setHeightUnit(heightUnit)
           setHapticsOn(haptics)
           setHealthAvail(avail === 'available' ? 'available' : avail === 'not-ios' ? 'not-ios' : 'unavailable')
         } catch {
@@ -65,6 +73,21 @@ export default function UnitsHealthSettings() {
         setWeightUnit(previous)
         showToast({
           message: 'Could not save the preference — your weight display unit was not changed.',
+          tone: 'error',
+        })
+      })
+  }
+
+  function changeHeightUnit(unit: HeightUnit) {
+    if (unit === heightUnit) return
+    const previous = heightUnit
+    setHeightUnit(unit)
+    void db()
+      .then((handle) => writeHeightUnit(handle, unit))
+      .catch(() => {
+        setHeightUnit(previous)
+        showToast({
+          message: 'Could not save the preference — your height display unit was not changed.',
           tone: 'error',
         })
       })
@@ -122,6 +145,36 @@ export default function UnitsHealthSettings() {
                 ]}
               >
                 <Text style={[type.label, { color: selected ? theme.bg : theme.text }]}>{unit}</Text>
+              </Pressable>
+            )
+          })}
+        </View>
+      </View>
+
+      {/* 2026-10: height units decoupled from weight — its own display
+          preference. Stored heights remain in centimetres. */}
+      <View style={[styles.card, { backgroundColor: theme.bgSunken, marginTop: space.md }]}>
+        <Text style={[type.body, { color: theme.text }]}>Height unit</Text>
+        <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
+          Stored heights remain in centimetres.
+        </Text>
+        <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.md }}>
+          {(['cm', 'ftin'] as const).map((unit) => {
+            const selected = heightUnit === unit
+            return (
+              <Pressable
+                key={unit}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => changeHeightUnit(unit)}
+                style={[
+                  styles.choiceButton,
+                  { backgroundColor: selected ? theme.text : theme.bgElevated, borderColor: theme.border },
+                ]}
+              >
+                <Text style={[type.label, { color: selected ? theme.bg : theme.text }]}>
+                  {unit === 'cm' ? 'cm' : 'ft + in'}
+                </Text>
               </Pressable>
             )
           })}

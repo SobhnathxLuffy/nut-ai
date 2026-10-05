@@ -2,26 +2,32 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { FLOW, nextRoute, stepIndex, TOTAL_STEPS } from './flow'
+import { FLOW, isStep, stepIndex, TOTAL_STEPS } from './flow'
 import type { OnboardingAnswers } from './store'
 
 /**
- * Owner QA 2026-10 — onboarding collapsed to a SINGLE PAGE.
+ * Owner mandate 2026-10 — the STEPWISE REBUILD (deliberate contract revision,
+ * 2026-10-05).
  *
- * "Why is the onboarding giving three things in one page so many times? Don't
- * do that — give everything one single page."
+ * The owner first asked for ONE page; on seeing it they asked to go back to
+ * one focused question per step. This file pins the CONTRACT of the rebuild,
+ * not the pixels:
  *
- * This file pins the CONTRACT of that collapse, not the pixels:
- *
- *   1. The flow is exactly TWO pages: the single form (index) and the plan
- *      reveal (plan, which persists and exits). No interstitials.
- *   2. The progress rail is continuous: the form is 1/2, the reveal 2/2.
- *   3. DATA INTEGRITY — the non-negotiable: the single page captures EXACTLY
- *      the same answer fields the twelve-step flow captured. The harvest now
- *      walks BOTH the route files and the shared onboarding components, since
- *      the question controls live in src/components/onboarding/.
+ *   1. The flow is exactly TWELVE steps on ONE route (app/onboarding/index.tsx
+ *      hosts them as internal state) + the plan reveal (/onboarding/plan).
+ *      Steps are not routes — the header chevron and Android hardware Back
+ *      step between them with state intact.
+ *   2. The rail is continuous and labelled: "Step N of 12" with N = 1..12;
+ *      the reveal comes after the last step's "See my plan".
+ *   3. DATA INTEGRITY — the non-negotiable: the stepwise flow captures
+ *      EXACTLY the answer fields the plan generation consumes (plus the new
+ *      independent heightUnit). The harvest walks the route files AND the
+ *      shared onboarding components.
  *   4. The dead routes are actually dead — nothing in app/, src/ or e2e/
- *      deep-links to a screen that no longer exists.
+ *      deep-links to a screen that no longer exists. The step ids inside the
+ *      host are internal state, never '/onboarding/<id>' paths.
+ *   5. RESUME: a draft ('onboarding.draft.v1') persists on every change and
+ *      is only read while onboarding is unfinished; completion clears it.
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -29,12 +35,12 @@ const APP_ROOT = join(here, '../..')
 const ONBOARDING_DIR = join(APP_ROOT, 'app/onboarding')
 const COMPONENTS_DIR = join(APP_ROOT, 'src/components/onboarding')
 
-/** The single form + the reveal + the uncounted alternate entry. */
+/** The step host + the reveal + the uncounted alternate entry. */
 const EXPECTED_FILES = ['_layout.tsx', 'index.tsx', 'plan.tsx', 'restore.tsx'].sort()
 
-/** Screens absorbed into the single page, plus the older merge casualties. */
+/** Screens absorbed into the step host, plus the older merge casualties. */
 const DEAD_ROUTES = [
-  // absorbed by the single-page collapse (owner QA 2026-10):
+  // absorbed by the stepwise rebuild (owner mandate 2026-10):
   'activity', 'diet', 'accomplish', 'body', 'desired-weight', 'provider',
   'health', 'projection', 'rollover', 'notifications',
   // absorbed by the original 22→12 merge:
@@ -43,9 +49,10 @@ const DEAD_ROUTES = [
 ] as const
 
 /**
- * Every OnboardingAnswers field a SCREEN must still capture after the merge.
+ * Every OnboardingAnswers field a SCREEN must still capture after the rebuild.
  * `goal` is deliberately absent: it is DERIVED (inferredGoal) — no screen may
- * ask it, before or after the merge.
+ * ask it, before or after the rebuild. `heightUnit` is NEW: the owner-mandated
+ * decoupling of height units from weight units.
  */
 const EXPECTED_FIELDS: ReadonlySet<keyof OnboardingAnswers> = new Set([
   'sex',
@@ -60,6 +67,7 @@ const EXPECTED_FIELDS: ReadonlySet<keyof OnboardingAnswers> = new Set([
   'heightCm',
   'weightKg',
   'units',
+  'heightUnit',
   'desiredWeightKg',
   'provider',
   'providerModel',
@@ -82,8 +90,8 @@ function walk(dir: string, out: string[] = []): string[] {
 
 /**
  * Fields the onboarding surfaces write, harvested from their own source —
- * route files AND the shared section components (the single page moved the
- * controls into src/components/onboarding/OnboardingSections.tsx).
+ * route files AND the shared section components (the step bodies live in
+ * src/components/onboarding/).
  */
 function capturedFields(): Set<string> {
   const files = [...walk(ONBOARDING_DIR), ...walk(COMPONENTS_DIR)]
@@ -101,51 +109,31 @@ function capturedFields(): Set<string> {
   return fields
 }
 
-describe('owner QA 2026-10: the flow is ONE page + the reveal', () => {
-  it('FLOW is exactly the form and the reveal', () => {
-    expect([...FLOW]).toEqual(['index', 'plan'])
-    expect(TOTAL_STEPS).toBe(2)
+describe('owner mandate 2026-10: the flow is TWELVE steps + the reveal', () => {
+  it('FLOW is exactly the stepwise sequence', () => {
+    expect([...FLOW]).toEqual([
+      'welcome', 'sex', 'activity', 'diet', 'accomplish', 'birth',
+      'height', 'weight', 'goal-weight', 'provider', 'preferences', 'health',
+    ])
+    expect(TOTAL_STEPS).toBe(12)
   })
 
-  it('the onboarding directory is exactly the form + plan + restore + layout', () => {
+  it('the onboarding directory is exactly the host + plan + restore + layout', () => {
     expect(readdirSync(ONBOARDING_DIR).sort()).toEqual(EXPECTED_FILES)
   })
 
-  it('the rail runs 1..2 — the form is 1/2, the reveal finishes at 2/2', () => {
-    expect(stepIndex('index')).toBe(1)
-    expect(stepIndex('plan')).toBe(2)
-    for (const step of FLOW) expect(stepIndex(step)).toBeGreaterThan(0)
-  })
-
-  it('every next hop is the next FLOW entry — the rail can never jump or reset', () => {
-    for (let i = 0; i < FLOW.length - 1; i++) {
-      expect(nextRoute(FLOW[i]!)).toBe(`/onboarding/${FLOW[i + 1]}`)
-    }
-    // The terminal step's fallback is the plan itself (it never routes on).
-    expect(nextRoute('plan')).toBe('/onboarding/plan')
-  })
-
-  it('the single page renders every section — no question was dropped from the page', () => {
-    const form = readFileSync(join(ONBOARDING_DIR, 'index.tsx'), 'utf8')
-    for (const section of [
-      'AboutYouSection',
-      'DietSection',
-      'AccomplishSection',
-      'BodySection',
-      'DesiredWeightSection',
-      'ProviderSection',
-      'PreferencesSection',
-      'HealthSection',
-    ]) {
-      expect(form, `${section} on the single page`).toContain(section)
-    }
-    // The one Continue opens the plan reveal — no per-section navigation.
-    expect(form).toContain("'/onboarding/plan'")
+  it('the rail runs 1..12 and isStep rejects anything outside the machine', () => {
+    for (let i = 0; i < FLOW.length; i++) expect(stepIndex(FLOW[i]!)).toBe(i + 1)
+    expect(isStep('welcome')).toBe(true)
+    expect(isStep('health')).toBe(true)
+    expect(isStep('projection')).toBe(false)
+    expect(isStep('index')).toBe(false)
+    expect(isStep(0)).toBe(false)
   })
 })
 
-describe('data integrity — the collapse drops zero fields', () => {
-  it('the single page captures EXACTLY the fields the plan generation consumes', () => {
+describe('data integrity — the rebuild drops zero fields, asks no goal', () => {
+  it('the steps capture EXACTLY the fields the plan generation consumes (+ heightUnit)', () => {
     const captured = capturedFields()
     expect([...captured].sort()).toEqual([...EXPECTED_FIELDS].sort())
   })
@@ -174,12 +162,92 @@ describe('data integrity — the collapse drops zero fields', () => {
 
   it('the deleted chart components went with their screens', () => {
     const charts = readFileSync(join(here, '../components/onboarding/Charts.tsx'), 'utf8')
-    // ProjectionChart survives the collapse — it renders inline on the single
-    // page (DesiredWeightSection) instead of owning a screen.
+    // ProjectionChart survives the rebuild — it renders on the goal-weight
+    // step instead of owning a screen.
     expect(charts).toContain('export function ProjectionChart')
     expect(charts).not.toContain('TrendComparisonChart')
     expect(charts).not.toContain('TransitionChart')
     // ProgressChart survives — the plan reveal still uses it.
     expect(charts).toContain('export function ProgressChart')
+  })
+})
+
+describe('the step host (app/onboarding/index.tsx)', () => {
+  const host = readFileSync(join(ONBOARDING_DIR, 'index.tsx'), 'utf8')
+
+  it('renders one focused step at a time from the machine, never a route per step', () => {
+    // Every step is a case of the host; steps are internal state.
+    for (const step of FLOW) {
+      expect(host, `case for step ${step}`).toMatch(new RegExp(`case '${step}':`))
+    }
+    // No step id ever becomes a route path.
+    for (const step of FLOW) {
+      expect(host).not.toContain(`/onboarding/${step}`)
+    }
+  })
+
+  it('"See my plan" exists ONLY on the final step; the reveal route is behind it', () => {
+    const finalCase = host.slice(host.indexOf("case 'health':"))
+    expect(finalCase).toContain("cta=\"See my plan\"")
+    expect(finalCase).toContain("'/onboarding/plan'")
+    // No other case may open the reveal or carry the final CTA (prose mentions
+    // in the header comment don't count — this is the JSX prop).
+    const beforeFinal = host.slice(0, host.indexOf("case 'health':"))
+    expect(beforeFinal).not.toContain("'/onboarding/plan'")
+    expect(beforeFinal).not.toContain('cta="See my plan"')
+  })
+
+  it('hardware Back steps back with state intact; step 1 keeps default behaviour', () => {
+    expect(host).toContain('BackHandler.addEventListener')
+    expect(host).toMatch(/step === FLOW\[0\]\) return false/)
+  })
+
+  it('restores the draft on mount (done key unset only), hydrated before writing', () => {
+    expect(host).toContain('loadDraft')
+    expect(host).toContain('replaceAnswers')
+    expect(host).toContain('ONBOARDING_DONE_KEY')
+    // The draft write is gated on hydration — a mount-time save must not be
+    // able to clobber the snapshot with empty answers.
+    expect(host).toMatch(/if \(!hydrated\) return/)
+  })
+
+  it('the restore entry survives on the welcome step (e2e harness depends on it)', () => {
+    const welcomeCase = host.slice(host.indexOf("case 'welcome':"), host.indexOf("case 'sex':"))
+    expect(welcomeCase).toContain('Restore from a backup')
+    expect(welcomeCase).toContain("'/onboarding/restore'")
+  })
+
+  it('picker steps commit shown defaults on Continue, clamped to the pickers\' range', () => {
+    expect(host).toMatch(/setAnswer\('birthYear', 2000\)/)
+    expect(host).toMatch(/a\.heightCm \?\? BODY_DEFAULT_CM/)
+    expect(host).toMatch(/a\.weightKg \?\? BODY_DEFAULT_KG/)
+    expect(host).toMatch(/setAnswer\('desiredWeightKg', a\.weightKg \?\? BODY_DEFAULT_KG\)/)
+    expect(host).toContain('isRealBirthDate')
+    // Both picker steps clamp the committed value (HEIGHT_MIN_CM/MAX,
+    // WEIGHT_MIN_KG/MAX mirror the wheels/ruler ranges).
+    expect(host).toMatch(/clamp\((Number\.isFinite\(raw\) \? raw : BODY_DEFAULT_CM), HEIGHT_MIN_CM, HEIGHT_MAX_CM\)/)
+    expect(host).toMatch(/clamp\((Number\.isFinite\(raw\) \? raw : BODY_DEFAULT_KG), WEIGHT_MIN_KG, WEIGHT_MAX_KG\)/)
+  })
+})
+
+describe('the draft (src/onboarding/draft.ts) — transient, guarded, cleared on completion', () => {
+  const draftSrc = readFileSync(join(here, 'draft.ts'), 'utf8')
+  const persistSrc = readFileSync(join(here, 'persist.ts'), 'utf8')
+
+  it('lives under its own versioned kv key, documented as not-for-backup', () => {
+    expect(draftSrc).toContain("ONBOARDING_DRAFT_KEY = 'onboarding.draft.v1'")
+    expect(draftSrc).toMatch(/NOT part of the backup\s*\n?\s*\*? EXPORT_TABLES|never.*EXPORT_TABLES|TRANSIENT AND DERIVABLE/)
+  })
+
+  it('validates the step against the flow before resuming', () => {
+    expect(draftSrc).toContain('isStep')
+  })
+
+  it('persistOnboarding clears the draft after the done key is set', () => {
+    expect(persistSrc).toMatch(/await Storage\.setItem\(ONBOARDING_DONE_KEY, 'true'\)/)
+    expect(persistSrc).toMatch(/await clearDraft\(\)/)
+    const donePos = persistSrc.indexOf("await Storage.setItem(ONBOARDING_DONE_KEY, 'true')")
+    const clearPos = persistSrc.indexOf('await clearDraft()')
+    expect(clearPos).toBeGreaterThan(donePos)
   })
 })

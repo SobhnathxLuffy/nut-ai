@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { ActivityLevel, Goal, Sex } from '@nutai/goals'
 import type { ProviderId } from '@nutai/prompt'
+import type { HeightUnit } from '../data/height-units'
 
 /**
  * Onboarding answers.
@@ -27,6 +28,10 @@ import type { ProviderId } from '@nutai/prompt'
  *   worksWithProfessional                -> suppresses coaching nudges and turns
  *                                           on the dietitian-friendly PDF export
  *   rolloverCalories                     -> a real daily-target behaviour
+ *   heightUnit                           -> the height pickers' display unit
+ *                                           (decoupled from `units`, which now
+ *                                           drives WEIGHT only; persisted as
+ *                                           the height.displayUnit setting)
  *
  * If a field is ever added here without a consumer, delete the screen instead.
  */
@@ -60,7 +65,10 @@ export interface OnboardingAnswers {
   birthDay: number | null
   heightCm: number | null
   weightKg: number | null
+  /** Weight unit system — user_profile.units + weight.displayUnit. */
   units: UnitSystem
+  /** Height display unit, independent of `units` since the 2026-10 rebuild. */
+  heightUnit: HeightUnit
   worksWithProfessional: boolean | null
   goal: Goal | null
   desiredWeightKg: number | null
@@ -83,6 +91,7 @@ const EMPTY: OnboardingAnswers = {
   heightCm: null,
   weightKg: null,
   units: 'metric',
+  heightUnit: 'cm',
   worksWithProfessional: null,
   goal: null,
   desiredWeightKg: null,
@@ -127,6 +136,16 @@ export function getAnswers(): OnboardingAnswers {
 
 export function resetAnswers(): void {
   answers = { ...EMPTY }
+  emit()
+}
+
+/**
+ * Wholesale replacement for the draft-resume path (the step host hydrates
+ * from 'onboarding.draft.v1' on mount). Callers own validation — the draft
+ * loader sanitizes before handing answers here.
+ */
+export function replaceAnswers(next: OnboardingAnswers): void {
+  answers = next
   emit()
 }
 

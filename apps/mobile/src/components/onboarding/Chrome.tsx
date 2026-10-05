@@ -1,6 +1,6 @@
 import { router } from 'expo-router'
 import type { ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon } from '../Icon'
 import { useTheme } from '../../theme/ThemeProvider'
@@ -32,7 +32,16 @@ export function ProgressBar({ step, total }: { step: number; total: number }) {
   )
 }
 
-export function OnboardingHeader({ step, total }: { step: number; total: number }) {
+export function OnboardingHeader({
+  step,
+  total,
+  onBack,
+}: {
+  step: number
+  total: number
+  /** Step-host hook-up: steps > 1 go back a STEP; step 1 falls back to router.back(). */
+  onBack?: () => void
+}) {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   return (
@@ -40,7 +49,7 @@ export function OnboardingHeader({ step, total }: { step: number; total: number 
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Go back"
-        onPress={() => router.back()}
+        onPress={onBack ?? (() => router.back())}
         hitSlop={space.sm}
         style={[styles.back, { backgroundColor: theme.bgChrome }]}
       >
@@ -49,6 +58,11 @@ export function OnboardingHeader({ step, total }: { step: number; total: number 
         </View>
       </Pressable>
       <View style={{ flex: 1, marginLeft: space.lg, marginRight: space.xs }}>
+        {/* "Step N of M" — the textual counterpart of the progress bar, so the
+            position in the flow is stated, not just drawn. */}
+        <Text style={[type.caption, { color: theme.textMuted, marginBottom: space.xs }]}>
+          Step {step} of {total}
+        </Text>
         <ProgressBar step={step} total={total} />
       </View>
     </View>
@@ -70,6 +84,8 @@ export interface OnboardingScreenProps {
   /** Secondary action beneath the primary, e.g. Skip or No. */
   secondaryLabel?: string
   onSecondary?: () => void
+  /** Header back override (the step host steps back internally). */
+  onBack?: () => void
   /** Content sits in a ScrollView when it can overflow. */
   scroll?: boolean
   /** Center the content block vertically, as the picker screens do. */
@@ -88,6 +104,7 @@ export function OnboardingScreen({
   disabledHint,
   secondaryLabel,
   onSecondary,
+  onBack,
   scroll = false,
   centerContent = false,
 }: OnboardingScreenProps) {
@@ -107,8 +124,14 @@ export function OnboardingScreen({
   )
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <OnboardingHeader step={step} total={total} />
+    // AGENTS §8.3: the keyboard must not hide the CTA. iOS lifts the dock with
+    // padding (the repo-wide pattern); Android's adjustResize already shrinks
+    // the window; web ignores it — the dock is in normal flow there.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.bg }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <OnboardingHeader step={step} total={total} onBack={onBack} />
 
       {scroll ? (
         <ScrollView
@@ -167,7 +190,7 @@ export function OnboardingScreen({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </KeyboardAvoidingView>
   )
 }
 

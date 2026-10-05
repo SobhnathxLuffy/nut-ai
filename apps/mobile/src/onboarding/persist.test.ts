@@ -5,7 +5,7 @@ import { migrate } from '@nutai/db-adapter'
 // The module under test reaches for expo singletons at import time — the unit
 // suite runs on the node adapter and never touches them.
 vi.mock('expo-sqlite/kv-store', () => ({
-  default: { get: vi.fn(), getItem: vi.fn(), set: vi.fn(), setItem: vi.fn(), delete: vi.fn(), deleteItem: vi.fn(), deleteAsync: vi.fn() },
+  default: { get: vi.fn(), getItem: vi.fn(), set: vi.fn(), setItem: vi.fn(), delete: vi.fn(), deleteItem: vi.fn(), deleteAsync: vi.fn(), removeItem: vi.fn() },
 }))
 vi.mock('../db/expo-adapter', () => ({ openUserDb: vi.fn() }))
 
@@ -29,6 +29,7 @@ const answers: OnboardingAnswers = {
   heightCm: 178,
   weightKg: 80,
   units: 'metric',
+  heightUnit: 'cm',
   worksWithProfessional: false,
   goal: 'lose',
   desiredWeightKg: 74,
@@ -113,5 +114,39 @@ describe('persistOnboarding', () => {
       "SELECT * FROM operations WHERE entity_type IN ('goals','weight_entries')",
     )
     expect(ops.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('writes the height display unit to its own settings key without touching height_cm', async () => {
+    const db = await freshDb()
+    await persistOnboarding({ ...answers, heightUnit: 'ftin' }, target, macros, db)
+
+    const stored = await db.get<{ value: string }>(
+      "SELECT value FROM settings WHERE key = 'height.displayUnit'",
+    )
+    expect(stored?.value).toBe('ftin')
+    // Canonical height is untouched by the display-unit choice.
+    const profile = await db.get<{ height_cm: number }>('SELECT height_cm FROM user_profile WHERE id = 1')
+    expect(profile?.height_cm).toBe(178)
+  })
+
+  it('completion clears the draft — a done onboarding never resumes', async () => {
+    const { default: Storage } = await import('expo-sqlite/kv-store')
+    const { ONBOARDING_DONE_KEY } = await import('./done-key')
+    const { ONBOARDING_DRAFT_KEY } = await import('./draft')
+    const db = await freshDb()
+    await persistOnboarding(answers, target, macros, db)
+
+    const doneCall = vi
+      .mocked(Storage.setItem)
+      .mock.calls.findIndex((c) => c[0] === ONBOARDING_DONE_KEY)
+    const clearCall = vi
+      .mocked(Storage.removeItem)
+      .mock.calls.findIndex((c) => c[0] === ONBOARDING_DRAFT_KEY)
+    expect(doneCall).toBeGreaterThanOrEqual(0)
+    expect(clearCall).toBeGreaterThanOrEqual(0)
+    // The done key is set BEFORE the draft is cleared: a kill between the two
+    // writes leaves resume intact (the resume path checks the done key first,
+    // so a leftover draft is inert either way).
+    expect(clearCall).toBeGreaterThanOrEqual(doneCall)
   })
 })

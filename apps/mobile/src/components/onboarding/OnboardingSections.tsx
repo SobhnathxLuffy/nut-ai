@@ -12,7 +12,8 @@ import {
   QuestionGroups,
   type QuestionGroup,
 } from './OptionScreen'
-import { putSetting } from '../../data/repo'
+import { putSetting, setting } from '../../data/repo'
+import { cmToFtIn, ftInToCm } from '../../data/height-units'
 import { availability, requestPermissions, type HealthAvailability } from '../../health/healthkit'
 import {
   inferredGoal,
@@ -26,19 +27,22 @@ import { useTheme } from '../../theme/ThemeProvider'
 import { radius, space, type } from '../../theme/tokens'
 
 /**
- * The sections of the SINGLE-PAGE onboarding form (owner QA 2026-10: "give
- * everything one single page").
+ * The question sections of the onboarding flow.
  *
- * The old flow pushed twelve screens; each one is now a section on ONE page
- * (app/onboarding/index.tsx) with ONE Continue. Every control is extracted
- * VERBATIM from the step it came from — the same wheels, the same ruler, the
- * same option cards, the same haptics — so the merge costs no control quality.
- * Section order follows the old flow order.
+ * Owner mandate 2026-10 — the STEPWISE REBUILD: one focused question group per
+ * step again, hosted by app/onboarding/index.tsx (each section below renders
+ * on its own step). Height units are DECOUPLED from weight units: `units` now
+ * drives the WEIGHT pickers only, and the new heightUnit answer drives the
+ * HEIGHT pickers — all four combinations (kg/cm, kg/ft+in, lb/cm, lb/ft+in)
+ * are valid. Canonical values stay metric (heightCm, weightKg); conversions
+ * happen only at the picker boundary.
  *
- * Persistence is unchanged: sections write through useAnswers()/setAnswer
- * into the onboarding store; persistOnboarding (at the plan reveal) is still
- * the single writer of user.db. The only eager writes remain the provider
- * credential path (Keychain + settings), exactly as before.
+ * Every control is the same widget extracted verbatim from the pre-merge
+ * steps — the same wheels, the same ruler, the same haptics. Sections write
+ * through useAnswers()/setAnswer into the onboarding store; the step host
+ * persists the draft on every change, and persistOnboarding (at the plan
+ * reveal) is still the single writer of user.db. The only eager writes remain
+ * the provider credential path (Keychain + settings), exactly as before.
  */
 
 const MONTHS = [
@@ -54,13 +58,6 @@ function daysIn(month: number, year: number): number {
 export const BODY_DEFAULT_CM = 168 // 5 ft 6 in, the reference default
 export const BODY_DEFAULT_KG = 88.4 // ~194.9 lbs, matching the reference default
 
-const CM_PER_IN = 2.54
-
-function toFtIn(cm: number): { ft: number; inch: number } {
-  const totalIn = Math.round(cm / CM_PER_IN)
-  return { ft: Math.floor(totalIn / 12), inch: totalIn % 12 }
-}
-
 /** Section heading — one rhythm for the whole page. */
 export function SectionHeading({ title, hint }: { title: string; hint?: string }) {
   const theme = useTheme()
@@ -75,9 +72,10 @@ export function SectionHeading({ title, hint }: { title: string; hint?: string }
 }
 
 // ---------------------------------------------------------------------------
-// About you (was activity.tsx)
+// About you (sex was its own step before the collapse; the stepwise rebuild
+// splits them again — sex alone, then activity + professional)
 
-const ABOUT_YOU_GROUPS: ReadonlyArray<QuestionGroup> = [
+const SEX_GROUPS: ReadonlyArray<QuestionGroup> = [
   questionGroup({
     field: 'sex',
     label: 'Your sex',
@@ -88,6 +86,13 @@ const ABOUT_YOU_GROUPS: ReadonlyArray<QuestionGroup> = [
       { value: 'unspecified', label: 'Other', glyph: 'nonbinary' },
     ],
   }),
+]
+
+export function SexSection() {
+  return <QuestionGroups groups={SEX_GROUPS} compactTop />
+}
+
+const ACTIVITY_GROUPS: ReadonlyArray<QuestionGroup> = [
   questionGroup({
     field: 'workoutsPerWeek',
     label: 'Workouts per week',
@@ -105,8 +110,8 @@ const ABOUT_YOU_GROUPS: ReadonlyArray<QuestionGroup> = [
   }),
 ]
 
-export function AboutYouSection() {
-  return <QuestionGroups groups={ABOUT_YOU_GROUPS} compactTop />
+export function ActivitySection() {
+  return <QuestionGroups groups={ACTIVITY_GROUPS} compactTop />
 }
 
 // ---------------------------------------------------------------------------
@@ -167,11 +172,67 @@ export function AccomplishSection() {
 }
 
 // ---------------------------------------------------------------------------
-// Body metrics (was body.tsx) — pickers verbatim
+// Units — height and weight are INDEPENDENT controls now (owner mandate
+// 2026-10: the old single combined toggle coupled two answers that have
+// nothing to do with each other).
 
-export function BodySection() {
+/**
+ * Weight display unit — the ONLY writer of the `units` answer (user_profile.
+ * units + weight.displayUnit persist semantics unchanged). Switching converts
+ * the pickers rather than resetting: the canonical kilograms never move.
+ */
+export function WeightUnitToggle() {
+  const a = useAnswers()
+  return (
+    <Segmented
+      options={[
+        { value: 'metric', label: 'kg' },
+        { value: 'imperial', label: 'lb' },
+      ]}
+      value={a.units}
+      onChange={(u) => setAnswer('units', u)}
+    />
+  )
+}
+
+/** Height display unit — the ONLY writer of the heightUnit answer. Display
+    only: the canonical heightCm answer is untouched by the switch. */
+export function HeightUnitToggle() {
+  const a = useAnswers()
+  return (
+    <Segmented
+      options={[
+        { value: 'cm', label: 'cm' },
+        { value: 'ftin', label: 'ft + in' },
+      ]}
+      value={a.heightUnit}
+      onChange={(u) => setAnswer('heightUnit', u)}
+    />
+  )
+}
+
+/** The welcome step's units block: both independent controls, labeled. */
+export function UnitsSection() {
   const theme = useTheme()
-  const { width } = useWindowDimensions()
+  return (
+    <View style={{ gap: space.md }}>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={[type.bodyStrong, { color: theme.text, marginBottom: space.sm }]}>Weight unit</Text>
+        <WeightUnitToggle />
+      </View>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={[type.bodyStrong, { color: theme.text, marginBottom: space.sm }]}>Height unit</Text>
+        <HeightUnitToggle />
+      </View>
+    </View>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Body metrics (was body.tsx) — one focused step per metric, pickers verbatim
+
+export function BirthSection() {
+  const theme = useTheme()
   const a = useAnswers()
 
   // A fixed reference year keeps this deterministic and avoids reading the clock
@@ -180,15 +241,6 @@ export function BodySection() {
   const year = a.birthYear ?? 2000
   const month = a.birthMonth ?? 1
   const day = a.birthDay ?? 1
-
-  const cm = a.heightCm ?? BODY_DEFAULT_CM
-  const imperial = a.units === 'imperial'
-  const { ft, inch } = toFtIn(cm)
-
-  const kg = a.weightKg ?? BODY_DEFAULT_KG
-  const shownWeight = imperial ? kgToLb(kg) : kg
-  const wMin = imperial ? 60 : 30
-  const wMax = imperial ? 500 : 227
 
   const months = useMemo(() => MONTHS.map((m, i) => ({ value: i + 1, label: m })), [])
   const days = useMemo(
@@ -203,6 +255,61 @@ export function BodySection() {
       }).reverse(),
     [],
   )
+
+  return (
+    <>
+      <Text style={[type.heading, { color: theme.text }]}>When were you born?</Text>
+      <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
+        Age changes your BMR.
+      </Text>
+      <WheelHighlight>
+        <Wheel
+          label="Month"
+          items={months}
+          value={month}
+          width={140}
+          onChange={(v) => {
+            setAnswer('birthMonth', v)
+            // Clamp the day when the new month is shorter.
+            const max = daysIn(v, year)
+            if (day > max) setAnswer('birthDay', max)
+          }}
+        />
+        <Wheel
+          label="Day"
+          items={days}
+          value={day}
+          width={70}
+          onChange={(v) => setAnswer('birthDay', v)}
+        />
+        <Wheel
+          label="Year"
+          items={years}
+          value={year}
+          width={110}
+          onChange={(v) => setAnswer('birthYear', v)}
+        />
+      </WheelHighlight>
+    </>
+  )
+}
+
+/** Real-date check for the birth step's gate: the wheels can only produce
+    real dates, so this exists to catch restored-draft damage. */
+export function isRealBirthDate(year: number, month: number, day: number): boolean {
+  return (
+    Number.isInteger(year) &&
+    month >= 1 && month <= 12 &&
+    day >= 1 && day <= daysIn(month, year)
+  )
+}
+
+export function HeightSection() {
+  const theme = useTheme()
+  const a = useAnswers()
+
+  const cm = a.heightCm ?? BODY_DEFAULT_CM
+  const { ft, inch } = cmToFtIn(cm)
 
   const feet = useMemo(
     () => Array.from({ length: 7 }, (_, i) => ({ value: i + 2, label: `${i + 2} ft` })),
@@ -219,115 +326,88 @@ export function BodySection() {
 
   return (
     <>
-      {/* ONE unit toggle for both height and weight. Switching converts rather
-          than resetting — losing the entered value on a unit toggle is a small
-          betrayal that makes people distrust every other control. */}
-      <View style={{ alignItems: 'center' }}>
-        <Segmented
-          options={[
-            { value: 'imperial', label: 'lb · ft, in' },
-            { value: 'metric', label: 'kg · cm' },
-          ]}
-          value={a.units}
-          onChange={(u) => setAnswer('units', u)}
+      {/* Height's OWN unit control — independent of the weight unit. */}
+      <View style={{ alignItems: 'center', marginBottom: space.md }}>
+        <HeightUnitToggle />
+      </View>
+
+      <Text style={[type.heading, { color: theme.text }]}>What is your height?</Text>
+      <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
+        Part of the Mifflin-St Jeor equation.
+      </Text>
+      <WheelHighlight>
+        {a.heightUnit === 'ftin' ? (
+          <>
+            <Wheel
+              label="Feet"
+              items={feet}
+              value={ft}
+              width={130}
+              onChange={(v) => setAnswer('heightCm', ftInToCm(v, inch))}
+            />
+            <Wheel
+              label="Inches"
+              items={inches}
+              value={inch}
+              width={130}
+              onChange={(v) => setAnswer('heightCm', ftInToCm(ft, v))}
+            />
+          </>
+        ) : (
+          <Wheel
+            label="Centimetres"
+            items={cms}
+            value={Math.round(cm)}
+            width={space.xxxl * 4}
+            onChange={(v) => setAnswer('heightCm', v)}
+          />
+        )}
+      </WheelHighlight>
+    </>
+  )
+}
+
+export function WeightSection() {
+  const theme = useTheme()
+  const { width } = useWindowDimensions()
+  const a = useAnswers()
+
+  const imperial = a.units === 'imperial'
+  const kg = a.weightKg ?? BODY_DEFAULT_KG
+  const shownWeight = imperial ? kgToLb(kg) : kg
+  const wMin = imperial ? 60 : 30
+  const wMax = imperial ? 500 : 227
+
+  return (
+    <>
+      {/* Weight's OWN unit control — independent of the height unit. */}
+      <View style={{ alignItems: 'center', marginBottom: space.md }}>
+        <WeightUnitToggle />
+      </View>
+
+      <Text style={[type.heading, { color: theme.text }]}>What is your weight?</Text>
+      <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
+        The number your target scales from.
+      </Text>
+      <View style={{ alignItems: 'center', marginBottom: space.lg }}>
+        <EditableValue
+          label="Current weight"
+          value={shownWeight}
+          unit={imperial ? 'lbs' : 'kg'}
+          min={wMin}
+          max={wMax}
+          onCommit={(v) => setAnswer('weightKg', imperial ? lbToKg(v) : v)}
         />
       </View>
-
-      <View style={styles.section}>
-        <Text style={[type.heading, { color: theme.text }]}>When were you born?</Text>
-        <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
-          Age changes your BMR.
-        </Text>
-        <WheelHighlight>
-          <Wheel
-            label="Month"
-            items={months}
-            value={month}
-            width={140}
-            onChange={(v) => {
-              setAnswer('birthMonth', v)
-              // Clamp the day when the new month is shorter.
-              const max = daysIn(v, year)
-              if (day > max) setAnswer('birthDay', max)
-            }}
-          />
-          <Wheel
-            label="Day"
-            items={days}
-            value={day}
-            width={70}
-            onChange={(v) => setAnswer('birthDay', v)}
-          />
-          <Wheel
-            label="Year"
-            items={years}
-            value={year}
-            width={110}
-            onChange={(v) => setAnswer('birthYear', v)}
-          />
-        </WheelHighlight>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[type.heading, { color: theme.text }]}>What is your height?</Text>
-        <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
-          Part of the Mifflin-St Jeor equation.
-        </Text>
-        <WheelHighlight>
-          {imperial ? (
-            <>
-              <Wheel
-                label="Feet"
-                items={feet}
-                value={ft}
-                width={130}
-                onChange={(v) => setAnswer('heightCm', (v * 12 + inch) * CM_PER_IN)}
-              />
-              <Wheel
-                label="Inches"
-                items={inches}
-                value={inch}
-                width={130}
-                onChange={(v) => setAnswer('heightCm', (ft * 12 + v) * CM_PER_IN)}
-              />
-            </>
-          ) : (
-            <Wheel
-              label="Centimetres"
-              items={cms}
-              value={Math.round(cm)}
-              width={space.xxxl * 4}
-              onChange={(v) => setAnswer('heightCm', v)}
-            />
-          )}
-        </WheelHighlight>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[type.heading, { color: theme.text }]}>What is your weight?</Text>
-        <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
-          The number your target scales from.
-        </Text>
-        <View style={{ alignItems: 'center', marginBottom: space.lg }}>
-          <EditableValue
-            label="Current weight"
-            value={shownWeight}
-            unit={imperial ? 'lbs' : 'kg'}
-            min={wMin}
-            max={wMax}
-            onCommit={(v) => setAnswer('weightKg', imperial ? lbToKg(v) : v)}
-          />
-        </View>
-        <View style={{ marginHorizontal: -space.lg }}>
-          <RulerPicker
-            width={width}
-            min={wMin}
-            max={wMax}
-            step={0.1}
-            value={Number(shownWeight.toFixed(1))}
-            onChange={(v) => setAnswer('weightKg', imperial ? lbToKg(v) : v)}
-          />
-        </View>
+      <View style={{ marginHorizontal: -space.lg }}>
+        <RulerPicker
+          width={width}
+          min={wMin}
+          max={wMax}
+          step={0.1}
+          value={Number(shownWeight.toFixed(1))}
+          onChange={(v) => setAnswer('weightKg', imperial ? lbToKg(v) : v)}
+        />
       </View>
     </>
   )
@@ -429,6 +509,12 @@ const LABELS: Record<ProviderId, { name: string; icon: IconName; note: string }>
  * verified key before the page-level Continue unlocks ("No key for now"
  * satisfies it immediately). The section owns the saved state because only it
  * sees the CredentialForm's onSaved.
+ *
+ * The section REMOUNTS on every visit (the step host renders one step at a
+ * time), so a component-level "verified" flag cannot survive Back or a draft
+ * resume. The durable truth is the 'provider' settings row: verify() and the
+ * skip path both write it eagerly, so it reads back "which provider's
+ * credential is saved" across remounts and process death.
  */
 export function ProviderSection({ onReadyChange }: { onReadyChange?: (ready: boolean) => void }) {
   const theme = useTheme()
@@ -440,9 +526,20 @@ export function ProviderSection({ onReadyChange }: { onReadyChange?: (ready: boo
     a.provider && a.provider !== 'none' ? a.provider : null
 
   // Switching providers after a saved key invalidates the save for the NEW
-  // choice — the key verified was the previous provider's.
+  // choice — the key verified was the previous provider's. The same pass
+  // re-arms the gate after a remount (Back to this step, or a draft resume):
+  // the persisted row unlocks only when it names the CURRENTLY selected
+  // provider, so a stale key can never verify a different one.
   useEffect(() => {
     setSaved(false)
+    let alive = true
+    void (async () => {
+      const persisted = await setting('provider')
+      if (alive && persisted === a.provider) setSaved(true)
+    })()
+    return () => {
+      alive = false
+    }
   }, [a.provider])
 
   const ready = a.provider === 'none' || (realProvider != null && saved)
@@ -656,7 +753,6 @@ const styles = StyleSheet.create({
   // Plain section rhythm, matching the pre-merge picker screens: a heading,
   // a hint, the picker. No card chrome — the wheel band and the ruler already
   // draw their own surfaces.
-  section: { marginTop: space.xxl },
   note: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
   warn: { marginTop: space.md, padding: space.lg, borderRadius: radius.lg },
   keySection: { marginTop: space.xl },
