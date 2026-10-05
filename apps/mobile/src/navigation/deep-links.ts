@@ -90,6 +90,11 @@ export const DEEP_LINK_ROUTES: readonly DeepLinkRoute[] = [
     route: '/log-weight',
     description: 'Direct route — the log-weight modal.',
   },
+  {
+    path: 'checkin',
+    route: '/checkin',
+    description: 'Direct route — the daily review (check-in) screen; the daily-review notification tap lands here (Task 3-b).',
+  },
 ]
 
 /**
@@ -120,4 +125,21 @@ export function resolveDeepLink(url: string): string | null {
 
   const path = rest.toLowerCase()
   return DEEP_LINK_ROUTES.find((entry) => entry.path === path)?.route ?? null
+}
+
+/**
+ * Notification-tap routing (Task 3-b): a notification's `data.url` is a full
+ * `nutai://` URL that may carry a query (`nutai://workout?id=3` — the workout
+ * screen needs the id). `resolveDeepLink` strips queries on purpose, so this
+ * helper validates the alias AND re-attaches the query to the resolved route.
+ * Returns null for anything not in the map (the tap is then dropped — a
+ * notification whose link died must never 404 the user).
+ */
+export function routeFromNotificationUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null
+  const route = resolveDeepLink(url)
+  if (!route) return null
+  const queryAt = url.indexOf('?')
+  const query = queryAt === -1 ? '' : url.slice(queryAt)
+  return `${route}${query}`
 }

@@ -125,6 +125,7 @@ export default function Profile() {
     units: `Bodyweight in ${weightUnit} · Haptics ${hapticsOn ? 'on' : 'off'}`,
     data: mealCount != null ? `${groupDigits(mealCount)} meals logged` : '—',
     'data-methods': 'Where every number comes from',
+    notifications: 'Reminders & rest timer',
     about: 'Licenses & medical disclaimer',
     diagnostics: formatDiagnosticsValue(providerLabel, gatewayHost),
   }

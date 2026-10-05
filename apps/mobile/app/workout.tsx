@@ -41,6 +41,7 @@ import {
 import { canonicalizeFieldValue, describeSet, getFieldLabels, setValuesToDisplay } from '../src/data/workout-load'
 import { friendlySetValueError } from '../src/data/workout-errors'
 import { showToast } from '../src/components/toast-store'
+import { syncRestNotification } from '../src/notifications/scheduler'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, elevationStyle, radius, space, stateLayerFor, type } from '../src/theme/tokens'
 // UI/UX report Table 9.2 (Wave 1c): "Complete a set → Light impact" — fast,
@@ -71,6 +72,22 @@ type SetInputRef = ComponentRef<typeof TextInput>
 
 /** Fixed width of the set-number column (#) in the set table. */
 const SET_NUMBER_WIDTH = 26
+
+/**
+ * T4-b #4: planned_json is written at routine launch and was parsed UNGUARDED
+ * in render — one corrupt row threw mid-render and killed the whole flagship
+ * screen (the root ErrorBoundary caught it; the workout still died). Parse
+ * per row behind a guard: corrupt data renders the honest unreadable caption
+ * (the train-tab corrupt-program-card pattern) and logging keeps working.
+ */
+function plannedCaption(s: WorkoutSet, unit: WeightUnit): string | null {
+  if (!s.planned_json) return null
+  try {
+    return `Planned: ${describeSet({ ...s, ...JSON.parse(s.planned_json) }, unit)}`
+  } catch {
+    return 'Planned data unreadable — this set still logs normally.'
+  }
+}
 
 export default function WorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
@@ -130,6 +147,7 @@ export default function WorkoutScreen() {
     if ((w.rest_until ?? 0) > 0) {
       const next = (w.rest_until ?? 0) + deltaS * 1000
       await updateWorkout(h, w.id, { rest_until: next > 0 ? next : null })
+      void syncRestNotification(next > 0 ? next : null, w.id)
     } else {
       const next = Math.min(600, Math.max(15, restPref + deltaS))
       setRestPref(next)
@@ -153,8 +171,8 @@ export default function WorkoutScreen() {
   // zero until the user taps it away (skip).
   const resting = w.rest_until != null
 
-  const skipRest = () => run(async () => { await updateWorkout(await db(), w.id, { rest_until: null }) })
-  const startRest = () => run(async () => { await updateWorkout(await db(), w.id, { rest_until: Date.now() + restPref * 1000 }) })
+  const skipRest = () => run(async () => { await updateWorkout(await db(), w.id, { rest_until: null }); void syncRestNotification(null, w.id) })
+  const startRest = () => run(async () => { const until = Date.now() + restPref * 1000; await updateWorkout(await db(), w.id, { rest_until: until }); void syncRestNotification(until, w.id) })
 
   // ------------------------------------------------------------------
   // The collapsed twelve secondary actions (Ch. 8.5). Every handler is the
@@ -433,7 +451,7 @@ export default function WorkoutScreen() {
 
         {active ? (
           <>
-            <Button label="Finish workout" selected disabled={action.busy} onPress={() => run(async () => finishWorkout(await db(), w.id))} />
+            <Button label="Finish workout" selected disabled={action.busy} onPress={() => run(async () => { await finishWorkout(await db(), w.id); void syncRestNotification(null, w.id) })} />
             <Button
               label="Discard workout"
               onPress={() => confirmDialog({
@@ -441,7 +459,7 @@ export default function WorkoutScreen() {
                 message: 'The saved workout can be restored with Undo.',
                 confirmLabel: 'Discard',
                 destructive: true,
-                onConfirm: () => run(async () => { await discardWorkout(await db(), w.id); router.back() }),
+                onConfirm: () => run(async () => { await discardWorkout(await db(), w.id); void syncRestNotification(null, w.id); router.back() }),
               })}
             />
           </>
@@ -638,6 +656,9 @@ function SetRow({
   // re-renders on every keystroke, and the old deps array re-ran SetValues.parse
   // + JSON.stringify for every row on every one of those renders.
   const parsedSet = useMemo(() => SetValues.parse(s), [s])
+  // T4-b #4: the planned line parses per row object behind the guard — a
+  // corrupt planned_json renders the honest unreadable caption, never a throw.
+  const plannedText = useMemo(() => plannedCaption(s, unit), [s, unit])
   useEffect(() => {
     setValues(toDisplayValues(parsedSet))
     draft.current = parsedSet
@@ -728,9 +749,7 @@ function SetRow({
       </View>
 
       {s.planned_json && (
-        <Text style={[type.caption, { color: t.textFaint }]}>
-          Planned: {describeSet({ ...s, ...JSON.parse(s.planned_json) }, unit)}
-        </Text>
+        <Text style={[type.caption, { color: t.textFaint }]}>{plannedText}</Text>
       )}
       {saving && <Text style={[type.caption, { color: t.textFaint }]}>Saving…</Text>}
       {!!error && <Label>{error}</Label>}

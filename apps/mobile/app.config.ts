@@ -76,7 +76,14 @@ const config: ExpoConfig = {
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
     },
-    permissions: ['android.permission.CAMERA'],
+    permissions: [
+      'android.permission.CAMERA',
+      // Android 13+ runtime permission for posting notifications. Requested
+      // CONTEXTUALLY (first reminder enable / first rest-timer start), never
+      // at startup — see src/notifications/permissions.ts. Local
+      // notifications only — no FCM, no push token; see the note below.
+      'android.permission.POST_NOTIFICATIONS',
+    ],
     // No Google Play Services dependency: all notifications are local, there is
     // no push token and no FCM. Preserving that keeps F-Droid viable, which
     // matters for an AGPL project.
@@ -88,6 +95,13 @@ const config: ExpoConfig = {
     ['expo-camera', { cameraPermission: 'Nut AI uses your camera to photograph meals and scan barcodes.' }],
     'expo-secure-store',
     'expo-sqlite',
+    // Local notifications (Task 3-b): scheduled reminders + rest-timer
+    // completion, all device-local. The plugin registers the boot-persistent
+    // receiver/service wiring at prebuild. It pulls in NO Google services
+    // dependency — expo-notifications schedules local notifications via
+    // AlarmManager, so the no-FCM/F-Droid policy above still holds. No
+    // custom icon/color/sounds: defaults keep the bundle minimal.
+    'expo-notifications',
     ...(SKIP_HEALTHKIT
       ? []
       : ([
@@ -114,6 +128,7 @@ const config: ExpoConfig = {
     // ~/.gradle/gradle.properties provides NUTAI_UPLOAD_* credentials; fall
     // back to the debug keystore otherwise so a fresh clone still builds.
     './plugins/withAndroidReleaseSigning',
+    './plugins/withAndroidWidgets',
   ],
 
   // GitHub Pages project sites host the app under /<repo>/ — scripts/

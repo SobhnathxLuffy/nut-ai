@@ -69,6 +69,7 @@ describe('Ch 8.8 — the grouped-list structure (pure module)', () => {
         '/settings-units-health',
         '/settings-data',
         '/data-methods',
+        '/notification-settings',
         '/settings-about',
         '/diagnostics',
       ]),
@@ -79,6 +80,13 @@ describe('Ch 8.8 — the grouped-list structure (pure module)', () => {
   it('"How food & dish data works" stays reachable from the About group', () => {
     const about = PROFILE_GROUPS.find((g) => g.key === 'about')!
     expect(about.rows.some((r) => r.route === '/data-methods')).toBe(true)
+  })
+
+  it('notification settings are reachable from the Units & health group (Task 3-b)', () => {
+    const units = PROFILE_GROUPS.find((g) => g.key === 'units')!
+    const row = units.rows.find((r) => r.key === 'notifications')
+    expect(row).toMatchObject({ label: 'Notifications', route: '/notification-settings' })
+    expect(row!.icon.length).toBeGreaterThan(0)
   })
 })
 

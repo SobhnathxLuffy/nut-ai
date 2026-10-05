@@ -405,6 +405,15 @@ export function Wheel({
       ref={scrollRef}
       onLayout={onLayout}
       accessibilityLabel={label}
+      // T4-c P1-1: the wheel must announce its current value, not just its
+      // label — TalkBack reads min/max/now on focus, and the polite live
+      // region re-announces as the value changes while scrolling.
+      accessibilityValue={{
+        min: items[0]?.value ?? 0,
+        max: items[items.length - 1]?.value ?? 0,
+        now: value,
+      }}
+      accessibilityLiveRegion="polite"
       showsVerticalScrollIndicator={false}
       snapToInterval={ROW_HEIGHT}
       disableIntervalMomentum

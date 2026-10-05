@@ -75,7 +75,13 @@ export async function ensureChannels(): Promise<void> {
   if (Platform.OS !== 'android') return
   for (const c of CATEGORIES) {
     try {
-      await Notifications.setNotificationChannelAsync(c.channelId, { name: c.channelName, importance: c.importance })
+      // The description is the one-sentence explainer Android shows under the
+      // channel name in the OS settings sheet (T4-c P2-13).
+      await Notifications.setNotificationChannelAsync(c.channelId, {
+        name: c.channelName,
+        description: c.channelDescription,
+        importance: c.importance,
+      })
     } catch {
       // Channel creation can fail on locked-down devices; scheduling will
       // still land in the app's default channel. Never worth crashing a flow.

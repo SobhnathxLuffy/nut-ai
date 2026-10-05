@@ -25,7 +25,7 @@ import { ItemRow } from '../src/components/ItemRow'
 import { type IconName } from '../src/components/Icon'
 import { showToast } from '../src/components/toast-store'
 import { useTheme } from '../src/theme/ThemeProvider'
-import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
+import { MIN_TAP_TARGET, radius, space, stateLayerFor, type } from '../src/theme/tokens'
 
 /**
  * Notification settings — Task 3-b, route /notification-settings.
@@ -181,8 +181,13 @@ export default function NotificationSettings() {
   return (
     <Screen title="Notifications" back backLabel="Back to profile">
       {/* Master */}
+      {/* 'clock' — the same honest glyph the Profile tab's Notifications row
+          uses (profile-groups.ts). 'sparkles' is the AI-assistant identity
+          glyph (design-system §3.1); this screen schedules nothing smart and
+          no bell exists in the in-house set, so the neutral existing mark
+          wins over adding a 65th glyph for one row. */}
       <ItemRow
-        icon="sparkles"
+        icon="clock"
         label="All notifications"
         value={settings.master ? 'On' : 'Off — nothing will be scheduled'}
         accessibilityLabel="All notifications"
@@ -196,7 +201,9 @@ export default function NotificationSettings() {
         icon={permission === 'granted' ? 'check' : 'warning'}
         label="Permission"
         value={permissionCopy[permission]}
-        accessibilityLabel={`Notification permission: ${permission}`}
+        // ItemRow composes this with the value line (T4-c P2-5) — the human
+        // copy carries the state; the raw token ('undetermined') never speaks.
+        accessibilityLabel="Notification permission"
         trailing={
           permission === 'undetermined' ? (
             <Pressable
@@ -224,22 +231,31 @@ export default function NotificationSettings() {
 
       {/* Categories */}
       {CATEGORIES.map((c) => {
+        // The EFFECTIVE state: nothing is scheduled while the master is off,
+        // so the switch must not display an enabled flag it would ignore
+        // (T4-c: category switches showed raw enabled flags while master OFF).
         const enabled = settings.master && settings.enabled[c.id]
         return (
           <View key={c.id} style={{ marginTop: space.md }}>
-            <ItemRow
-              icon={CATEGORY_ICONS[c.id]}
-              label={c.channelName}
-              value={CATEGORY_HINTS[c.id]}
-              accessibilityLabel={c.channelName}
-              trailing={
-                <Switch
-                  value={settings.enabled[c.id]}
-                  onValueChange={(next) => toggleCategory(c.id, next)}
-                  accessibilityLabel={`Toggle ${c.channelName}`}
-                />
-              }
-            />
+            <View style={settings.master ? undefined : stateLayerFor(theme.isDark).disabled}>
+              <ItemRow
+                icon={CATEGORY_ICONS[c.id]}
+                label={c.channelName}
+                value={CATEGORY_HINTS[c.id]}
+                accessibilityLabel={c.channelName}
+                trailing={
+                  <Switch
+                    value={enabled}
+                    disabled={!settings.master}
+                    // Explicit alongside the disabled prop: the announced state
+                    // must match the (non-)behavior on every platform shim.
+                    accessibilityState={{ disabled: !settings.master }}
+                    onValueChange={(next) => toggleCategory(c.id, next)}
+                    accessibilityLabel={`Toggle ${c.channelName}`}
+                  />
+                }
+              />
+            </View>
             {enabled && c.timeKey && c.defaultTime ? (
               <View style={[styles.timeCard, { backgroundColor: theme.bgSunken }]}>
                 <Text style={[type.label, { color: theme.textMuted }]}>{TIME_LABELS[c.id]}</Text>
@@ -251,6 +267,9 @@ export default function NotificationSettings() {
                         key={preset}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
+                        // Category context: "12:30, selected" alone is useless
+                        // when every category offers its own chip row (T4-c).
+                        accessibilityLabel={`${c.channelName} · ${preset}`}
                         onPress={() => changeTime(c.id, preset)}
                         style={[
                           styles.timeChip,

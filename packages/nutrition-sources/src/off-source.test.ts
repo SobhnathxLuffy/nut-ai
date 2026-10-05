@@ -125,3 +125,79 @@ describe('OpenFoodFactsSource', () => {
     expect((await source.resolveByBarcode('12345678'))?.servingSizeG).toBe(60)
   })
 })
+
+describe('OpenFoodFactsSource barcode outcome — offline vs genuine miss', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('reports a GENUINE MISS when OFF answers HTTP 200 with status 0 — and the legacy contract still maps it to null', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ status: 0 }) })
+    const source = new OpenFoodFactsSource()
+    expect(await source.resolveByBarcodeOutcome('12345678')).toEqual({ kind: 'miss' })
+    expect(await source.resolveByBarcode('12345678')).toBeNull()
+  })
+
+  it('reports a malformed barcode as a miss without touching the network', async () => {
+    global.fetch = vi.fn()
+    const source = new OpenFoodFactsSource()
+    expect(await source.resolveByBarcodeOutcome('not-a-barcode')).toEqual({ kind: 'miss' })
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('reports UNREACHABLE/network when fetch rejects (the offline shape) — resolveByBarcode still null, unchanged', async () => {
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Network request failed'))
+    const source = new OpenFoodFactsSource()
+    expect(await source.resolveByBarcodeOutcome('12345678')).toEqual({ kind: 'unreachable', reason: 'network' })
+    expect(await source.resolveByBarcode('12345678')).toBeNull()
+  })
+
+  it('reports UNREACHABLE/timeout when the bounded abort fires', async () => {
+    vi.useFakeTimers()
+    global.fetch = vi.fn((_url, init) => new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+    })) as typeof fetch
+    const source = new OpenFoodFactsSource()
+    const pending = source.resolveByBarcodeOutcome('12345678')
+    await vi.advanceTimersByTimeAsync(8_001)
+    expect(await pending).toEqual({ kind: 'unreachable', reason: 'timeout' })
+  })
+
+  it('reports UNREACHABLE/http-status for a non-OK response instead of a silent miss', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({}) })
+    const source = new OpenFoodFactsSource()
+    expect(await source.resolveByBarcodeOutcome('12345678')).toEqual({
+      kind: 'unreachable', reason: 'http-status', status: 503,
+    })
+  })
+
+  it('reports UNREACHABLE/bad-payload when a 200 body is not JSON', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.reject(new SyntaxError('Unexpected token < in JSON')),
+    })
+    const source = new OpenFoodFactsSource()
+    expect(await source.resolveByBarcodeOutcome('12345678')).toEqual({ kind: 'unreachable', reason: 'bad-payload' })
+  })
+
+  it('reports FOUND and carries the product payload', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        status: 1,
+        product: {
+          product_name: 'Outcome Product',
+          nutriments: { 'energy-kcal_100g': 120, sodium_100g: 0.05 },
+        },
+      }),
+    })
+    const source = new OpenFoodFactsSource()
+    const outcome = await source.resolveByBarcodeOutcome('12345678')
+    expect(outcome.kind).toBe('found')
+    if (outcome.kind !== 'found') return
+    expect(outcome.food.name).toBe('Outcome Product')
+    expect(outcome.food.foodId).toBe('off:12345678')
+    expect(outcome.food.sodiumMg).toBe(50)
+  })
+})

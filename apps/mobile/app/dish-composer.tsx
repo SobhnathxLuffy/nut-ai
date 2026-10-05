@@ -134,6 +134,9 @@ export default function DishComposerScreen() {
   // The template JSON the component rows were last derived from — the
   // re-derive effect skips when nothing changed (skip = current behavior).
   const derivedTemplateRef = useRef<string | null>(null)
+  // §8.3 rapid-tap guard: a fast double-tap on "Log household variant" used to
+  // save TWO household variants (Date.now() ids) and push food-review twice.
+  const isLoggingRef = useRef(false)
 
   // Ingredient search across user foods + IFCT + USDA, plus the create-new
   // flow for ingredients no database knows — now owned PER COMPONENT by
@@ -544,7 +547,7 @@ export default function DishComposerScreen() {
       })
     : null
 
-    const logDish = async () => {
+    const runLogDish = async () => {
     // UI/UX report §10.1 (Wave 1b): reversible validation and save failures
     // are toasts — the review data is untouched and the user simply retries.
     if (hasUnknowns) return showToast({ message: 'Resolve all ingredients first — every component needs a nutrition match before the dish can be logged.', tone: 'error' })
@@ -603,6 +606,17 @@ export default function DishComposerScreen() {
         nutrientSnapshot: per100Snapshot({ kcal: portionKcal, protein_g: portionP, carbs_g: portionC, fat_g: portionF }, portionG)
     }
     router.push({ pathname: '/food-review', params: { payload: encodeFoodReview({ selection, date: params.date || '' }) } } as never)
+  }
+
+  /** Same busy-guard shape as the food tab's logCard — §8.3 duplicate writes. */
+  const logDish = async () => {
+    if (isLoggingRef.current) return
+    isLoggingRef.current = true
+    try {
+      await runLogDish()
+    } finally {
+      isLoggingRef.current = false
+    }
   }
 
   if (loading) return <View style={s.container}><ActivityIndicator /></View>
@@ -691,7 +705,7 @@ export default function DishComposerScreen() {
         <View key={c.id} style={[s.row, { borderColor: t.border, flexDirection: 'column', alignItems: 'stretch' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <View style={{ flex: 1 }}>
-               <TextInput style={[type.body, { color: t.text, padding: 0, margin: 0, fontWeight: 'bold' }]} value={c.name} onChangeText={t => updateName(c.id, t)} placeholder="Ingredient Name" placeholderTextColor={t.textMuted} />
+               <TextInput allowFontScaling style={[type.body, { color: t.text, padding: 0, margin: 0, fontWeight: 'bold' }]} value={c.name} onChangeText={t => updateName(c.id, t)} placeholder="Ingredient Name" placeholderTextColor={t.textMuted} />
                {/* P1-9: show the resolved food's NAME — a raw source id like
                    ifct:A019 tells the user nothing about the ingredient. */}
                {c.foodId ? <Text style={[type.caption, { color: t.proteinText }]} numberOfLines={2}>Resolved: {c.resolvedName ?? c.foodId}</Text> : <Text style={[type.caption, { color: t.safety }]}>Unresolved Ingredient</Text>}
@@ -700,7 +714,7 @@ export default function DishComposerScreen() {
                </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={String(c.grams)} onChangeText={t => updateGrams(c.id, t)} keyboardType="numeric" accessibilityLabel={`Grams of ${c.name}`} />
+              <TextInput allowFontScaling style={[s.input, { color: t.text, borderColor: t.border }]} value={String(c.grams)} onChangeText={t => updateGrams(c.id, t)} keyboardType="numeric" accessibilityLabel={`Grams of ${c.name}`} />
               <Text style={{ color: t.text, marginLeft: 4 }}>g</Text>
               {/* UI/UX report Table 12.1 (Wave 1b): the unicode ✕ remove glyph
                   joins the icon set — one close affordance across the app. */}
@@ -736,7 +750,7 @@ export default function DishComposerScreen() {
       {fatOption.foodId ? (
         <View style={[s.row, { borderColor: t.border }]}>
           <Text style={[type.body, { color: t.text, flex: 1 }]}>Oil in the pan (g)</Text>
-          <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={fatGrams} onChangeText={(text) => { setFatGrams(text); setCompositionEdited(true) }} keyboardType="numeric" accessibilityLabel="Grams of oil in the pan" />
+          <TextInput allowFontScaling style={[s.input, { color: t.text, borderColor: t.border }]} value={fatGrams} onChangeText={(text) => { setFatGrams(text); setCompositionEdited(true) }} keyboardType="numeric" accessibilityLabel="Grams of oil in the pan" />
         </View>
       ) : null}
       {fatOption.foodId && oilAbsorption.frying ? (
@@ -780,7 +794,7 @@ export default function DishComposerScreen() {
 
       <View style={[s.row, { borderColor: t.border }]}>
         <Text style={[type.body, { color: t.text, flex: 1 }]}>Final Portion (g)</Text>
-        <TextInput style={[s.input, { color: t.text, borderColor: t.border }]} value={portion} onChangeText={setPortion} keyboardType="numeric" accessibilityLabel="Final portion grams" />
+        <TextInput allowFontScaling style={[s.input, { color: t.text, borderColor: t.border }]} value={portion} onChangeText={setPortion} keyboardType="numeric" accessibilityLabel="Final portion grams" />
       </View>
 
       <View style={[s.summary, { backgroundColor: t.bgSunken, borderColor: t.border }]}>
@@ -932,6 +946,7 @@ function IngredientResolver({
     <View style={{ marginTop: space.sm }}>
       <Text style={[type.caption, { color: t.textMuted }]}>Search your foods, IFCT and USDA — results appear as you type.</Text>
       <TextInput
+        allowFontScaling
         value={query}
         onChangeText={(text) => { setQuery(text); setShowCreate(false) }}
         placeholder="Search ingredient databases"

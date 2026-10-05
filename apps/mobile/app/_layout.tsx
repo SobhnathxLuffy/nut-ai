@@ -15,6 +15,8 @@ import { Toast } from '../src/components/Toast'
 import '../src/ui/alert-web'
 
 import { ONBOARDING_DONE_KEY } from '../src/onboarding/done-key'
+import { initNotifications } from '../src/notifications/handler'
+import { installWidgetPublishers } from '../src/widgets/publish'
 /**
  * The entry gate.
  *
@@ -94,6 +96,22 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 function Root() {
   const theme = useTheme()
   useOnboardingGate()
+
+  useEffect(() => {
+    // Task 3-b: install the notification handler, tap routing and schedule
+    // re-sync ONCE. This requests NO permission and does nothing while
+    // onboarding runs — see src/notifications/handler.ts for the contract.
+    initNotifications()
+  }, [])
+
+  useEffect(() => {
+    // Task 3-c (home-screen widget): food/workout mutations coalesce into one
+    // debounced widget publish; AppState 'active' self-heals paths that emit
+    // no events (backup restore, raw undo). Without the native module (web,
+    // Expo Go, prebuild not yet run) everything is a silent no-op. The return
+    // value is the publisher's unsubscribe — the effect's cleanup.
+    return installWidgetPublishers()
+  }, [])
 
   return (
     <>

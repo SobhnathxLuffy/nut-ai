@@ -16,14 +16,20 @@ import {
 import { db, localDate } from '../src/data/repo'
 import { isValidLocalDate } from '../src/data/date-utils'
 import { friendlySetValueError } from '../src/data/workout-errors'
+import { confirmDialog } from '../src/ui/alert-web'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
 import { Badge } from '../src/components/Badge'
+import { ChipRow } from '../src/components/ChipRow'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { space } from '../src/theme/tokens'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+/** A11Y P2-11: the weekday chips announce the full weekday name, not just
+    the row heading's 3-letter abbreviation (index-aligned with DAYS). */
+const FULL_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const
 
 /** What the editor's schedule state holds: a real calendar weekday (0 = Sun)
  * plus the routine. Cycle-day conversion happens once, at save/load — the
@@ -226,14 +232,21 @@ export default function ProgramsScreen() {
                     {dayName}: {assigned ? (routines.find((r) => r.id === assigned.routine_id)?.name ?? 'Assigned') : 'Rest Day'}
                   </Label>
                   <Row>
-                    {routines.map((r) => (
-                      <Button
-                        key={r.id}
-                        label={r.name}
-                        selected={assigned?.routine_id === r.id}
-                        onPress={() => handleToggleDayRoutine(weekday, r.id)}
+                    {/* A11Y P2-11: the sanctioned ChipRow replaces the
+                        hand-rolled Button row — each chip now announces the
+                        routine AND the weekday it assigns (the visible row
+                        heading is invisible to a per-chip reader), under a
+                        radiogroup named for the weekday. */}
+                    <View accessibilityRole="radiogroup" accessibilityLabel={`${FULL_DAYS[weekday]} — assign a routine`}>
+                      <ChipRow
+                        items={routines}
+                        keyOf={(r) => String(r.id)}
+                        label={(r) => r.name}
+                        a11yLabel={(r) => `${r.name} — ${FULL_DAYS[weekday]}`}
+                        isActive={(r) => assigned?.routine_id === r.id}
+                        onPress={(r) => handleToggleDayRoutine(weekday, r.id)}
                       />
-                    ))}
+                    </View>
                   </Row>
                 </View>
               )
@@ -306,7 +319,22 @@ export default function ProgramsScreen() {
             {status.kind === 'finished' && <Label muted>Program finished — all {plan.weeks} weeks ran. Edit it to set a new start date, or create a new block.</Label>}
             <Row>
               <Button label="Edit program" onPress={() => handleEdit(p)} />
-              <Button label="Delete Program" onPress={() => void action.run(() => handleDelete(p.id))} />
+              <Button
+                label="Delete Program"
+                onPress={() =>
+                  // T4-b #1: destructive confirmation via the ONE shared
+                  // helper (the peer pattern: meal-detail, settings-data,
+                  // backup restore). This soft delete has no undo, so the
+                  // message must not promise one.
+                  confirmDialog({
+                    title: 'Delete this program?',
+                    message: 'The weekday schedule is removed. Your routines and logged workouts are not affected.',
+                    confirmLabel: 'Delete',
+                    destructive: true,
+                    onConfirm: () => void action.run(() => handleDelete(p.id)),
+                  })
+                }
+              />
             </Row>
           </View>
         )

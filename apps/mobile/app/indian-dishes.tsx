@@ -148,6 +148,9 @@ export default function IndianDishesScreen() {
             key={f}
             accessibilityRole="button"
             accessibilityState={{ selected: filter === f }}
+            // T4-b P2: the caption chip is ~26px tall — the 12px hit slop lifts
+            // the effective target to ~50px, over MIN_TAP_TARGET 44.
+            hitSlop={space.md}
             // eslint-disable-next-line no-restricted-syntax -- filter chips render from a local id list typed loosely for the map
             onPress={() => setFilter(f as any)}
             style={[s.filterBtn, { backgroundColor: filter === f ? t.proteinTint : t.bgSunken, borderColor: filter === f ? t.protein : t.border }]}
@@ -160,6 +163,7 @@ export default function IndianDishesScreen() {
       </View>
       
       <TextInput
+        allowFontScaling
         style={[s.input, { color: t.text, borderColor: t.border, backgroundColor: t.bgSunken }]}
         value={query}
         onChangeText={setQuery}

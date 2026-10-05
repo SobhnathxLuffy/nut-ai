@@ -165,6 +165,20 @@ describe('body steps — the pickers stay verbatim', () => {
     expect(chrome).toMatch(/Step \{step\} of \{total\}/)
     expect(chrome).toContain('accessibilityRole="progressbar"')
   })
+
+  it('step transitions are announced: header role on the title, live region on the step caption (T4-c P1-2)', () => {
+    const chrome = readFileSync(join(here, 'Chrome.tsx'), 'utf8')
+    expect(chrome).toMatch(/accessibilityRole="header" style=\{\[styles\.title/)
+    expect(chrome).toMatch(/accessibilityLiveRegion="polite"/)
+  })
+
+  it('wheels expose their current value to screen readers (T4-c P1-1)', () => {
+    const controls = readFileSync(join(here, 'Controls.tsx'), 'utf8')
+    expect(controls).toMatch(
+      /accessibilityValue=\{\{\s*min: items\[0\]\?\.value \?\? 0,\s*max: items\[items\.length - 1\]\?\.value \?\? 0,\s*now: value,\s*\}\}/,
+    )
+    expect(controls).toContain('accessibilityLiveRegion="polite"')
+  })
 })
 
 describe('provider step — the shared CredentialForm stays inline', () => {
@@ -228,6 +242,29 @@ describe('preferences step — rollover + reminders copy verbatim', () => {
     expect(SECTIONS).toContain("A nudge when you'd usually log")
     expect(SECTIONS).toContain('worth sending, not now')
   })
+
+  it('the reminders lie stays dead on the plan reveal (T4-copyfix / T5-a)', () => {
+    const plan = screen('plan.tsx')
+    expect(SECTIONS).not.toContain('learned from when you actually log')
+    expect(plan).not.toContain('learned from when you actually log')
+    // The plan bullet now repeats the truthful phrasing: optional, off by
+    // default, times chosen later in Profile → Notifications.
+    expect(plan).toContain('optional and off by default')
+    expect(plan).toContain('Profile → Notifications')
+  })
+})
+
+describe('health step — Android honesty (T4-b / T5-a)', () => {
+  it('no working Health Connect sync is promised; the step is optional', () => {
+    // The old note promised unbuilt integration ("this will use Health
+    // Connect instead"); the note now marks it as not available yet.
+    expect(SECTIONS).not.toContain('this will use Health Connect instead')
+    expect(SECTIONS).toContain('built yet')
+    // The step subtitle is platform-neutral and honest for both.
+    const healthCase = HOST.slice(HOST.indexOf("case 'health':"))
+    expect(healthCase).toContain('iOS-only for now')
+    expect(healthCase).not.toContain('Connect Apple Health')
+  })
 })
 
 describe('plan reveal — the hero moment (Ch 8.1, unchanged by the rebuild)', () => {
@@ -254,5 +291,16 @@ describe('plan reveal — the hero moment (Ch 8.1, unchanged by the rebuild)', (
   it('persist-before-navigate survives the rebuild (P3 contract)', () => {
     expect(src).toMatch(/persistOnboarding\(a, plan\.target, plan\.macros\)/)
     expect(src).toMatch(/router\.replace\('\/\(tabs\)'/)
+  })
+
+  it('the final CTA is guarded against double-taps and surfaces persist failure (§8.3/§8.4, T5-a)', () => {
+    // One tap = one persist + one tutorial push, ever; a re-tap while busy
+    // returns early. Failure re-arms the CTA and reports honestly via the
+    // error toast — never a silent dead button.
+    expect(src).toMatch(/if \(busy\.current\) return/)
+    expect(src).toMatch(/busy\.current = true/)
+    expect(src).toMatch(/\.catch\(\(e\) => \{/)
+    expect(src).toMatch(/busy\.current = false/)
+    expect(src).toContain("tone: 'error'")
   })
 })

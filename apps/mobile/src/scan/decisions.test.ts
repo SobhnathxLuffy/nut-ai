@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   BARCODE_NOT_FOUND_FAILURE,
   BARCODE_NO_KEY_FAILURE,
+  BARCODE_OFFLINE_FAILURE,
+  barcodeFailurePhase,
   describePreprocessFailure,
   gateScanProvider,
   isUnambiguousLookup,
@@ -158,6 +160,22 @@ describe('contract: barcode 3-step routing', () => {
   it('lookup miss → not-found phase points at label mode, never retries into a second billed call', () => {
     expect(BARCODE_NOT_FOUND_FAILURE.message).toMatch(/Food label mode/)
     expect(BARCODE_NOT_FOUND_FAILURE.canRetry).toBe(false)
+  })
+
+  it('OFF UNREACHABLE (T4-a offline-vs-miss wiring) → the offline phase, with or without a key', () => {
+    // Airplane mode / OFF outage: the failure must say no-connection, NOT
+    // "not in the bundled database" (a claim a transport failure cannot know).
+    expect(barcodeFailurePhase(true, false)).toBe(BARCODE_OFFLINE_FAILURE)
+    expect(barcodeFailurePhase(true, true)).toBe(BARCODE_OFFLINE_FAILURE)
+    // Honest retry semantics: a transport failure may recover.
+    expect(BARCODE_OFFLINE_FAILURE.canRetry).toBe(true)
+    expect(BARCODE_OFFLINE_FAILURE.message).toMatch(/^No connection/)
+    expect(BARCODE_OFFLINE_FAILURE.message).toMatch(/manually|label/)
+  })
+
+  it('genuine OFF miss → the pre-existing phases (no-key pointer, or not-found after the lookup)', () => {
+    expect(barcodeFailurePhase(false, false)).toBe(BARCODE_NO_KEY_FAILURE)
+    expect(barcodeFailurePhase(false, true)).toBe(BARCODE_NOT_FOUND_FAILURE)
   })
 })
 

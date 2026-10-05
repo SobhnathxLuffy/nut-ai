@@ -138,7 +138,10 @@ export async function persistOnboarding(
       ['professional.working', answers.worksWithProfessional ? 'true' : 'false'],
       ['export.shareablePdf', answers.worksWithProfessional ? 'true' : 'false'],
       ['coaching.suppressNudges', answers.worksWithProfessional ? 'true' : 'false'],
-      ['reminders.enabled', features.remindersOn ? 'true' : 'false'],
+      // T5-a: the dead reminders.enabled write is gone — nothing read it. The
+      // notifications system keys off its own categories/permissions state
+      // (src/notifications), and the plan screen's bullet is copy, not state.
+      // Per the note above, a written-but-unread field is a bug, not a row.
       ['streak.enabled', features.streakOn ? 'true' : 'false'],
       ['foods.savedPinned', features.savedMealsPinned ? 'true' : 'false'],
       ['mealIdeas.visible', features.showMealIdeas ? 'true' : 'false'],

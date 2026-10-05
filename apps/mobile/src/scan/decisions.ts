@@ -269,6 +269,38 @@ export const BARCODE_NOT_FOUND_FAILURE = {
   canRetry: false as const,
 }
 
+/**
+ * The failure phase when the OFF barcode lookup never produced a verdict at
+ * all (airplane mode, timeout, non-OK HTTP, unparseable body) — T4-a's
+ * offline-vs-miss wiring. Copy rides the AI path's honest offline taxonomy
+ * (classifyTransportError's "No connection…", retryable): unlike a genuine
+ * miss, a transport failure may simply recover, so retry stays available and
+ * the manual/label exits are named.
+ */
+export const BARCODE_OFFLINE_FAILURE = {
+  kind: 'failed' as const,
+  photoUri: '',
+  message:
+    'No connection — the barcode web lookup needs internet. You can still log this product manually or from its label.',
+  canRetry: true as const,
+}
+
+/**
+ * Which failure phase a corpus-missed barcode shows, given whether the OFF
+ * lookup was UNREACHABLE (vs a definitive miss). An unreachable OFF is an
+ * offline verdict — the honest retryable copy — while a genuine miss keeps
+ * the label-mode pointers (the no-key pointer, or not-found after the AI
+ * lookup also failed). Pure so decisions.test.ts can pin the offline branch
+ * without the orchestrator's I/O.
+ */
+export function barcodeFailurePhase(
+  offUnreachable: boolean,
+  lookupRan: boolean,
+): typeof BARCODE_OFFLINE_FAILURE | typeof BARCODE_NO_KEY_FAILURE | typeof BARCODE_NOT_FOUND_FAILURE {
+  if (offUnreachable) return BARCODE_OFFLINE_FAILURE
+  return lookupRan ? BARCODE_NOT_FOUND_FAILURE : BARCODE_NO_KEY_FAILURE
+}
+
 // ---------------------------------------------------------------------------
 // Web lookup option → packaged-exact ingredient row
 // ---------------------------------------------------------------------------

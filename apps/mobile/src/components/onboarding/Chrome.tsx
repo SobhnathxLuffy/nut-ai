@@ -59,8 +59,13 @@ export function OnboardingHeader({
       </Pressable>
       <View style={{ flex: 1, marginLeft: space.lg, marginRight: space.xs }}>
         {/* "Step N of M" — the textual counterpart of the progress bar, so the
-            position in the flow is stated, not just drawn. */}
-        <Text style={[type.caption, { color: theme.textMuted, marginBottom: space.xs }]}>
+            position in the flow is stated, not just drawn. The live region
+            makes a step change an announcement, not a silent redraw
+            (T4-c P1-2). */}
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[type.caption, { color: theme.textMuted, marginBottom: space.xs }]}
+        >
           Step {step} of {total}
         </Text>
         <ProgressBar step={step} total={total} />
@@ -113,7 +118,7 @@ export function OnboardingScreen({
 
   const body = (
     <>
-      <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+      <Text accessibilityRole="header" style={[styles.title, { color: theme.text }]}>{title}</Text>
       {subtitle ? (
         <Text style={[styles.subtitle, { color: theme.textMuted }]}>{subtitle}</Text>
       ) : null}

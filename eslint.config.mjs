@@ -64,9 +64,6 @@ export default tseslint.config(
     //   - tokens.ts          — the sanctioned home of every hex.
     //   - alert-web.ts       — DOM shim that cannot consume the React theme
     //                          context; its values mirror the palette exactly.
-    //   - onboarding/Charts  — SVG illustration palette (static marketing
-    //                          artwork, not themed UI). The Chrome/Controls
-    //                          ternaries were tokenized in Wave 3 (QA P2-19).
     //   - camera.tsx         — text over a live camera feed must stay
     //                          theme-independent white/black for contrast.
     //   - app.config.ts      — native build config takes ONE static colour;
@@ -76,7 +73,6 @@ export default tseslint.config(
       '**/*.test.*',
       '**/tokens.ts',
       '**/alert-web.ts',
-      '**/onboarding/Charts.tsx',
       '**/camera.tsx',
       '**/app.config.ts',
     ],

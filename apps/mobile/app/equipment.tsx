@@ -12,6 +12,7 @@ import {
   type Loading,
 } from '@nutai/training'
 import { db } from '../src/data/repo'
+import { confirmDialog } from '../src/ui/alert-web'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 import { ItemRow } from '../src/components/ItemRow'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -284,7 +285,23 @@ export default function EquipmentScreen() {
           icon={item.kind === 'plate' ? 'scale' : 'dumbbell'}
           label={item.name}
           value={`${item.kind.replace('_', ' ')} · ${item.weight_kg} kg each · count: ${item.count}`}
-          trailing={<Button label="Delete" onPress={() => void action.run(() => handleDelete(item.id))} />}
+          trailing={
+            // T4-b P1: the soft delete is destructive — it takes the row out of
+            // the inventory and the plate calculator — so it confirms first,
+            // exactly like every peer destructive path (meal-detail, custom-food).
+            <Button
+              label="Delete"
+              onPress={() =>
+                confirmDialog({
+                  title: 'Delete this equipment?',
+                  message: 'It disappears from your inventory and the plate calculator.',
+                  confirmLabel: 'Delete',
+                  destructive: true,
+                  onConfirm: () => void action.run(() => handleDelete(item.id)),
+                })
+              }
+            />
+          }
         />
       ))}
     </Screen>

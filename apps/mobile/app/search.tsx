@@ -13,6 +13,22 @@ import { showToast } from '../src/components/toast-store'
 let cachedBuiltinDocs: SearchEntity[] | null = null
 let cachedOwned: string[] | null = null
 
+/**
+ * T4-b #8: user exercise rows carry hand-entered JSON columns (aliases /
+ * equipment / primary muscles). One corrupt row used to throw inside
+ * refresh's big try and permanently dead-end the exercise library behind
+ * "Failed to load". Parse each column PER ROW: a corrupt field degrades to
+ * [] and the row — and the library — stay alive.
+ */
+function parseJsonArray(raw: unknown): string[] {
+  try {
+    const parsed = JSON.parse(String(raw ?? '') || '[]')
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
 export default function SearchScreen(){
   const params=useLocalSearchParams<{
     scope?: string
@@ -78,12 +94,14 @@ export default function SearchScreen(){
         id: String(r.id),
         type: 'exercise' as const,
         label: String(r.name),
-        aliases: JSON.parse(String(r.aliases_json || '[]')),
+        // T4-b #8: per-row guard — a corrupt JSON column degrades to [] (see
+        // parseJsonArray) instead of dead-ending the whole library.
+        aliases: parseJsonArray(r.aliases_json),
         source: 'user' as const,
         provenance: String(r.source || 'user'),
         custom: true,
-        equipment: JSON.parse(String(r.equipment_json || '[]')),
-        muscles: JSON.parse(String(r.primary_muscles_json || '[]')),
+        equipment: parseJsonArray(r.equipment_json),
+        muscles: parseJsonArray(r.primary_muscles_json),
         tracking_type: r.tracking_type as TrackingType
       }))
       const eq = (await listEquipment(h)).map(e=>e.kind)

@@ -1,6 +1,6 @@
 import { router } from 'expo-router'
 import { useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { BackupPayload } from '../../src/data/backup-core'
 import { describeBackup } from '../../src/data/backup-core'
@@ -74,7 +74,15 @@ export default function RestoreScreen() {
   }
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.bg, paddingTop: insets.top + space.xl }]}>
+    // A ScrollView, not a fixed flex column: on small screens at 130% font the
+    // pick card + note cards + CTA could clip (T4-b P2). flexGrow keeps the
+    // spacer pushing the CTA to the bottom when content is short, and lets the
+    // column scroll when it is not.
+    <ScrollView
+      style={[styles.root, { backgroundColor: theme.bg }]}
+      contentContainerStyle={{ flexGrow: 1, padding: space.lg, paddingTop: insets.top + space.xl }}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Wave 1a: header-scale 30px override removed — type.title (28/32)
           is the one header voice (UI/UX report Table 3.1). */}
       <Text style={[type.title, { color: theme.text }]}>Restore from a backup</Text>
@@ -112,8 +120,8 @@ export default function RestoreScreen() {
 
       <View style={[styles.card, { backgroundColor: theme.uncertainBg }]}>
         <Text style={[type.caption, { color: theme.text, lineHeight: 19 }]}>
-          One thing never travels in a backup: your API key. Keys stay in the device Keychain, so
-          after restoring you will re-enter it once in Profile.
+          One thing never travels in a backup: your API key. Keys stay in your device's secure
+          storage, so after restoring you will re-enter it once in Profile.
         </Text>
       </View>
 
@@ -144,12 +152,12 @@ export default function RestoreScreen() {
           {payload ? 'Choose a different file' : 'Back'}
         </Text>
       </Pressable>
-    </View>
+    </ScrollView>
   )
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, padding: space.lg },
+  root: { flex: 1 },
   card: { marginTop: space.lg, padding: space.lg, borderRadius: radius.lg },
   pickCard: {
     marginTop: space.xl,

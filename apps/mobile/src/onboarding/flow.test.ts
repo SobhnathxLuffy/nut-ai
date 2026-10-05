@@ -250,4 +250,11 @@ describe('the draft (src/onboarding/draft.ts) — transient, guarded, cleared on
     const clearPos = persistSrc.indexOf('await clearDraft()')
     expect(clearPos).toBeGreaterThan(donePos)
   })
+
+  it("the dead 'reminders.enabled' settings row stays dead (T5-a)", () => {
+    // T4-copyfix found persist.ts writing 'reminders.enabled' with no reader —
+    // the notifications system owns reminder state (src/notifications). Per
+    // the persist.ts header note, a written-but-unread field is a bug.
+    expect(persistSrc).not.toContain("'reminders.enabled'")
+  })
 })

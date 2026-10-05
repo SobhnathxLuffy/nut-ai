@@ -239,6 +239,7 @@ export default function ProviderSettings() {
                   endpoint. These are the same fields offered on the key form when you tap Replace key.
                 </Text>
                 <TextInput
+                  allowFontScaling
                   value={baseUrlDraft}
                   onChangeText={setBaseUrlDraft}
                   onEndEditing={() => void putSetting('provider_base_url', baseUrlDraft.trim())}
@@ -263,6 +264,7 @@ export default function ProviderSettings() {
                   as typed.
                 </Text>
                 <TextInput
+                  allowFontScaling
                   value={customModelDraft}
                   onChangeText={setCustomModelDraft}
                   onBlur={saveScanModel}
@@ -278,6 +280,7 @@ export default function ProviderSettings() {
                   scan model". Sent exactly as typed.
                 </Text>
                 <TextInput
+                  allowFontScaling
                   value={assistantModelId ?? ''}
                   onChangeText={(v) => setAssistantModelId(v.trim())}
                   onBlur={saveAssistantModel}

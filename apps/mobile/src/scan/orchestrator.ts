@@ -18,8 +18,9 @@ import {
   RECEIPT_SCAN_PROMPT_VERSION,
   type ProviderId,
 } from '@nutai/prompt'
+import { OpenFoodFactsSource } from '@nutai/nutrition-sources'
 import { recomputeAfterEdit, runPipeline, validatePayload, payloadValidationIssues, type ScanResult } from '@nutai/pipeline'
-import { resolveByBarcode } from '@nutai/resolver'
+import { normalizeGtin, resolveByBarcode } from '@nutai/resolver'
 import { openIfctDb, openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
 import { db, customProviderBaseUrl, setting } from '../data/repo'
@@ -28,8 +29,7 @@ import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type S
 import { applyWebOption, beginScan, currentScanEpoch, getPhase, recordScanModelServerFailure, resetScanModelFailures, setPhase, setWebLookup } from './store'
 import { deleteLocalFile } from './file-cleanup'
 import {
-  BARCODE_NOT_FOUND_FAILURE,
-  BARCODE_NO_KEY_FAILURE,
+  barcodeFailurePhase,
   describePreprocessFailure,
   gateScanProvider,
   isUnambiguousLookup,
@@ -654,6 +654,23 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   }
   if (stale()) return
 
+  // T4-a wiring (offline-vs-miss): the router's resolveByBarcode collapses an
+  // OFF transport failure into the same null as a genuine miss. On a miss, ask
+  // the OFF source directly WHY nothing came back — an unreachable OFF is an
+  // offline verdict the failure phases must own (barcodeFailurePhase). The
+  // outcome call never throws; the one extra fetch happens only on the miss
+  // path, where a verdict is about to be shown anyway.
+  let offUnreachable = false
+  if (!food) {
+    const normalized = normalizeGtin(gtin)
+    if (normalized) {
+      const outcome = await new OpenFoodFactsSource().resolveByBarcodeOutcome(normalized)
+      if (stale()) return
+      if (outcome.kind === 'found') food = outcome.food
+      else offUnreachable = outcome.kind === 'unreachable'
+    }
+  }
+
   // P2-37 (QA Wave 4): the barcode 3-step ROUTE (corpus hit → no-key pointer
   // → one AI lookup) is a pure decision with contract tests in decisions.ts.
   // The corpus-hit row construction stays here — it needs the resolver's food.
@@ -705,7 +722,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   if (stale()) return
   const route = planBarcodeScan(food, !!credential?.value)
   if (route.step === 'need-label-mode') {
-    setPhase(BARCODE_NO_KEY_FAILURE)
+    setPhase(barcodeFailurePhase(offUnreachable, false))
     return
   }
   if (!credential || !providerSetting || providerSetting === 'none') return
@@ -730,7 +747,7 @@ export async function startBarcodeScan(gtin: string): Promise<void> {
   const parsed = lookup.ok ? WebLookupResultZ.safeParse(lookup.raw) : null
   const opt = parsed?.success && parsed.data.found ? parsed.data.options[0] : undefined
   if (!opt) {
-    setPhase(BARCODE_NOT_FOUND_FAILURE)
+    setPhase(barcodeFailurePhase(offUnreachable, true))
     return
   }
 

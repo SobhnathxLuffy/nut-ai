@@ -812,6 +812,10 @@ export default function Result() {
 
                 <TextInput
                   accessibilityLabel={`Grams of ${row.displayName}`}
+                  // Android's TextInput ships font scaling OFF — the explicit
+                  // prop keeps the input growing with the OS font size (the
+                  // Screen/Field policy; the row is minHeight, no clip).
+                  allowFontScaling
                   keyboardType="numeric"
                   value={gramDrafts[row.id] ?? String(Math.round(row.grams))}
                   onChangeText={(t) => {
@@ -907,6 +911,7 @@ export default function Result() {
             <TextInput
               autoFocus
               multiline
+              allowFontScaling
               placeholder="Describe what needs to be fixed"
               placeholderTextColor={theme.textFaint}
               value={fixText}
@@ -1362,6 +1367,7 @@ function AddIngredientSheet({
       <View style={{ gap: space.md }}>
         <TextInput
           autoFocus
+          allowFontScaling
           placeholder="Search foods and dishes"
           placeholderTextColor={theme.textFaint}
           value={query}
@@ -1509,6 +1515,7 @@ function WebLookupCard({ rowId, state }: { rowId: string; state: WebLookupState 
           <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
             <TextInput
               autoFocus
+              allowFontScaling
               placeholder="Type what it was"
               placeholderTextColor={theme.textFaint}
               value={otherText}

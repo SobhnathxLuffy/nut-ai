@@ -51,6 +51,7 @@ import { putSetting, setting } from '../data/repo'
 const scheduleMock = vi.mocked(Notifications.scheduleNotificationAsync)
 const cancelMock = vi.mocked(Notifications.cancelScheduledNotificationAsync)
 const getAllMock = vi.mocked(Notifications.getAllScheduledNotificationsAsync)
+const setChannelMock = vi.mocked(Notifications.setNotificationChannelAsync)
 const settingMock = vi.mocked(setting)
 const permissionMock = vi.mocked(ensureNotificationPermission)
 
@@ -68,6 +69,22 @@ beforeEach(() => {
   vi.mocked(listPrograms).mockResolvedValue([])
   vi.mocked(listRoutines).mockResolvedValue([])
   vi.mocked(putSetting).mockResolvedValue(undefined)
+})
+
+describe('ensureChannels — the OS channel sheet explains itself (T4-c P2-13)', () => {
+  it('creates every channel with its name AND the user-readable description', async () => {
+    const { ensureChannels } = await import('./scheduler')
+    const { CATEGORIES } = await import('./categories')
+    await ensureChannels()
+    expect(setChannelMock).toHaveBeenCalledTimes(CATEGORIES.length)
+    for (const c of CATEGORIES) {
+      expect(setChannelMock).toHaveBeenCalledWith(c.channelId, {
+        name: c.channelName,
+        description: c.channelDescription,
+        importance: c.importance,
+      })
+    }
+  })
 })
 
 describe('syncRestNotification — the single cancel-and-replace slot', () => {
@@ -120,20 +137,29 @@ describe('syncRestNotification — the single cancel-and-replace slot', () => {
 
 describe('syncWorkoutReminders — derived from real program rows only', () => {
   it('schedules one notification per upcoming session with a deterministic id', async () => {
-    settingsRows['notifications.workoutReminders'] = 'on'
-    settingsRows['notifications.workoutTime'] = '08:00'
-    vi.mocked(listPrograms).mockResolvedValue(programRow(mondayProgram) as never)
-    vi.mocked(listRoutines).mockResolvedValue([{ id: 11, name: 'Push day', definition_json: '' }] as never)
-    await syncWorkoutReminders()
-    expect(scheduleMock).toHaveBeenCalledTimes(7) // the horizon
-    const first = scheduleMock.mock.calls[0]![0]
-    expect(first.identifier).toMatch(/^workout_reminder\.\d{4}-\d{2}-\d{2}\.0800$/)
-    expect(first.content.body).toContain('Block A')
-    expect(first.content.body).toContain('Push day')
-    expect(first.content.data).toEqual({ url: 'nutai://train' })
-    const trigger = first.trigger as { type: string; date: number; channelId: string }
-    expect(trigger.type).toBe('date')
-    expect(trigger.channelId).toBe('workout_reminder')
+    // Hermetic clock (T5-c): the derived plan counts only sessions STRICTLY in
+    // the future (fireAt <= now is skipped), so "today 08:00 local" must still
+    // be upcoming — a real-clock run after 08:00 saw 6 sessions, not 7.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-28T06:00:00'))
+    try {
+      settingsRows['notifications.workoutReminders'] = 'on'
+      settingsRows['notifications.workoutTime'] = '08:00'
+      vi.mocked(listPrograms).mockResolvedValue(programRow(mondayProgram) as never)
+      vi.mocked(listRoutines).mockResolvedValue([{ id: 11, name: 'Push day', definition_json: '' }] as never)
+      await syncWorkoutReminders()
+      expect(scheduleMock).toHaveBeenCalledTimes(7) // the horizon
+      const first = scheduleMock.mock.calls[0]![0]
+      expect(first.identifier).toMatch(/^workout_reminder\.\d{4}-\d{2}-\d{2}\.0800$/)
+      expect(first.content.body).toContain('Block A')
+      expect(first.content.body).toContain('Push day')
+      expect(first.content.data).toEqual({ url: 'nutai://train' })
+      const trigger = first.trigger as { type: string; date: number; channelId: string }
+      expect(trigger.type).toBe('date')
+      expect(trigger.channelId).toBe('workout_reminder')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('is a no-op when the same plan is already scheduled (per-set writes must not churn)', async () => {

@@ -22,6 +22,38 @@ export function parseGramsFromServingSize(value: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
+/**
+ * Honest barcode-lookup outcome: separates "Open Food Facts answered and does
+ * not know this barcode" from "we never got an OFF verdict at all".
+ *
+ * WHY this exists: `resolveByBarcode` collapses every failure to null, which
+ * made an airplane-mode scan indistinguishable from a genuine miss at the
+ * callers — the scan UI then told an offline user "this barcode is not in the
+ * bundled database", a claim the app could not actually know. The fetch API
+ * DOES distinguish the two (a rejection/abort is a transport failure; an
+ * HTTP 200 with OFF's status:0 is a definitive miss), so the distinction is
+ * made here, at the layer that owns the fetch:
+ *
+ *   - 'miss'        — the barcode is not even a plausible GTIN, or OFF answered
+ *                     HTTP 200 with status !== 1 / no product (its definitive
+ *                     "unknown product" answer);
+ *   - 'unreachable' — the request never produced an OFF verdict: connection /
+ *                     DNS failure ('network'), the 8s abort ('timeout'), a
+ *                     non-OK HTTP status ('http-status', with the status
+ *                     carried alongside), or an unparseable body
+ *                     ('bad-payload').
+ *
+ * `resolveByBarcode` and `resolveById` KEEP the legacy null-on-failure
+ * contract on purpose: their callers (the RouterSource fan-out and loadFood's
+ * re-resolution of saved off: rows) are graceful by design and gain nothing
+ * from a thrown error. Consumers that CAN act on the distinction (the barcode
+ * scan flow's offline-vs-not-found messaging) read the outcome instead.
+ */
+export type OffBarcodeOutcome =
+  | { kind: 'found'; food: SourceResolvedFood }
+  | { kind: 'miss' }
+  | { kind: 'unreachable'; reason: 'network' | 'timeout' | 'http-status' | 'bad-payload'; status?: number }
+
 export class OpenFoodFactsSource implements NutritionSource {
   readonly id = 'off'
   readonly priority = 60
@@ -50,7 +82,18 @@ export class OpenFoodFactsSource implements NutritionSource {
   }
 
   async resolveByBarcode(barcode: string): Promise<SourceResolvedFood | null> {
-    if (!/^\d{8,14}$/.test(barcode)) return null
+    const outcome = await this.resolveByBarcodeOutcome(barcode)
+    return outcome.kind === 'found' ? outcome.food : null
+  }
+
+  /**
+   * The honest variant: never throws, but reports WHY no row came back
+   * (see OffBarcodeOutcome). Behavior of `resolveByBarcode` is unchanged —
+   * every 'miss' and 'unreachable' outcome maps to null exactly where the
+   * old catch-all returned null.
+   */
+  async resolveByBarcodeOutcome(barcode: string): Promise<OffBarcodeOutcome> {
+    if (!/^\d{8,14}$/.test(barcode)) return { kind: 'miss' }
     const controller = typeof AbortController === 'undefined' ? null : new AbortController()
     const timeout = controller == null ? null : setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
     try {
@@ -60,10 +103,17 @@ export class OpenFoodFactsSource implements NutritionSource {
         },
         ...(controller ? { signal: controller.signal } : {}),
       })
-      if (!res.ok) return null
+      if (!res.ok) return { kind: 'unreachable', reason: 'http-status', status: res.status }
 
-      const data = (await res.json()) as { status?: number; product?: Record<string, unknown> }
-      if (data?.status !== 1 || !data?.product) return null
+      let data: { status?: number; product?: Record<string, unknown> }
+      try {
+        data = (await res.json()) as { status?: number; product?: Record<string, unknown> }
+      } catch {
+        // A 200 whose body is not JSON (proxy error page, truncation) is no
+        // OFF verdict either.
+        return { kind: 'unreachable', reason: 'bad-payload' }
+      }
+      if (data?.status !== 1 || !data?.product) return { kind: 'miss' }
 
       const product = data.product
       const nut = (product['nutriments'] && typeof product['nutriments'] === 'object'
@@ -94,27 +144,34 @@ export class OpenFoodFactsSource implements NutritionSource {
           : null)
 
       return {
-        foodId: `off:${barcode}`,
-        sourceId: barcode,
-        sourceVersion: null,
-        attribution: 'Open Food Facts contributors, https://openfoodfacts.org',
-        name: typeof product['product_name'] === 'string' ? product['product_name']
-          : typeof product['product_name_en'] === 'string' ? product['product_name_en'] : 'Unknown Product',
-        brand: typeof product['brands'] === 'string' ? product['brands'] : null,
-        energyKcal,
-        proteinG,
-        fatG,
-        carbG,
-        fiberG: finiteNumber(nut['fiber_100g']),
-        sugarG: finiteNumber(nut['sugars_100g']),
-        sodiumMg: sodiumG == null ? null : sodiumG * 1000,
-        servingSizeG: servingQuantity,
-        servingDesc: typeof product['serving_size'] === 'string' ? product['serving_size'] : null,
-        license: 'odbl-1.0',
-        source: 'off'
+        kind: 'found',
+        food: {
+          foodId: `off:${barcode}`,
+          sourceId: barcode,
+          sourceVersion: null,
+          attribution: 'Open Food Facts contributors, https://openfoodfacts.org',
+          name: typeof product['product_name'] === 'string' ? product['product_name']
+            : typeof product['product_name_en'] === 'string' ? product['product_name_en'] : 'Unknown Product',
+          brand: typeof product['brands'] === 'string' ? product['brands'] : null,
+          energyKcal,
+          proteinG,
+          fatG,
+          carbG,
+          fiberG: finiteNumber(nut['fiber_100g']),
+          sugarG: finiteNumber(nut['sugars_100g']),
+          sodiumMg: sodiumG == null ? null : sodiumG * 1000,
+          servingSizeG: servingQuantity,
+          servingDesc: typeof product['serving_size'] === 'string' ? product['serving_size'] : null,
+          license: 'odbl-1.0',
+          source: 'off'
+        }
       }
-    } catch {
-      return null
+    } catch (err) {
+      // Transport failure — the request produced no OFF verdict. The abort
+      // the timeout fired above is the 'timeout' shape; every other
+      // rejection (TypeError on Hermes/web) is the offline shape.
+      if ((err as Error)?.name === 'AbortError') return { kind: 'unreachable', reason: 'timeout' }
+      return { kind: 'unreachable', reason: 'network' }
     } finally {
       if (timeout != null) clearTimeout(timeout)
     }

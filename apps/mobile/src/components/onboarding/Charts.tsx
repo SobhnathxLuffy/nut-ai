@@ -97,12 +97,16 @@ export function ProjectionChart({ gaining }: { gaining: boolean }) {
         <SvgLine x1="12" y1="95" x2="290" y2="95" stroke={theme.border} strokeDasharray="3 5" strokeWidth="1" />
 
         <Path d={`${withPlan} L 290 150 L 12 150 Z`} fill="url(#projFill)" />
-        <Path d={without} stroke="#E8615A" strokeWidth="3" fill="none" strokeLinecap="round" />
+        {/* The "without a plan" series rides the UNCERTAIN family — violet is
+            the documented "please check, not a scold" hue (tokens.ts header);
+            red is reserved for safety only, and the raw coral hex failed AA
+            now that this chart is a live onboarding surface (T4-c). */}
+        <Path d={without} stroke={theme.uncertain} strokeWidth="3" fill="none" strokeLinecap="round" />
         <Path d={withPlan} stroke={theme.text} strokeWidth="3.5" fill="none" strokeLinecap="round" />
 
         <Circle cx={milestone(18).x} cy={milestone(18).y} r="5" fill={theme.bg} stroke={theme.text} strokeWidth="2.5" />
         <Circle cx={milestone(32).x} cy={milestone(32).y} r="5" fill={theme.bg} stroke={theme.text} strokeWidth="2.5" />
-        <Circle cx={milestone(62).x} cy={milestone(62).y} r="12" fill="#C88A4B" />
+        <Circle cx={milestone(62).x} cy={milestone(62).y} r="12" fill={theme.uncertain} />
         <Circle cx={milestone(62).x} cy={milestone(62).y} r="12" fill="none" stroke={theme.bg} strokeWidth="2" />
 
         <Circle cx="12" cy={gaining ? 138 : 30} r="6" fill={theme.bg} stroke={theme.text} strokeWidth="3" />
@@ -113,7 +117,7 @@ export function ProjectionChart({ gaining }: { gaining: boolean }) {
         <View style={[styles.pill, { backgroundColor: theme.text }]}>
           <Text style={[type.caption, { color: theme.bg }]}>Nut AI</Text>
         </View>
-        <Text style={[type.caption, { color: '#E8615A' }]}>Without a plan</Text>
+        <Text style={[type.caption, { color: theme.uncertainText }]}>Without a plan</Text>
         <View style={[styles.bandChip, { backgroundColor: theme.uncertainBg }]}>
           <Text style={[type.caption, { color: theme.text }]}>First 30 days</Text>
         </View>

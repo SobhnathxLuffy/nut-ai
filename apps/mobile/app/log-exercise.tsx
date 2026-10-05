@@ -216,6 +216,7 @@ function PickScreen({ onPick }: { onPick: (s: Step) => void }) {
 
         <TextInput
           accessibilityLabel="Search exercises"
+          allowFontScaling
           placeholder="Search exercises or aliases"
           placeholderTextColor={theme.textFaint}
           autoCorrect={false}
@@ -642,6 +643,7 @@ function IntensityScreen({ exercise, onBack }: { exercise: ExerciseKind; onBack:
 
         <TextInput
           accessibilityLabel="Duration in minutes"
+          allowFontScaling
           keyboardType="number-pad"
           value={minutes}
           onChangeText={setMinutes}
@@ -712,6 +714,7 @@ function DescribeScreen({ onBack }: { onBack: () => void }) {
       <ScrollView contentContainerStyle={{ padding: space.lg }} keyboardShouldPersistTaps="handled">
         <TextInput
           autoFocus
+          allowFontScaling
           placeholder="Describe workout time, intensity, etc."
           placeholderTextColor={theme.textFaint}
           value={text}
@@ -789,6 +792,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
         <Text style={[type.label, { color: theme.textMuted }]}>Calories burned</Text>
         <TextInput
           autoFocus
+          allowFontScaling
           accessibilityLabel="Calories burned"
           keyboardType="number-pad"
           placeholder="250"
@@ -801,6 +805,7 @@ function ManualScreen({ onBack }: { onBack: () => void }) {
         <Text style={[type.label, { color: theme.textMuted, marginTop: space.xl }]}>Name (optional)</Text>
         <TextInput
           accessibilityLabel="Exercise name"
+          allowFontScaling
           placeholder="Workout"
           placeholderTextColor={theme.textFaint}
           value={name}

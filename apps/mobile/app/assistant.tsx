@@ -790,6 +790,7 @@ export default function AssistantScreen() {
       </View>
       <View style={s.inputRow}>
         <TextInput
+          allowFontScaling
           style={[s.input, { color: t.text, borderColor: t.border }]}
           value={input}
           onChangeText={setInput}

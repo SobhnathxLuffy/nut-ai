@@ -436,6 +436,7 @@ function WebCameraFallback() {
         <View style={{ width: '100%', maxWidth: 420, gap: space.sm }}>
           <TextInput
             accessibilityLabel="Barcode number (GTIN)"
+            allowFontScaling
             placeholder="e.g. 8901058000224"
             placeholderTextColor={theme.textFaint}
             value={gtin}

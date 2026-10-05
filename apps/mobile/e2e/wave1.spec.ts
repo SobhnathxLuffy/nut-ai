@@ -32,48 +32,88 @@ async function restoreOnboarding(page: Page): Promise<void> {
 }
 
 test.describe('BUG-002: Onboarding Dead End', () => {
-  test('the single-page form gates its CTA until every required question is answered', async ({ page }) => {
-    // Owner QA 2026-10: onboarding is ONE page — every question from the old
-    // 12-step flow is a section with ONE Continue ("See my plan"). The gate
-    // semantics survive: the CTA stays disabled until EVERY required field
-    // has an answer, with the hint visible the whole time. Same-labelled
-    // Yes/No pairs (professional vs rollover) are scoped by radiogroup.
+  // 2026-10-05 stepwise rebuild: onboarding is ONE route hosting TWELVE steps
+  // ("Step N of 12" in the chrome). Each step gates its own Continue; option
+  // steps stay disabled until every question on THAT step has an answer. The
+  // walk below follows the whole journey with the default kg/cm units.
+  test('each step gates its Continue; the flow walks through all twelve steps to the final CTA', async ({ page }) => {
     await page.goto('/onboarding');
 
-    // Button should be visible but disabled initially
-    const continueBtn = page.getByRole('button', { name: 'See my plan' });
+    // Step 1 — welcome + units: the restore entry survives (harness anchor).
+    await expect(page.getByText('Step 1 of 12')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Restore from a backup' })).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 2 — sex: disabled until an option is selected.
+    await expect(page.getByText('Step 2 of 12')).toBeVisible();
+    const continueBtn = page.getByRole('button', { name: 'Continue' });
     await expect(continueBtn).toBeDisabled();
-
-    // Explicitly check for the gate hint (every required question must be answered)
-    const hintLabel = page.getByText('Answer every question to continue');
-    await expect(hintLabel).toBeVisible();
-
-    const aboutYou = page.getByRole('radiogroup', { name: /personal trainer or registered dietitian/ }).first();
-    // Selecting one option is not enough: the button stays disabled until
-    // every required group has an answer.
     await page.getByRole('radio', { name: 'Female' }).click();
-    await expect(continueBtn).toBeDisabled();
+    await continueBtn.click();
 
+    // Step 3 — activity + professional: the grouped gate (both answers needed).
+    await expect(page.getByText('Step 3 of 12')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    await expect(page.getByText('Answer every question to continue')).toBeVisible();
     await page.getByRole('radio', { name: '3-5' }).click();
-    await expect(continueBtn).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    // Same-labelled Yes/No pairs are scoped by radiogroup.
+    await page
+      .getByRole('radiogroup', { name: /personal trainer or registered dietitian/ })
+      .getByRole('radio', { name: 'No', exact: true })
+      .click();
+    await page.getByRole('button', { name: 'Continue' }).click();
 
-    // Options render with accessibilityRole="radio", not "button". NOTE
-    // exact + radiogroup scope: 'No' is a substring of "Workouts now and
-    // then" under Playwright's default partial match, and the single page
-    // has a SECOND No (the rollover group).
-    await aboutYou.getByRole('radio', { name: 'No', exact: true }).click();
-    // About-you done — but diet, accomplish, rollover and provider are still open.
-    await expect(continueBtn).toBeDisabled();
-
+    // Step 4 — diet + blocker: one answer is not enough.
+    await expect(page.getByText('Step 4 of 12')).toBeVisible();
     await page.getByRole('radio', { name: 'Balanced' }).click();
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await page.getByRole('radio', { name: 'Lack of consistency' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 5 — accomplish.
+    await expect(page.getByText('Step 5 of 12')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await page.getByRole('radio', { name: 'Eat and live healthier' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 6 — birthday: the wheels' defaults commit on Continue.
+    await expect(page.getByText('Step 6 of 12')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 7 — height (cm wheel by default).
+    await expect(page.getByText('Step 7 of 12')).toBeVisible();
+    await expect(page.getByLabel('Centimetres')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 8 — weight (kg ruler by default).
+    await expect(page.getByText('Step 8 of 12')).toBeVisible();
+    await expect(page.getByLabel(/kg\. Tap to type an exact value/)).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 9 — goal weight: the underweight note is non-blocking; defaults commit.
+    await expect(page.getByText('Step 9 of 12')).toBeVisible();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 10 — provider: "No key for now" satisfies the gate immediately.
+    await expect(page.getByText('Step 10 of 12')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    await page.getByRole('radio', { name: 'No key for now' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 11 — preferences: rollover Yes/No, scoped by radiogroup.
+    await expect(page.getByText('Step 11 of 12')).toBeVisible();
     await page
       .getByRole('radiogroup', { name: /Rollover/ })
       .getByRole('radio', { name: 'Yes', exact: true })
       .click();
-    await page.getByRole('radio', { name: 'No key for now' }).click();
-    await expect(continueBtn).toBeEnabled();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
+    // Step 12 — health + the FINAL question: the only "See my plan" CTA.
+    await expect(page.getByText('Step 12 of 12')).toBeVisible();
+    const seePlan = page.getByRole('button', { name: 'See my plan' });
+    await expect(seePlan).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Continue' })).toHaveCount(0);
   });
 });
 

@@ -309,7 +309,7 @@ export default function OnboardingFlow() {
           step={position}
           total={TOTAL_STEPS}
           title="Last thing"
-          subtitle="Connect Apple Health if you'd like — or go straight to your plan."
+          subtitle="Health sync is optional and iOS-only for now — or go straight to your plan."
           cta="See my plan"
           onCta={() => router.push('/onboarding/plan' as never)}
           onBack={goPrev}

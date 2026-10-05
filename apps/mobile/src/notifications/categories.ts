@@ -43,6 +43,8 @@ export interface NotificationCategory {
   /** === id: one Android channel per category (OS-level user controls). */
   channelId: string
   channelName: string
+  /** One-sentence user-readable description for the Android channel settings sheet (T4-c P2-13). */
+  channelDescription: string
   /** AndroidImportance value: DEFAULT for reminders, HIGH for the mid-workout rest timer. */
   importance: (typeof CHANNEL_IMPORTANCE)[keyof typeof CHANNEL_IMPORTANCE]
   /** Per-category on/off switch in the settings table. */
@@ -65,6 +67,7 @@ export const CATEGORIES: readonly NotificationCategory[] = [
     id: 'workout_reminder',
     channelId: 'workout_reminder',
     channelName: 'Workout reminders',
+    channelDescription: 'Reminds you on a scheduled program day, at the time you set.',
     importance: CHANNEL_IMPORTANCE.DEFAULT,
     settingsKey: 'notifications.workoutReminders',
     timeKey: 'notifications.workoutTime',
@@ -80,6 +83,7 @@ export const CATEGORIES: readonly NotificationCategory[] = [
     id: 'rest_timer',
     channelId: 'rest_timer',
     channelName: 'Rest timer',
+    channelDescription: 'Fires the moment a workout rest timer runs out.',
     importance: CHANNEL_IMPORTANCE.HIGH,
     settingsKey: 'notifications.restTimer',
     timeKey: null,
@@ -94,6 +98,7 @@ export const CATEGORIES: readonly NotificationCategory[] = [
     id: 'meal_reminder',
     channelId: 'meal_reminder',
     channelName: 'Meal reminders',
+    channelDescription: 'A daily nudge to log a meal at the time you pick.',
     importance: CHANNEL_IMPORTANCE.DEFAULT,
     settingsKey: 'notifications.mealReminders',
     timeKey: 'notifications.mealTime',
@@ -108,6 +113,7 @@ export const CATEGORIES: readonly NotificationCategory[] = [
     id: 'weigh_in',
     channelId: 'weigh_in',
     channelName: 'Weigh-in reminders',
+    channelDescription: 'A daily nudge to weigh in at the time you pick.',
     importance: CHANNEL_IMPORTANCE.DEFAULT,
     settingsKey: 'notifications.weighIn',
     timeKey: 'notifications.weighInTime',
@@ -122,6 +128,7 @@ export const CATEGORIES: readonly NotificationCategory[] = [
     id: 'daily_review',
     channelId: 'daily_review',
     channelName: 'Daily review',
+    channelDescription: 'An evening nudge to check the day’s totals while they are fresh.',
     importance: CHANNEL_IMPORTANCE.DEFAULT,
     settingsKey: 'notifications.dailyReview',
     timeKey: 'notifications.dailyReviewTime',

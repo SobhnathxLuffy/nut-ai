@@ -21,11 +21,14 @@ describe('the notification category registry', () => {
     ])
   })
 
-  it('every category has id, channel id/name/importance, settings key, deep link and copy', () => {
+  it('every category has id, channel id/name/description/importance, settings key, deep link and copy', () => {
     for (const c of notificationCategories()) {
       expect(c.id.length).toBeGreaterThan(0)
       expect(c.channelId).toBe(c.id) // one Android channel per category
       expect(c.channelName.length).toBeGreaterThan(0)
+      // T4-c P2-13: the OS channel settings sheet shows a user-readable sentence.
+      expect(c.channelDescription.length).toBeGreaterThan(20)
+      expect(c.channelDescription.endsWith('.')).toBe(true)
       expect([2, 5, 6]).toContain(c.importance) // AndroidImportance: 2 NONE, 5 DEFAULT, 6 HIGH
       expect(c.settingsKey).toMatch(/^notifications\./)
       expect(c.deepLink.startsWith('nutai://')).toBe(true)

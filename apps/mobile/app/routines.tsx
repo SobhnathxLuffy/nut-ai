@@ -13,7 +13,9 @@ import {
 } from '@nutai/training'
 import { db, localDate } from '../src/data/repo'
 import { consumePendingRoutineExercises } from '../src/data/routine-draft'
+import { confirmDialog } from '../src/ui/alert-web'
 import { useWebDirtyGuard } from '../src/ui/web-dirty-guard'
+import { ChipRow } from '../src/components/ChipRow'
 import { Screen, Card, Label, Button, Field, Row, useAction } from '../src/components/Screen'
 import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
@@ -22,6 +24,22 @@ import { useTheme } from '../src/theme/ThemeProvider'
 import { space } from '../src/theme/tokens'
 
 const PROGRESSION_KINDS = ['double', 'fixed', 'percentage', 'rir', 'manual'] as const
+
+/** A11Y P2-10: chips announce human labels, not the engine's raw enums.
+    Keyed by the FULL schema kind union — routines loaded from storage can
+    carry kind 'program' (the engine leaves progression to the program), and
+    the summary line must show a human word, not undefined. The editor's own
+    chip row still offers only PROGRESSION_KINDS. */
+const PROGRESSION_LABELS: Record<ProgressionRule['kind'], string> = {
+  double: 'Double',
+  fixed: 'Fixed',
+  percentage: 'Percentage',
+  rir: 'RIR',
+  manual: 'Manual',
+  program: 'Program',
+}
+
+const SUPERSET_GROUPS = ['none', 'A', 'B', 'C'] as const
 
 /** The SetValues fields one planned-set row edits (the tracked numeric keys). */
 type SetFieldKey = 'load_kg' | 'reps' | 'duration_s' | 'distance_m' | 'assistance_kg'
@@ -57,6 +75,48 @@ function withPlannedExtra(set: SetValues, key: 'rir' | 'rpe' | 'tempo', value: n
   return next
 }
 
+/**
+ * T4-b #5: the editor's dirty fingerprint — exactly the two pieces of state
+ * the editor edits. Captured at every editor entry; every exit path compares
+ * it against the live state and runs the shared "Discard changes?"
+ * confirmDialog when it differs (§8.3: dirty forms warn before destructive
+ * exit). Local input DRAFTS (see drafts below) deliberately stay out: an
+ * uncommitted draft is not editor data — its invalid text is rejected by
+ * design, never silently saved.
+ */
+function editorFingerprint(name: string, exercises: ReadonlyArray<unknown>): string {
+  return JSON.stringify([name, exercises])
+}
+
+/** Key-map copy without one key (draft bookkeeping). */
+function dropKey(map: Record<string, string>, key: string): Record<string, string> {
+  if (!(key in map)) return map
+  const next = { ...map }
+  delete next[key]
+  return next
+}
+
+/** Draft keys are prefixed by exercise_id — dropping one exercise's drafts
+    must not leave a stale invalid draft blocking Save for the whole form. */
+function dropKeysWithPrefix(map: Record<string, string>, prefix: string): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [k, v] of Object.entries(map)) if (!k.startsWith(prefix)) next[k] = v
+  return next
+}
+
+/**
+ * T4-b #6: parse a planned set-field draft (§8.3 — intermediate text like ""
+ * or "1." must never explode into NaN state). "" clears the field (null);
+ * anything else must be a finite non-negative number (whole for reps).
+ */
+function parseSetFieldDraft(key: SetFieldKey, text: string): { value: number | null } | { error: string } {
+  if (text.trim() === '') return { value: null }
+  const n = Number(text)
+  if (!Number.isFinite(n) || n < 0) return { error: 'Enter a number of 0 or more' }
+  if (key === 'reps' && !Number.isInteger(n)) return { error: 'Reps must be a whole number' }
+  return { value: n }
+}
+
 export default function RoutinesScreen() {
   const t = useTheme()
   const params = useLocalSearchParams<{ id?: string; addExerciseId?: string }>()
@@ -77,17 +137,61 @@ export default function RoutinesScreen() {
   >([])
   const initialLoadedRef = useRef(false)
 
-  // P2-15/P3-47: web parity — reload and tab close now get the browser
-  // leave-confirmation while the editor holds unsaved routine work. (Browser
-  // back cannot be intercepted on expo-router web; see
-  // src/ui/web-dirty-guard.ts.)
-  useWebDirtyGuard(editing)
+  // T4-b #6: LOCAL input drafts for the planned numeric/tempo fields, keyed
+  // `${exercise_id}:${slot}:${field}` so removing an exercise cannot re-point
+  // a draft at another row. The input value is `drafts[k] ?? committed`, so
+  // the native TextInput ALWAYS shows exactly what the user typed — native
+  // text and state can no longer diverge. A draft that parses commits into
+  // selectedExercises immediately; an invalid one stays visible with a Field
+  // error and blocks Save (nothing silently vanishes at save time).
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [invalidDrafts, setInvalidDrafts] = useState<Record<string, string>>({})
+
+  // T4-b #5: dirty tracking — see editorFingerprint.
+  const [baseline, setBaseline] = useState(() => editorFingerprint('', []))
+  const dirty = editing && editorFingerprint(name, selectedExercises) !== baseline
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  const hasInvalidDrafts = Object.keys(invalidDrafts).length > 0
+
+  // P2-15/P3-47 + T4-b #5: reload and tab close get the browser
+  // leave-confirmation while the editor holds UNSAVED work (clean editors no
+  // longer warn). Browser back cannot be intercepted on expo-router web; see
+  // src/ui/web-dirty-guard.ts.
+  useWebDirtyGuard(dirty)
+
+  // T4-b #5: the ONE guarded editor exit. Every path that would otherwise
+  // silently discard planned-set work (hardware back, header close, Cancel,
+  // switching to another routine row) routes through here: clean state exits
+  // directly, dirty state gets the shared destructive "Discard changes?"
+  // dialog. dirtyRef keeps every handler current between renders.
+  const closeEditor = () => {
+    setEditing(false)
+    initialLoadedRef.current = false
+    setDrafts({})
+    setInvalidDrafts({})
+  }
+
+  const confirmDiscardThen = (next: () => void) => {
+    if (!dirtyRef.current) {
+      next()
+      return
+    }
+    confirmDialog({
+      title: 'Discard changes?',
+      message: 'The routine editor has unsaved changes — discarding them cannot be undone.',
+      confirmLabel: 'Discard',
+      destructive: true,
+      onConfirm: next,
+    })
+  }
+
+  const exitEditor = () => confirmDiscardThen(closeEditor)
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (editing) {
-        setEditing(false)
-        initialLoadedRef.current = false
+        confirmDiscardThen(closeEditor)
         return true
       }
       router.back()
@@ -120,19 +224,38 @@ export default function RoutinesScreen() {
     if (params.id && !initialLoadedRef.current) {
       initialLoadedRef.current = true
       const target = rList.find((r) => r.id === Number(params.id))
-      if (target) {
-        setEditId(target.id)
-        setName(target.name)
-        try {
-          const parsed = RoutineInput.parse(JSON.parse(target.definition_json))
-          setSelectedExercises(parsed.exercises)
-          setEditing(true)
-        } catch {
-          // parse error
-        }
-      }
+      if (target) openRoutine(target)
     }
   }, [params.id])
+
+  /** Open the editor on an existing routine — the shared entry path for the
+      deep link and the list rows; captures the dirty baseline (T4-b #5). */
+  const openRoutine = (r: Routine) => {
+    setEditId(r.id)
+    setName(r.name)
+    try {
+      const parsed = RoutineInput.parse(JSON.parse(r.definition_json))
+      setBaseline(editorFingerprint(r.name, parsed.exercises))
+      setSelectedExercises(parsed.exercises)
+      setDrafts({})
+      setInvalidDrafts({})
+      setEditing(true)
+    } catch {
+      // corrupt definition row: the editor stays closed (unchanged behavior)
+    }
+  }
+
+  /** Open the editor on a clean slate — the shared entry path for the create
+      buttons and the pending-exercises flow; baseline = empty editor. */
+  const startCreate = () => {
+    setName('')
+    setEditId(null)
+    setSelectedExercises([])
+    setBaseline(editorFingerprint('', []))
+    setDrafts({})
+    setInvalidDrafts({})
+    setEditing(true)
+  }
 
   const handleAddExercise = useCallback(
     async (exerciseId: number) => {
@@ -189,10 +312,13 @@ export default function RoutinesScreen() {
         await refresh()
         const pending = consumePendingRoutineExercises()
         if (pending.length > 0) {
+          // T4-b #5: a pending-add opens the editor on a CLEAN slate — the
+          // baseline is captured BEFORE the adds land, so the added exercises
+          // correctly count as unsaved work for the dirty guard.
+          startCreate()
           for (const id of pending) {
             await handleAddExercise(id)
           }
-          setEditing(true)
         }
       })
     }, [refresh, handleAddExercise]),
@@ -202,6 +328,7 @@ export default function RoutinesScreen() {
     if (params.addExerciseId) {
       const id = Number(params.addExerciseId)
       if (Number.isInteger(id) && id > 0) {
+        if (!dirtyRef.current) setBaseline(editorFingerprint('', []))
         setEditing(true)
         void handleAddExercise(id)
       }
@@ -216,12 +343,15 @@ export default function RoutinesScreen() {
       exercises: selectedExercises,
     }
     RoutineInput.parse(input)
+    if (hasInvalidDrafts) throw new Error('Fix the highlighted planned values before saving.')
     const h = await db()
     await saveRoutine(h, input, editId ?? undefined)
     setEditing(false)
     setEditId(null)
     setName('')
     setSelectedExercises([])
+    setDrafts({})
+    setInvalidDrafts({})
     initialLoadedRef.current = false
   }
 
@@ -231,40 +361,97 @@ export default function RoutinesScreen() {
     router.push({ pathname: '/workout', params: { id: workoutId } } as never)
   }
 
-  // Task 2-c: the schema-backed planned controls. All three are pure
+  // Task 2-c: the schema-backed planned controls. All commits are pure
   // setSelectedExercises updates — nothing writes until Save (which rides
   // action.run's busy guard), so rapid taps cannot duplicate writes (§8.3).
-  const updateSetField = (ei: number, si: number, key: SetFieldKey, text: string) => {
-    let value: number | null = null
-    if (text !== '') {
-      const n = Number(text)
-      if (!Number.isFinite(n) || n < 0) return
-      if (key === 'reps' && !Number.isInteger(n)) return
-      value = n
+  // T4-b #6: the handlers write the RAW text into the local draft first (the
+  // input shows exactly what the user typed); only PARSED values reach the
+  // editor state, and a rejected value shows a Field error + blocks Save
+  // instead of silently vanishing between the field and the save.
+  const updateSetField = (exId: number, ei: number, si: number, key: SetFieldKey, text: string) => {
+    const k = `${exId}:${si}:${key}`
+    setDrafts((d) => ({ ...d, [k]: text }))
+    const parsed = parseSetFieldDraft(key, text)
+    if ('error' in parsed) {
+      setInvalidDrafts((v) => ({ ...v, [k]: parsed.error }))
+      return
     }
+    setInvalidDrafts((v) => dropKey(v, k))
     setSelectedExercises((prev) => prev.map((se, i) => {
       if (i !== ei) return se
       const sets = [...se.sets]
-      sets[si] = withSetField(sets[si]!, key, value)
+      sets[si] = withSetField(sets[si]!, key, parsed.value)
       return { ...se, sets }
     }))
   }
 
   const updatePlannedExtra = (ei: number, key: 'rir' | 'rpe' | 'tempo', text: string) => {
+    const exId = selectedExercises[ei]?.exercise_id
+    if (exId === undefined) return
+    const k = `${exId}:extra:${key}`
+    setDrafts((d) => ({ ...d, [k]: text }))
+    let error: string | null = null
     let value: number | string | null = null
-    if (text !== '') {
+    if (text.trim() !== '') {
       if (key === 'tempo') {
-        if (!/^(\d+|X)-(\d+|X)-(\d+|X)-(\d+|X)$/.test(text)) return
-        value = text
+        if (!/^(\d+|X)-(\d+|X)-(\d+|X)-(\d+|X)$/.test(text)) error = 'Use four parts, e.g. 3-1-2-0'
+        else value = text
       } else {
         const n = Number(text)
-        if (!Number.isFinite(n) || n < 0 || n > 10 || (key === 'rpe' && n < 1)) return
-        value = n
+        if (!Number.isFinite(n) || n < 0 || n > 10 || (key === 'rpe' && n < 1)) {
+          error = key === 'rpe' ? 'RPE runs 1–10' : 'RIR runs 0–10'
+        } else {
+          value = n
+        }
       }
     }
+    if (error !== null) {
+      const message = error
+      setInvalidDrafts((v) => ({ ...v, [k]: message }))
+      return
+    }
+    setInvalidDrafts((v) => dropKey(v, k))
     setSelectedExercises((prev) => prev.map((se, i) => (
       i !== ei ? se : { ...se, sets: se.sets.map((s) => withPlannedExtra(s, key, value)) }
     )))
+  }
+
+  // Rule fields share the same draft discipline; "" never commits — on blur
+  // the draft is dropped and the field snaps back to the committed rule value
+  // (rules are required, so clearing is a revert, not a silent loss).
+  const updateRuleField = (ei: number, key: 'min_reps' | 'max_reps' | 'increment' | 'target_rir', text: string) => {
+    const exId = selectedExercises[ei]?.exercise_id
+    if (exId === undefined) return
+    const k = `${exId}:rule:${key}`
+    setDrafts((d) => ({ ...d, [k]: text }))
+    if (text.trim() === '') {
+      setInvalidDrafts((v) => dropKey(v, k))
+      return
+    }
+    const n = Number(text)
+    let error: string | null = null
+    if (!Number.isFinite(n)) error = 'Enter a number'
+    else if ((key === 'min_reps' || key === 'max_reps') && (!Number.isInteger(n) || n < 1)) error = 'Whole number of 1 or more'
+    else if (key === 'increment' && n < 0) error = 'Enter a number of 0 or more'
+    else if (key === 'target_rir' && (n < 0 || n > 10)) error = 'RIR runs 0–10'
+    if (error !== null) {
+      const message = error
+      setInvalidDrafts((v) => ({ ...v, [k]: message }))
+      return
+    }
+    setInvalidDrafts((v) => dropKey(v, k))
+    setSelectedExercises((prev) => prev.map((se, i) => (
+      i !== ei ? se : { ...se, rule: { ...se.rule, [key]: n } }
+    )))
+  }
+
+  /** T4-b #6 blur: drop the local draft so the field snaps back to the last
+      committed value (the result.tsx P2-5 snap pattern). An INVALID draft
+      deliberately STAYS in the input with its error and keeps Save blocked —
+      a rejected value can no longer silently vanish. */
+  const settleDraft = (k: string) => {
+    if (drafts[k] === undefined || invalidDrafts[k] !== undefined) return
+    setDrafts((d) => dropKey(d, k))
   }
 
   const updateSupersetGroup = (ei: number, group: string | null) => {
@@ -293,7 +480,14 @@ export default function RoutinesScreen() {
   }
 
   const handleRemoveExercise = (index: number) => {
+    const removed = selectedExercises[index]
     setSelectedExercises(selectedExercises.filter((_, i) => i !== index))
+    if (removed) {
+      // Drafts are keyed by exercise_id — drop them with the row, or a stale
+      // invalid draft could keep blocking Save with no visible field.
+      setDrafts((d) => dropKeysWithPrefix(d, `${removed.exercise_id}:`))
+      setInvalidDrafts((v) => dropKeysWithPrefix(v, `${removed.exercise_id}:`))
+    }
   }
 
   const handleDeleteRoutine = async (id: number) => {
@@ -307,23 +501,23 @@ export default function RoutinesScreen() {
   }
 
   return (
-    <Screen title={editing ? (editId ? 'Edit Routine' : 'New Routine') : 'Routines'} back>
+    <Screen
+      title={editing ? (editId ? 'Edit Routine' : 'New Routine') : 'Routines'}
+      back={!editing}
+      // T4-b #5: while editing, the header exit is the GUARDED close — the
+      // plain chevron hard-routes router.back() inside Screen (its onPress
+      // cannot be intercepted) and used to silently discard the editor. The
+      // close icon runs the same "Discard changes?" dialog as hardware back
+      // and Cancel, with the same outcome (editor closes → list).
+      headerActions={editing ? [{ icon: 'close', label: 'Close routine editor', onPress: exitEditor }] : undefined}
+    >
       <Label muted>
         A routine is a reusable workout template: pick exercises, plan the sets and progression, then start it any day from the Train tab.
       </Label>
       {action.feedback}
 
       {!editing && routines.length > 0 && (
-        <Button
-          label="Create new routine"
-          selected
-          onPress={() => {
-            setName('')
-            setEditId(null)
-            setSelectedExercises([])
-            setEditing(true)
-          }}
-        />
+        <Button label="Create new routine" selected onPress={startCreate} />
       )}
 
       {routines.length === 0 && !editing ? (
@@ -337,12 +531,7 @@ export default function RoutinesScreen() {
           message="Build a routine once with planned targets, then start it any day from the Train tab — one tap."
           action={{
             label: 'Create new routine',
-            onPress: () => {
-              setName('')
-              setEditId(null)
-              setSelectedExercises([])
-              setEditing(true)
-            },
+            onPress: startCreate,
           }}
         />
       ) : null}
@@ -355,6 +544,11 @@ export default function RoutinesScreen() {
           <Label>Planned Exercises ({selectedExercises.length})</Label>
           {selectedExercises.map((se, idx) => {
             const exInfo = exercises.find((e) => e.id === se.exercise_id)
+            // A11Y P1-4: every per-exercise control prefixes the exercise
+            // name — with N exercises the old labels ("Load (kg) · set 1",
+            // "Remove") repeated identically and a screen-reader user could
+            // not tell which exercise/set a control belonged to.
+            const exName = exInfo?.name ?? `Exercise #${se.exercise_id}`
             // Task 2-c: per-set planned inputs follow the exercise's tracked
             // fields (TRACKING_FIELDS values are always tracked numeric keys).
             const tracked = (exInfo
@@ -364,72 +558,61 @@ export default function RoutinesScreen() {
             return (
               <View key={`${se.exercise_id}-${idx}`} style={{ gap: 8, padding: 12, borderRadius: 12, backgroundColor: t.rowRaised }}>
                 <Row>
-                  <Label>{exInfo?.name ?? `Exercise #${se.exercise_id}`}</Label>
-                  <Button label="Remove" onPress={() => handleRemoveExercise(idx)} />
+                  <Label>{exName}</Label>
+                  <Button label={`Remove ${exName}`} onPress={() => handleRemoveExercise(idx)} />
                 </Row>
-                <Label muted>{se.sets.length} planned sets · Progression: {se.rule.kind}</Label>
+                <Label muted>{se.sets.length} planned sets · Progression: {PROGRESSION_LABELS[se.rule.kind]}</Label>
 
-                <Row>
-                  <Label muted>Progression Rule:</Label>
-                  {PROGRESSION_KINDS.map((k) => (
-                    <Button
-                      key={k}
-                      label={k}
-                      selected={se.rule.kind === k}
-                      onPress={() => {
-                        const next = [...selectedExercises]
-                        next[idx] = { ...se, rule: { ...se.rule, kind: k } }
-                        setSelectedExercises(next)
-                      }}
-                    />
-                  ))}
-                </Row>
+                <Label muted>Progression Rule:</Label>
+                {/* A11Y P2-10: the sanctioned ChipRow primitive replaces the
+                    hand-rolled Button row — human chip labels instead of raw
+                    engine enums, per-chip a11y labels carrying the exercise
+                    name, radiogroup semantics around the row. */}
+                <View accessibilityRole="radiogroup" accessibilityLabel={`${exName} — progression rule`}>
+                  <ChipRow
+                    items={PROGRESSION_KINDS}
+                    keyOf={(k) => k}
+                    label={(k) => PROGRESSION_LABELS[k]}
+                    a11yLabel={(k) => `${exName} — progression ${PROGRESSION_LABELS[k]}`}
+                    isActive={(k) => se.rule.kind === k}
+                    onPress={(k) => {
+                      const next = [...selectedExercises]
+                      next[idx] = { ...se, rule: { ...se.rule, kind: k } }
+                      setSelectedExercises(next)
+                    }}
+                  />
+                </View>
 
                 {se.rule.kind === 'double' && (
                   <Row>
                     <View style={{ flex: 1 }}>
                       <Field
-                        label="Min Reps"
+                        label={`${exName} — Min Reps`}
                         keyboardType="number-pad"
-                        value={String(se.rule.min_reps)}
-                        onChangeText={(t) => {
-                          const n = Number(t)
-                          if (Number.isInteger(n) && n > 0) {
-                            const next = [...selectedExercises]
-                            next[idx] = { ...se, rule: { ...se.rule, min_reps: n } }
-                            setSelectedExercises(next)
-                          }
-                        }}
+                        error={invalidDrafts[`${se.exercise_id}:rule:min_reps`]}
+                        value={drafts[`${se.exercise_id}:rule:min_reps`] ?? String(se.rule.min_reps)}
+                        onChangeText={(t) => updateRuleField(idx, 'min_reps', t)}
+                        onBlur={() => settleDraft(`${se.exercise_id}:rule:min_reps`)}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Field
-                        label="Max Reps"
+                        label={`${exName} — Max Reps`}
                         keyboardType="number-pad"
-                        value={String(se.rule.max_reps)}
-                        onChangeText={(t) => {
-                          const n = Number(t)
-                          if (Number.isInteger(n) && n > 0) {
-                            const next = [...selectedExercises]
-                            next[idx] = { ...se, rule: { ...se.rule, max_reps: n } }
-                            setSelectedExercises(next)
-                          }
-                        }}
+                        error={invalidDrafts[`${se.exercise_id}:rule:max_reps`]}
+                        value={drafts[`${se.exercise_id}:rule:max_reps`] ?? String(se.rule.max_reps)}
+                        onChangeText={(t) => updateRuleField(idx, 'max_reps', t)}
+                        onBlur={() => settleDraft(`${se.exercise_id}:rule:max_reps`)}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Field
-                        label="Increment (kg)"
+                        label={`${exName} — Increment (kg)`}
                         keyboardType="decimal-pad"
-                        value={String(se.rule.increment)}
-                        onChangeText={(t) => {
-                          const n = Number(t)
-                          if (Number.isFinite(n) && n >= 0) {
-                            const next = [...selectedExercises]
-                            next[idx] = { ...se, rule: { ...se.rule, increment: n } }
-                            setSelectedExercises(next)
-                          }
-                        }}
+                        error={invalidDrafts[`${se.exercise_id}:rule:increment`]}
+                        value={drafts[`${se.exercise_id}:rule:increment`] ?? String(se.rule.increment)}
+                        onChangeText={(t) => updateRuleField(idx, 'increment', t)}
+                        onBlur={() => settleDraft(`${se.exercise_id}:rule:increment`)}
                       />
                     </View>
                   </Row>
@@ -443,33 +626,23 @@ export default function RoutinesScreen() {
                   <Row>
                     <View style={{ flex: 1 }}>
                       <Field
-                        label={se.rule.kind === 'percentage' ? 'Increment (%)' : 'Increment (kg)'}
+                        label={`${exName} — ${se.rule.kind === 'percentage' ? 'Increment (%)' : 'Increment (kg)'}`}
                         keyboardType="decimal-pad"
-                        value={String(se.rule.increment)}
-                        onChangeText={(text) => {
-                          const n = Number(text)
-                          if (Number.isFinite(n) && n >= 0) {
-                            const next = [...selectedExercises]
-                            next[idx] = { ...se, rule: { ...se.rule, increment: n } }
-                            setSelectedExercises(next)
-                          }
-                        }}
+                        error={invalidDrafts[`${se.exercise_id}:rule:increment`]}
+                        value={drafts[`${se.exercise_id}:rule:increment`] ?? String(se.rule.increment)}
+                        onChangeText={(text) => updateRuleField(idx, 'increment', text)}
+                        onBlur={() => settleDraft(`${se.exercise_id}:rule:increment`)}
                       />
                     </View>
                     {se.rule.kind === 'rir' && (
                       <View style={{ flex: 1 }}>
                         <Field
-                          label="Target RIR (0-10)"
+                          label={`${exName} — Target RIR (0-10)`}
                           keyboardType="decimal-pad"
-                          value={String(se.rule.target_rir)}
-                          onChangeText={(text) => {
-                            const n = Number(text)
-                            if (Number.isFinite(n) && n >= 0 && n <= 10) {
-                              const next = [...selectedExercises]
-                              next[idx] = { ...se, rule: { ...se.rule, target_rir: n } }
-                              setSelectedExercises(next)
-                            }
-                          }}
+                          error={invalidDrafts[`${se.exercise_id}:rule:target_rir`]}
+                          value={drafts[`${se.exercise_id}:rule:target_rir`] ?? String(se.rule.target_rir)}
+                          onChangeText={(text) => updateRuleField(idx, 'target_rir', text)}
+                          onBlur={() => settleDraft(`${se.exercise_id}:rule:target_rir`)}
                         />
                       </View>
                     )}
@@ -484,18 +657,22 @@ export default function RoutinesScreen() {
                   {(['rir', 'rpe'] as const).map((key) => (
                     <View key={key} style={{ flex: 1, minWidth: 90 }}>
                       <Field
-                        label={`Planned ${fieldLabels[key]}`}
+                        label={`${exName} — Planned ${fieldLabels[key]}`}
                         keyboardType="decimal-pad"
-                        value={se.sets[0]?.[key] == null ? '' : String(se.sets[0]![key])}
+                        error={invalidDrafts[`${se.exercise_id}:extra:${key}`]}
+                        value={drafts[`${se.exercise_id}:extra:${key}`] ?? (se.sets[0]?.[key] == null ? '' : String(se.sets[0]![key]))}
                         onChangeText={(text) => updatePlannedExtra(idx, key, text)}
+                        onBlur={() => settleDraft(`${se.exercise_id}:extra:${key}`)}
                       />
                     </View>
                   ))}
                   <View style={{ flex: 1, minWidth: 130 }}>
                     <Field
-                      label="Planned tempo (e.g. 3-1-2-0)"
-                      value={se.sets[0]?.tempo ?? ''}
+                      label={`${exName} — Planned tempo (e.g. 3-1-2-0)`}
+                      error={invalidDrafts[`${se.exercise_id}:extra:tempo`]}
+                      value={drafts[`${se.exercise_id}:extra:tempo`] ?? (se.sets[0]?.tempo ?? '')}
                       onChangeText={(text) => updatePlannedExtra(idx, 'tempo', text)}
+                      onBlur={() => settleDraft(`${se.exercise_id}:extra:tempo`)}
                     />
                   </View>
                 </Row>
@@ -503,17 +680,20 @@ export default function RoutinesScreen() {
                 {/* Task 2-c: superset grouping (exercises[].group →
                     superset_group_id at launch). Consecutive same-group
                     exercises launch linked as a circuit. */}
-                <Row>
-                  <Label muted>Superset group:</Label>
-                  {(['none', 'A', 'B', 'C'] as const).map((g) => (
-                    <Button
-                      key={g}
-                      label={g}
-                      selected={(se.group ?? 'none') === g}
-                      onPress={() => updateSupersetGroup(idx, g === 'none' ? null : g)}
-                    />
-                  ))}
-                </Row>
+                <Label muted>Superset group:</Label>
+                {/* A11Y P2-10: same ChipRow dialect as the progression row —
+                    "None" instead of the raw "none" enum, per-chip a11y
+                    labels carrying the exercise name, radiogroup context. */}
+                <View accessibilityRole="radiogroup" accessibilityLabel={`${exName} — superset group`}>
+                  <ChipRow
+                    items={SUPERSET_GROUPS}
+                    keyOf={(g) => g}
+                    label={(g) => (g === 'none' ? 'None' : g)}
+                    a11yLabel={(g) => `${exName} — superset ${g === 'none' ? 'none' : `group ${g}`}`}
+                    isActive={(g) => (se.group ?? 'none') === g}
+                    onPress={(g) => updateSupersetGroup(idx, g === 'none' ? null : g)}
+                  />
+                </View>
                 {se.group ? <Label muted>Consecutive exercises sharing a group launch linked as a circuit.</Label> : null}
 
                 {/* Task 2-c: planned values per set (RoutineInput.sets[]). */}
@@ -522,10 +702,12 @@ export default function RoutinesScreen() {
                     {tracked.map((key) => (
                       <View key={key} style={{ flex: 1, minWidth: 90 }}>
                         <Field
-                          label={`${fieldLabels[key]} · set ${si + 1}`}
+                          label={`${exName} — ${fieldLabels[key]} · set ${si + 1}`}
                           keyboardType="decimal-pad"
-                          value={set[key] == null ? '' : String(set[key])}
-                          onChangeText={(text) => updateSetField(idx, si, key, text)}
+                          error={invalidDrafts[`${se.exercise_id}:${si}:${key}`]}
+                          value={drafts[`${se.exercise_id}:${si}:${key}`] ?? (set[key] == null ? '' : String(set[key]))}
+                          onChangeText={(text) => updateSetField(se.exercise_id, idx, si, key, text)}
+                          onBlur={() => settleDraft(`${se.exercise_id}:${si}:${key}`)}
                         />
                       </View>
                     ))}
@@ -555,9 +737,15 @@ export default function RoutinesScreen() {
           />
 
           <Row>
-            <Button label="Save routine" selected disabled={action.busy} onPress={() => void action.run(handleSave)} />
-            <Button label="Cancel" onPress={() => { setEditing(false); initialLoadedRef.current = false }} />
+            <Button label="Save routine" selected disabled={action.busy || hasInvalidDrafts} onPress={() => void action.run(handleSave)} />
+            <Button label="Cancel" onPress={exitEditor} />
           </Row>
+          {hasInvalidDrafts && (
+            // T4-b #6: the invalid drafts stay visible (Field error slot) and
+            // Save stays blocked until they parse or are cleared — a rejected
+            // value can never silently vanish at save time (§8.3).
+            <Label muted>Fix the highlighted planned values — they are not saved until they parse.</Label>
+          )}
         </Card>
       )}
 
@@ -580,36 +768,30 @@ export default function RoutinesScreen() {
               icon="dumbbell"
               label={r.name}
               value={`${count} exercise${count === 1 ? '' : 's'}`}
-              onPress={() => {
-                setEditId(r.id)
-                setName(r.name)
-                try {
-                  const parsed = RoutineInput.parse(JSON.parse(r.definition_json))
-                  setSelectedExercises(parsed.exercises)
-                  setEditing(true)
-                } catch {
-                  // ignore
-                }
-              }}
+              // T4-b #5: switching rows while the editor holds unsaved work is
+              // a silent discard — guarded like every other exit path.
+              onPress={() => confirmDiscardThen(() => openRoutine(r))}
               accessibilityLabel={`Edit routine ${r.name}`}
             />
             <Row>
               <Button label="Launch workout" selected onPress={() => void action.run(() => handleLaunch(r.id))} />
+              <Button label="Edit" onPress={() => confirmDiscardThen(() => openRoutine(r))} />
               <Button
-                label="Edit"
-                onPress={() => {
-                  setEditId(r.id)
-                  setName(r.name)
-                  try {
-                    const parsed = RoutineInput.parse(JSON.parse(r.definition_json))
-                    setSelectedExercises(parsed.exercises)
-                    setEditing(true)
-                  } catch {
-                    // ignore
-                  }
-                }}
+                label="Delete"
+                onPress={() =>
+                  // T4-b #1: destructive confirmation via the ONE shared
+                  // helper (the peer pattern: meal-detail, settings-data,
+                  // backup restore). This soft delete has no undo, so the
+                  // message must not promise one.
+                  confirmDialog({
+                    title: 'Delete this routine?',
+                    message: 'The routine is removed from the Train tab and from programs that schedule it. Workouts you already logged are not affected.',
+                    confirmLabel: 'Delete',
+                    destructive: true,
+                    onConfirm: () => void action.run(() => handleDeleteRoutine(r.id)),
+                  })
+                }
               />
-              <Button label="Delete" onPress={() => void action.run(() => handleDeleteRoutine(r.id))} />
             </Row>
           </View>
         )

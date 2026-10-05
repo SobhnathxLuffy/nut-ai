@@ -33,6 +33,19 @@ export function ItemRow({
 }) {
   const t = useTheme()
   const labelColor = destructive ? t.safety : t.text
+  // T4-c P2-5: an accessibilityLabel — and the pressable branch's bare `label`
+  // fallback — used to REPLACE the row's spoken content, and group semantics
+  // then swallowed the value line entirely (TalkBack read "Edit routine Push
+  // day" with the exercise count silent). Compose the spoken label with the
+  // value instead; a caller label that already contains the value text stays
+  // verbatim, and a static row without an override keeps its natural
+  // two-Text reading.
+  const spokenLabel = (() => {
+    if (!onPress && accessibilityLabel == null) return undefined
+    const base = accessibilityLabel ?? label
+    if (value == null || base.includes(value)) return base
+    return `${base}. ${value}`
+  })()
   const content = (
     <>
       <Icon name={icon} size={20} color={labelColor} />
@@ -46,7 +59,7 @@ export function ItemRow({
   const surface = [styles.row, { borderColor: t.border, backgroundColor: t.bgElevated }]
   if (!onPress) {
     return (
-      <View accessibilityLabel={accessibilityLabel} style={surface}>
+      <View accessibilityLabel={spokenLabel} style={surface}>
         {content}
       </View>
     )
@@ -54,7 +67,7 @@ export function ItemRow({
   return (
     <PressableFX
       accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityLabel={spokenLabel}
       onPress={onPress}
       style={surface}
     >

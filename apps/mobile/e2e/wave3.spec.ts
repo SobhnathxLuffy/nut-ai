@@ -80,29 +80,77 @@ test.describe('P2-15: web dirty-guard on custom-food', () => {
 })
 
 test.describe('P2-17..19 smoke: onboarding chrome still works after tokenization', () => {
-  test('the single-page form renders, gates its CTA, and unlocks when every required answer is in', async ({ page }) => {
-    // Owner QA 2026-10: the 12-step flow collapsed to ONE page. Same gate,
-    // same hint, same option cards — scoped by radiogroup where labels repeat.
+  // 2026-10-05 stepwise rebuild smoke: the whole journey end to end, PLUS the
+  // owner-mandated unit independence — height units are switched independently
+  // of weight units mid-journey, touching all four combinations (kg/cm via the
+  // defaults, lb/ft+in after the welcome switches, lb/cm and kg/cm via the
+  // mid-step switches). Canonical answers stay metric; only the pickers change
+  // what they render.
+  test('the stepwise journey completes end to end with independent height/weight units', async ({ page }) => {
     await page.goto('/onboarding')
-    const continueBtn = page.getByRole('button', { name: 'See my plan' })
-    await expect(continueBtn).toBeDisabled()
-    await expect(page.getByText('Answer every question to continue')).toBeVisible()
+    await expect(page.getByText('Step 1 of 12')).toBeVisible()
+
+    // Step 1 — welcome + units: switch BOTH independently (kg/cm -> lb/ft+in).
+    await page.getByRole('button', { name: 'lb', exact: true }).click()
+    await page.getByRole('button', { name: 'ft + in', exact: true }).click()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Steps 2-5 — the question steps (same gates as the wave1 walk).
     await page.getByRole('radio', { name: 'Female' }).click()
-    await expect(continueBtn).toBeDisabled()
+    await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('radio', { name: '3-5' }).click()
-    await expect(continueBtn).toBeDisabled()
     await page
       .getByRole('radiogroup', { name: /personal trainer or registered dietitian/ })
       .getByRole('radio', { name: 'No', exact: true })
       .click()
+    await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('radio', { name: 'Balanced' }).click()
     await page.getByRole('radio', { name: 'Lack of consistency' }).click()
+    await page.getByRole('button', { name: 'Continue' }).click()
     await page.getByRole('radio', { name: 'Eat and live healthier' }).click()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 6 — birthday defaults.
+    await expect(page.getByText('Step 6 of 12')).toBeVisible()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 7 — height: lb/ft+in renders the FEET wheel. Then switch height
+    // back to cm mid-step -> the CENTIMETRES wheel. The weight unit is
+    // untouched by the height toggle (independence).
+    await expect(page.getByText('Step 7 of 12')).toBeVisible()
+    await expect(page.getByLabel('Feet')).toBeVisible()
+    await page.getByRole('button', { name: 'cm', exact: true }).click()
+    await expect(page.getByLabel('Centimetres')).toBeVisible()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 8 — weight: the lb switch from step 1 holds — the ruler reads lbs
+    // (lb/cm combination). Switch weight back to kg mid-step -> kg readout.
+    // Canonical kg is what persists either way; only the picker changes.
+    await expect(page.getByText('Step 8 of 12')).toBeVisible()
+    await expect(page.getByLabel(/lbs\. Tap to type an exact value/)).toBeVisible()
+    await page.getByRole('button', { name: 'kg', exact: true }).click()
+    await expect(page.getByLabel(/kg\. Tap to type an exact value/)).toBeVisible()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 9 — goal weight (underweight note stays non-blocking).
+    await expect(page.getByText('Step 9 of 12')).toBeVisible()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 10 — provider skip path.
+    await page.getByRole('radio', { name: 'No key for now' }).click()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 11 — preferences.
     await page
       .getByRole('radiogroup', { name: /Rollover/ })
       .getByRole('radio', { name: 'Yes', exact: true })
       .click()
-    await page.getByRole('radio', { name: 'No key for now' }).click()
-    await expect(continueBtn).toBeEnabled()
+    await page.getByRole('button', { name: 'Continue' }).click()
+
+    // Step 12 — final CTA opens the reveal (persist happens at the reveal's
+    // own CTA, not here — this smoke stops at the hero numbers rendering).
+    await expect(page.getByText('Step 12 of 12')).toBeVisible()
+    await page.getByRole('button', { name: 'See my plan' }).click()
+    await expect(page.getByText('Your daily recommendation')).toBeVisible({ timeout: 20_000 })
   })
 })

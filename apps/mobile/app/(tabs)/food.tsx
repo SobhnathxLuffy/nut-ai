@@ -235,6 +235,10 @@ export default function Food() {
 }
 
 /** The quick-action tiles — distinct glyphs (Table 6.1), destinations EXACTLY the old grid's plus the timeline's Copy yesterday. */
+// §8.3: rapid repeated taps must not create duplicate writes. The one-tap
+// cards guard with the component's isLoggingRef; this module-scope closure
+// can't reach it, so Copy yesterday carries its own identical busy lock.
+let copyYesterdayBusy = false
 const QUICK_ACTIONS: ReadonlyArray<{ label: string; icon: IconName; onPress: () => void }> = [
   {
     label: 'Scan food',
@@ -265,6 +269,10 @@ const QUICK_ACTIONS: ReadonlyArray<{ label: string; icon: IconName; onPress: () 
     label: 'Copy yesterday',
     icon: 'clock',
     onPress: () => {
+      // Same busy-guard shape as the one-tap cards' logCard: a fast double-tap
+      // must not copy yesterday's meals twice.
+      if (copyYesterdayBusy) return
+      copyYesterdayBusy = true
       void (async () => {
         try {
           await copyYesterday(await db(), localDate(Date.now()))
@@ -283,6 +291,8 @@ const QUICK_ACTIONS: ReadonlyArray<{ label: string; icon: IconName; onPress: () 
           })
         } catch (e) {
           showToast({ message: e instanceof Error ? e.message : 'Could not copy yesterday', tone: 'error' })
+        } finally {
+          copyYesterdayBusy = false
         }
       })()
     },

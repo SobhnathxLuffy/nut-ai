@@ -2,6 +2,7 @@ import { router } from 'expo-router'
 import { useEffect, useMemo, useRef } from 'react'
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { showToast } from '../../src/components/toast-store'
 import {
   computeCalorieTarget,
   computeMacros,
@@ -140,6 +141,12 @@ export default function PlanScreen() {
         opacity: reveal.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
       }
 
+  // §8.3: rapid repeated taps must not create duplicate writes — one persist,
+  // one tutorial push, ever (T4-b: a double-tap appended two goal rows and
+  // pushed the tutorial twice). A ref, not state: the guard must be
+  // synchronous with the tap.
+  const busy = useRef(false)
+
   const gaining = derivedGoal === 'gain'
   const imperial = a.units === 'imperial'
   const displayUnit = imperial ? 'lb' : 'kg'
@@ -272,7 +279,11 @@ export default function PlanScreen() {
             {diet ? (
               <Bullet text={`Food matches biased toward a ${diet.label.toLowerCase()} diet, and "what kind of milk?" defaults to ${diet.defaultMilk}.`} />
             ) : null}
-            {features.remindersOn ? <Bullet text="Reminders on, learned from when you actually log." /> : null}
+            {/* Truthful per the shipped notifications behaviour (T4-copyfix):
+                reminders never start on their own — fixed times, chosen later. */}
+            {features.remindersOn ? (
+              <Bullet text="Reminders suggested for you — optional and off by default, each at a time you pick in Profile → Notifications." />
+            ) : null}
             {features.savedMealsPinned ? <Bullet text="Saved meals pinned for one-tap relogging." /> : null}
             {features.showMealIdeas ? <Bullet text="Meal ideas surfaced on the Today screen." /> : null}
             {a.worksWithProfessional ? (
@@ -310,6 +321,8 @@ export default function PlanScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={() => {
+            if (busy.current) return
+            busy.current = true
             // Persist BEFORE navigating. A plan the user saw but the app forgot
             // is worse than no plan: they would arrive at a Today screen whose
             // targets contradict the screen they just approved.
@@ -319,14 +332,26 @@ export default function PlanScreen() {
               })
               .then(async () => {
                 // The optional walkthrough (owner item #3): fresh completions
-                // ONLY. Replace-then-push keeps the tabs below the tour, so
-                // Skip and hardware Back both land on Home — it can never
-                // trap. The restore path (finishRestore) never routes here,
-                // so restoring users are never ambushed; a re-play from the
-                // Profile About group is explicit and never re-arms this.
+                // ONLY, and only ONCE — the busy guard above dedupes the push
+                // along with the persist. Replace-then-push keeps the tabs
+                // below the tour, so Skip and hardware Back both land on Home
+                // — it can never trap. The restore path (finishRestore) never
+                // routes here, so restoring users are never ambushed; a re-play
+                // from the Profile About group is explicit and never re-arms
+                // this.
                 if (shouldAutoShowTutorial(await readTutorialSeen())) {
                   router.push('/tutorial' as never)
                 }
+              })
+              .catch((e) => {
+                // §8.4: failure + retry, never a silent dead CTA. The write is
+                // a single transaction, so a throw here rolled back — say so
+                // and re-arm the button.
+                busy.current = false
+                showToast({
+                  message: `Couldn't save your plan — nothing was changed: ${String((e as Error)?.message ?? e)}`,
+                  tone: 'error',
+                })
               })
           }}
           style={[styles.cta, { backgroundColor: theme.text }]}

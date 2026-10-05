@@ -335,6 +335,33 @@ export function HeightSection() {
       <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
         Part of the Mifflin-St Jeor equation.
       </Text>
+      {/* The typed-value alternative input, parity with the weight step (T4-c
+          P1-1: the wheels were the ONLY input here). EditableValue clamps to
+          the wheels' own range and the wheels re-scroll to the commit. */}
+      <View style={{ alignItems: 'center', marginBottom: space.lg }}>
+        {a.heightUnit === 'ftin' ? (
+          <EditableValue
+            label="Height"
+            value={ft * 12 + inch}
+            unit="in"
+            min={2 * 12}
+            max={8 * 12 + 11}
+            onCommit={(v) => {
+              const total = Math.round(v)
+              setAnswer('heightCm', ftInToCm(Math.floor(total / 12), total % 12))
+            }}
+          />
+        ) : (
+          <EditableValue
+            label="Height"
+            value={Math.round(cm)}
+            unit="cm"
+            min={100}
+            max={250}
+            onCommit={(v) => setAnswer('heightCm', v)}
+          />
+        )}
+      </View>
       <WheelHighlight>
         {a.heightUnit === 'ftin' ? (
           <>
@@ -605,8 +632,8 @@ export function ProviderSection({ onReadyChange }: { onReadyChange?: (ready: boo
         <View style={styles.keySection}>
           <Text style={[type.heading, { color: theme.text }]}>Connect {PROVIDER_NAME[realProvider]}</Text>
           <Text style={[type.caption, { color: theme.textMuted, marginTop: 2, marginBottom: space.md }]}>
-            We'll check the key works before saving it. It is stored in the iOS Keychain and sent
-            only to {PROVIDER_NAME[realProvider]}.
+            We'll check the key works before saving it. It is stored in your device's secure
+            storage (Keychain / Keystore) and sent only to {PROVIDER_NAME[realProvider]}.
           </Text>
           {/* key= remounts the form when the provider changes, so drafts and
               verify state can never leak across providers. */}
@@ -647,10 +674,10 @@ export function PreferencesSection() {
           A nudge when you'd usually log
         </Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, lineHeight: 19 }]}>
-          Reminders learn from when you actually log rather than firing at a fixed hour, and every
-          one is local to your device. We'll ask for notification permission the first time a
-          reminder is actually worth sending, not now — whether they start ON depends on the
-          obstacle you picked above.
+          Reminders are optional and start off — you turn them on later in Profile →
+          Notifications, where a master switch and one toggle per reminder decide what
+          fires, each at a time you pick. Every one is local to your device. We'll ask for
+          notification permission the first time a reminder is actually worth sending, not now.
         </Text>
       </View>
     </>
@@ -740,7 +767,7 @@ export function HealthSection() {
         <View style={[styles.note, { backgroundColor: theme.uncertainBg }]}>
           <Text style={[type.caption, { color: theme.text }]}>
             {avail === 'not-ios'
-              ? 'Apple Health is iOS only. On Android this will use Health Connect instead.'
+              ? 'Apple Health is iOS-only. Health Connect for Android isn\'t built yet — this step is optional either way.'
               : 'Health data is not available on this device, so there is nothing to connect to.'}
           </Text>
         </View>

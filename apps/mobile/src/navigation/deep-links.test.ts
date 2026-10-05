@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEEP_LINK_ROUTES, DEEP_LINK_SCHEME, resolveDeepLink } from './deep-links'
+import { DEEP_LINK_ROUTES, DEEP_LINK_SCHEME, resolveDeepLink, routeFromNotificationUrl } from './deep-links'
 
 /**
  * Wave 4c — the nutai:// deep-link handler (UI/UX report §7.2 / Table 7.1).
@@ -32,7 +32,7 @@ function routeFileCandidates(route: string): string[] {
 
 describe('resolveDeepLink: the nutai:// alias map', () => {
   it('resolves every table entry exactly (table-mapping exactness)', () => {
-    expect(DEEP_LINK_ROUTES).toHaveLength(9)
+    expect(DEEP_LINK_ROUTES).toHaveLength(10)
     for (const entry of DEEP_LINK_ROUTES) {
       expect(resolveDeepLink(`${DEEP_LINK_SCHEME}://${entry.path}`)).toBe(entry.route)
     }
@@ -48,6 +48,9 @@ describe('resolveDeepLink: the nutai:// alias map', () => {
     expect(resolveDeepLink('nutai://assistant')).toBe('/assistant')
     expect(resolveDeepLink('nutai://progress')).toBe('/progress')
     expect(resolveDeepLink('nutai://weight')).toBe('/log-weight')
+    // Task 3-b: the daily-review notification taps through to the check-in
+    // screen — a real route file, so no alias file is needed (same as train).
+    expect(resolveDeepLink('nutai://checkin')).toBe('/checkin')
   })
 
   it('is case-insensitive for both scheme and host', () => {
@@ -79,6 +82,23 @@ describe('resolveDeepLink: the nutai:// alias map', () => {
     expect(resolveDeepLink('nutai:///')).toBeNull()
     expect(resolveDeepLink('nutai:log')).toBeNull()
     expect(resolveDeepLink('')).toBeNull()
+  })
+})
+
+describe('routeFromNotificationUrl: notification-tap routing (Task 3-b)', () => {
+  it('resolves an alias and re-attaches its query to the real route', () => {
+    expect(routeFromNotificationUrl('nutai://workout?id=3')).toBe('/workout?id=3')
+    expect(routeFromNotificationUrl('nutai://train')).toBe('/train')
+    expect(routeFromNotificationUrl('nutai://checkin')).toBe('/checkin')
+    expect(routeFromNotificationUrl('nutai://day?date=2026-10-05')).toBe('/day-detail?date=2026-10-05')
+  })
+
+  it('drops non-URLs and unknown aliases (a dead link must never 404 the user)', () => {
+    expect(routeFromNotificationUrl(undefined)).toBeNull()
+    expect(routeFromNotificationUrl(null)).toBeNull()
+    expect(routeFromNotificationUrl(42)).toBeNull()
+    expect(routeFromNotificationUrl('nutai://nope')).toBeNull()
+    expect(routeFromNotificationUrl('https://example.com')).toBeNull()
   })
 })
 

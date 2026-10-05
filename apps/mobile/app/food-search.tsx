@@ -620,6 +620,7 @@ export default function FoodSearch() {
 
       <TextInput
         accessibilityLabel="Search foods"
+        allowFontScaling
         placeholder="Search — try “litti chokha”, “idli sambar”, “roti”"
         placeholderTextColor={theme.textFaint}
         value={query}
@@ -837,6 +838,7 @@ export default function FoodSearch() {
           {/* Dish Name */}
           <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Dish Name</Text>
           <TextInput
+            allowFontScaling
             value={decomposeName}
             onChangeText={setDecomposeName}
             placeholder="Dish Name"
@@ -855,6 +857,7 @@ export default function FoodSearch() {
               </View>
               <TextInput
                 accessibilityLabel={`Grams of ${item.label}`}
+                allowFontScaling
                 value={item.grams}
                 onChangeText={(text) => setDecompItems((prev) => prev.map((row) => (row.key === item.key ? { ...row, grams: text } : row)))}
                 keyboardType="numeric"
@@ -910,6 +913,7 @@ export default function FoodSearch() {
           <Text style={[type.caption, { color: theme.text, marginTop: space.md, fontWeight: '600' }]}>Add any ingredient (searches your foods · IFCT · USDA)</Text>
           <TextInput
             accessibilityLabel="Search ingredients"
+            allowFontScaling
             value={ingredientQuery}
             onChangeText={(text) => {
               setIngredientQuery(text)
@@ -991,6 +995,7 @@ export default function FoodSearch() {
                 <Text style={[type.caption, { color: theme.textMuted }]}>Oil in the pan (g):</Text>
                 <TextInput
                   accessibilityLabel="Grams of oil in the pan"
+                  allowFontScaling
                   value={fatGrams}
                   onChangeText={setFatGrams}
                   keyboardType="numeric"
@@ -1016,6 +1021,7 @@ export default function FoodSearch() {
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: space.md, gap: space.md }}>
             <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>Portion Size (g):</Text>
             <TextInput
+              allowFontScaling
               value={decomposePortion}
               onChangeText={setDecomposePortion}
               keyboardType="numeric"
