@@ -7,4 +7,10 @@ group = 'com.nutai.app'
 
 android {
   namespace 'com.nutai.app.widget'
+  defaultConfig {
+    // The expo-module-gradle-plugin requires a versionName on every module
+    // (it keys the module's Maven publication off it). Keep in sync with
+    // app.config.ts — bumped only when the module's native surface changes.
+    versionName '0.2.0'
+  }
 }
