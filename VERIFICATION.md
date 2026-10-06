@@ -6,7 +6,7 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **1,883 passed**, 158 files (T5-fix2 gate run, 2026-10-05) |
+| Unit + property + integration tests | `npx vitest run` | **1,915 passed**, 161 files (v0.3.0 owner-QA gate run, 2026-10-06) |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **19/19 packages** React-Native-free |
@@ -1122,8 +1122,8 @@ subsystems plus a QA-batch fix round, followed by an independent hostile
 review (T5-review) and this fix pass (T5-fix2). Evidence discipline per
 AGENTS §3: every claim below names its class, and NOTHING here is
 device-verified — no device or emulator exists in the development
-environment. The full automated gate was re-run at this tree: 1,883 tests /
-158 files / 0 failed, typecheck (root + mobile) clean, ESLint
+environment. The full automated gate was re-run at the v0.3.0 wave tree: 1,915 tests /
+161 files / 0 failed, typecheck (root + mobile) clean, ESLint
 `--max-warnings=0` clean, node-purity 19/19, contrast 104/104, Playwright
 web e2e 46/46.
 
@@ -1227,3 +1227,31 @@ web e2e 46/46.
 8. The release pipeline itself — version derivation, SHA-256 asset, and
    prerelease flag run on GitHub Actions for the first time with the
    v0.2.0 tag.
+
+---
+
+## v0.3.0 owner-QA wave — five reported issues, fixes + evidence (2026-10-06)
+
+The owner QA'd the installed v0.2.0 APK on a phone and reported five issues.
+Each fix below was implemented, unit-gated, and pushed as its own commit.
+
+| # | Owner report | Fix | Evidence class |
+|---|---|---|---|
+| 1 | "Saved usual and favorite options — only favorites needed; remove the other two from everywhere" | `logging_shortcuts` schema v13 rebuild (CHECK kind='favorite', legacy rows remapped + deduped), shortcut/one-tap types narrowed, food tab 5 strip modes → 3, timeline "Save usual meal"/"Save meal" buttons removed, backup restore remaps legacy kinds, orphaned `/saved-foods` surface (FAB action + route + helpers) removed; `saved_meals` table + backup lists kept so old backups restore losslessly | AUTOMATICALLY VERIFIED — migration-v13.test.ts (conversion/dedupe/fresh-install rejection/forward-only), backup-core legacy-payload test, wave3-food/wave2-nav/Skeleton/tutorial locks; 1,915-test gate green |
+| 2a | "Tapping a logged meal only changes weight — no calories/macros shown" | meal-detail renders per-item snapshot macros at current grams (snap per-100g × grams/100) + meal totals; missing nutrients render '—', never zero | AUTOMATICALLY VERIFIED — logged-meals.test.ts extended, meal-honesty.test.ts, tsc; display math pure |
+| 2b | "Favorite meals should be searchable alongside IFCT/USDA/recipes" | FavoritesSource registered in the resolver router at priority 95 (below user_foods → never hijacks auto-accept), resolving a favorite snapshot to its meal totals | AUTOMATICALLY VERIFIED — favorites-source.test.ts (match by shortcut/item name, macro roundtrip, corrupt-snapshot skip) |
+| 3 | "Add more foods from common and uncommon companies to the barcode DB" | Curated representative dataset of 116 packaged SKUs (India-first: Amul, Britannia, Nestlé, Haldiram's, Parle, MDH, Tata, Dabur… + international) ingested into nutrition.db with GS1 check-digit-valid barcodes, real serving sizes, label-plausible per-100g macros; USDASource barcode lookup widened to source='branded'; corpus revision bumped | AUTOMATICALLY VERIFIED (data-level) — branded-foods.test.mjs (check digit ×116, dupes, kcal consistency, serving>0), built-DB spot checks (116 barcodes, 51 brands, 0 dupes). HONESTY: values are curated-representative approximations from public labels, NOT a licensed OFF dump; on-phone scan hits are NOT TESTED yet (device wave) |
+| 4 | "AI logs '3 parathas and 400g curd' as one blob — can't change individual weights; too many questions" | food-review multi-item payloads render one row per food (editable grams + live kcal/macros) and save per-item grams — the proportional global rescale is deleted; system prompt assistant-v1.2: never merge named foods, no clarifying-question round-trip, propose immediately | AUTOMATICALLY VERIFIED — wave3-food per-item locks (no `originalTotal`/scale regression), prompt golden test, assistant-write e2e updated; 46/46 e2e green |
+| 5a | "Household variant / 'Log household variant' unreachable behind the Android nav bar" | dish-composer insets moved from ScrollView frame style to contentContainerStyle (insets.bottom + 120) + working KeyboardAvoidingView | AUTOMATICALLY VERIFIED (source-lock) — wave3-food Task 11-e locks; on-device reachability NOT TESTED yet |
+| 5b | "AI assistant chat hides behind the keyboard" | assistant KeyboardAvoidingView: Android was a no-op (`undefined`) — edge-to-edge on Expo SDK 53+ broke the adjustResize premise; now padding (iOS) / height (Android) + keyboardShouldPersistTaps="handled"; same fix swept to recipes + custom-food | AUTOMATICALLY VERIFIED (source-lock) — assistant/keyboard.test.ts; runtime IME behavior on device NOT TESTED yet |
+
+Gates at `4679490` (full tree): vitest **1,915 / 161 files / 0 failed**; mobile typecheck clean; ESLint `--max-warnings=0`; node-purity 19/19; contrast 104/104; Playwright e2e **46 passed / 0 failed / 0 skipped** (fresh `expo export --platform web`).
+
+### NOT TESTED — carried into the v0.3.0 device wave
+
+1. On-phone verification of each owner-reported fix (the five above are
+   automated-verified only until the APK QA round runs).
+2. Everything in the v0.2.0 device wave list above that stayed NOT TESTED
+   (TalkBack, 130%, widgets on launcher, notification delivery, hardware
+   journeys, Codex success path).
+3. Branded-barcode scan hits on device camera (data-level verified).

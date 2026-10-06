@@ -1,7 +1,7 @@
 # PLAN.md — Current Nut AI Implementation Status
 
 > **Last updated:** 2026-10-05
-> **Evidence baseline:** 1,883 tests / 158 files, Playwright web e2e 46 passed / 0 skipped / 0 failed (re-run at the T5-fix2 tree on `e6e3274`), 19/19 node-pure packages, contrast gate 104/104 pairs (light 52 + dark 52), USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,451 slots) + dish-mapping (1,451/1,451 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round), UI/UX Waves 1–4 complete (design system gated + documented — docs/design-system.md), Wave 5 QA-completion closed (day-detail view, recipe contributions, composer clarifications, honesty persistence v12, event-driven workout card, assistant write-path e2e, protein-chip AA fix), v0.2.0 wave complete at the automated layer (stepwise onboarding, tutorial, notifications, widgets, Codex bridge — device wave pending).
+> **Evidence baseline:** 1,915 tests / 161 files, Playwright web e2e 46 passed / 0 skipped / 0 failed (re-run at the v0.3.0 owner-QA wave on `4679490`), 19/19 node-pure packages, contrast gate 104/104 pairs (light 52 + dark 52), USDA (26/26, 7,930 foods) + IFCT (542 rows) + Indian-dish (362 CURATED, 1,451 slots) + dish-mapping (1,451/1,451 slots) verification passing, Android food-flow device verification completed, five QA/product rounds closed (web P0 WEB-001…011, product P0/P1/P2 Sections B/C/D, search+decompose round, draft-graduation round), UI/UX Waves 1–4 complete (design system gated + documented — docs/design-system.md), Wave 5 QA-completion closed (day-detail view, recipe contributions, composer clarifications, honesty persistence v12, event-driven workout card, assistant write-path e2e, protein-chip AA fix), v0.2.0 wave complete at the automated layer (stepwise onboarding, tutorial, notifications, widgets, Codex bridge — device wave pending).
 > **Worktree:** Waves 4a–4d + Wave 5A/5B are committed (`16809c2`…`0025f28`, `a06ad42`, `1eef079`); the v0.2.0 wave + release prep (T6-prep: version bump + parametrized build-apk.yml + draft) + the T5-fix2 review fixes are committed on main at `5cefd46`; tag `apk-v0.2.0-rc3` built successfully by CI.
 
 ## 1. Executive Status
@@ -55,7 +55,7 @@ Latest verified gate (T5-fix2 review-fix wrap, 2026-10-05, working tree on `e6e3
 
 - ESLint: clean, 0 errors/warnings (`--max-warnings=0`)
 - TypeScript: strict, packages + mobile clean
-- Vitest: **1,883 passed across 158 files** (the +8 over the wave's 1,875 are the T5-fix2 regression locks)
+- Vitest: **1,915 passed across 161 files** (the v0.3.0 owner-QA wave: favorites-only schema v13 + restore remap, favorites search source, meal-detail macro totals, per-item multi-food review, composer/assistant keyboard + inset locks, 116-SKU branded barcode corpus)
 - Node purity: **19/19** packages
 - Contrast gate (`check:contrast`): **104/104 pairs pass** (light 52, dark 52; 24 logged — includes the filled option-chip pairs)
 - USDA `data:verify`: **26/26** golden queries passing
