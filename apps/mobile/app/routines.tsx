@@ -106,6 +106,24 @@ function dropKeysWithPrefix(map: Record<string, string>, prefix: string): Record
 }
 
 /**
+ * Task 12-b M2: the pure core of the pending-exercise merge (the one
+ * setSelectedExercises update inside handleAddExercise, so BOTH editor
+ * entries — create and edit — share it). Appends a picker id only when it is
+ * not already in the editor (dedupe); a duplicate returns the SAME array (no
+ * re-render churn — the T1-b lesson); existing rows pass through by
+ * reference, and the planned-set draft maps live OUTSIDE this array, so a
+ * merge can never disturb an in-progress edit's planned values.
+ */
+function withPendingExercise<T extends { exercise_id: number }>(
+  prev: Array<T>,
+  exerciseId: number,
+  addRow: () => T,
+): Array<T> {
+  if (prev.some((se) => se.exercise_id === exerciseId)) return prev
+  return [...prev, addRow()]
+}
+
+/**
  * T4-b #6: parse a planned set-field draft (§8.3 — intermediate text like ""
  * or "1." must never explode into NaN state). "" clears the field (null);
  * anything else must be a finite non-negative number (whole for reps).
@@ -153,6 +171,11 @@ export default function RoutinesScreen() {
   const dirty = editing && editorFingerprint(name, selectedExercises) !== baseline
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
+  // Task 12-b M2: the focus effect must know the editor's mode without
+  // depending on it (state deps here would re-fire the effect mid-focus — the
+  // T1-b jitter class the locks forbid). Same render-body sync as dirtyRef.
+  const editModeRef = useRef({ editing: false, editId: null as number | null })
+  editModeRef.current = { editing, editId }
   const hasInvalidDrafts = Object.keys(invalidDrafts).length > 0
 
   // T5-fix2 (review SHOULD-FIX #1): publish the dirty state for the ONE exit
@@ -298,18 +321,12 @@ export default function RoutinesScreen() {
         target_rir: 2,
       }
 
-      setSelectedExercises((prev) => {
-        if (prev.some((se) => se.exercise_id === exerciseId)) return prev
-        return [
-          ...prev,
-          {
-            exercise_id: exerciseId,
-            group: null,
-            sets: [defaultSet, { ...defaultSet }, { ...defaultSet }],
-            rule: defaultRule,
-          },
-        ]
-      })
+      setSelectedExercises((prev) => withPendingExercise(prev, exerciseId, () => ({
+        exercise_id: exerciseId,
+        group: null,
+        sets: [defaultSet, { ...defaultSet }, { ...defaultSet }],
+        rule: defaultRule,
+      })))
     },
     // Stable on purpose — see the T1-b note above. The useFocusEffect deps
     // lock (src/components/routines-screen.test.ts) pins this array empty.
@@ -323,12 +340,27 @@ export default function RoutinesScreen() {
         await refresh()
         const pending = consumePendingRoutineExercises()
         if (pending.length > 0) {
-          // T4-b #5: a pending-add opens the editor on a CLEAN slate — the
-          // baseline is captured BEFORE the adds land, so the added exercises
-          // correctly count as unsaved work for the dirty guard.
-          startCreate()
-          for (const id of pending) {
-            await handleAddExercise(id)
+          if (editModeRef.current.editing && editModeRef.current.editId != null) {
+            // Task 12-b M2: returning from the multi-select picker while the
+            // editor is open on an EXISTING routine must MERGE the picks —
+            // the clean-slate startCreate reset here used to wipe the loaded
+            // routine, its planned-set drafts and editId, so Save created a
+            // NEW routine instead of updating. handleAddExercise appends only
+            // NEW unique ids (see withPendingExercise) and never touches
+            // drafts or the baseline, so existing rows + planned values
+            // survive and the appended rows read as unsaved work for every
+            // dirty guard (§8.3).
+            for (const id of pending) {
+              await handleAddExercise(id)
+            }
+          } else {
+            // T4-b #5: a pending-add opens the editor on a CLEAN slate — the
+            // baseline is captured BEFORE the adds land, so the added exercises
+            // correctly count as unsaved work for the dirty guard.
+            startCreate()
+            for (const id of pending) {
+              await handleAddExercise(id)
+            }
           }
         }
       })

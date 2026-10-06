@@ -21,7 +21,7 @@ import {
   type WorkoutSet,
 } from '@nutai/training'
 import { type WeightUnit } from '@nutai/analytics'
-import { db, putSetting, redoLastOperation, setting, undoLastOperation } from '../src/data/repo'
+import { db, putSetting, redoLastWorkoutOperation, setting, undoLastWorkoutOperation } from '../src/data/repo'
 import { readWeightUnit } from '../src/data/weight-units'
 import { Button, Field, Label, Row, Screen, useAction } from '../src/components/Screen'
 import { Badge } from '../src/components/Badge'
@@ -233,7 +233,10 @@ export default function WorkoutScreen() {
           key: 'move-up',
           label: 'Move up',
           icon: 'arrowUp',
-          disabled: index === 0,
+          // Task 12-b NIT: index −1 means the menued exercise was removed
+          // while the sheet was open — its move target no longer exists and
+          // the old handler threw on exercises[-2]. Keep the item unpressable.
+          disabled: index <= 0,
           onPress: () => run(async () => {
             const h = await db()
             const previousExercise = exercises[index - 1]!
@@ -445,8 +448,10 @@ export default function WorkoutScreen() {
         )}
 
         <Row>
-          <Button label="Undo workout action" onPress={() => run(async () => { const r = await undoLastOperation(); if (!r.success) throw new Error(r.error ?? 'Nothing to undo') })} />
-          <Button label="Redo workout action" onPress={() => run(async () => { const r = await redoLastOperation(); if (!r.success) throw new Error(r.error ?? 'Nothing to redo') })} />
+          {/* Task 12-b M1: scoped variants — a food log newer than the last
+              workout action must not be undone by these buttons. */}
+          <Button label="Undo workout action" onPress={() => run(async () => { const r = await undoLastWorkoutOperation(); if (!r.success) throw new Error(r.error ?? 'Nothing to undo') })} />
+          <Button label="Redo workout action" onPress={() => run(async () => { const r = await redoLastWorkoutOperation(); if (!r.success) throw new Error(r.error ?? 'Nothing to redo') })} />
         </Row>
 
         {active ? (

@@ -279,7 +279,18 @@ export default function ProgramsScreen() {
         } catch {
           // ignore
         }
-        if (!plan) return null
+        if (!plan) {
+          // Task 12-b m4: a corrupt row used to `return null` — invisible and
+          // therefore un-editable/un-deletable. Render the same unreadable
+          // card (tabs)/train.tsx shows so the row stays visible and the tab
+          // survives one bad row.
+          return (
+            <Card key={p.id}>
+              <Label>{p.name}</Label>
+              <Label muted>This program could not be read. Edit or recreate it from Programs &amp; schedule.</Label>
+            </Card>
+          )
+        }
         const status = programDayStatus(plan, today)
         const weekdays = plan.schedule.length
           ? plan.schedule

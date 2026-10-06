@@ -49,10 +49,13 @@ import {
   mealsForDay,
   overrideTargets,
   redoLastOperation,
+  redoLastWorkoutOperation,
   resetEverything,
   undoLastOperation,
+  undoLastWorkoutOperation,
   updateMealSlot,
 } from './repo'
+import { startWorkout } from '@nutai/training'
 import { publishResetSnapshot, scheduleWidgetPublish } from '../widgets/publish'
 
 const NOW = 1_754_300_000_000
@@ -65,6 +68,7 @@ const TODAY = new Date(NOW).toISOString().slice(0, 10)
 const DAY2 = NOW + 10 * 86_400_000
 const DAY3 = NOW + 20 * 86_400_000
 const DAY4 = NOW + 30 * 86_400_000
+const DAY5 = NOW + 40 * 86_400_000
 
 let database: DbAdapter
 
@@ -196,6 +200,57 @@ describe('P1-9 repo invariants: undo / redo chains', () => {
 
     await undoLastOperation(DAY4 + 1000)
     expect((await mealsForDay(dayDate)).find((m) => m.id === mealId)!.slot).not.toBe('dinner')
+  })
+})
+
+describe('Task 12-b M1: workout-scoped undo / redo', () => {
+  /**
+   * M1: the workout screen's "Undo/Redo workout action" used to call the
+   * GENERIC undoLastOperation/redoLastOperation — logging food then tapping
+   * "Undo workout action" silently deleted the food log. The scoped variants
+   * must pick the newest WORKOUT operation (direct workout-table ops, or a
+   * training batch whose payload touches a workout table) and never a food op.
+   */
+  it('food op then workout op: the workout-scoped undo undoes the workout, not the food', async () => {
+    const dayDate = new Date(DAY5).toISOString().slice(0, 10)
+    const mealId = await logMeal(scanResult('Khichdi', 200, 140), SCAN_META, null, DAY5)
+    // The workout screen's every mutation is ONE training batch operation.
+    const workoutId = await startWorkout(database, dayDate, 'Pull day', DAY5 + 1000)
+    expect((await mealsForDay(dayDate)).map((m) => m.id)).toContain(mealId)
+    expect(await database.all('SELECT * FROM workouts')).toHaveLength(1)
+
+    const u1 = await undoLastWorkoutOperation(DAY5 + 2000)
+    expect(u1.success).toBe(true)
+    // the workout rows are gone — and the meal is untouched
+    expect(await database.all('SELECT * FROM workouts')).toHaveLength(0)
+    expect((await mealsForDay(dayDate)).find((m) => m.id === mealId)).toBeDefined()
+    const mealOps = await database.all<{ undone_at: number | null }>(
+      'SELECT undone_at FROM operations WHERE entity_type = ? AND entity_id = ?', ['meals', mealId],
+    )
+    expect(mealOps.length).toBeGreaterThan(0)
+    expect(mealOps.every((o) => o.undone_at === null)).toBe(true)
+
+    // the scoped redo re-applies the workout batch — still not the food
+    const r1 = await redoLastWorkoutOperation()
+    expect(r1.success).toBe(true)
+    expect(await database.all('SELECT * FROM workouts WHERE id = ?', [workoutId])).toHaveLength(1)
+    expect((await mealsForDay(dayDate)).find((m) => m.id === mealId)).toBeDefined()
+  })
+
+  it('with no live workout operation the scoped undo honestly reports nothing — a food op cannot be stolen', async () => {
+    // The previous test left the workout batch live again (redone); undo it
+    // once more so NO workout operation is live.
+    const u1 = await undoLastWorkoutOperation(DAY5 + 3000)
+    expect(u1.success).toBe(true)
+
+    // Only food/weight operations remain live: the workout screen's Undo
+    // must refuse (the caller's existing "Nothing to undo" toast), while the
+    // GENERIC undo still reaches the newest food op — unchanged behavior.
+    const u2 = await undoLastWorkoutOperation(DAY5 + 4000)
+    expect(u2.success).toBe(false)
+    const generic = await undoLastOperation(DAY5 + 5000)
+    expect(generic.success).toBe(true)
+    expect(generic.operation?.entity_type).toBe('meals')
   })
 })
 

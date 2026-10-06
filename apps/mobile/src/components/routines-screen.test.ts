@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from 'typescript'
 
 /**
  * Task 2-c regression locks for /routines (the "Create Routine" / "New
@@ -186,5 +187,83 @@ describe('T5-fix2 — dirty-editor exits outside the screen tree (review SHOULD-
     // Unmount clears the flag: a dismissed editor can never leave it stuck
     // true (which would block every future deep link).
     expect(source).toMatch(/useEffect\(\(\) => \(\) => setRoutineEditorDirty\(false\), \[\]\)/)
+  })
+})
+
+/** Slice a module-level `function NAME(...)` declaration out of screen source.
+ *  AST-based for the same reason training-surface.test.ts documents: the
+ *  generic constraint braces would break a naive first-`{` match. */
+function functionSource(src: string, name: string): string {
+  const sf = ts.createSourceFile('screen.tsx', src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  for (const statement of sf.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name && statement.body) {
+      return src.slice(statement.getStart(sf), statement.end)
+    }
+  }
+  throw new Error(`module-level function not found: function ${name}(`)
+}
+
+/** Transpile an extracted TS helper and hand back the real callable. */
+function evalHelper<T>(src: string, name: string, deps: Record<string, unknown> = {}): T {
+  const js = ts.transpileModule(functionSource(src, name), {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText
+  const factory = new Function(...Object.keys(deps), `${js}; return ${name};`)
+  return factory(...Object.values(deps)) as T
+}
+
+describe('Task 12-b M2 — the picker handoff merges into an EDIT in progress', () => {
+  /**
+   * Bug: confirmMultiSelect always setPendingRoutineExercises, and the focus
+   * effect ran startCreate() whenever pending > 0 — even while EDITING an
+   * existing routine. The loaded routine, its planned-set drafts and editId
+   * were replaced by a clean slate, so Save then created a NEW routine
+   * instead of updating the one being edited.
+   */
+  it('the focus effect branches on the editor mode BEFORE consuming the picks', () => {
+    const focus = argsOf(source, 'useFocusEffect(')
+    // The mode is read through the render-synced ref (state deps here would
+    // re-fire the effect mid-focus — the T1-b jitter class locked above).
+    expect(focus).toContain('editModeRef.current.editing && editModeRef.current.editId != null')
+    // The ref mirrors the same editing/editId the guarded exits use.
+    expect(source).toContain('editModeRef.current = { editing, editId }')
+  })
+
+  it('EDIT mode MERGES: no startCreate, adds ride the dedupe-append primitive', () => {
+    const focus = argsOf(source, 'useFocusEffect(')
+    const merge = focus.slice(focus.indexOf('editModeRef.current.editing'))
+    const mergeBody = merge.slice(0, merge.indexOf('} else {'))
+    expect(mergeBody).toContain('for (const id of pending)')
+    expect(mergeBody).toContain('await handleAddExercise(id)')
+    // The exact regression: the edit branch must not reset the editor.
+    expect(mergeBody).not.toContain('startCreate()')
+  })
+
+  it('CREATE/closed mode keeps the clean-slate entry (T4-b #5 behavior unchanged)', () => {
+    const focus = argsOf(source, 'useFocusEffect(')
+    const createBranch = focus.slice(focus.indexOf('} else {'))
+    expect(createBranch).toContain('startCreate()')
+    expect(createBranch).toContain('await handleAddExercise(id)')
+  })
+
+  it('behavioral: withPendingExercise dedupes, appends, and preserves existing rows', () => {
+    type Row = { exercise_id: number; sets: unknown[] }
+    const merge = evalHelper<(prev: Row[], exerciseId: number, addRow: () => Row) => Row[]>(source, 'withPendingExercise')
+    const rowA = { exercise_id: 1, sets: [{ reps: 8 }] }
+    const rowB = { exercise_id: 2, sets: [{ reps: 12 }] }
+    const addRowB = () => ({ exercise_id: 2, sets: [{ reps: 10 }, { reps: 10 }, { reps: 10 }] })
+
+    // a new id is appended at the end; the existing row object passes
+    // through BY REFERENCE (so a merge cannot disturb its planned values —
+    // the draft maps are keyed off exercise_id and live outside the array)
+    const merged = merge([rowA], 2, addRowB)
+    expect(merged).toHaveLength(2)
+    expect(merged[0]).toBe(rowA)
+    expect(merged[1]).toEqual(addRowB())
+
+    // a duplicate id is a no-op returning the SAME array (no re-render churn)
+    const again = merge([rowA, rowB], 2, addRowB)
+    expect(again).toHaveLength(2)
+    expect(again).toEqual([rowA, rowB])
   })
 })

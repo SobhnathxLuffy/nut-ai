@@ -249,8 +249,10 @@ describe('workout.tsx source invariants (Ch. 8.5 contract)', () => {
       'finishWorkout(await db(), w.id)',
       'await discardWorkout(await db(), w.id)',
       'reopenWorkout(await db(), w.id)',
-      'undoLastOperation()',
-      'redoLastOperation()',
+      // Task 12-b M1: the workout screen's undo/redo is SCOPED to workout
+      // operations (the generic variants could undo a newer food log).
+      'undoLastWorkoutOperation()',
+      'redoLastWorkoutOperation()',
     ]) {
       expect(workoutSource).toContain(call)
     }

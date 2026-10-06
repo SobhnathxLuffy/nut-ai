@@ -879,6 +879,94 @@ export async function redoRecordedOperation(
   return result
 }
 
+// ---------------------------------------------------------------------------
+// Workout-scoped undo/redo (Task 12-b M1)
+// ---------------------------------------------------------------------------
+
+/** The entity types whose operations are WORKOUT edits. Mirrors the scoping
+ * idea of packages/training's WORKOUT_WRITE_TABLES registry. Deliberately
+ * absent: 'exercise_entries' (the food diary's manual exercise log, a
+ * different feature) and everything food-side ('meals', 'log_items', ...). */
+const WORKOUT_ENTITY_TYPES = new Set(['workouts', 'workout_exercises', 'workout_sets'])
+
+/**
+ * M1 discriminator. Every workout UI mutation is ONE batch operation recorded
+ * by packages/training's mutate(): its new_json is `{ changes: [...] }` where
+ * each change names the table it touched, and only training's writeRow can
+ * write the workout tables. Food paths record their own batches (favorite
+ * shortcuts, repeat-meal copies) whose changes only ever touch
+ * meals/log_items/logging_shortcuts, and no marker field exists on the
+ * operation row — so the table names inside the batch payload are the
+ * cleanest correct discriminator (adding a marker would change the training
+ * write path). 'batch' is therefore shared, and a batch counts as
+ * workout-related iff any of its changes touched a workout table.
+ */
+function isWorkoutOperation(op: { entity_type: string; new_json: string | null }): boolean {
+  if (WORKOUT_ENTITY_TYPES.has(op.entity_type)) return true
+  if (op.entity_type !== 'batch' || !op.new_json) return false
+  try {
+    const changes = (JSON.parse(op.new_json) as { changes?: Array<{ entityType?: unknown }> }).changes
+    return Array.isArray(changes) && changes.some((c) => WORKOUT_ENTITY_TYPES.has(String(c?.entityType)))
+  } catch {
+    return false // a corrupt payload is not recognisably a workout operation
+  }
+}
+
+/**
+ * Newest workout-scope operation id (same orderings as undoLastOperation /
+ * redoLastOperation), or null. The SQL arms keep the scan small: direct
+ * workout-table types are exact; batch rows prefilter on the substring every
+ * workout-table name carries ("workout" — a food batch's payload never has
+ * it, bar user-typed text) before the precise payload check rejects any
+ * prefilter false positive.
+ */
+async function newestWorkoutOperationId(
+  h: DbAdapter,
+  options: { undone: boolean },
+): Promise<number | null> {
+  const rows = await h.all<{ id: number; entity_type: string; new_json: string | null }>(
+    `SELECT id, entity_type, new_json FROM operations
+     WHERE undone_at IS ${options.undone ? 'NOT NULL' : 'NULL'}
+       AND (entity_type IN ('workouts','workout_exercises','workout_sets')
+            OR (entity_type = 'batch' AND new_json LIKE '%workout%'))
+     ORDER BY ${options.undone ? 'undone_at DESC, id DESC' : 'created_at DESC, id DESC'}`,
+  )
+  for (const row of rows) if (isWorkoutOperation(row)) return row.id
+  return null
+}
+
+/** undoLastOperation scoped to workout operations: a food log newer than the
+ * last workout action can no longer be undone by the workout screen's
+ * "Undo workout action" (M1). Same result contract, so the caller's existing
+ * "Nothing to undo" toast flow is unchanged when no workout op is live. */
+export async function undoLastWorkoutOperation(now: number = Date.now()): Promise<UndoResult> {
+  const h = await db()
+  const id = await newestWorkoutOperationId(h, { undone: false })
+  if (id == null) {
+    return { success: false, reason: 'not_found' }
+  }
+  const result = await undoOperation(h, id, now)
+  if (result.success) {
+    emitMutationForOperation(result.operation)
+    if (result.operation && result.operation.uuid === getLastDeletedMealUndoUuid()) {
+      setLastDeletedMealUndoUuid(null)
+    }
+  }
+  return result
+}
+
+/** redoLastOperation scoped to workout operations (M1 — see undo above). */
+export async function redoLastWorkoutOperation(): Promise<RedoResult> {
+  const h = await db()
+  const id = await newestWorkoutOperationId(h, { undone: true })
+  if (id == null) {
+    return { success: false, reason: 'not_found' }
+  }
+  const result = await redoOperation(h, id)
+  if (result.success) emitMutationForOperation(result.operation)
+  return result
+}
+
 export async function listRecentOperations(limit: number = 20): Promise<OperationRecord[]> {
   const h = await db()
   return listOperations(h, { limit })
