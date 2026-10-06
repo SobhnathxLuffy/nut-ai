@@ -231,7 +231,12 @@ export default function CustomFoodScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: theme.bg }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      // Edge-to-edge (Expo SDK 53+) broke Android's windowSoftInputMode
+      // resize the old `undefined` behavior leaned on — 'height' keeps the
+      // custom-food fields above the keyboard. Web never shows a software
+      // keyboard and react-native-web's KeyboardAvoidingView is a plain
+      // View, so this is inert there.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         keyboardShouldPersistTaps="handled"

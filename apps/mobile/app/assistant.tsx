@@ -592,10 +592,16 @@ export default function AssistantScreen() {
   return (
     <KeyboardAvoidingView
       style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}
-      // §8.7 keyboard-safe insets: iOS lifts the input bar above the software
-      // keyboard (Android adjusts via windowSoftInputMode; web browsers scroll
-      // the focused input into view themselves — no behavior needed there).
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      // §8.7 keyboard-safe insets: iOS pads above the software keyboard so
+      // the input row stays docked at its top edge. Android NEEDS its own
+      // adjustment: edge-to-edge (Expo SDK 53+) broke the windowSoftInputMode
+      // resize the old `undefined` behavior leaned on, so the whole chat —
+      // input included — hid behind the keyboard. 'height' shrinks the chat
+      // frame by the keyboard height instead (insets.bottom stays on the
+      // container; the keyboard covers that strip). Web never shows a
+      // software keyboard and react-native-web's KeyboardAvoidingView is a
+      // plain View, so 'height' is inert there.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={s.headerRow}>
         <Pressable
@@ -626,11 +632,15 @@ export default function AssistantScreen() {
         ) : null}
       </View>
       <View style={s.chatArea}>
+        {/* §8.7: bubbles, the Latest pill and the starter chips stay
+            tappable while the keyboard is up — one tap acts instead of
+            one tap dismissing the keyboard. */}
         <ScrollView
           ref={scrollRef}
           style={s.scroll}
           scrollEventThrottle={16}
           onScroll={onScroll}
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() =>
             // §8.7 auto-scroll-to-new-reply: animated scrolling respects
             // reduce-motion (motionScale 0 = jump cut) and pauses when the

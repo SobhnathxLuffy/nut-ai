@@ -236,3 +236,28 @@ describe('Ch. 8.3 item 7 — meal-detail rows adopt the row-action pattern', () 
     expect(mealDetail).toContain('confirmDialog(')
   })
 })
+
+describe('Task 11-e — the composer bottom controls clear the gesture bar and the keyboard (AGENTS §8.3)', () => {
+  it('safe-area insets live on the ScrollView contentContainer, not the frame', () => {
+    // The frame paddingBottom did nothing for scroll content — "Final Portion
+    // (g)" and the "Log household variant" button ended behind the home
+    // gesture area, unreachable. The data-methods.tsx contentContainer
+    // pattern (insets.bottom + 120) is the repo's established fix.
+    expect(dishComposer).toMatch(
+      /contentContainerStyle=\{\{ paddingTop: insets\.top, paddingBottom: insets\.bottom \+ 120 \}\}/,
+    )
+    // The retired frame padding cannot regrow (the error-state View's own
+    // content padding is separate and legitimate).
+    expect(dishComposer).not.toMatch(
+      /<ScrollView style=\{\[s\.container, \{ backgroundColor: t\.bg, paddingTop: insets\.top, paddingBottom: insets\.bottom \}\]\}>/,
+    )
+  })
+
+  it('the composer wraps in a WORKING KeyboardAvoidingView (iOS padding / Android height)', () => {
+    // Same presence idiom as wave3-screens.test.ts's Chrome keyboard lock —
+    // but Android now gets a real behavior: edge-to-edge (Expo SDK 53+) broke
+    // the windowSoftInputMode resize the old `undefined` leaned on.
+    expect(dishComposer).toContain('<KeyboardAvoidingView')
+    expect(dishComposer).toMatch(/behavior=\{Platform\.OS === 'ios' \? 'padding' : 'height'\}/)
+  })
+})

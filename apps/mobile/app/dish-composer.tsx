@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View, TextInput, ScrollView, Pressable, ActivityIndicator } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
@@ -633,7 +633,28 @@ export default function DishComposerScreen() {
   }
 
   return (
-    <ScrollView style={[s.container, { backgroundColor: t.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <KeyboardAvoidingView
+      style={[s.container, { backgroundColor: t.bg }]}
+      // §8.3 keyboard must not hide required controls: iOS pads above the
+      // software keyboard; Android needs its own adjustment because
+      // edge-to-edge (Expo SDK 53+) broke the windowSoftInputMode resize the
+      // old no-op leaned on — 'height' shrinks the composer by the keyboard
+      // height so the grams inputs stay reachable while typing. Web never
+      // shows a software keyboard and react-native-web's
+      // KeyboardAvoidingView is a plain View, so this is inert there.
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      {/* Owner QA (11-e): the safe-area insets used to sit on the ScrollView
+          FRAME style, where paddingBottom does nothing for scroll content —
+          "Final Portion (g)" and the "Log household variant" button ended
+          behind the gesture bar, unreachable. They belong on the
+          contentContainer (the data-methods.tsx pattern): insets.bottom + 120
+          of scroll padding now keeps the bottom controls clear, and
+          paddingTop moved with them so the header does not jump. */}
+      <ScrollView
+        style={[s.container, { backgroundColor: t.bg }]}
+        contentContainerStyle={{ paddingTop: insets.top, paddingBottom: insets.bottom + 120 }}
+      >
       <View style={s.headerRow}>
         <Text accessibilityRole="header" style={[type.title, { color: t.text }]}>Compose: {dish?.canonicalName}</Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()} hitSlop={space.md}>
@@ -847,7 +868,8 @@ export default function DishComposerScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="Log household variant" onPress={logDish} style={[s.saveBtn, { backgroundColor: hasUnknowns ? t.bgElevated : t.text, borderColor: t.border }]}>
         <Text style={{ color: hasUnknowns ? t.textMuted : t.bg, fontWeight: 'bold', textAlign: 'center' }}>Log household variant</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   )
 }
 
