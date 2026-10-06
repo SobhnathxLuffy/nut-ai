@@ -24,6 +24,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { SOURCES, FDC_DIR, findExtracted, ensureSource } from './fetch.mjs'
+import { BRANDED_FOODS, gs1CheckDigit } from './branded-foods.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const REPO = join(HERE, '../../..')
@@ -315,18 +316,80 @@ async function main() {
   })
   tx()
 
+  // -----------------------------------------------------------------------
+  // Task 11-c: the curated branded tier — offline barcode lookups.
+  //
+  // Self-authored representative dataset (provenance and honesty notes live
+  // in branded-foods.mjs): real packaged products with per-100 g values
+  // approximated from public labels. Every barcode is check-digit valid BY
+  // CONSTRUCTION and is validated AGAIN here, so a drifted or duplicated
+  // code fails the build instead of shipping a barcode that can never be
+  // scanned. Rows carry source='branded' + license='curated-representative'
+  // so they stay distinguishable from USDA data everywhere they surface.
+  // -----------------------------------------------------------------------
+  const insertBrand = db.prepare('INSERT INTO brands (canonical_name) VALUES (?)')
+  const brandIds = new Map()
+  const brandIdFor = (name) => {
+    let id = brandIds.get(name)
+    if (id == null) {
+      id = Number(insertBrand.run(name).lastInsertRowid)
+      brandIds.set(name, id)
+    }
+    return id
+  }
+  const insertBrandedFood = db.prepare(`
+    INSERT INTO foods (id, source, source_id, name, brand_id, basis, basis_confidence,
+                       serving_size_g, serving_desc, barcode,
+                       energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg,
+                       completeness_score, popularity_rank, license, updated_at)
+    VALUES (?, 'branded', ?, ?, ?, 'per_100g', 'reviewed',
+            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0, ?, 'curated-representative', ?)
+  `)
+
+  const seenBarcodes = new Set()
+  for (const p of BRANDED_FOODS) {
+    const bc = String(p.barcode)
+    if (!/^\d{13}$/.test(bc) || gs1CheckDigit(bc.slice(0, 12)) !== Number(bc[12])) {
+      throw new Error(`branded food "${p.name}": barcode ${bc} fails the GS1 check digit — refusing to build`)
+    }
+    if (seenBarcodes.has(bc)) {
+      throw new Error(`branded food "${p.name}": duplicate barcode ${bc} — refusing to build`)
+    }
+    seenBarcodes.add(bc)
+  }
+
+  let brandedRows = 0
+  db.transaction(() => {
+    for (const p of BRANDED_FOODS) {
+      rowId++
+      const n = p.per100g
+      insertBrandedFood.run(
+        rowId, `BRD-${rowId}`, p.name, brandIdFor(p.brand),
+        p.servingSizeG, p.servingDesc, p.barcode,
+        n.energy_kcal, n.protein_g, n.fat_g, n.carb_g, n.fiber_g, n.sugar_g, n.sodium_mg,
+        rowId, now,
+      )
+      insertFts.run(rowId, p.name, p.brand, '')
+      insertTri.run(rowId, p.name)
+      brandedRows++
+    }
+  })()
+
   const manifest = db.prepare('INSERT OR REPLACE INTO build_manifest (key, value) VALUES (?,?)')
   const counts = {
     foods: db.prepare('SELECT COUNT(*) c FROM foods').get().c,
     portions: db.prepare('SELECT COUNT(*) c FROM food_portions').get().c,
+    barcodes: db.prepare('SELECT COUNT(*) c FROM foods WHERE barcode IS NOT NULL').get().c,
   }
   db.transaction(() => {
     manifest.run('tier', 'generic')
     manifest.run('sources', resolved.map((s) => s.label).join(' | '))
-    manifest.run('licenses', 'CC0-1.0 (USDA FoodData Central)')
+    manifest.run('licenses', 'CC0-1.0 (USDA FoodData Central) | curated-representative (self-authored branded dataset)')
     manifest.run('attribution', 'U.S. Department of Agriculture, Agricultural Research Service. FoodData Central.')
     manifest.run('food_count', String(counts.foods))
     manifest.run('portion_count', String(counts.portions))
+    manifest.run('branded_food_count', String(brandedRows))
+    manifest.run('barcode_count', String(db.prepare('SELECT COUNT(*) c FROM foods WHERE barcode IS NOT NULL').get().c))
     manifest.run('schema_version', '1')
     manifest.run('built_at', new Date(now).toISOString())
   })()
@@ -337,6 +400,7 @@ async function main() {
   const size = (await stat(OUT)).size
   console.log('\nBuilt', OUT)
   console.log(`  foods:    ${counts.foods}`)
+  console.log(`  branded:  ${brandedRows} foods / ${brandIds.size} brands / ${counts.barcodes} barcodes`)
   console.log(`  portions: ${counts.portions}`)
   console.log(`  size:     ${(size / 1024 / 1024).toFixed(1)} MB`)
 }

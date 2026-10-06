@@ -88,7 +88,10 @@ export class USDASource implements NutritionSource {
     const unpadded = barcode.replace(/^0+/, '')
     const sql = FOOD_BY_ID_SQL.replace(
       "WHERE (f.source_id = ? OR (f.source_id IS NULL AND CAST(f.id AS TEXT) = ?)) AND f.source LIKE 'fdc_%'",
-      "WHERE (f.barcode = ? OR f.barcode = ?) AND f.source LIKE 'fdc_%'",
+      // 'branded' = the curated self-authored barcode tier the corpus build
+      // inserts alongside USDA rows (task 11-c). Everything else stays
+      // generic-tier only, as in search().
+      "WHERE (f.barcode = ? OR f.barcode = ?) AND (f.source LIKE 'fdc_%' OR f.source = 'branded')",
     )
     const row = await this.db.get<Omit<SourceResolvedFood, 'foodId' | 'sourceId'> & { foodId: string }>(sql, [barcode, unpadded])
     return toResolvedFood(row)

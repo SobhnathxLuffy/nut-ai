@@ -5,4 +5,4 @@
 // app update can never keep serving a stale corpus (owner QA 2026-10: the
 // Indian-dishes browser showed a handful of rows under a "362 identities"
 // headline because an early import was never refreshed).
-export const REQUIRED_CORPUS_REVISION = '935077039d31'
+export const REQUIRED_CORPUS_REVISION = 'cfc4afa9eb41'

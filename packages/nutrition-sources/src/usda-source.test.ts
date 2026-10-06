@@ -60,4 +60,39 @@ describe('USDASource', () => {
     expect(food?.foodId).toBe('usda:2456789')
     expect(food?.name).toBe('Granola Bar, Chewy')
   })
+
+  // Task 11-c: the corpus build inserts a curated branded tier with
+  // source='branded' + license='curated-representative'. A barcode scan must
+  // reach those rows too — they are the offline first hit for packaged foods.
+  it('resolves curated branded corpus rows by barcode', async () => {
+    await db.run(`INSERT INTO brands (id, canonical_name) VALUES (1, 'Parle')`)
+    await db.run(
+      `INSERT INTO foods (id, source, source_id, name, brand_id, barcode, serving_size_g, serving_desc,
+                          energy_kcal, protein_g, fat_g, carb_g, fiber_g, sugar_g, sodium_mg,
+                          completeness_score, popularity_rank, license, basis_confidence)
+       VALUES (5, 'branded', 'BRD-5', 'Parle-G Original Gluco Biscuits', 1, '8901063014442', 25,
+               '5 biscuits (25 g)', 453, 6.5, 13.5, 76, 1, 25, 343, 1.0, 5,
+               'curated-representative', 'reviewed')`,
+    )
+    await db.run('INSERT INTO food_fts (rowid, name, brand, synonyms) VALUES (5, ?, ?, ?)', [
+      'Parle-G Original Gluco Biscuits', 'Parle', '',
+    ])
+
+    const food = await source.resolveByBarcode('8901063014442')
+    expect(food).not.toBeNull()
+    expect(food?.name).toBe('Parle-G Original Gluco Biscuits')
+    expect(food?.brand).toBe('Parle')
+    expect(food?.servingSizeG).toBe(25)
+    expect(food?.servingDesc).toBe('5 biscuits (25 g)')
+    expect(food?.license).toBe('curated-representative')
+    expect(food?.foodId).toBe('usda:BRD-5')
+  })
+
+  it('does not resolve non-USDA, non-branded sources by barcode', async () => {
+    await db.run(
+      `INSERT INTO foods (id, source, source_id, name, barcode, energy_kcal, license, basis_confidence, completeness_score)
+       VALUES (6, 'ifct', 'IFCT-1', 'Some IFCT row', '8901063000025', 100, 'CC0', 'high', 1.0)`,
+    )
+    expect(await source.resolveByBarcode('8901063000025')).toBeNull()
+  })
 })
