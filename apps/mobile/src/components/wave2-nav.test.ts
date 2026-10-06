@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
  *
  *   - FAB on ALL five tabs opening a true bottom sheet (spring translateY,
  *     sheet radius 20, tap-outside + swipe-down, reduce-motion fade);
- *   - scan promoted as the primary row; six DISTINCT action glyphs; routes
+ *   - scan promoted as the primary row; five DISTINCT action glyphs; routes
  *     EXACTLY where the old fullscreen grid routed;
  *   - no haptic on sheet open/close (Table 9.2 "Sheet open/close → None");
  *   - 12pt-class caption labels, accent pill morphing 240ms between tabs,
@@ -75,22 +75,22 @@ describe('the bottom sheet — a true sheet, not the fullscreen grid', () => {
   })
 })
 
-describe('the six actions — distinct glyphs, scan promoted, routes preserved', () => {
+describe('the five actions — distinct glyphs, scan promoted, routes preserved', () => {
   it('scan is the hero row (Table 7.1) and renders the 26pt hero glyph (Table 6.1)', () => {
     expect(source).toMatch(/route: '\/camera', hero: true/)
     expect(source).toMatch(/<Icon name=\{action\.icon\} size=\{26\} color=\{theme\.bg\} \/>/)
   })
 
-  it('all six glyphs are DISTINCT (P3-U14 invariant)', () => {
+  it('all five glyphs are DISTINCT (P3-U14 invariant)', () => {
     const icons = [...source.matchAll(/^\s*\{ label: '[^']+', icon: '(\w+)', route: '[^']+'(?:, hero: true)?,?/gm)].map(
       (m) => m[1],
     )
-    expect(icons).toHaveLength(6)
-    expect(new Set(icons).size).toBe(6)
+    expect(icons).toHaveLength(5)
+    expect(new Set(icons).size).toBe(5)
   })
 
   it('routes are exactly the old action grid destinations', () => {
-    for (const route of ['/log-exercise', '/saved-foods', '/recipes', '/food-search', '/camera', '/assistant']) {
+    for (const route of ['/log-exercise', '/recipes', '/food-search', '/camera', '/assistant']) {
       expect(source).toContain(`route: '${route}'`)
     }
   })

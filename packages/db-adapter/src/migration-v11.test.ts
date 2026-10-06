@@ -18,9 +18,9 @@ describe('schema v11 custom-food servings', () => {
     )
 
     const result = await migrate(db, now + 1)
-    // v12 now follows v11 in the chain; a v10 database still lands at
+    // v12 and v13 now follow v11 in the chain; a v10 database still lands at
     // USER_SCHEMA_VERSION with its nutrient values untouched.
-    expect(result.applied).toEqual([11, 12])
+    expect(result.applied).toEqual([11, 12, 13])
     expect(await currentVersion(db)).toBe(USER_SCHEMA_VERSION)
     const row = await db.get<{
       serving_size_g: number
@@ -33,8 +33,8 @@ describe('schema v11 custom-food servings', () => {
 
   it('keeps the shipped v1 migration immutable and v11 forward-only', () => {
     expect(MIGRATIONS[0]?.version).toBe(1)
-    // v12 (honesty persistence) now caps the chain; v11 itself stays untouched.
-    expect(MIGRATIONS.at(-1)?.version).toBe(12)
+    // v13 (favorites-only shortcuts) now caps the chain; v11 itself stays untouched.
+    expect(MIGRATIONS.at(-1)?.version).toBe(13)
     expect(MIGRATIONS.find((m) => m.version === 11)?.sql).toBe(USER_SCHEMA_V11_SQL)
   })
 })

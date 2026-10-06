@@ -133,8 +133,8 @@ describe('one-tap logging (the write)', () => {
 
   it('snapshot cards (shortcuts) repeat their stored provenance byte-identically', async () => {
     await seedMeal(db, 1, 'dinner', 'Dal tadka', 273, NOW - 86_400_000)
-    const shortcutId = await saveShortcut(db, 1, 'usual', 'Usual dal', NOW)
-    const row = await db.get<{ id: number; meal_id: number; name: string; kind: 'usual'; snapshot_json: string }>(
+    const shortcutId = await saveShortcut(db, 1, 'favorite', 'Evening dal', NOW)
+    const row = await db.get<{ id: number; meal_id: number; name: string; kind: 'favorite'; snapshot_json: string }>(
       'SELECT * FROM logging_shortcuts WHERE id = ?',
       [shortcutId],
     )

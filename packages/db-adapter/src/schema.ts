@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 12
+export const USER_SCHEMA_VERSION = 13
 
 export interface Migration {
   up?: (db: DbAdapter, now: number) => Promise<void>
@@ -775,6 +775,33 @@ ALTER TABLE log_items ADD COLUMN preparation_json TEXT;
 ALTER TABLE meals ADD COLUMN honesty_json TEXT;
 `
 
+/**
+ * v13 — favorites-only logging_shortcuts.
+ *
+ * The app shipped three shortcut kinds ('favorite', 'usual', 'saved') for the
+ * same job; only 'favorite' survives. SQLite cannot alter a CHECK constraint,
+ * so the table is rebuilt with the identical shape: every row is carried over
+ * with kind remapped to 'favorite', and live rows are deduped per meal — the
+ * partial unique index allows one live row per (meal_id, kind), and after the
+ * remap every live row is a 'favorite', so the lowest id wins and the extras
+ * are dropped. Deleted rows are not covered by the unique index and are all
+ * preserved.
+ */
+export const USER_SCHEMA_V13_SQL = `
+CREATE TABLE logging_shortcuts_v13 (id INTEGER PRIMARY KEY, uuid TEXT NOT NULL UNIQUE CHECK(length(uuid)=36), created_at INTEGER NOT NULL,
+ updated_at INTEGER, revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>0), deleted_at INTEGER,
+ sync_state TEXT NOT NULL DEFAULT 'local' CHECK(sync_state IN ('local','pending','synced','conflict')), meal_id INTEGER NOT NULL,
+ kind TEXT NOT NULL CHECK(kind IN ('favorite')), name TEXT NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)));
+INSERT INTO logging_shortcuts_v13 (id, uuid, created_at, updated_at, revision, deleted_at, sync_state, meal_id, kind, name, snapshot_json)
+SELECT id, uuid, created_at, updated_at, revision, deleted_at, sync_state, meal_id, 'favorite', name, snapshot_json
+FROM logging_shortcuts s
+WHERE s.deleted_at IS NOT NULL
+   OR s.id = (SELECT MIN(e.id) FROM logging_shortcuts e WHERE e.meal_id = s.meal_id AND e.deleted_at IS NULL);
+DROP TABLE logging_shortcuts;
+ALTER TABLE logging_shortcuts_v13 RENAME TO logging_shortcuts;
+CREATE UNIQUE INDEX shortcut_unique ON logging_shortcuts(meal_id,kind) WHERE deleted_at IS NULL;
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: USER_SCHEMA },
   { version: 2, sql: USER_SCHEMA_V2_SQL, up: backfillV2 },
@@ -788,6 +815,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 10, sql: TRAINING_SQL + OPERATIONS_V10_SQL },
   { version: 11, sql: USER_SCHEMA_V11_SQL },
   { version: 12, sql: USER_SCHEMA_V12_SQL },
+  { version: 13, sql: USER_SCHEMA_V13_SQL },
 ]
 
 export const DISH_KB_SCHEMA = `

@@ -245,6 +245,46 @@ describe('backup round trip', () => {
     expect(w!.weight_kg).toBeCloseTo(79.4, 6)
   })
 
+  it('remaps legacy usual/saved shortcut rows to favorite and dedupes per meal (v13)', async () => {
+    await seed(db)
+    await db.run(
+      `INSERT INTO logging_shortcuts (uuid, created_at, meal_id, kind, name, snapshot_json)
+       VALUES (?, ?, 77, 'favorite', 'Lunch favorite', '{}')`,
+      [generateUuidV7(NOW), NOW],
+    )
+    await db.run(
+      `INSERT INTO logging_shortcuts (uuid, created_at, meal_id, kind, name, snapshot_json)
+       VALUES (?, ?, 999, 'favorite', 'Snack favorite', '{}')`,
+      [generateUuidV7(NOW), NOW],
+    )
+    const payload = await exportOf(db)
+
+    // Simulate a legacy v12 export: pre-v13 kinds (a v13 app cannot produce
+    // them) and one meal holding two live shortcuts, which the remap turns
+    // into a (meal_id, kind) collision.
+    const shortcuts = payload.tables['logging_shortcuts']!
+    shortcuts[0]!['kind'] = 'usual'
+    shortcuts[1]!['kind'] = 'saved'
+    shortcuts[1]!['meal_id'] = 77
+    payload.schema_version = 12
+    payload.manifest!.schema_version = 12
+
+    const dst = openMemoryDb()
+    await dst.exec('PRAGMA foreign_keys = ON;')
+    await migrate(dst, NOW)
+    const parsed = parseBackup(serializeBackup(payload))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    const outcome = await importBackupPayload(dst, parsed.payload, USER_SCHEMA_VERSION)
+    expect(outcome).toMatchObject({ ok: true })
+    expect(outcome.ok && outcome.rowCounts['logging_shortcuts']).toBe(1)
+    // First row wins (lowest rowid, same rule the v13 migration applies).
+    const row = await dst.get<{ meal_id: number; kind: string; name: string }>(
+      'SELECT meal_id, kind, name FROM logging_shortcuts',
+    )
+    expect(row).toEqual({ meal_id: 77, kind: 'favorite', name: 'Lunch favorite' })
+  })
+
   it('never exports derived caches, wipes them on import, never touches schema_migrations', async () => {
     await seed(db)
     const payload = await exportOf(db)

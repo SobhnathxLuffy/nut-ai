@@ -107,28 +107,22 @@ describe('Logging Shortcuts (SRH-004)', () => {
     await expect(mealSnapshot(db, 2)).rejects.toThrow('Meal no longer exists')
   })
 
-  it('saves, lists, and removes shortcuts across favorite, usual, and saved types', async () => {
+  it('saves, lists, and removes favorite shortcuts', async () => {
     await seedMeal(1, 'Protein Shake', NOW, TODAY)
 
-    // Save as favorite
+    // Save as favorite — the only shortcut kind since schema v13.
     const favId = await saveShortcut(db, 1, 'favorite', 'My Morning Shake', NOW)
     expect(favId).toBeGreaterThan(0)
 
-    // Save as usual
-    const usualId = await saveShortcut(db, 1, 'usual', 'Daily Usual Shake', NOW)
-    expect(usualId).toBeGreaterThan(0)
-
     // List shortcuts
     const shortcuts = await listShortcuts(db)
-    expect(shortcuts.length).toBe(2)
+    expect(shortcuts.length).toBe(1)
     expect(shortcuts.some((s) => s.kind === 'favorite' && s.name === 'My Morning Shake')).toBe(true)
-    expect(shortcuts.some((s) => s.kind === 'usual' && s.name === 'Daily Usual Shake')).toBe(true)
 
     // Remove favorite
     await removeShortcut(db, favId, NOW + 100)
     const remaining = await listShortcuts(db)
-    expect(remaining.length).toBe(1)
-    expect(remaining[0]?.kind).toBe('usual')
+    expect(remaining.length).toBe(0)
   })
 
   it('validates shortcut inputs strictly', async () => {
@@ -140,9 +134,13 @@ describe('Logging Shortcuts (SRH-004)', () => {
     // Name too long (> 120 chars)
     await expect(saveShortcut(db, 1, 'favorite', 'a'.repeat(121), NOW)).rejects.toThrow('Enter a shortcut name')
 
-    // Invalid kind
+    // Invalid kind — 'usual' and 'saved' were removed in schema v13
     // @ts-expect-error test runtime validation
     await expect(saveShortcut(db, 1, 'invalid_kind', 'Rice', NOW)).rejects.toThrow('Enter a shortcut name')
+    // @ts-expect-error test runtime validation
+    await expect(saveShortcut(db, 1, 'usual', 'Rice', NOW)).rejects.toThrow('Enter a shortcut name')
+    // @ts-expect-error test runtime validation
+    await expect(saveShortcut(db, 1, 'saved', 'Rice', NOW)).rejects.toThrow('Enter a shortcut name')
   })
 
   it('calculates recents within 30 days and ignores deleted or test fixture rows', async () => {

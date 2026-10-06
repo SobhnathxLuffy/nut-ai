@@ -557,7 +557,7 @@ function render(name: IconName, c: string, s: Common) {
         </G>
       )
     case 'bowlPlus':
-      // Wave 4d (report Table 6.1): "Save as usual meal" — the plain bowl
+      // Wave 4d (report Table 6.1): the save-a-meal glyph — the plain bowl
       // with a small plus at the top-right. The bowl body is the existing
       // `bowl` path; the steam curls are dropped so the plus owns the space
       // above the rim.

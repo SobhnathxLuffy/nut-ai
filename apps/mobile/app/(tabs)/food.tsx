@@ -30,9 +30,9 @@ import { selectionAsync, success as hapticSuccess } from '../../src/utils/haptic
 // lives in src/theme/responsive-grid.ts (pure + width-sweep tested).
 import { quickActionTileWidthFor } from '../../src/theme/responsive-grid'
 
-type ShortcutMode = 'Recent' | 'Frequent' | 'Favorites' | 'Usual' | 'Saved'
+type ShortcutMode = 'Recent' | 'Frequent' | 'Favorites'
 
-const SHORTCUT_MODES: ShortcutMode[] = ['Recent', 'Frequent', 'Favorites', 'Usual', 'Saved']
+const SHORTCUT_MODES: ShortcutMode[] = ['Recent', 'Frequent', 'Favorites']
 
 /**
  * Food tab — THE WRITE SURFACE (UI/UX report §7.1 / Ch. 8.3, Wave 3).
@@ -134,7 +134,7 @@ export default function Food() {
           icon: 'plus' as IconName,
           onPress: () => logCard(card),
         },
-        ...(card.mealId != null || card.source === 'favorite' || card.source === 'usual' || card.source === 'saved'
+        ...(card.mealId != null || card.source === 'favorite'
           ? [{
               key: 'open',
               label: 'Open meal',
@@ -217,8 +217,8 @@ export default function Food() {
         <Card>
           <Label>{mode === 'Recent' || mode === 'Frequent'
             ? 'Nothing here yet — log a few foods and they will appear.'
-            : 'Nothing here yet — save a favorite or usual meal and it will appear.'}</Label>
-          <Label muted>Tap the plus on a card once meals exist — one tap logs the meal with its usual grams.</Label>
+            : 'Nothing here yet — save a favorite meal and it will appear.'}</Label>
+          <Label muted>Tap the plus on a card once meals exist — one tap logs the meal with its saved grams.</Label>
         </Card>
       ) : (
         cards.map((card) => <OneTapCardRow key={card.key} card={card} onLog={() => logCard(card)} onMenu={() => setMenuCard(card)} />)
@@ -259,11 +259,6 @@ const QUICK_ACTIONS: ReadonlyArray<{ label: string; icon: IconName; onPress: () 
     label: 'Custom food',
     icon: 'pencil',
     onPress: () => router.push({ pathname: '/custom-food', params: { date: localDate(Date.now()) } } as never),
-  },
-  {
-    label: 'Saved meals',
-    icon: 'bookmark',
-    onPress: () => router.push({ pathname: '/saved-foods', params: { date: localDate(Date.now()) } } as never),
   },
   {
     label: 'Copy yesterday',
@@ -312,7 +307,8 @@ function cardsForMode(
         : recent
     return ordered.map((r) => oneTapCardFromRecentFood(r, mode === 'Frequent' ? 'frequent' : 'recent'))
   }
-  const kind: OneTapSource = mode === 'Favorites' ? 'favorite' : mode === 'Usual' ? 'usual' : 'saved'
+  // Favorites is the only shortcut kind (schema v13); Recent/Frequent returned above.
+  const kind: OneTapSource = 'favorite'
   return shortcuts
     .filter((s) => s.kind === kind)
     .map(oneTapCardFromShortcut)
@@ -337,7 +333,7 @@ function OneTapCardRow({
     <PressableFX
       accessibilityRole="button"
       accessibilityLabel={`Log ${card.name}, ${Math.round(card.presetGrams)} grams, one tap`}
-      accessibilityHint="Logs the meal immediately with its usual grams. Long-press for more actions."
+      accessibilityHint="Logs the meal immediately with its saved grams. Long-press for more actions."
       onPress={onLog}
       onLongPress={onMenu}
       style={[styles.card, { borderColor: theme.border, backgroundColor: theme.bgElevated }]}

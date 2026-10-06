@@ -66,8 +66,8 @@ describe('§7.1 item 2 + Ch. 8.3 — the shortcut strip is ONE-TAP LOGGING CARDS
     expect(foodTab).toContain('undoLastOperation')
   })
 
-  it('all five shortcut sources remain (Recent, Frequent, Favorites, Usual, Saved)', () => {
-    for (const mode of ['Recent', 'Frequent', 'Favorites', 'Usual', 'Saved']) {
+  it('all three shortcut modes remain (Recent, Frequent, Favorites)', () => {
+    for (const mode of ['Recent', 'Frequent', 'Favorites']) {
       expect(foodTab).toContain(`'${mode}'`)
     }
     expect(foodTab).toContain('recentFoodsWithGrams')
@@ -89,8 +89,8 @@ describe('§7.1 item 2 + Ch. 8.3 — the shortcut strip is ONE-TAP LOGGING CARDS
 })
 
 describe('§7.1 item 3 — quick actions are an icon grid with distinct glyphs', () => {
-  it('the grid renders six tiles, each with its own glyph', () => {
-    const glyphs = ['scan', 'lotus', 'bookOpen', 'pencil', 'bookmark', 'clock']
+  it('the grid renders five tiles, each with its own glyph', () => {
+    const glyphs = ['scan', 'lotus', 'bookOpen', 'pencil', 'clock']
     for (const glyph of glyphs) {
       expect(foodTab).toMatch(new RegExp(`icon: '${glyph}'`))
     }
@@ -100,8 +100,7 @@ describe('§7.1 item 3 — quick actions are an icon grid with distinct glyphs',
     expect(new Set(names).size).toBe(names.length)
   })
 
-  it('saved meals, recipes, and the Indian dish library have clear entries', () => {
-    expect(foodTab).toMatch(/label: 'Saved meals'/)
+  it('recipes and the Indian dish library have clear entries', () => {
     expect(foodTab).toMatch(/label: 'Recipes'/)
     expect(foodTab).toMatch(/label: 'Indian dishes'/)
   })

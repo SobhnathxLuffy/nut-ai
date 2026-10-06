@@ -49,7 +49,7 @@ describe('schema v12 honesty persistence', () => {
     )
 
     const result = await migrate(db, NOW + 1)
-    expect(result.applied).toEqual([12])
+    expect(result.applied).toEqual([12, 13])
     expect(await currentVersion(db)).toBe(USER_SCHEMA_VERSION)
 
     // Pre-v12 rows keep every number they had…
@@ -88,11 +88,11 @@ describe('schema v12 honesty persistence', () => {
     expect(meal!.honesty_json).toBeNull()
   })
 
-  it('a fresh database lands at v12 with the new columns accepting their closed sets', async () => {
+  it('a fresh database lands at the current version with the new columns accepting their closed sets', async () => {
     const db = openMemoryDb()
     const result = await migrate(db, NOW)
     expect(result.to).toBe(USER_SCHEMA_VERSION)
-    expect(result.applied.at(-1)).toBe(12)
+    expect(result.applied.at(-1)).toBe(13)
 
     await db.run(
       `INSERT INTO meals (logged_at, local_date, meal_slot, analysis_status, honesty_json, created_at)
@@ -144,29 +144,29 @@ describe('schema v12 honesty persistence', () => {
     expect(rows).toEqual([{ visibility: null }])
   })
 
-  it('keeps the chain forward-only: v1 immutable, v12 last, no downgrade path', () => {
+  it('keeps the chain forward-only: v1 immutable, v13 last, no downgrade path', () => {
     expect(MIGRATIONS[0]?.version).toBe(1)
-    expect(MIGRATIONS.at(-1)?.version).toBe(12)
+    expect(MIGRATIONS.at(-1)?.version).toBe(13)
     // No migration in the chain carries a `down` — the runner only knows up.
     expect(MIGRATIONS.some((m) => 'down' in m)).toBe(false)
   })
 
-  it('cannot downgrade a v12 database by asking for an older target', async () => {
+  it('cannot downgrade a v13 database by asking for an older target', async () => {
     const db = openMemoryDb()
     await migrate(db, NOW)
-    // A lower explicit target must not un-apply v12 or mutate the schema.
+    // A lower explicit target must not un-apply v13 or mutate the schema.
     const result = await migrate(db, NOW + 1, 11)
     expect(result.applied).toEqual([])
-    expect(await currentVersion(db)).toBe(12)
+    expect(await currentVersion(db)).toBe(13)
     const columns = await tableColumns(db, 'log_items')
     expect(columns).toContain('visibility')
   })
 
-  it('is idempotent: re-running migrate on a v12 database applies nothing', async () => {
+  it('is idempotent: re-running migrate on a fully-migrated database applies nothing', async () => {
     const db = openMemoryDb()
     await migrate(db, NOW)
     const again = await migrate(db, NOW + 1000)
     expect(again.applied).toEqual([])
-    expect(await currentVersion(db)).toBe(12)
+    expect(await currentVersion(db)).toBe(13)
   })
 })

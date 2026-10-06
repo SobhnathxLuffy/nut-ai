@@ -4,7 +4,7 @@ import { emitFoodMutation } from './food-mutations'
 import { localDate } from './date-utils'
 type Row=Record<string,SqlValue>
 export interface MealSnapshot {meal:Row;items:Row[];ledger:Row[]}
-export interface Shortcut {id:number;meal_id:number;name:string;kind:'favorite'|'usual'|'saved';snapshot_json:string}
+export interface Shortcut {id:number;meal_id:number;name:string;kind:'favorite';snapshot_json:string}
 export async function mealSnapshot(db:DbAdapter,id:number):Promise<MealSnapshot> {
   const meal=await db.get<Row>('SELECT * FROM meals WHERE id=? AND deleted_at IS NULL',[id]);if(!meal)throw new Error('Meal no longer exists')
   const items=await db.all<Row>('SELECT * FROM log_items WHERE meal_id=? AND deleted_at IS NULL ORDER BY sort_order,id',[id])
@@ -12,7 +12,7 @@ export async function mealSnapshot(db:DbAdapter,id:number):Promise<MealSnapshot>
 }
 export const listShortcuts=(db:DbAdapter):Promise<Shortcut[]>=>db.all('SELECT * FROM logging_shortcuts WHERE deleted_at IS NULL ORDER BY updated_at DESC,id DESC')
 export async function saveShortcut(db:DbAdapter,mealId:number,kind:Shortcut['kind'],name:string,now=Date.now()):Promise<number> {
-  if(!['favorite','usual','saved'].includes(kind)||!name.trim()||name.length>120)throw new Error('Enter a shortcut name')
+  if(kind!=='favorite'||!name.trim()||name.length>120)throw new Error('Enter a shortcut name')
   let opUuid: string | undefined
   const id = await db.transaction(async tx=>{
     const snapshot=await mealSnapshot(tx,mealId);const changes:BatchChange[]=[]

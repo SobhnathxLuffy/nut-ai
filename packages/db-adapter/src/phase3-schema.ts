@@ -33,7 +33,7 @@ CREATE TABLE workout_sets (id INTEGER PRIMARY KEY, ${identity}, workout_exercise
  planned_json TEXT CHECK(planned_json IS NULL OR json_valid(planned_json)), completed_at INTEGER);
 CREATE INDEX workout_sets_parent ON workout_sets(workout_exercise_id,sort_order);
 CREATE TABLE logging_shortcuts (id INTEGER PRIMARY KEY, ${identity}, meal_id INTEGER NOT NULL,
- kind TEXT NOT NULL CHECK(kind IN ('favorite','usual','saved')), name TEXT NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)));
+ kind TEXT NOT NULL CHECK(kind IN ('favorite')), name TEXT NOT NULL, snapshot_json TEXT NOT NULL CHECK(json_valid(snapshot_json)));
 CREATE UNIQUE INDEX shortcut_unique ON logging_shortcuts(meal_id,kind) WHERE deleted_at IS NULL;
 CREATE VIRTUAL TABLE exercise_search USING fts5(name, aliases, muscles, equipment, content='');
 CREATE TRIGGER exercise_search_insert AFTER INSERT ON exercises BEGIN

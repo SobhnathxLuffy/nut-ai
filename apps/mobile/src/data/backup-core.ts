@@ -446,6 +446,13 @@ export async function importBackupPayload(
 
         const installedCols = columnsByTable.get(t) ?? new Set<string>()
         const isSyncable = (SYNCABLE_TABLES as readonly string[]).includes(t)
+        // Schema v13 collapsed the shortcut kinds to 'favorite'. A legacy
+        // backup can still carry 'usual'/'saved' rows — remap them here so the
+        // restore never trips the v13 CHECK, and keep only the FIRST live row
+        // per meal (the (meal_id, kind) unique index allows one live
+        // 'favorite' per meal; the v13 migration applies the same
+        // lowest-rowid-wins rule, so restore and migrate agree).
+        const shortcutLiveMeals = t === 'logging_shortcuts' ? new Set<SqlValue>() : null
         const rows: BackupRow[] = []
 
         for (const [rowIndex, rawRow] of rawRows.entries()) {
@@ -455,6 +462,15 @@ export async function importBackupPayload(
           }
 
           let processedRow = sanitizeExportRow(t, rawRow)
+          if (shortcutLiveMeals) {
+            const kind = processedRow['kind']
+            if (kind === 'usual' || kind === 'saved') processedRow = { ...processedRow, kind: 'favorite' }
+            // After the remap every live row is kind 'favorite' — one per meal survives.
+            if (processedRow['deleted_at'] == null) {
+              if (shortcutLiveMeals.has(processedRow['meal_id'] ?? null)) continue
+              shortcutLiveMeals.add(processedRow['meal_id'] ?? null)
+            }
+          }
           // Backfill UUIDv7 and sync metadata for v1 backups or legacy rows missing UUID
           if (isSyncable && installedCols.has('uuid')) {
             const rowUuid = processedRow['uuid']

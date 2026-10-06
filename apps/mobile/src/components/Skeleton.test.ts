@@ -126,7 +126,6 @@ describe('frame-only skeletons are forbidden — the 1–10s windows deploy cont
 
 describe('empty-list screens get the Empty primitive with an icon (report Ch. 6.3, Table 10.1)', () => {
   it.each([
-    ['Saved foods', '../../app/saved-foods.tsx'],
     ['Recipes', '../../app/recipes.tsx'],
     ['Routines', '../../app/routines.tsx'],
     ['Programs', '../../app/programs.tsx'],

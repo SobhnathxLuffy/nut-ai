@@ -16,7 +16,7 @@ import { mealSnapshot, repeatSnapshots, type MealSnapshot, type RecentFood, type
  */
 
 /** Card provenance — which shortcut strip mode a one-tap card came from. */
-export type OneTapSource = 'recent' | 'frequent' | 'favorite' | 'usual' | 'saved'
+export type OneTapSource = 'recent' | 'frequent' | 'favorite'
 
 export interface OneTapCard {
   /** Stable React key. */

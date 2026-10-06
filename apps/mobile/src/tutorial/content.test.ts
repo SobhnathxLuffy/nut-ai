@@ -45,7 +45,6 @@ describe('source-lock — the cards name the REAL features the user will find', 
     ['bundled indian KB', /Indian dishes/],
     ['recipes', /Recipes/],
     ['custom foods', /Custom food/],
-    ['saved meals', /Saved meals/],
     ['one-tap relog', /Copy yesterday/],
     ['camera modes', /Barcode/],
     // Train

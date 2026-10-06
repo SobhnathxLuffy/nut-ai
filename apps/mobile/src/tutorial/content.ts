@@ -47,7 +47,7 @@ export const TUTORIAL_CARDS: readonly TutorialCard[] = [
     body:
       'The Food tab leads with a large "Log food" search across the food databases shipped inside the app.',
     points: [
-      'The quick actions: "Scan food", "Indian dishes" (362 curated dishes), "Recipes", "Custom food", "Saved meals" and "Copy yesterday" to re-log a whole day.',
+      'The quick actions: "Scan food", "Indian dishes" (362 curated dishes), "Recipes", "Custom food" and "Copy yesterday" to re-log a whole day.',
       '"Scan food" opens the camera with Food, Barcode, Label and Receipt modes — every scan is reviewed with you before anything is saved.',
       'Search, dishes, recipes and logging all run on bundled data: these work offline.',
     ],

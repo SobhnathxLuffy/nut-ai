@@ -36,7 +36,7 @@ import { selectionAsync } from '../../src/utils/haptics'
  *     carries it; avoid noise".
  *
  * P3-U14: every action in the sheet has a DISTINCT icon; no two rows may
- * share one. Table 6.1 mappings: scan (hero), dumbbell, bookmark, bookOpen
+ * share one. Table 6.1 mappings: scan (hero), dumbbell, bookOpen
  * (recipes), search (food database), sparkles (AI assistant).
  */
 
@@ -61,7 +61,6 @@ interface Action {
 const ACTIONS: Action[] = [
   { label: 'Scan food', icon: 'scan', route: '/camera', hero: true, hint: 'Point your camera at any meal' },
   { label: 'Log exercise', icon: 'dumbbell', route: '/log-exercise' },
-  { label: 'Saved foods', icon: 'bookmark', route: '/saved-foods' },
   { label: 'Recipes', icon: 'bookOpen', route: '/recipes' },
   { label: 'Food database', icon: 'search', route: '/food-search' },
   { label: 'AI Assistant', icon: 'sparkles', route: '/assistant' },
@@ -485,7 +484,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     borderRadius: radius.md,
     // Hairline outline — the borderColor the rows pass in is otherwise a
-    // no-op (no width); the outline keeps the six rows scannable on the
+    // no-op (no width); the outline keeps the five rows scannable on the
     // elevated sheet.
     borderWidth: StyleSheet.hairlineWidth,
   },

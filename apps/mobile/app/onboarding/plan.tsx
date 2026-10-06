@@ -284,7 +284,7 @@ export default function PlanScreen() {
             {features.remindersOn ? (
               <Bullet text="Reminders suggested for you — optional and off by default, each at a time you pick in Profile → Notifications." />
             ) : null}
-            {features.savedMealsPinned ? <Bullet text="Saved meals pinned for one-tap relogging." /> : null}
+            {features.savedMealsPinned ? <Bullet text="Favorite meals pinned for one-tap relogging." /> : null}
             {features.showMealIdeas ? <Bullet text="Meal ideas surfaced on the Today screen." /> : null}
             {a.worksWithProfessional ? (
               <Bullet text="Shareable export enabled, and we'll keep our coaching suggestions out of your way." />
