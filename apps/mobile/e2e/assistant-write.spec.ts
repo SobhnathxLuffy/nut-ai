@@ -25,9 +25,10 @@ import * as path from 'path'
  *     computes them from the shipped corpora (toor dal → dish KB Toor Dal
  *     104.07 kcal/100 g; roti → Tandoori Roti 253.27 kcal/100 g).
  *
- * Journeys: confirm (the meal REALLY persists + undo), cancel (nothing
- * logged), honest failure (500 on every chat call → the real error in the
- * bubble, no fake success). Plus the C2-P2-6 hit-test at 390×844.
+ * Journeys: confirm (the meal REALLY persists + undo, reviewed PER FOOD via
+ * the 11-d per-item rows — each selection carries its own editable grams),
+ * cancel (nothing logged), honest failure (500 on every chat call → the real
+ * error in the bubble, no fake success). Plus the C2-P2-6 hit-test at 390×844.
  */
 
 const BACKUP = path.join(__dirname, 'fixtures', 'qa-backup.json')
@@ -207,11 +208,33 @@ test.describe('O10: assistant write path — propose_meal confirmed', () => {
     await page.getByRole('button', { name: 'Review & Save', exact: true }).click()
     await expect(page.getByText('Review food')).toBeVisible({ timeout: 30_000 })
     await expect(page.getByLabel('Food name')).toHaveValue('Post-workout dal chawal')
+
+    // Per-item review (11-d separate-food logging): the payload's THREE
+    // selections (toor dal 150 g, roti 40 g, roti 40 g) each render as their
+    // own row with an editable grams field. The old single "How much" /
+    // Total-grams stepper must NOT appear for a multi-item meal — its save
+    // path could only rescale every item proportionally, which is exactly the
+    // behaviour this flow replaces.
+    await expect(page.getByText('Foods in this meal')).toBeVisible()
+    await expect(page.getByText('How much')).toHaveCount(0)
+    await expect(page.getByLabel('toor dal grams')).toHaveValue('150')
+    await expect(page.getByLabel('roti grams')).toHaveCount(2)
+    await expect(page.getByLabel('roti grams').first()).toHaveValue('40')
+
     // kcal/macros are COMPUTED from the corpus (the tool payload carried
     // none — the app never logs model-claimed numbers): 359 kcal for the
     // 230 g meal, with the P/C/F line beside it.
     await expect(page.getByText(`${EXPECTED_KCAL} kcal`)).toBeVisible()
     await expect(page.getByText(/P: \d+(\.\d+)?g · C: \d+(\.\d+)?g · F: \d+(\.\d+)?g/)).toBeVisible()
+
+    // Each row's grams is AUTHORITATIVE: editing ONE row moves the Σ footer
+    // by exactly that row's nutrition (dal 150→200 g = +2 × 104.07 ≈ +52 →
+    // 411), not a proportional rescale of every row. Reverted before saving
+    // so the downstream 359-kcal persistence assertions stay exact.
+    await page.getByLabel('toor dal grams').fill('200')
+    await expect(page.getByText('411 kcal')).toBeVisible()
+    await page.getByLabel('toor dal grams').fill('150')
+    await expect(page.getByText(`${EXPECTED_KCAL} kcal`)).toBeVisible()
 
     // THE WRITE: Save to diary persists the meal (logManualMealWithItems —
     // 3 rows, an operation record, undoable).

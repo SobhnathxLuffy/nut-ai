@@ -154,7 +154,10 @@ const SYSTEM_PROMPT_GOLDEN_SHA256 = '4acedf9197903e85a3b614951b797a95026ac303573
 // same commit as an intentional prompt edit and say why in the message.
 // 2026-09 tool-misroute fix (assistant-v1.1): get_nutrition_summary scoped to
 // the user's own logged data; knowledge questions instructed to answer in text.
-const ASSISTANT_SYSTEM_PROMPT_GOLDEN_SHA256 = '629735b06326520f12f72e566694d39cadcde091869bc4128afff6c2e3fe5e17'
+// 11-d separate-food logging (assistant-v1.2): propose_meal pinned to one
+// ingredient row per distinct food with its own grams, no merging different
+// foods, no clarifying questions before proposing, one tool call per reply.
+const ASSISTANT_SYSTEM_PROMPT_GOLDEN_SHA256 = '5d67dbe8848be129b6b2efe204f63b4f65fe17659dc66ce65b30e12cc6b8e8ca'
 
 // ---------------------------------------------------------------------------
 // P3-D3 completion: the remaining builder surfaces (label/receipt/assistant/
@@ -222,7 +225,24 @@ describe('golden: assistant system prompt', () => {
     expect(ASSISTANT_SYSTEM_PROMPT).toContain('cooked toor dal')
   })
   it('carries a version that was bumped with the fix', () => {
-    expect(ASSISTANT_PROMPT_VERSION).toBe('assistant-v1.1')
+    expect(ASSISTANT_PROMPT_VERSION).toBe('assistant-v1.2')
+  })
+
+  // 11-d separate-food logging (assistant-v1.2): "log 3 parathas and 400g
+  // curd" used to reach the diary as ONE merged row the user could only
+  // rescale proportionally. These guards pin the load-bearing v1.2 rules.
+  it('v1.2: one ingredient row per distinct food, never merged (separate-food logging)', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('NEVER combine different foods into')
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('one ingredient row per food')
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('3 parathas and 400g curd')
+  })
+  it('v1.2: proposes immediately from a reasonable assumption — no clarifying questions', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('Do NOT ask clarifying questions before proposing')
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('standard household serving')
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('propose immediately')
+  })
+  it('v1.2: keeps one tool call per reply, JSON alone', () => {
+    expect(ASSISTANT_SYSTEM_PROMPT).toContain('ONE tool call per reply')
   })
 })
 

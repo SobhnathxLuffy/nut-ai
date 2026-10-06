@@ -168,6 +168,47 @@ describe('Ch. 8.3 item 6 — food-review is a stepper', () => {
   })
 })
 
+// 11-d separate-food logging: a multi-item payload (assistant proposal,
+// composite meal, saved food) is reviewed and saved PER FOOD. The old single
+// global total-grams stepper + proportional rescale made individual weights
+// unreachable — these locks pin the replacement contract.
+describe('11-d — food-review per-item rows for multi-item meals', () => {
+  it('multi-item payloads render one row per selection with its own editable grams field', () => {
+    expect(foodReview).toContain('Foods in this meal')
+    // Each row's grams input is named after that food ("Paratha grams").
+    expect(foodReview).toMatch(/label=\{`\$\{item\.displayName\} grams`\}/)
+    expect(foodReview).toMatch(/updateItemGrams\(index, value\)/)
+    // Each row shows its own live kcal + macro line at the CURRENT grams.
+    expect(foodReview).toMatch(/macroLineCompact\(/)
+    expect(foodReview).toMatch(/snap\?\.kcal != null \? `\$\{Math\.round\(\(snap\.kcal \* rowGrams\) \/ 100\)\} kcal`/)
+  })
+
+  it('the single total-grams stepper stays single-selection only', () => {
+    // The "How much" card is the else-branch of the isMulti conditional.
+    expect(foodReview).toMatch(/\{isMulti \? \(/)
+    expect(foodReview).toContain('>How much</Text>')
+    expect(foodReview).toMatch(/label="Total grams"/)
+  })
+
+  it('save writes each selection with ITS OWN grams — no proportional rescale of a global weight', () => {
+    // The multi branch saves through logManualMealWithItems with per-row grams.
+    expect(foodReview).toMatch(/reviewSelections\.map\(\(item, i\) => \(\{ \.\.\.item, grams: rowGramsAt\(i\) \}\)\)/)
+    // The old scale factor is gone for good.
+    expect(foodReview).not.toMatch(/originalTotal/)
+    expect(foodReview).not.toMatch(/scale = weight \//)
+    // Per-row validation carries the food's name (meal-detail's message style).
+    expect(foodReview).toMatch(/Enter a valid gram weight greater than zero for/)
+  })
+
+  it('the sticky footer totals the rows and the Android keyboard mode is fixed', () => {
+    expect(foodReview).toMatch(/footerKcal/)
+    expect(foodReview).toMatch(/footerMacros/)
+    // Android 'height' — 'padding' is iOS-only behavior and left fields under
+    // the keyboard there.
+    expect(foodReview).toMatch(/behavior=\{Platform\.OS === 'ios' \? 'padding' : 'height'\}/)
+  })
+})
+
 describe('Ch. 8.3 item 7 — meal-detail rows adopt the row-action pattern', () => {
   it('rows are summaries with a long-press + visible dot3 affordance opening the Sheet menu', () => {
     expect(mealDetail).toContain('onLongPress')

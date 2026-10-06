@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { decodeFoodReview } from '../src/data/food-review'
-import { logManualFood, logManualMealWithItems } from '../src/data/manual-food'
+import { logManualFood, logManualMealWithItems, type ManualFoodSelection } from '../src/data/manual-food'
 import { db, undoLastOperation } from '../src/data/repo'
 import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -31,14 +31,43 @@ const GRAM_LADDER = [25, 50, 100, 150, 200, 250] as const
 const GRAM_STEP = 10
 
 /**
+ * Per-100g snapshot value scaled to a gram weight. Null stays null — missing
+ * nutrition is shown as '—' and excluded from sums, never silently counted as
+ * zero (§19).
+ */
+function scaledPer100(per100: number | null | undefined, grams: number): number | null {
+  return per100 != null ? (per100 * grams) / 100 : null
+}
+
+/** One macro triple line. Colon form (footer, the full-meal readout). */
+function macroLine(protein: number | null, carbs: number | null, fat: number | null): string {
+  const fmt = (v: number | null) => (v != null ? `${Math.round(v * 10) / 10}g` : '—')
+  return `P: ${fmt(protein)} · C: ${fmt(carbs)} · F: ${fmt(fat)}`
+}
+
+/** One macro triple line, compact form (per-item rows) so the footer's colon
+    form stays the single full-meal readout for assistive tech and e2e. */
+function macroLineCompact(protein: number | null, carbs: number | null, fat: number | null): string {
+  const fmt = (v: number | null) => (v != null ? `${Math.round(v * 10) / 10}g` : '—')
+  return `P ${fmt(protein)} · C ${fmt(carbs)} · F ${fmt(fat)}`
+}
+
+/**
  * Food review — THE STEPPER (UI/UX report Ch. 8.3, Wave 3).
  *
  * "Quantity and unit confirmed in one card with large touch ladders, slot
  * picker as a segmented row, and a sticky summary footer with the log button."
  * This is a re-layout of the SAME data logic: the piece-weight model
- * (quantity × grams-in-1-quantity, all three synced), multi-item proportional
- * scaling, dish-KB breakdowns, the composer jump, date validation, the
- * assistant-proposal status write, and the Undo toast are all unchanged.
+ * (quantity × grams-in-1-quantity, all three synced), dish-KB breakdowns, the
+ * composer jump, date validation, the assistant-proposal status write, and the
+ * Undo toast are all unchanged.
+ *
+ * 11-d separate-food logging: a MULTI-item payload (assistant proposal,
+ * composite meal, saved food) no longer renders one global total-grams stepper
+ * that rescaled every item proportionally on save. It renders one row per
+ * selection — name, editable grams, live kcal + macro line — and saves each
+ * item with its own grams (the footer shows the Σ of the rows). The global
+ * stepper remains for the single-food case.
  */
 export default function FoodReview() {
   const theme = useTheme()
@@ -59,6 +88,14 @@ export default function FoodReview() {
     }
   }, [params.payload])
   const base = decoded.value?.selection
+  // Per-item review (multi-item payloads — assistant proposals, composite
+  // meals, saved foods): one editable gram weight per selection row. Each
+  // row's grams is AUTHORITATIVE at save time; no global weight rescales them.
+  const reviewSelections: ManualFoodSelection[] = decoded.value?.selections ?? []
+  const isMulti = reviewSelections.length > 1
+  const [itemGrams, setItemGrams] = useState<string[]>(() =>
+    reviewSelections.map((item) => String(Math.round(item.grams * 10) / 10)),
+  )
   const [name, setName] = useState(base?.displayName ?? '')
   const [quantity, setQuantity] = useState('1')
   // Piece-weight model: total grams = quantity x grams-per-1-quantity. Every
@@ -101,6 +138,18 @@ export default function FoodReview() {
     }
   }
 
+  // Per-item grams: only the edited row moves. (11-d separate-food logging —
+  // the old single global weight rescaled every item proportionally, so
+  // individual weights could not be changed.)
+  const updateItemGrams = (index: number, value: string) => {
+    setItemGrams((current) => current.map((g, i) => (i === index ? value : g)))
+  }
+
+  /** A row's grams as it will be saved: the edited text, falling back to the
+      payload's own grams when the row state is missing (stale payload). */
+  const rowGramsAt = (index: number) =>
+    Number(itemGrams[index] ?? String(Math.round(reviewSelections[index]!.grams * 10) / 10))
+
   // ---- Large touch ladders (Ch. 8.3). Each step lands the Table 9.2
   // selection haptic and keeps the piece-weight fields synced.
   const stepQuantity = (delta: number) => {
@@ -132,7 +181,11 @@ export default function FoodReview() {
       isSavingRef.current = false
       return setError('Food name is required')
     }
-    if (!Number.isFinite(weight) || weight <= 0) {
+    // Single-item payloads keep the one total-grams field. Multi-item
+    // payloads skip it — the aggregated selection is never written, so its
+    // grams is not a meaningful thing to require; each ROW is validated
+    // instead (below).
+    if (!isMulti && (!Number.isFinite(weight) || weight <= 0)) {
       isSavingRef.current = false
       return setError('Grams must be greater than zero')
     }
@@ -140,14 +193,29 @@ export default function FoodReview() {
       isSavingRef.current = false
       return setError('Enter a real calendar date in YYYY-MM-DD format, like 2026-02-27')
     }
+    if (isMulti) {
+      for (let i = 0; i < reviewSelections.length; i++) {
+        const grams = rowGramsAt(i)
+        if (!Number.isFinite(grams) || grams <= 0) {
+          isSavingRef.current = false
+          return setError(`Enter a valid gram weight greater than zero for "${reviewSelections[i]!.displayName}"`)
+        }
+      }
+    }
     setBusy(true); setError(null)
     try {
       const options = { localDate: date, mealSlot: slot }
-      const selections = decoded.value?.selections
-      if (selections && selections.length > 1) {
-        const originalTotal = selections.reduce((sum, item) => sum + item.grams, 0)
-        const scale = weight / originalTotal
-        await logManualMealWithItems(await db(), selections.map(item => ({ ...item, grams: item.grams * scale })), Date.now(), options)
+      if (isMulti) {
+        // 11-d separate-food logging: each item saves with ITS OWN edited
+        // grams. The old single-global-weight proportional rescale is gone —
+        // editing one row never moves another, and each food still lands as
+        // its own log_item.
+        await logManualMealWithItems(
+          await db(),
+          reviewSelections.map((item, i) => ({ ...item, grams: rowGramsAt(i) })),
+          Date.now(),
+          options,
+        )
       } else {
         await logManualFood(await db(), { ...base, displayName: name.trim(), grams: weight }, Date.now(), options)
       }
@@ -194,9 +262,42 @@ export default function FoodReview() {
     ? Math.round((base.nutrientSnapshot.kcal ?? 0) * weight / 100)
     : null
 
+  // Footer totals. Multi-item meals total their rows' CURRENT grams (a
+  // nutrient is summed only when every row reports it — no zero-filling).
+  const multiTotals = isMulti
+    ? reviewSelections.reduce(
+        (acc, item, i) => {
+          const grams = rowGramsAt(i)
+          const snap = item.nutrientSnapshot
+          return {
+            kcal: acc.kcal !== null && snap?.kcal != null ? acc.kcal + (snap.kcal * grams) / 100 : null,
+            protein: acc.protein !== null && snap?.protein_g != null ? acc.protein + (snap.protein_g * grams) / 100 : null,
+            carbs: acc.carbs !== null && snap?.carbs_g != null ? acc.carbs + (snap.carbs_g * grams) / 100 : null,
+            fat: acc.fat !== null && snap?.fat_g != null ? acc.fat + (snap.fat_g * grams) / 100 : null,
+          }
+        },
+        { kcal: 0 as number | null, protein: 0 as number | null, carbs: 0 as number | null, fat: 0 as number | null },
+      )
+    : null
+  const footerKcal = isMulti && multiTotals
+    ? (multiTotals.kcal != null ? Math.round(multiTotals.kcal) : null)
+    : kcalNow
+  const footerMacros = isMulti && multiTotals
+    ? macroLine(multiTotals.protein, multiTotals.carbs, multiTotals.fat)
+    : base
+      ? macroLine(
+          scaledPer100(base.nutrientSnapshot.protein_g, weight),
+          scaledPer100(base.nutrientSnapshot.carbs_g, weight),
+          scaledPer100(base.nutrientSnapshot.fat_g, weight),
+        )
+      : ''
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* 'height' on Android: its default adjustResize + 'padding' leaves the
+          fields under the keyboard, so the scroll area must shrink instead
+          (iOS keeps 'padding', which works there). */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 180, gap: space.md }}
@@ -210,51 +311,92 @@ export default function FoodReview() {
           {base ? <>
             <Field label="Food name" value={name} onValueChange={setName} />
             <Text style={[type.caption, { color: theme.textMuted }]}>{SOURCE_NAMES[base.matchedFoodSource] ?? 'Food database'}{base.matchedFoodSource === 'ingredient_decomposition' ? ' · cooking amounts are estimates' : ''}</Text>
-            {decoded.value?.selections && decoded.value.selections.length > 1 ? <Text style={[type.caption, { color: theme.textMuted }]}>{decoded.value.selections.map(item => item.displayName).join(' · ')}</Text> : null}
 
-            {/* STEP 1 — Quantity & unit confirmed in ONE card, with large
-                touch ladders: a how-many stepper, a gram stepper, and the
-                gram ladder of common bowl/plate masses. */}
-            <Card>
-              <Text style={[type.label, { color: theme.text }]}>How much</Text>
-              <StepperRow
-                label="How many"
-                value={quantity}
-                onMinus={() => stepQuantity(-1)}
-                onPlus={() => stepQuantity(1)}
-              />
-              <View style={styles.row}>
-                <Field label="Grams in 1 quantity" value={unitGrams} onValueChange={updateUnitGrams} numeric />
-                <Field label="Quantity (how many)" value={quantity} onValueChange={updateQuantity} numeric />
-              </View>
-              <StepperRow
-                label="Total grams"
-                step={GRAM_STEP}
-                value={grams}
-                onMinus={() => stepGrams(-GRAM_STEP)}
-                onPlus={() => stepGrams(GRAM_STEP)}
-              />
-              <Field label="Total grams (type to fine-tune)" value={grams} onValueChange={updateGrams} numeric />
-              <View style={styles.ladder}>
-                {GRAM_LADDER.map((preset) => (
-                  <PressableFX
-                    key={preset}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set ${preset} grams`}
-                    accessibilityState={{ selected: Math.round(weight) === preset }}
-                    onPress={() => setLadderGrams(preset)}
-                    style={[styles.ladderChip, { borderColor: theme.border, backgroundColor: Math.round(weight) === preset ? theme.text : theme.bgSunken }]}
-                  >
-                    <Text style={[type.label, { color: Math.round(weight) === preset ? theme.bg : theme.text }]}>{preset} g</Text>
-                  </PressableFX>
-                ))}
-              </View>
-              {base.grams > 0 ? (
+            {isMulti ? (
+              /* STEP 1 (multi-item meal) — ONE ROW PER FOOD, each with its own
+                 editable grams. This is the 11-d separate-food contract: a
+                 proposal like "3 parathas and 400g curd" arrives as separate
+                 rows that are weighed (and saved) individually — the old
+                 single total-grams stepper could only rescale every item
+                 proportionally, so it stays single-selection only. */
+              <Card>
+                <Text style={[type.label, { color: theme.text }]}>Foods in this meal</Text>
                 <Text style={[type.caption, { color: theme.textMuted }]}>
-                  Standard serving: 1 × {Math.round(base.grams * 10) / 10} g — change how many you had and the weight of one piece or bowl
+                  Each food saves as its own item — set the weight you actually had for each row.
                 </Text>
-              ) : null}
-            </Card>
+                {reviewSelections.map((item, index) => {
+                  const rowGrams = rowGramsAt(index)
+                  const snap = item.nutrientSnapshot
+                  return (
+                    <View key={`${item.displayName}-${index}`} style={styles.itemReview}>
+                      <View style={styles.itemReviewHead}>
+                        <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]} numberOfLines={2}>{item.displayName}</Text>
+                        <Text style={[type.bodyStrong, type.monoData, { color: theme.text }]}>
+                          {snap?.kcal != null ? `${Math.round((snap.kcal * rowGrams) / 100)} kcal` : '—'}
+                        </Text>
+                      </View>
+                      <Field
+                        label={`${item.displayName} grams`}
+                        value={itemGrams[index] ?? String(Math.round(item.grams * 10) / 10)}
+                        onValueChange={(value) => updateItemGrams(index, value)}
+                        numeric
+                      />
+                      <Text style={[type.caption, { color: theme.textMuted }]}>
+                        {macroLineCompact(
+                          scaledPer100(snap?.protein_g, rowGrams),
+                          scaledPer100(snap?.carbs_g, rowGrams),
+                          scaledPer100(snap?.fat_g, rowGrams),
+                        )}
+                      </Text>
+                    </View>
+                  )
+                })}
+              </Card>
+            ) : (
+              /* STEP 1 (single food) — Quantity & unit confirmed in ONE card,
+                 with large touch ladders: a how-many stepper, a gram stepper,
+                 and the gram ladder of common bowl/plate masses. */
+              <Card>
+                <Text style={[type.label, { color: theme.text }]}>How much</Text>
+                <StepperRow
+                  label="How many"
+                  value={quantity}
+                  onMinus={() => stepQuantity(-1)}
+                  onPlus={() => stepQuantity(1)}
+                />
+                <View style={styles.row}>
+                  <Field label="Grams in 1 quantity" value={unitGrams} onValueChange={updateUnitGrams} numeric />
+                  <Field label="Quantity (how many)" value={quantity} onValueChange={updateQuantity} numeric />
+                </View>
+                <StepperRow
+                  label="Total grams"
+                  step={GRAM_STEP}
+                  value={grams}
+                  onMinus={() => stepGrams(-GRAM_STEP)}
+                  onPlus={() => stepGrams(GRAM_STEP)}
+                />
+                <Field label="Total grams (type to fine-tune)" value={grams} onValueChange={updateGrams} numeric />
+                <View style={styles.ladder}>
+                  {GRAM_LADDER.map((preset) => (
+                    <PressableFX
+                      key={preset}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set ${preset} grams`}
+                      accessibilityState={{ selected: Math.round(weight) === preset }}
+                      onPress={() => setLadderGrams(preset)}
+                      style={[styles.ladderChip, { borderColor: theme.border, backgroundColor: Math.round(weight) === preset ? theme.text : theme.bgSunken }]}
+                    >
+                      <Text style={[type.label, { color: Math.round(weight) === preset ? theme.bg : theme.text }]}>{preset} g</Text>
+                    </PressableFX>
+                  ))}
+                </View>
+                {base.grams > 0 ? (
+                  <Text style={[type.caption, { color: theme.textMuted }]}>
+                    Standard serving: 1 × {Math.round(base.grams * 10) / 10} g — change how many you had and the weight of one piece or bowl
+                  </Text>
+                ) : null}
+              </Card>
+            )}
 
             {/* STEP 2 — Meal slot as a segmented row + the date, one card. */}
             <Card>
@@ -321,19 +463,18 @@ export default function FoodReview() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* STICKY SUMMARY FOOTER (Ch. 8.3) — the totals the stepper is building
-          and the log button, always visible above the fold. */}
+      {/* STICKY SUMMARY FOOTER (Ch. 8.3) — the totals the stepper (or, for a
+          multi-item meal, the per-item rows) are building, and the log button,
+          always visible above the fold. Multi-item meals show the Σ of the
+          rows' CURRENT grams; a nutrient is summed only when every row
+          reports it — missing values are never counted as zero. */}
       {base ? (
         <View style={[styles.footer, { backgroundColor: theme.bgElevated, borderTopColor: theme.border, paddingBottom: Math.max(insets.bottom, space.md) }]}>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[type.title, type.monoData, { color: theme.text }]}>
-              {kcalNow != null ? `${kcalNow} kcal` : 'Calories unavailable'}
+              {footerKcal != null ? `${footerKcal} kcal` : 'Calories unavailable'}
             </Text>
-            <Text style={[type.caption, { color: theme.textMuted }]}>
-              P: {base.nutrientSnapshot.protein_g !== null ? `${Math.round(((base.nutrientSnapshot.protein_g ?? 0) * weight / 100) * 10) / 10}g` : '—'} ·
-              C: {base.nutrientSnapshot.carbs_g !== null ? `${Math.round(((base.nutrientSnapshot.carbs_g ?? 0) * weight / 100) * 10) / 10}g` : '—'} ·
-              F: {base.nutrientSnapshot.fat_g !== null ? `${Math.round(((base.nutrientSnapshot.fat_g ?? 0) * weight / 100) * 10) / 10}g` : '—'}
-            </Text>
+            <Text style={[type.caption, { color: theme.textMuted }]}>{footerMacros}</Text>
           </View>
           <Button
             label={busy ? 'Saving…' : 'Save to diary'}
@@ -428,6 +569,10 @@ const styles = StyleSheet.create({
   slotFirst: { borderTopLeftRadius: radius.md, borderBottomLeftRadius: radius.md },
   slotLast: { borderTopRightRadius: radius.md, borderBottomRightRadius: radius.md },
   ingredientRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  // Per-item review rows (multi-item meals): name + kcal head, grams field,
+  // compact macro line — one block per food, matching the card's gap rhythm.
+  itemReview: { gap: space.xs },
+  itemReviewHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: MIN_TAP_TARGET / 2 },
   editIngredientsBtn: {
     marginTop: space.xs,
     minHeight: MIN_TAP_TARGET,
