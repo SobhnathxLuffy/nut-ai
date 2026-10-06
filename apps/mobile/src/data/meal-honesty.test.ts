@@ -221,6 +221,14 @@ describe('the log path persists what the scan said (logMeal → getLoggedMeal)',
       name: 'Roti',
       grams: 60,
       kcalPer100g: 300,
+      // Task 11-b: the logged per-100g macro snapshot reads back alongside the
+      // honesty columns; fiber/sugar/sodium were not reported, so null.
+      proteinPer100g: 9,
+      fatPer100g: 3,
+      carbPer100g: 55,
+      fiberPer100g: null,
+      sugarPer100g: null,
+      sodiumPer100Mg: null,
       visibility: 'likely',
       bandHalfPct: 0.375,
     })
@@ -309,6 +317,14 @@ describe('the log path persists what the scan said (logMeal → getLoggedMeal)',
       name: 'Legacy dal',
       grams: 180,
       kcalPer100g: 120,
+      // Task 11-b: the per-100g macro columns read back too — this legacy row
+      // reported none of them, so the honest shape is all-null.
+      proteinPer100g: null,
+      fatPer100g: null,
+      carbPer100g: null,
+      fiberPer100g: null,
+      sugarPer100g: null,
+      sodiumPer100Mg: null,
       visibility: null,
       bandHalfPct: null,
     })

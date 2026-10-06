@@ -20,6 +20,7 @@ import { Field } from '../src/components/Field'
 import { Icon } from '../src/components/Icon'
 import { PressableFX } from '../src/components/PressableFX'
 import { MenuSheet } from '../src/components/Sheet'
+import { Card } from '../src/components/Screen'
 import { showToast } from '../src/components/toast-store'
 import { MIN_TAP_TARGET, radius, space, type } from '../src/theme/tokens'
 import { confirmDialog } from '../src/ui/alert-web'
@@ -34,6 +35,14 @@ interface EditableItem {
   name: string
   gramsText: string
   kcalPer100g: number | null
+  // Task 11-b: the row's per-100g snapshot macros, shown at the item's current
+  // grams and summed into the meal totals. NULL = the log never reported it.
+  proteinPer100g: number | null
+  fatPer100g: number | null
+  carbPer100g: number | null
+  fiberPer100g: number | null
+  sugarPer100g: number | null
+  sodiumPer100Mg: number | null
   /** Task 5-5: persisted scan honesty, rendered under the row summary. */
   visibility?: string | null
   bandHalfPct?: number | null
@@ -74,6 +83,12 @@ export default function MealDetail() {
         name: item.name,
         gramsText: String(item.grams),
         kcalPer100g: item.kcalPer100g,
+        proteinPer100g: item.proteinPer100g ?? null,
+        fatPer100g: item.fatPer100g ?? null,
+        carbPer100g: item.carbPer100g ?? null,
+        fiberPer100g: item.fiberPer100g ?? null,
+        sugarPer100g: item.sugarPer100g ?? null,
+        sodiumPer100Mg: item.sodiumPer100Mg ?? null,
         visibility: item.visibility ?? null,
         bandHalfPct: item.bandHalfPct ?? null,
       })),
@@ -217,8 +232,32 @@ export default function MealDetail() {
     )
   }
 
+  // Task 11-b: the meal totals — each item's snapshot macro at its CURRENT
+  // editor grams (snap per-100g × grams / 100), summed across items. A nutrient
+  // no item reported sums to null and renders '—'; the calorie caption
+  // discloses how many items the total excludes (missing snapshot or grams
+  // mid-edit), so a partial total is never presented as the whole meal.
+  const totalsGrams = meal.items.map((item) => ({ item, grams: validGramsOf(item.gramsText) }))
+  const kcalParts = totalsGrams.map(({ item, grams }) => macroAtGrams(item.kcalPer100g, grams))
+  const totalKcal = sumPresent(kcalParts)
+  const totalProtein = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.proteinPer100g, grams)))
+  const totalCarb = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.carbPer100g, grams)))
+  const totalFat = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.fatPer100g, grams)))
+  const totalFiber = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.fiberPer100g, grams)))
+  const totalSugar = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.sugarPer100g, grams)))
+  const totalSodium = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.sodiumPer100Mg, grams)))
+  const totalsMicroLine = [
+    totalFiber !== null ? `Fiber ${gramText(totalFiber)}` : null,
+    totalSugar !== null ? `Sugar ${gramText(totalSugar)}` : null,
+    totalSodium !== null ? `Sodium ${Math.round(totalSodium)}mg` : null,
+  ].filter(Boolean).join(' · ')
+  const missingKcal = kcalParts.filter((part) => part === null).length
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // §8.3 (the keyboard must not hide required controls): 'padding' tracks the
+    // keyboard on iOS; RN's padding mode does not resize on Android, where
+    // 'height' is the mode that does — same component, per-OS behavior.
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
@@ -279,13 +318,40 @@ export default function MealDetail() {
           const rowKcal =
             item.kcalPer100g !== null && validGrams !== null ? (item.kcalPer100g * validGrams) / 100 : null
           const rowBand = rowKcal !== null ? loggedRowBandFor(item.bandHalfPct, rowKcal) : null
+          // Task 11-b: the row's macros at its CURRENT grams — snap per-100g ×
+          // grams / 100 — so editing grams rescales the preview live (the snaps
+          // themselves are per-100g and are never rewritten on save).
+          const proteinNow = macroAtGrams(item.proteinPer100g, validGrams)
+          const carbNow = macroAtGrams(item.carbPer100g, validGrams)
+          const fatNow = macroAtGrams(item.fatPer100g, validGrams)
+          const fiberNow = macroAtGrams(item.fiberPer100g, validGrams)
+          const sugarNow = macroAtGrams(item.sugarPer100g, validGrams)
+          const sodiumNow = macroAtGrams(item.sodiumPer100Mg, validGrams)
+          const hasMacros = proteinNow !== null || carbNow !== null || fatNow !== null
+          const macroLine = `P: ${gramText(proteinNow)} · C: ${gramText(carbNow)} · F: ${gramText(fatNow)}`
+          // Fiber/sugar/sodium join the compact secondary line only when the
+          // log actually reported them — NULL stays silent, never zero.
+          const microLine = [
+            fiberNow !== null ? `Fiber ${gramText(fiberNow)}` : null,
+            sugarNow !== null ? `Sugar ${gramText(sugarNow)}` : null,
+            sodiumNow !== null ? `Sodium ${Math.round(sodiumNow)}mg` : null,
+          ].filter(Boolean).join(' · ')
+          // Spoken summary carries only the nutrients this row really has.
+          const macrosSpoken = [
+            proteinNow !== null ? `${oneDecimal(proteinNow)} grams protein` : null,
+            carbNow !== null ? `${oneDecimal(carbNow)} grams carbs` : null,
+            fatNow !== null ? `${oneDecimal(fatNow)} grams fat` : null,
+            fiberNow !== null ? `${oneDecimal(fiberNow)} grams fiber` : null,
+            sugarNow !== null ? `${oneDecimal(sugarNow)} grams sugar` : null,
+            sodiumNow !== null ? `${Math.round(sodiumNow)} milligrams sodium` : null,
+          ].filter(Boolean).join(', ')
 
           return (
             <View key={item.id} style={[styles.card, { borderColor: theme.border }]}>
               <View style={styles.itemRow}>
                 <PressableFX
                   accessibilityRole="button"
-                  accessibilityLabel={`Item ${item.name}, ${item.gramsText} grams, ${preview}`}
+                  accessibilityLabel={`Item ${item.name}, ${item.gramsText} grams, ${preview}${macrosSpoken ? `, ${macrosSpoken}` : ''}`}
                   accessibilityHint="Tap to edit this item. Long-press for actions."
                   accessibilityState={{ expanded: editing }}
                   onPress={() => {
@@ -299,6 +365,13 @@ export default function MealDetail() {
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text style={[type.bodyStrong, { color: theme.text }]} numberOfLines={1}>{item.name}</Text>
                     <Text style={[type.caption, { color: theme.textMuted }]}>{item.gramsText} g · {preview}</Text>
+                    {/* Task 11-b: the item's logged macros at its current grams. */}
+                    {hasMacros ? (
+                      <Text style={[type.caption, { color: theme.textMuted }]}>{macroLine}</Text>
+                    ) : null}
+                    {microLine ? (
+                      <Text style={[type.caption, { color: theme.textFaint }]}>{microLine}</Text>
+                    ) : null}
                     {/* Task 5-5 (O6): the row's persisted scan honesty — the
                         basis (how this row earned its place: the model's own
                         visibility claim) and the band around its calories,
@@ -360,6 +433,28 @@ export default function MealDetail() {
           )
         })}
 
+        {/* Task 11-b: the meal totals — what the user actually logged, at the
+            current gram weights, in the ONE per-100g computational basis.
+            Nutrients nothing reported stay '—' (never a silent zero); the
+            caption discloses what the calorie total excludes. */}
+        <Card>
+          <Text style={[type.label, { color: theme.textMuted }]}>Meal totals</Text>
+          <Text style={[type.title, type.monoData, { color: theme.text }]}>
+            {totalKcal !== null ? `${Math.round(totalKcal)} kcal` : 'Calories not reported'}
+          </Text>
+          <Text style={[type.body, { color: theme.text }]}>
+            P: {gramText(totalProtein)} · C: {gramText(totalCarb)} · F: {gramText(totalFat)}
+          </Text>
+          {totalsMicroLine ? (
+            <Text style={[type.caption, { color: theme.textMuted }]}>{totalsMicroLine}</Text>
+          ) : null}
+          {missingKcal > 0 ? (
+            <Text style={[type.caption, { color: theme.textFaint }]}>
+              {missingKcal} of {meal.items.length} {missingKcal === 1 ? 'item has' : 'items have'} no calorie data and {missingKcal === 1 ? 'is' : 'are'} not in this total.
+            </Text>
+          ) : null}
+        </Card>
+
         {error ? <Text style={[type.caption, { color: theme.safety }]}>{error}</Text> : null}
         <Pressable
           accessibilityRole="button"
@@ -390,6 +485,12 @@ export default function MealDetail() {
                       name: item.name,
                       gramsText: String(item.grams),
                       kcalPer100g: item.kcalPer100g,
+                      proteinPer100g: item.proteinPer100g ?? null,
+                      fatPer100g: item.fatPer100g ?? null,
+                      carbPer100g: item.carbPer100g ?? null,
+                      fiberPer100g: item.fiberPer100g ?? null,
+                      sugarPer100g: item.sugarPer100g ?? null,
+                      sodiumPer100Mg: item.sodiumPer100Mg ?? null,
                       // Task 5-5: the undo path keeps the persisted honesty on
                       // screen — applyLoggedMeal's mapping, verbatim.
                       visibility: item.visibility ?? null,
@@ -470,6 +571,44 @@ export default function MealDetail() {
       />
     </KeyboardAvoidingView>
   )
+}
+
+// ---------------------------------------------------------------------------
+// Task 11-b macro display helpers — pure arithmetic over the per-100g snapshot
+// columns (the ONE computational basis). NaN never escapes: mid-edit gram text
+// ("", "1.") parses to null and renders '—', never a broken number (§8.3).
+// ---------------------------------------------------------------------------
+
+/** The editor's gram text as a usable weight, or null while it doesn't parse. */
+function validGramsOf(gramsText: string): number | null {
+  const parsed = parseFloat(gramsText)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+/** A snapshot macro at `grams`, or null when the row reported nothing (or grams are mid-edit). */
+function macroAtGrams(per100g: number | null, grams: number | null): number | null {
+  if (per100g === null || grams === null) return null
+  const value = (per100g * grams) / 100
+  return Number.isFinite(value) ? value : null
+}
+
+/** Sum of the values that exist — stays null when NOTHING was reported, never a silent zero. */
+function sumPresent(values: Array<number | null>): number | null {
+  let total: number | null = null
+  for (const value of values) {
+    if (value === null) continue
+    total = (total ?? 0) + value
+  }
+  return total
+}
+
+/** One-decimal gram figure — the food-review footer convention ('—' when unreported). */
+function gramText(value: number | null): string {
+  return value === null ? '—' : `${Math.round(value * 10) / 10}g`
+}
+
+function oneDecimal(value: number): number {
+  return Math.round(value * 10) / 10
 }
 
 

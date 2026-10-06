@@ -1181,6 +1181,9 @@ function sourceLabel(source: string | undefined, basisConfidence?: string): stri
   if (source === 'ifct') return 'IFCT 2017 · ICMR-NIN'
   if (source === 'recipe') return 'HOUSEHOLD RECIPE'
   if (source === 'userfood') return 'YOUR FOOD'
+  // Task 11-b: favorites are their own source now — without this they would
+  // fall through to the USDA label, which would be a lie about provenance.
+  if (source === 'favorite') return 'SAVED FAVORITE MEAL'
   if (source === 'household_dish') return 'YOUR VERSION'
   if (source === 'off') return 'OPEN FOOD FACTS · ODbL 1.0'
   if (source === 'indian_dish_kb') {

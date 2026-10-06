@@ -4,6 +4,7 @@ import { lookupPrior, priorToHint, type PortionHint } from '@nutai/portion-prior
 import { normalizeGtin } from './gtin.js'
 import { matchLadder } from './query.js'
 import { normalizeIndianAliases } from './aliases.js'
+import { FavoritesSource } from './favorites-source.js'
 import {
   type Candidate,
   type ResolutionOutcome,
@@ -17,6 +18,7 @@ export * from './gtin.js'
 export * from './query.js'
 export * from './scoring.js'
 export * from './aliases.js'
+export * from './favorites-source.js'
 
 // Task 2-c: re-export the canonical hint shape so the pipeline (and any other
 // consumer) can type ResolvedFood.portionHints without reaching into the
@@ -33,6 +35,12 @@ function sourceRouter(nutritionDb: DbAdapter, context: NutritionSourceContext = 
   const sources = [
     ...(context.userDb ? [
       new UserFoodSource(context.userDb),
+      // Task 11-b: saved favorite meals (logging_shortcuts kind='favorite') —
+      // the user's own logged meal snapshots, searchable alongside every
+      // corpus. Priority 95: below user_foods (100) so a matching single food
+      // keeps the top auto-accept tier, above recipes (90) because the user's
+      // own logged meal beats a household recipe for the same name.
+      new FavoritesSource(context.userDb),
       new RecipeSource(context.userDb),
       // Saved "My Version" household dishes: previously written to the user DB
       // where no source could find them again.

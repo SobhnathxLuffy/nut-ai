@@ -8,6 +8,16 @@ export interface LoggedMealItem {
   name: string
   grams: number
   kcalPer100g: number | null
+  // Task 11-b: the item's remaining per-100g snapshot macros, read back so
+  // meal-detail can show each item's macros and the meal totals. All optional
+  // so edit/save round trips and pre-existing callers compile unchanged; NULL
+  // means the log row never reported that nutrient (never invented as zero).
+  proteinPer100g?: number | null
+  fatPer100g?: number | null
+  carbPer100g?: number | null
+  fiberPer100g?: number | null
+  sugarPer100g?: number | null
+  sodiumPer100Mg?: number | null
   /** Task 5-5: the model's scene-visibility claim, persisted since v12. Optional so edit/save round trips and pre-v12 callers compile unchanged. */
   visibility?: string | null
   /** Task 5-5: the row's persisted band half-width (fraction). Optional — manual/legacy rows carry NULL (no claim). */
@@ -33,7 +43,7 @@ async function aggregate(db: DbAdapter, mealId: number): Promise<Record<string, 
 export async function getLoggedMeal(db: DbAdapter, mealId: number): Promise<LoggedMealDetail | null> {
   const meal = await db.get<{ id:number; local_date:string; meal_slot:string | null; honesty_json:string | null }>('SELECT id, local_date, meal_slot, honesty_json FROM meals WHERE id = ?', [mealId])
   if (!meal) return null
-  const items = await db.all<{id:number;display_name:string;grams:number;snap_energy_kcal:number|null;visibility:string | null;band_half_pct:number | null}>('SELECT id, display_name, grams, snap_energy_kcal, visibility, band_half_pct FROM log_items WHERE meal_id = ? AND deleted_at IS NULL ORDER BY sort_order, id', [mealId])
+  const items = await db.all<{id:number;display_name:string;grams:number;snap_energy_kcal:number|null;snap_protein_g:number|null;snap_fat_g:number|null;snap_carb_g:number|null;snap_fiber_g:number|null;snap_sugar_g:number|null;snap_sodium_mg:number|null;visibility:string | null;band_half_pct:number | null}>('SELECT id, display_name, grams, snap_energy_kcal, snap_protein_g, snap_fat_g, snap_carb_g, snap_fiber_g, snap_sugar_g, snap_sodium_mg, visibility, band_half_pct FROM log_items WHERE meal_id = ? AND deleted_at IS NULL ORDER BY sort_order, id', [mealId])
   return {
     id: meal.id,
     date: meal.local_date,
@@ -47,6 +57,12 @@ export async function getLoggedMeal(db: DbAdapter, mealId: number): Promise<Logg
       name: item.display_name,
       grams: item.grams,
       kcalPer100g: item.snap_energy_kcal,
+      proteinPer100g: item.snap_protein_g,
+      fatPer100g: item.snap_fat_g,
+      carbPer100g: item.snap_carb_g,
+      fiberPer100g: item.snap_fiber_g,
+      sugarPer100g: item.snap_sugar_g,
+      sodiumPer100Mg: item.snap_sodium_mg,
       visibility: item.visibility ?? null,
       bandHalfPct: item.band_half_pct ?? null,
     })),
@@ -59,6 +75,9 @@ export async function updateLoggedMeal(db: DbAdapter, detail: LoggedMealDetail, 
   const operation = await db.transaction(async tx=>{
     const previous = await aggregate(tx,detail.id)
     await tx.run("UPDATE meals SET local_date=?, meal_slot=?, updated_at=?, revision=revision+1, sync_state='local' WHERE id=?",[detail.date,detail.slot,now,detail.id])
+    // Task 11-b: grams edits deliberately touch ONLY display_name/grams. The
+    // snap_* columns are PER-100G snapshots, so every displayed macro (snap ×
+    // grams / 100) rescales itself from the new grams — no rewrite, no drift.
     for(const item of detail.items) await tx.run("UPDATE log_items SET display_name=?, grams=?, updated_at=?, revision=revision+1, sync_state='local' WHERE id=? AND meal_id=?",[item.name.trim(),item.grams,now,item.id,detail.id])
     const next=await aggregate(tx,detail.id)
     return recordOperation(tx,{entityType:'meals',entityId:detail.id,opType:'update',prevJson:previous,newJson:next,actor:'user',createdAt:now})

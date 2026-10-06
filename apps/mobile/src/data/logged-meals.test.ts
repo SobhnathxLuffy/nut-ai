@@ -64,6 +64,12 @@ describe('Logged Meals Data Layer (Edit, Delete, Undo, Redo, Aggregate Restorati
       name: 'Cauliflower sabzi',
       grams: 150,
       kcalPer100g: 50,
+      proteinPer100g: 2.5,
+      fatPer100g: 2.0,
+      carbPer100g: 6.0,
+      fiberPer100g: null,
+      sugarPer100g: null,
+      sodiumPer100Mg: null,
       visibility: null,
       bandHalfPct: null,
     })
@@ -72,6 +78,12 @@ describe('Logged Meals Data Layer (Edit, Delete, Undo, Redo, Aggregate Restorati
       name: 'Steamed rice',
       grams: 200,
       kcalPer100g: 130,
+      proteinPer100g: 2.7,
+      fatPer100g: 0.3,
+      carbPer100g: 28.0,
+      fiberPer100g: null,
+      sugarPer100g: null,
+      sodiumPer100Mg: null,
       visibility: null,
       bandHalfPct: null,
     })
@@ -362,6 +374,12 @@ describe('Logged Meal row actions (Wave 3 Ch. 8.3: meal-detail duplicate / remov
       name: 'Steamed rice',
       grams: 200,
       kcalPer100g: 130,
+      proteinPer100g: 2.7,
+      fatPer100g: 0.3,
+      carbPer100g: 28.0,
+      fiberPer100g: null,
+      sugarPer100g: null,
+      sodiumPer100Mg: null,
       visibility: null,
       bandHalfPct: null,
     })
@@ -373,6 +391,40 @@ describe('Logged Meal row actions (Wave 3 Ch. 8.3: meal-detail duplicate / remov
     await expect(removeLoggedItem(db, 1, 999, NOW)).rejects.toThrow('Item not found')
     // And nothing changed.
     expect((await db.all('SELECT id FROM log_items WHERE meal_id = 1 AND deleted_at IS NULL')).length).toBe(2)
+  })
+
+  it('grams edits rescale the displayed macros without rewriting the per-100g snapshots (Task 11-b)', async () => {
+    await createRowActionMeal()
+
+    await updateLoggedMeal(
+      db,
+      {
+        id: 1,
+        date: '2026-09-13',
+        slot: 'lunch',
+        items: [
+          { id: 101, name: 'Cauliflower sabzi', grams: 300, kcalPer100g: 50 },
+          { id: 102, name: 'Steamed rice', grams: 100, kcalPer100g: 130 },
+        ],
+      },
+      NOW + 1000,
+    )
+
+    // The snap_* columns stay exactly as logged (per-100g basis); the displayed
+    // macros are snap × grams / 100, so they follow the new grams on their own.
+    const rows = await db.all<{ id: number; grams: number; snap_energy_kcal: number; snap_protein_g: number; snap_fat_g: number; snap_carb_g: number }>(
+      'SELECT id, grams, snap_energy_kcal, snap_protein_g, snap_fat_g, snap_carb_g FROM log_items WHERE meal_id = 1 ORDER BY id',
+    )
+    expect(rows).toEqual([
+      { id: 101, grams: 300, snap_energy_kcal: 50, snap_protein_g: 2.5, snap_fat_g: 2.0, snap_carb_g: 6.0 },
+      { id: 102, grams: 100, snap_energy_kcal: 130, snap_protein_g: 2.7, snap_fat_g: 0.3, snap_carb_g: 28.0 },
+    ])
+    const meal = await getLoggedMeal(db, 1)
+    // 300g of the 50 kcal/100g item displays 150 kcal; 100g of the 130 item, 130.
+    expect(meal?.items[0]?.grams).toBe(300)
+    expect(meal?.items[0]?.kcalPer100g).toBe(50)
+    expect(meal?.items[1]?.grams).toBe(100)
+    expect(meal?.items[1]?.kcalPer100g).toBe(130)
   })
 })
 
