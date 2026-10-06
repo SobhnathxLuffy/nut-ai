@@ -139,117 +139,52 @@ jobs:
           # (drafted in docs/release-notes-draft-v0.2.0.md §2). Version strings
           # are derived — do not hardcode them back.
           body: |
-            > Tag: `${{ github.ref_name }}` · versionCode ${{ env.VERSION_CODE }} · upgrade-installs over apk-v0.1.1
+            > Tag: `${{ github.ref_name }}` · versionCode ${{ env.VERSION_CODE }} · upgrade-installs over apk-v0.2.0
 
             ## Nut AI v${{ env.VERSION }} — Android APK
 
-            ### New
+            ### Your reported issues, fixed
 
-            **Step-by-step onboarding, rebuilt**
-            - The single-page form is gone: 12 guided steps (about you → body
-              metrics → units → provider → plan), a gated Continue on each
-              step, keyboard-friendly numeric entry, and a final "See my plan"
-              reveal. Your answers persist as a draft, so an interrupted
-              onboarding resumes where you left off.
-            - Height and weight units are now independent: choose cm or ft/in
-              for height and kg or lb for weight separately — in onboarding
-              and later in Profile → Units & Health. Everything is stored
-              canonically (kg, cm) and converted only for display.
-            - A short optional tutorial after onboarding (5 cards, replayable
-              from Profile, Skip always visible — it never traps you).
+            **1. Favorites only — "usual" and "saved" removed everywhere**
+            - The three save options (Favorite / Save usual meal / Save meal) are now just **Favorite**.
+            - The Food tab strip shows Recent / Frequent / Favorites only; the Saved Foods entry is gone.
+            - Old backups still restore losslessly — legacy usual/saved shortcuts come back as favorites.
 
-            **Local notifications (no cloud, no accounts)**
-            - Meal reminders learned from your plan and rest-timer completion
-              notices, scheduled entirely on the device via AlarmManager. No
-              FCM, no push token.
-            - The Android 13+ notification permission is asked CONTEXTUALLY —
-              when you first enable a reminder or start a rest timer — never
-              at app startup, and the app works fine if you decline. Manage
-              everything in Profile → Notifications.
+            **2. Logged meals finally show what you logged**
+            - Tap any logged meal: you now see its calories AND protein/carbs/fat per item, plus honest meal totals.
+            - Saved favorite meals are searchable in food search alongside IFCT, USDA, recipes, and dishes.
 
-            **Three Android home-screen widgets**
-            - **Today** (calories remaining + protein progress), **Quick
-              Action** (one-tap log/scan/train), **Training** (your next
-              scheduled session). They update from the app's own data
-              on-device; if the snapshot goes stale they say "Open Nut AI to
-              refresh" instead of guessing. Taps deep-link straight into the
-              right screen.
+            **3. Barcode database — 116 packaged products added offline**
+            - India-first: Amul, Britannia, Maggi/Nestlé, Haldiram's, Parle, MDH, Tata, Dabur, Patanjali, Aachi and more — plus international staples (Coca-Cola, Pepsi, Lay's, Oreo, Nutella, Kellogg's…).
+            - Scans resolve offline in airplane mode. Values are curated-representative from public labels.
 
-            **Codex CLI as an AI provider (local bridge)**
-            - Run `tools/codex-bridge` on your computer (requires the
-              [Codex CLI](https://github.com/openai/codex) installed and
-              logged in) and add a provider in the app pointing at the
-              bridge's local URL. It exposes the OpenAI-compatible endpoints
-              the app already speaks and translates them to `codex exec`.
-            - What we verified by installing and probing real codex-cli
-              0.160.0: the headless surface (`exec`, `-m` model, `-i` image
-              files, `--json` event stream, `--output-schema`/`-o`,
-              `--ephemeral`, sandbox flags) exists and parses, and failures
-              map honestly — exit-code 1 + a truthful 401/403/429 envelope
-              reaches the app instead of a generic "server error" (verified
-              end-to-end through the real bridge/CLI).
-            - What is NOT verified (needs API credentials): successful
-              completions, model routing, image understanding quality, and
-              JSON-schema enforcement — those shapes are documented by the
-              CLI but not exercised by us.
-            - Limitations: the bridge is plain HTTP on your local network (no
-              TLS yet) — use it only on a network you trust; `codex exec` has
-              no timeout flag; your Codex auth lives on your computer, never
-              inside the APK.
+            **4. AI logs multi-food requests separately**
+            - "Log 3 parathas and 400g curd" no longer collapses into one blob: the review screen shows ONE row per food with its own editable grams and live macros.
+            - The assistant stops asking extra questions — it proposes immediately; you adjust weights before saving.
 
-            ### Fixed
+            **5. Two touch-blocking bugs fixed**
+            - Indian-foods composer: "Log household variant" and the portion controls are reachable above the gesture bar again.
+            - AI assistant chat: the input and latest messages no longer hide behind the keyboard on Android.
 
-            - **Home calorie breakdown animation:** the calorie card could
-              open-close-open when tapped (duplicate press delivery on some
-              Samsung/OneUI devices, amplified by the height spring restarting
-              mid-flight). One tap now flips it exactly once, the spring is
-              critically damped with overshoot clamping, and content
-              re-measures can no longer restart the animation.
-              Regression-locked in tests; the on-device tap behavior still
-              needs the owner device pass.
-            - **Routines screen jitter:** Create/New Routine re-fetched its
-              lists in a focus-effect loop (4 SQLite round-trips per cycle,
-              busy spinner flicker). Root cause fixed (stable callbacks +
-              change fingerprint) with a red-first regression test that
-              proves 25 refires before → 1 after.
-            - **Workout modes, routines and programs, cleaned up:** honest
-              "Start empty workout" wording, Simple/Advanced set fields named
-              consistently, real advanced controls in the routine editor
-              (progression labels, superset chips, per-exercise context),
-              programs actually editable with a weekday↔cycle-day fix
-              (schedules starting mid-week used to never fire), delete
-              confirmations, dirty-exit guards, and an explainer for the
-              program schedule.
-            - **Android APK QA pass:** font-scaling contract enforced on every
-              text input (31/31), screen-reader labels composed correctly on
-              report rows, larger tap targets on dish chips, notification
-              settings disabled-state made screen-reader-visible, barcode
-              offline vs not-found told apart honestly, restore screen scrolls
-              on small displays, and the onboarding plan button can no longer
-              double-fire (double-tap previously double-persisted your goals).
-              Health-step copy now says plainly that Health Connect for
-              Android isn't built yet.
+            **6. QA-sweep fixes**
+            - "Undo workout action" no longer deletes food logs (workout-scoped undo/redo).
+            - Editing a routine no longer loses your sets when returning from the exercise picker.
+            - No more "NaN kcal" while typing grams in the review screen; zero-ingredient AI proposals fail honestly; check-in pregnancy/lactation switch is operable; corrupt program rows are visible.
 
-            ## Install on your phone
+            ### Install on your phone
+            1. Download `nut-ai-v${{ env.VERSION }}.apk` below.
+            2. If v0.1.1 or v0.2.0 is installed, install straight over it (versionCode ${{ env.VERSION_CODE }} upgrades cleanly; your data migrates automatically).
+            3. Fresh install: open the APK and allow "install unknown apps" for your browser if asked.
 
-            1. If v0.1.0 is installed, UNINSTALL it first — v0.1.0 shipped with
-               a one-off CI debug key, and Android forbids updating across
-               signing keys (one-time step; releases from v0.1.1 on install as
-               updates over each other).
-            2. Download `nut-ai-v${{ env.VERSION }}.apk` below and tap it.
-            3. Android will warn about unknown apps — choose **Install anyway /
-               Allow from this source**.
-
-            ## SHA-256 checksum
-
-            Verify your download: the file `nut-ai-v${{ env.VERSION }}.apk.sha256`
-            is attached to this release — put both files in one folder and run
-            `sha256sum -c nut-ai-v${{ env.VERSION }}.apk.sha256`, or compare
-            the APK hash against the value printed in the release body:
-
+            ### Verify the download (optional)
             ```
             ${{ env.SHA256 }}  nut-ai-v${{ env.VERSION }}.apk
             ```
+
+            ### Honest verification status
+            - Automated gates at this tag: 1,925 unit tests / 162 files, 46/46 web e2e journeys, typecheck, lint, node-purity, contrast — all green (see VERIFICATION.md).
+            - On-device rows (TalkBack, widgets on a real launcher, notification delivery, camera scan hits, keyboard feel) remain NOT TESTED in CI — no Android environment is available in the build sandbox; the two touch-blocking UI fixes are source-locked and web-e2e-verified but not device-photographed.
+
           files: |
             out/nut-ai-v${{ env.VERSION }}.apk
             out/nut-ai-v${{ env.VERSION }}.apk.sha256
