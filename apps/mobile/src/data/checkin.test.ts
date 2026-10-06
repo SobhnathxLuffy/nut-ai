@@ -228,4 +228,44 @@ describe('Day Completeness & Checkin Data (ADP-001 & ADP-002)', () => {
     expect(updated.reviewed).toBe(true)
     expect(updated.locks.kcal).toBe(false)
   })
+
+  it('nulls a finalized day protein sum when any item lacks a protein snapshot; energy behavior unchanged', async () => {
+    const date = '2026-03-09'
+    // Item 1 (via seedMeal) carries BOTH snapshots; item 2 carries energy only.
+    await seedMeal(1, date, 600, 40)
+    const sync = createSyncMetadata(NOW)
+    await db.run(
+      `INSERT INTO log_items (
+        id, uuid, created_at, updated_at, revision, deleted_at, sync_state,
+        meal_id, matched_food_id, matched_food_source, display_name, grams, gram_pathway, portion_source,
+        snap_energy_kcal, snap_protein_g, logged_at
+      ) VALUES (?, ?, ?, ?, ?, NULL, ?, 1, 'food-1', 'usda', 'Test Food', 100, 'direct', 'default', 200, NULL, ?)`,
+      [2, sync.uuid, NOW, NOW, 1, sync.sync_state, NOW],
+    )
+    await changeDayStatus(db, { localDate: date, completion: 'complete' })
+
+    const days = await checkinDays(db, date, date)
+    expect(days).toHaveLength(1)
+    // Energy: every item has a snapshot, so the full sum stands (unchanged).
+    expect(days[0].kcal).toBe(800)
+    // Protein: item 2 has no snapshot, so the sum is partially known — null
+    // (the per-nutrient exclusion analytics.ts applies), never a silently
+    // low number and never 0 (§19).
+    expect(days[0].protein_g).toBeNull()
+
+    // A day whose items ALL lack protein snapshots is unknown too — not 0.
+    await seedMeal(3, '2026-03-10', 300, 0)
+    await db.run('UPDATE log_items SET snap_protein_g = NULL WHERE id = 3')
+    await changeDayStatus(db, { localDate: '2026-03-10', completion: 'complete' })
+    const nextDay = await checkinDays(db, '2026-03-10', '2026-03-10')
+    expect(nextDay[0].kcal).toBe(300)
+    expect(nextDay[0].protein_g).toBeNull()
+
+    // A fully-snapshotted day keeps its exact sums.
+    await seedMeal(4, '2026-03-11', 300, 20)
+    await changeDayStatus(db, { localDate: '2026-03-11', completion: 'complete' })
+    const knownDay = await checkinDays(db, '2026-03-11', '2026-03-11')
+    expect(knownDay[0].kcal).toBe(300)
+    expect(knownDay[0].protein_g).toBe(20)
+  })
 })

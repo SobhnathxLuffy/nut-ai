@@ -11,13 +11,17 @@ export async function checkinDays(db:DbAdapter,start:string,end:string):Promise<
   const days:CheckinDay[]=[]
   for(let date=start;date<=end;date=dateOffset(date,1)){
     const status=await getDayStatus(db,date)
-    const nutrition=await db.get<{kcal:number|null;protein:number|null;missing:number;count:number}>(`SELECT SUM(s.snap_energy_kcal*s.grams/100*m.portion_eaten_fraction) kcal,SUM(s.snap_protein_g*s.grams/100*m.portion_eaten_fraction) protein,SUM(CASE WHEN s.snap_energy_kcal IS NULL THEN 1 ELSE 0 END) missing,COUNT(*) count FROM meals m JOIN log_items s ON s.meal_id=m.id WHERE m.local_date=? AND m.deleted_at IS NULL AND s.deleted_at IS NULL AND m.analysis_status IN ('complete','manual')`,[date])
+    // Per-nutrient honesty (mirrors analytics.ts): `missing` counts items without an
+    // energy snapshot, `missing_protein` items without a protein snapshot. A day with
+    // ANY such item has an UNKNOWN nutrient sum for that nutrient — null it instead of
+    // feeding a partial (silently low) sum to weeklyMetrics/suggestTargets.
+    const nutrition=await db.get<{kcal:number|null;protein:number|null;missing:number;missing_protein:number;count:number}>(`SELECT SUM(s.snap_energy_kcal*s.grams/100*m.portion_eaten_fraction) kcal,SUM(s.snap_protein_g*s.grams/100*m.portion_eaten_fraction) protein,SUM(CASE WHEN s.snap_energy_kcal IS NULL THEN 1 ELSE 0 END) missing,SUM(CASE WHEN s.snap_protein_g IS NULL THEN 1 ELSE 0 END) missing_protein,COUNT(*) count FROM meals m JOIN log_items s ON s.meal_id=m.id WHERE m.local_date=? AND m.deleted_at IS NULL AND s.deleted_at IS NULL AND m.analysis_status IN ('complete','manual')`,[date])
     const weight=await db.get<{weight_kg:number}>('SELECT weight_kg FROM weight_entries WHERE local_date=? AND deleted_at IS NULL ORDER BY logged_at DESC,id DESC LIMIT 1',[date])
     const training=await db.get<{n:number}>("SELECT COUNT(*) n FROM workouts WHERE local_date=? AND status='completed' AND deleted_at IS NULL",[date])
     const goal=await db.get<{protein_g:number}>('SELECT protein_g FROM goals WHERE effective_from<=? AND deleted_at IS NULL ORDER BY effective_from DESC,id DESC LIMIT 1',[new Date(`${date}T23:59:59`).getTime()])
     const pending=await db.get<{n:number}>("SELECT COUNT(*) n FROM meals WHERE local_date=? AND deleted_at IS NULL AND analysis_status NOT IN ('complete','manual')",[date])
     const intentional=status?.completion==='fasting'||status?.completion==='complete'
-    days.push({date,status:status?.completion??'unknown',kcal:nutrition?.missing?null:nutrition?.kcal??(intentional?0:null),protein_g:nutrition?.protein??(intentional?0:null),protein_target:goal?.protein_g??null,weight_kg:weight?.weight_kg??null,completed_workouts:training?.n??0,pending:(pending?.n??0)>0})
+    days.push({date,status:status?.completion??'unknown',kcal:nutrition?.missing?null:nutrition?.kcal??(intentional?0:null),protein_g:nutrition?.missing_protein?null:(nutrition?.protein??(intentional?0:null)),protein_target:goal?.protein_g??null,weight_kg:weight?.weight_kg??null,completed_workouts:training?.n??0,pending:(pending?.n??0)>0})
   }
   return days
 }

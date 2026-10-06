@@ -178,9 +178,10 @@ describe('11-d — food-review per-item rows for multi-item meals', () => {
     // Each row's grams input is named after that food ("Paratha grams").
     expect(foodReview).toMatch(/label=\{`\$\{item\.displayName\} grams`\}/)
     expect(foodReview).toMatch(/updateItemGrams\(index, value\)/)
-    // Each row shows its own live kcal + macro line at the CURRENT grams.
+    // Each row shows its own live kcal + macro line at the CURRENT grams (null
+    // while the grams field is mid-edit — Task 12-c null dialect).
     expect(foodReview).toMatch(/macroLineCompact\(/)
-    expect(foodReview).toMatch(/snap\?\.kcal != null \? `\$\{Math\.round\(\(snap\.kcal \* rowGrams\) \/ 100\)\} kcal`/)
+    expect(foodReview).toMatch(/snap\?\.kcal != null && rowGrams != null \? `\$\{Math\.round\(\(snap\.kcal \* rowGrams\) \/ 100\)\} kcal`/)
   })
 
   it('the single total-grams stepper stays single-selection only', () => {
@@ -191,8 +192,9 @@ describe('11-d — food-review per-item rows for multi-item meals', () => {
   })
 
   it('save writes each selection with ITS OWN grams — no proportional rescale of a global weight', () => {
-    // The multi branch saves through logManualMealWithItems with per-row grams.
-    expect(foodReview).toMatch(/reviewSelections\.map\(\(item, i\) => \(\{ \.\.\.item, grams: rowGramsAt\(i\) \}\)\)/)
+    // The multi branch saves through logManualMealWithItems with per-row grams
+    // (non-null asserted: every row validated finite > 0 immediately above).
+    expect(foodReview).toMatch(/reviewSelections\.map\(\(item, i\) => \(\{ \.\.\.item, grams: rowGramsAt\(i\)! \}\)\)/)
     // The old scale factor is gone for good.
     expect(foodReview).not.toMatch(/originalTotal/)
     expect(foodReview).not.toMatch(/scale = weight \//)
@@ -259,5 +261,22 @@ describe('Task 11-e — the composer bottom controls clear the gesture bar and t
     // the windowSoftInputMode resize the old `undefined` leaned on.
     expect(dishComposer).toContain('<KeyboardAvoidingView')
     expect(dishComposer).toMatch(/behavior=\{Platform\.OS === 'ios' \? 'padding' : 'height'\}/)
+  })
+})
+
+// Task 12-c — a mid-edit grams field ("", "1.") is UNKNOWN, not zero (§19):
+// rowGramsAt is null and every kcal/macro readout renders the established
+// missing-data dialect ('—' / 'Calories unavailable') instead of "NaN kcal"
+// or "0 kcal". Save validation blocks exactly as before (unchanged).
+describe('Task 12-c — food-review null-gram dialect (no NaN/0 kcal while editing)', () => {
+  it('rowGramsAt returns null on blank/non-finite text and the readouts use the missing-data dialect', () => {
+    expect(foodReview).toMatch(/if \(raw\.trim\(\) === ''\) return null/)
+    expect(foodReview).toMatch(/return Number\.isFinite\(grams\) \? grams : null/)
+    // Multi footer totals: an unknown row weight nulls the nutrient — no NaN.
+    expect(foodReview).toMatch(/kcal: acc\.kcal !== null && snap\?\.kcal != null && grams != null \? acc\.kcal \+ \(snap\.kcal \* grams\) \/ 100 : null/)
+    // Single footer: an emptied grams field is UNKNOWN, never "0 kcal".
+    expect(foodReview).toMatch(/const weight = grams\.trim\(\) !== '' && Number\.isFinite\(Number\(grams\)\) \? Number\(grams\) : null/)
+    // The established footer dialect for a null total.
+    expect(foodReview).toMatch(/footerKcal != null \? `\$\{footerKcal\} kcal` : 'Calories unavailable'/)
   })
 })

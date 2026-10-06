@@ -33,10 +33,11 @@ const GRAM_STEP = 10
 /**
  * Per-100g snapshot value scaled to a gram weight. Null stays null — missing
  * nutrition is shown as '—' and excluded from sums, never silently counted as
- * zero (§19).
+ * zero (§19). An unknown (null/non-finite) gram weight scales nothing: null
+ * out, never 0.
  */
-function scaledPer100(per100: number | null | undefined, grams: number): number | null {
-  return per100 != null ? (per100 * grams) / 100 : null
+function scaledPer100(per100: number | null | undefined, grams: number | null): number | null {
+  return per100 != null && grams != null && Number.isFinite(grams) ? (per100 * grams) / 100 : null
 }
 
 /** One macro triple line. Colon form (footer, the full-meal readout). */
@@ -146,9 +147,16 @@ export default function FoodReview() {
   }
 
   /** A row's grams as it will be saved: the edited text, falling back to the
-      payload's own grams when the row state is missing (stale payload). */
-  const rowGramsAt = (index: number) =>
-    Number(itemGrams[index] ?? String(Math.round(reviewSelections[index]!.grams * 10) / 10))
+      payload's own grams when the row state is missing (stale payload). Null
+      while the field is mid-edit blank or non-numeric ("", "1.") — display
+      renders the missing-data dialect and save() blocks, never "NaN kcal" or
+      a silent 0 (§8.3/§19). */
+  const rowGramsAt = (index: number): number | null => {
+    const raw = itemGrams[index] ?? String(Math.round(reviewSelections[index]!.grams * 10) / 10)
+    if (raw.trim() === '') return null
+    const grams = Number(raw)
+    return Number.isFinite(grams) ? grams : null
+  }
 
   // ---- Large touch ladders (Ch. 8.3). Each step lands the Table 9.2
   // selection haptic and keeps the piece-weight fields synced.
@@ -196,7 +204,9 @@ export default function FoodReview() {
     if (isMulti) {
       for (let i = 0; i < reviewSelections.length; i++) {
         const grams = rowGramsAt(i)
-        if (!Number.isFinite(grams) || grams <= 0) {
+        // Null (mid-edit text) blocks exactly like the NaN it replaces —
+        // validation behavior is unchanged.
+        if (grams === null || grams <= 0) {
           isSavingRef.current = false
           return setError(`Enter a valid gram weight greater than zero for "${reviewSelections[i]!.displayName}"`)
         }
@@ -212,7 +222,8 @@ export default function FoodReview() {
         // its own log_item.
         await logManualMealWithItems(
           await db(),
-          reviewSelections.map((item, i) => ({ ...item, grams: rowGramsAt(i) })),
+          // Every row validated finite > 0 above, so grams cannot be null here.
+          reviewSelections.map((item, i) => ({ ...item, grams: rowGramsAt(i)! })),
           Date.now(),
           options,
         )
@@ -257,10 +268,16 @@ export default function FoodReview() {
     }
   }
 
-  const weight = Number(grams) || 0
-  const kcalNow = base && base.nutrientSnapshot.kcal !== null
+  // Mid-edit the grams field can hold "" or "1." — that is UNKNOWN, not zero
+  // (§19: missing nutrition never becomes zero). A null weight renders the
+  // missing-data dialect ('Calories unavailable' / '—') instead of a false
+  // "0 kcal"; save validation is unchanged (save() parses the field itself).
+  const weight = grams.trim() !== '' && Number.isFinite(Number(grams)) ? Number(grams) : null
+  const kcalNow = base && base.nutrientSnapshot.kcal !== null && weight != null
     ? Math.round((base.nutrientSnapshot.kcal ?? 0) * weight / 100)
     : null
+  // Ladder highlight sits off while the field is mid-edit (−1 matches no preset).
+  const ladderGrams = weight != null ? Math.round(weight) : -1
 
   // Footer totals. Multi-item meals total their rows' CURRENT grams (a
   // nutrient is summed only when every row reports it — no zero-filling).
@@ -270,10 +287,12 @@ export default function FoodReview() {
           const grams = rowGramsAt(i)
           const snap = item.nutrientSnapshot
           return {
-            kcal: acc.kcal !== null && snap?.kcal != null ? acc.kcal + (snap.kcal * grams) / 100 : null,
-            protein: acc.protein !== null && snap?.protein_g != null ? acc.protein + (snap.protein_g * grams) / 100 : null,
-            carbs: acc.carbs !== null && snap?.carbs_g != null ? acc.carbs + (snap.carbs_g * grams) / 100 : null,
-            fat: acc.fat !== null && snap?.fat_g != null ? acc.fat + (snap.fat_g * grams) / 100 : null,
+            // An unknown row weight (mid-edit) makes every total unknown —
+            // the footer shows the missing-data dialect, never "NaN kcal".
+            kcal: acc.kcal !== null && snap?.kcal != null && grams != null ? acc.kcal + (snap.kcal * grams) / 100 : null,
+            protein: acc.protein !== null && snap?.protein_g != null && grams != null ? acc.protein + (snap.protein_g * grams) / 100 : null,
+            carbs: acc.carbs !== null && snap?.carbs_g != null && grams != null ? acc.carbs + (snap.carbs_g * grams) / 100 : null,
+            fat: acc.fat !== null && snap?.fat_g != null && grams != null ? acc.fat + (snap.fat_g * grams) / 100 : null,
           }
         },
         { kcal: 0 as number | null, protein: 0 as number | null, carbs: 0 as number | null, fat: 0 as number | null },
@@ -332,7 +351,7 @@ export default function FoodReview() {
                       <View style={styles.itemReviewHead}>
                         <Text style={[type.bodyStrong, { color: theme.text, flex: 1 }]} numberOfLines={2}>{item.displayName}</Text>
                         <Text style={[type.bodyStrong, type.monoData, { color: theme.text }]}>
-                          {snap?.kcal != null ? `${Math.round((snap.kcal * rowGrams) / 100)} kcal` : '—'}
+                          {snap?.kcal != null && rowGrams != null ? `${Math.round((snap.kcal * rowGrams) / 100)} kcal` : '—'}
                         </Text>
                       </View>
                       <Field
@@ -382,11 +401,11 @@ export default function FoodReview() {
                       key={preset}
                       accessibilityRole="button"
                       accessibilityLabel={`Set ${preset} grams`}
-                      accessibilityState={{ selected: Math.round(weight) === preset }}
+                      accessibilityState={{ selected: ladderGrams === preset }}
                       onPress={() => setLadderGrams(preset)}
-                      style={[styles.ladderChip, { borderColor: theme.border, backgroundColor: Math.round(weight) === preset ? theme.text : theme.bgSunken }]}
+                      style={[styles.ladderChip, { borderColor: theme.border, backgroundColor: ladderGrams === preset ? theme.text : theme.bgSunken }]}
                     >
-                      <Text style={[type.label, { color: Math.round(weight) === preset ? theme.bg : theme.text }]}>{preset} g</Text>
+                      <Text style={[type.label, { color: ladderGrams === preset ? theme.bg : theme.text }]}>{preset} g</Text>
                     </PressableFX>
                   ))}
                 </View>

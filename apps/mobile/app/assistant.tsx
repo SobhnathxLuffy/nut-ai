@@ -111,6 +111,16 @@ async function resolveMealProposal(data: any): Promise<{ selection: ManualFoodSe
     throw new Error(`Could not find nutrition for "${ing.name}". Try rephrasing or using standard ingredients.`)
   }
 
+  // A proposal with ZERO resolvable ingredients (empty or unparseable list)
+  // must not become the synthetic 0 kcal/100 g aggregate below — that would
+  // route a savable zero-calorie item into /food-review (§19: missing
+  // nutrition never silently becomes zero). Throwing routes handleMealConfirm
+  // to its existing FAILED path (Failed badge + retry), same as an
+  // unresolvable ingredient.
+  if (resolvedSelections.length === 0) {
+    throw new Error('No ingredients in this proposal could be resolved to a food with nutrition.')
+  }
+
   const totalGrams = resolvedSelections.reduce((sum, item) => sum + item.grams, 0) || 100
   const totalKcal = resolvedSelections.reduce((sum, s) => sum + (s.nutrientSnapshot.kcal * s.grams / 100), 0)
   const totalProtein = resolvedSelections.reduce((sum, s) => sum + (s.nutrientSnapshot.protein_g * s.grams / 100), 0)

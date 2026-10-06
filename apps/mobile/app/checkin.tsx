@@ -106,6 +106,22 @@ export default function CheckinScreen() {
     })
   }
 
+  // The "Pregnant or Lactating" switch displays the disjunction
+  // pregnant || lactating (a restored backup's checkin.safety can set
+  // lactating=true on its own), so a plain handleToggleRisk('pregnant') could
+  // never switch the displayed ON state off. Toggle the DISJUNCTION honestly:
+  // on → off clears BOTH flags; off → on sets 'pregnant' (lactating is
+  // necessarily false whenever the disjunction is off).
+  const handleTogglePregnancyRisk = () => {
+    if (!safety || busy) return
+    const on = safety.pregnant || safety.lactating
+    void persistSafety({
+      ...safety,
+      pregnant: !on,
+      lactating: on ? false : safety.lactating,
+    })
+  }
+
   const handleAccept = async () => {
     if (!review?.suggestion || busy) return
     setBusy(true)
@@ -385,7 +401,7 @@ export default function CheckinScreen() {
               </View>
               <Switch
                 value={safety.pregnant || safety.lactating}
-                onValueChange={() => handleToggleRisk('pregnant')}
+                onValueChange={handleTogglePregnancyRisk}
                 thumbColor={safety.pregnant || safety.lactating ? theme.protein : theme.border}
               />
             </View>
