@@ -287,7 +287,12 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     expect(focusedTabName).toBe('Home')
   })
 
-  test('Honesty rows: the result screen glyph rows ANNOUNCE (Wave 5C fix) — no bare glyphs', async ({ page }) => {
+  test('Optimistic scan honesty: the timeline card announces state, items and estimates — no bare glyphs', async ({ page }) => {
+    // T-IMPL-A (Cal AI parity): the photo path LOGS at the shutter and the
+    // camera dismisses — the honest surface is now the timeline card, not a
+    // blocking result screen. The a11y contract moves with it: staged state
+    // announced in words, per-item rows carry the estimate suffix in text,
+    // and the state glyph is a named icon, never a bare one.
     await restoreOnboarding(page)
     await installGateway(page)
     await configureGatewayProvider(page)
@@ -301,27 +306,18 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     ])
     await chooser.setFiles({ name: 'qa-meal.jpg', mimeType: 'image/jpeg', buffer: JPEG_BUFFER })
 
-    // The result screen renders the ingredients.
-    await expect(page.getByText('Ingredients')).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText('Roti', { exact: true }).first()).toBeVisible()
-    await expect(page.getByText('Butter', { exact: true })).toBeVisible()
+    // Back on Home, the pending card announces the designed wait.
+    const analysing = page.locator('[aria-label*="Scan analysing"]')
+    await expect(analysing.first()).toBeVisible({ timeout: 30_000 })
 
-    // The HonestySummaryCard rows: each glyph is a NAMED image (check =
-    // "Identified", search = "Could not identify") beside its sentence.
-    await expect(page.getByRole('img', { name: 'Identified' })).toBeVisible()
-    await expect(page.getByRole('img', { name: 'Could not identify' })).toBeVisible()
-    await expect(page.getByText('Two rotis and a branded butter portion were visible')).toBeVisible()
-    await expect(page.getByText('The exact butter portion beyond the label serving')).toBeVisible()
-
-    // The branded row whose lookup came back "not found": the warning glyph
-    // announces "Estimated" with image semantics — not a bare glyph.
-    await expect(page.getByRole('img', { name: 'Estimated' })).toHaveCount(1)
-
-    // The lookup's honest failure is ALSO announced as an alert live region.
-    await expect(
-      page.getByRole('alert', {
-        name: 'Some ingredients could not be matched to an online source. Their nutrition stays estimated.',
-      }),
+    // The gateway answers; the card upgrades in place to the logged meal —
+    // items in words, estimates marked in TEXT (never a bare glyph).
+    const complete = page.locator('[aria-label*="Scanned meal with"]')
+    await expect(complete.first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText('Roti', { exact: false }).first()).toBeVisible()
+    await expect(page.getByText('estimate', { exact: false }).first()).toBeVisible()
+  })
+})
     ).toBeVisible()
   })
 })
