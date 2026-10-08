@@ -323,6 +323,3 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     await expect(page.getByText('estimate', { exact: false }).first()).toBeVisible()
   })
 })
-    ).toBeVisible()
-  })
-})
