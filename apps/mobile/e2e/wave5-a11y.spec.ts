@@ -317,8 +317,6 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     // legitimate on the first poll — assert the card, then require the
     // completed announcement (the staged 'Scan analysing' state is the
     // documented fast-path surface).
-    // card first, then require the completed announcement (the staged
-    // 'Scan analysing' state remains the documented fast-path surface).
     const card = page.locator('[aria-label*="Scan analysing"], [aria-label*="Scanned meal with"]')
     await expect(card.first()).toBeVisible({ timeout: 30_000 })
     const stagedOrNull = await page.locator('[aria-label*="Scan analysing"]').count()
