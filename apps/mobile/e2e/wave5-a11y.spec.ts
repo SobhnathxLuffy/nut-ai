@@ -311,8 +311,12 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     // provider settings), not the tabs. Go to Home explicitly: the timeline
     // card is the optimistic flow's visible half.
     await page.goto('/')
-    await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible({ timeout: 30_000 }) The gateway mock can answer within one
-    // tick, so EITHER state is legitimate on the first poll — assert the
+    await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible({ timeout: 30_000 })
+
+    // The gateway mock can answer within one tick, so EITHER state is
+    // legitimate on the first poll — assert the card, then require the
+    // completed announcement (the staged 'Scan analysing' state is the
+    // documented fast-path surface).
     // card first, then require the completed announcement (the staged
     // 'Scan analysing' state remains the documented fast-path surface).
     const card = page.locator('[aria-label*="Scan analysing"], [aria-label*="Scanned meal with"]')
