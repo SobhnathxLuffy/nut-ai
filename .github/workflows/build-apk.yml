@@ -79,7 +79,7 @@ jobs:
           # upgrade-safe — same signing key on every build, so versionCode N+1
           # installs as an update over N. The REAL release keystore stays
           # outside the repo; local builds keep using ~/.gradle credentials.
-          ./gradlew assembleRelease --no-scan --console=plain \
+          ./gradlew assembleRelease --no-scan --console=plain --stacktrace \
             -PNUTAI_UPLOAD_STORE_FILE="$GITHUB_WORKSPACE/apps/mobile/ci/ci-upload.keystore" \
             -PNUTAI_UPLOAD_STORE_PASSWORD=nutai-ci-2026 \
             -PNUTAI_UPLOAD_KEY_ALIAS=nut-ai-ci \

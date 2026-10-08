@@ -306,7 +306,12 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     ])
     await chooser.setFiles({ name: 'qa-meal.jpg', mimeType: 'image/jpeg', buffer: JPEG_BUFFER })
 
-    // Back on Home, the card exists. The gateway mock can answer within one
+    // The optimistic capture dismisses the camera with router.back() — from a
+    // direct /camera goto that lands on the PREVIOUS history entry (here the
+    // provider settings), not the tabs. Go to Home explicitly: the timeline
+    // card is the optimistic flow's visible half.
+    await page.goto('/')
+    await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible({ timeout: 30_000 }) The gateway mock can answer within one
     // tick, so EITHER state is legitimate on the first poll — assert the
     // card first, then require the completed announcement (the staged
     // 'Scan analysing' state remains the documented fast-path surface).
