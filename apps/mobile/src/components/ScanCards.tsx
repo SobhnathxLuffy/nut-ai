@@ -55,7 +55,7 @@ export function ScanCardList({ cards }: { cards: ScanCard[] }) {
   const cancelPending = async (card: ScanCard) => {
     await deleteMeal(card.mealId)
     forgetScanOutcome(card.mealId)
-    showUndoableLoggedToast('Scan cancelled — the photo and row were removed.')
+    showUndoableLoggedToast('Scan cancelled — the photo and row were removed.', 'Could not undo — the log changed since the row was removed.')
   }
 
   const logManually = (card: ScanCard) => {

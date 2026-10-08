@@ -18,6 +18,7 @@ import { loggedRowBandFor, visibilityLabelFor } from '../src/data/meal-honesty'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Badge } from '../src/components/Badge'
 import { Field } from '../src/components/Field'
+import { MonthPicker } from '../src/components/MonthPicker'
 import { Icon } from '../src/components/Icon'
 import { PressableFX } from '../src/components/PressableFX'
 import { MenuSheet } from '../src/components/Sheet'
@@ -82,6 +83,7 @@ export default function MealDetail() {
   // whose inline editor is expanded.
   const [menuItemId, setMenuItemId] = useState<number | null>(null)
   const [editingItemId, setEditingItemId] = useState<number | null>(null)
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   const applyLoggedMeal = useCallback((value: LoggedMealDetail) => {
     setMeal({
@@ -318,7 +320,26 @@ export default function MealDetail() {
           </Pressable>
         </View>
 
-        <Field label="Date (YYYY-MM-DD)" value={meal.date} onValueChange={(value) => setMeal({ ...meal, date: value })} keyboardType="numbers-and-punctuation" placeholder="YYYY-MM-DD" autoCorrect={false} autoCapitalize="none" />
+        {/* F7: a real calendar pick replaces free-text ISO typing — one tap
+            moves a late-morning scan to yesterday's lunch, no typing. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Meal date ${meal.date} — tap to change`}
+          onPress={() => setShowDatePicker((v) => !v)}
+          style={styles.dateToggle}
+        >
+          <Text style={[type.body, { color: theme.text }]}>Date: {meal.date}</Text>
+          <Text style={[type.caption, { color: theme.textMuted }]}>{showDatePicker ? 'Hide calendar' : 'Tap to change'}</Text>
+        </Pressable>
+        {showDatePicker && (
+          <MonthPicker
+            value={meal.date}
+            onChange={(iso) => {
+              setMeal({ ...meal, date: iso })
+              setShowDatePicker(false)
+            }}
+          />
+        )}
         <View style={styles.row}>
           {SLOTS.map((slot) => {
             const selected = meal.slot === slot
@@ -699,6 +720,7 @@ const styles = StyleSheet.create({
   primaryBtn: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
   // F3: the per-100 g macro override grid — two rows of two compact fields.
   macroGrid: { gap: 8, marginTop: 4 },
+  dateToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 12, padding: 10, minHeight: 44 },
   macroRow: { flexDirection: 'row', gap: 8 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },

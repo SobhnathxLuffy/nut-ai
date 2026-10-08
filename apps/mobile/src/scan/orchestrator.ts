@@ -469,19 +469,33 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
         outputTokens: outcome.value.outputTokens,
         costUsd: outcome.value.costUsd,
       }
-      const completed = await completePendingMeal(mealId, result, scanMeta, Date.now()).catch(
-        (err) => {
+      // A transient DB failure inside the completion transaction must not
+      // cost the user a second MODEL call — one immediate retry, then the
+      // guarded fail path (which is a no-op if the row completed anyway).
+      const completeOnce = (now: number) =>
+        completePendingMeal(mealId, result, scanMeta, now).catch((err) => {
           console.error('[scan] completing the pending meal failed', err)
           return false
-        },
-      )
+        })
+      let completed = await completeOnce(Date.now())
+      if (!completed) completed = await completeOnce(Date.now() + 1)
       if (completed) {
+        // Baselines keyed by name are only unambiguous when the name is unique
+        // within the scan; duplicates fall back to the row's own logged grams
+        // (the consumer's ?? item.grams) instead of the wrong row's baseline.
+        const seen = new Set<string>()
+        const uniqueBaseline: Record<string, number> = {}
+        for (const r of result.meal.ingredients) {
+          if (seen.has(r.displayName)) delete uniqueBaseline[r.displayName]
+          else {
+            uniqueBaseline[r.displayName] = r.grams
+            seen.add(r.displayName)
+          }
+        }
         setScanOutcome({
           mealId,
           questions: result.questions.filter((q) => q.state === 'highlighted'),
-          baselineGrams: Object.fromEntries(
-            result.meal.ingredients.map((r) => [r.displayName, r.grams]),
-          ),
+          baselineGrams: uniqueBaseline,
         })
         // The haptic rides a dynamic import on purpose: a static one would
         // pull expo-haptics → react-native into every bare-Node test that

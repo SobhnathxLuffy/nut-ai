@@ -22,7 +22,7 @@ import {
   startWorkout,
   type Exercise,
   type Workout,
-} from '@nutai/training'
+  defaultSetsFor as sharedDefaultSetsFor,} from '@nutai/training'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { Icon, type IconName } from '../src/components/Icon'
 import { ItemRow } from '../src/components/ItemRow'
@@ -348,22 +348,10 @@ function ConfigureScreen({ exercise, onBack }: { exercise: { id: number; name: s
       // most recent completed performance of THIS exercise (any workout) —
       // before the user types a thing.
       try {
-        const perf = await performanceHistory(h)
-        const mine = perf.filter((p) => p.exercise_id === exercise.id)
-        if (mine.length === 0) return
-        const lastWorkoutId = Math.max(...mine.map((p) => p.workout_id))
-        const lastSets = mine.filter((p) => p.workout_id === lastWorkoutId && p.kind !== 'warmup' && p.kind !== 'cooldown').slice(0, 6)
-        if (lastSets.length === 0) return
-        const seeded = lastSets.map((s) => ({
-          load_kg: s.load_kg,
-          reps: s.reps,
-          duration_s: s.duration_s,
-          distance_m: s.distance_m,
-          assistance_kg: s.assistance_kg,
-          rir: null,
-          rpe: null,
-          tempo: null,
-        }))
+        // THE shared history-seeding helper (packages/training) — the same
+        // last-session logic the routine editor uses, never a divergent copy.
+        const seeded = sharedDefaultSetsFor(exercise, await performanceHistory(h)).slice(0, 6)
+        if (seeded.length === 0) return
         setRows(seeded.map((parsed, i) => ({ key: i, text: setValuesToDisplay(parsed, loadedUnit), parsed })))
       } catch {
         // seeding is best-effort — the static defaults remain

@@ -496,8 +496,11 @@ export default function WorkoutScreen() {
               <Text key={i} style={[type.caption, { color: t.textMuted, lineHeight: 19 }]}>{line}</Text>
             ))}
             <Row>
-              <Button label="Accept" selected onPress={() => setSuggestionDismissedFor(w.id)} />
-              <Button label="Edit" onPress={() => setSuggestionDismissedFor(w.id)} />
+              {/* The engine prefill is already applied either way — the two
+                  actions differ in what the USER does next, and the copy says
+                  so instead of pretending one of them changes the data. */}
+              <Button label="Keep this plan" selected onPress={() => setSuggestionDismissedFor(w.id)} />
+              <Button label="I'll adjust the fields" onPress={() => setSuggestionDismissedFor(w.id)} />
             </Row>
           </View>
         )}

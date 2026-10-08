@@ -25,6 +25,8 @@ import { ItemRow } from '../src/components/ItemRow'
 import { Empty } from '../src/components/Empty'
 import { Badge } from '../src/components/Badge'
 import { ChipRow } from '../src/components/ChipRow'
+import { MonthPicker } from '../src/components/MonthPicker'
+import { Pressable } from 'react-native'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { space } from '../src/theme/tokens'
 
@@ -59,6 +61,7 @@ function composeDate(p: DateParts): string {
 const EMPTY_FORM = { name: '', startDate: localDate(Date.now()), weeks: '8', schedule: [] as ScheduleSlot[] }
 
 export default function ProgramsScreen() {
+  const theme = useTheme()
   const t = useTheme()
   const [programs, setPrograms] = useState<Program[]>([])
   const [routines, setRoutines] = useState<Routine[]>([])
@@ -67,6 +70,7 @@ export default function ProgramsScreen() {
   const [editId, setEditId] = useState<number | null>(null)
   const [name, setName] = useState(EMPTY_FORM.name)
   const [dateParts, setDateParts] = useState<DateParts>(() => partsOfDate(EMPTY_FORM.startDate))
+  const [showDatePicker, setShowDatePicker] = useState(false)
   const [weeks, setWeeks] = useState(EMPTY_FORM.weeks)
   const [schedule, setSchedule] = useState<ScheduleSlot[]>(EMPTY_FORM.schedule)
 
@@ -200,22 +204,33 @@ export default function ProgramsScreen() {
           <Label>{editId ? 'Edit Program' : 'Create Training Program'}</Label>
           <Field label="Program Name" value={name} onChangeText={setName} placeholder="e.g. 8-Week Hypertrophy" />
           <Row>
-            {/* Task 2-c (program IA): three-part date entry replaces the raw
-                typed YYYY-MM-DD field (no new dependency; validation still
-                happens once at the save boundary). */}
-            <View style={{ flex: 1 }}>
-              <Field label="Start day" keyboardType="number-pad" maxLength={2} value={dateParts.day} onChangeText={(day) => setDateParts({ ...dateParts, day })} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field label="Start month" keyboardType="number-pad" maxLength={2} value={dateParts.month} onChangeText={(month) => setDateParts({ ...dateParts, month })} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Field label="Start year" keyboardType="number-pad" maxLength={4} value={dateParts.year} onChangeText={(year) => setDateParts({ ...dateParts, year })} />
+            {/* T6: the start date is a real calendar pick (THE shared
+                MonthPicker) — no numeric part-typing; the weeks number stays
+                a field and validation still happens at the save boundary. */}
+            <View style={{ flex: 2 }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Start date ${composeDate(dateParts) || 'unset'} — tap to change`}
+                onPress={() => setShowDatePicker((v) => !v)}
+                style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 10, minHeight: 44, justifyContent: 'center' }}
+              >
+                <Label>Start date</Label>
+                <Label muted>{isValidLocalDate(composeDate(dateParts)) ? composeDate(dateParts) : 'pick below'}</Label>
+              </Pressable>
             </View>
             <View style={{ flex: 1 }}>
               <Field label="Duration (Weeks)" keyboardType="number-pad" value={weeks} onChangeText={setWeeks} />
             </View>
           </Row>
+          {showDatePicker && (
+            <MonthPicker
+              value={isValidLocalDate(composeDate(dateParts)) ? composeDate(dateParts) : localDate(Date.now())}
+              onChange={(iso) => {
+                setDateParts(partsOfDate(iso))
+                setShowDatePicker(false)
+              }}
+            />
+          )}
 
           <Label>Assign Weekly Schedule</Label>
           <Label muted>

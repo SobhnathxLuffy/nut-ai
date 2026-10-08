@@ -41,18 +41,12 @@ import { describeActiveModel, composeModelLine } from '../src/inference/active-m
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
 import { loadFood, resolveByText } from '@nutai/resolver'
 import type { CorrectionIntent } from '@nutai/core-schema'
-import { describeCorrectionOperation } from '../src/data/correction-describe'
+import { describeCorrectionOperation, matchCorrectionRow } from '../src/data/correction-describe'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { STREAM_STALL_TIMEOUT_MS } from '@nutai/prompt'
 
-/** F4 fix 8: normalization for the fuzzy name→row fallback — case, punctuation
- *  and spacing drift between the model's echo and the logged name must not
- *  break the match. */
-function normalizeName(value: string | null | undefined): string {
-  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-}
 
 const HISTORY_SETTING = 'assistant_history'
 const HISTORY_MAX_TURNS = 40
@@ -593,20 +587,16 @@ export default function AssistantScreen() {
       }
 
       // F4 fix 8: a stale or hallucinated id no longer kills the operation —
-      // the echoed NAME (or an id that IS a name, per the prompt contract)
-      // falls back to a normalized substring match over the same rows.
+      // resolution goes through THE shared unicode-aware matcher (the same
+      // one the Fix-Result path uses), so Devanagari and other non-ASCII
+      // names match instead of dying in an ASCII-only normalization.
       const resolveKey = (id: string, nameCandidate: string | null): CorrectionRowRef | null => {
         const direct = byKey.get(id)
         if (direct) return direct
-        for (const candidate of [nameCandidate, id]) {
-          const needle = normalizeName(candidate)
-          if (!needle) continue
-          const hit =
-            rows.find((r) => normalizeName(r.displayName) === needle) ??
-            rows.find((r) => normalizeName(r.displayName).includes(needle) || needle.includes(normalizeName(r.displayName)))
-          if (hit) return hit
-        }
-        return null
+        // CorrectionRowRef.key IS the write layer's id (m<meal>i<item>).
+        const nameBearing = rows.map((r) => ({ id: r.key, displayName: r.displayName }))
+        const hit = matchCorrectionRow(nameCandidate ?? id, nameBearing) ?? matchCorrectionRow(id, nameBearing)
+        return hit ? byKey.get(hit.id) ?? null : null
       }
 
       const todayMeals = await mealsForDay(localDate(now))

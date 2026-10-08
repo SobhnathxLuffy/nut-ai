@@ -163,7 +163,7 @@ describe('Ch. 8.3 item 6 — food-review is a stepper', () => {
     expect(foodReview).toMatch(/updateQuantity|updateUnitGrams|updateGrams/)
     expect(foodReview).toContain(`What's inside`)
     expect(foodReview).toMatch(/pathname: '\/dish-composer'/)
-    expect(foodReview).toMatch(/message: 'Meal logged\.'/)
+    expect(foodReview).toMatch(/showUndoableLoggedToast\('Meal logged\.'\)/)
     expect(foodReview).toContain('hapticSuccess')
   })
 })

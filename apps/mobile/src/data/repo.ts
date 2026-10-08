@@ -597,11 +597,14 @@ export async function retryPendingMeal(mealId: number): Promise<string | null> {
     [mealId],
   )
   if (!row) return null
-  await h.run(
+  // Guarded write (same conditions as the read) — a meal completed or deleted
+  // between the read and this write must not flip states blindly (TOCTOU).
+  const updated = await h.run(
     `UPDATE meals SET analysis_status = 'captured', updated_at = ?, revision = revision + 1, sync_state = 'local'
-     WHERE id = ?`,
+     WHERE id = ? AND deleted_at IS NULL AND analysis_status = 'failed'`,
     [Date.now(), mealId],
   )
+  if (!updated.changes) return null
   emitFoodMutation({ kind: 'meal' })
   return row.photo_uri
 }

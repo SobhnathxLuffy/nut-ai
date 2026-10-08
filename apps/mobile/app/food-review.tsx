@@ -5,14 +5,14 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { decodeFoodReview } from '../src/data/food-review'
 import { logManualFood, logManualMealWithItems, type ManualFoodSelection } from '../src/data/manual-food'
-import { db, undoLastOperation } from '../src/data/repo'
+import { db } from '../src/data/repo'
+import { showUndoableLoggedToast } from '../src/data/undo-toast'
 import { slotFor, localDate, isValidLocalDate } from '../src/data/date-utils'
 import { useTheme } from '../src/theme/ThemeProvider'
 import { Field } from '../src/components/Field'
 import { Icon } from '../src/components/Icon'
 import { PressableFX } from '../src/components/PressableFX'
 import { Button, Card } from '../src/components/Screen'
-import { showToast } from '../src/components/toast-store'
 // UI/UX report Table 9.2 (Wave 1c): "Log meal → Success (notification)" — the
 // core reward moment fires with the Undo toast, never instead of it.
 import { selectionAsync, success as hapticSuccess } from '../src/utils/haptics'
@@ -241,21 +241,7 @@ export default function FoodReview() {
       // The toast host is mounted at the app root, so it outlives the dismiss;
       // undoLastOperation emits the food-mutation event that refreshes the
       // Home/Food timelines.
-      showToast({
-        message: 'Meal logged.',
-        tone: 'success',
-        durationMs: 6000,
-        action: {
-          label: 'Undo',
-          onPress: () => {
-            void undoLastOperation().then((r) => {
-              if (!r.success) {
-                showToast({ message: 'Could not undo — the log changed since this meal was added.', tone: 'error' })
-              }
-            })
-          },
-        },
-      })
+      showUndoableLoggedToast('Meal logged.')
       if (router.canDismiss?.()) {
         router.dismissAll()
       } else {

@@ -8,7 +8,11 @@ import { undoLastOperation } from './repo'
  * at the app root, so it outlives any dismiss; undoLastOperation emits the
  * food-mutation event that refreshes the Home/Food timelines.
  */
-export function showUndoableLoggedToast(message = 'Meal logged.'): void {
+export function showUndoableLoggedToast(
+  message = 'Meal logged.',
+  /** Failure copy must match the ACTION being undone, not always "added". */
+  failureMessage = 'Could not undo — the log changed since this meal was added.',
+): void {
   showToast({
     message,
     tone: 'success',
@@ -18,7 +22,7 @@ export function showUndoableLoggedToast(message = 'Meal logged.'): void {
       onPress: () => {
         void undoLastOperation().then((r) => {
           if (!r.success) {
-            showToast({ message: 'Could not undo — the log changed since this meal was added.', tone: 'error' })
+            showToast({ message: failureMessage, tone: 'error' })
           }
         })
       },
