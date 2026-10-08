@@ -339,9 +339,35 @@ function ConfigureScreen({ exercise, onBack }: { exercise: { id: number; name: s
   useEffect(() => {
     void (async () => {
       const h = await db()
-      setUnit(await readWeightUnit(h))
+      const loadedUnit = await readWeightUnit(h)
+      setUnit(loadedUnit)
       setUnitReady(true)
       setActive(await activeWorkout(h))
+      // T9: the configure screen used to hard-code 20 kg × 10 even though the
+      // user's last session was one tap away. Seed the draft rows from the
+      // most recent completed performance of THIS exercise (any workout) —
+      // before the user types a thing.
+      try {
+        const perf = await performanceHistory(h)
+        const mine = perf.filter((p) => p.exercise_id === exercise.id)
+        if (mine.length === 0) return
+        const lastWorkoutId = Math.max(...mine.map((p) => p.workout_id))
+        const lastSets = mine.filter((p) => p.workout_id === lastWorkoutId && p.kind !== 'warmup' && p.kind !== 'cooldown').slice(0, 6)
+        if (lastSets.length === 0) return
+        const seeded = lastSets.map((s) => ({
+          load_kg: s.load_kg,
+          reps: s.reps,
+          duration_s: s.duration_s,
+          distance_m: s.distance_m,
+          assistance_kg: s.assistance_kg,
+          rir: null,
+          rpe: null,
+          tempo: null,
+        }))
+        setRows(seeded.map((parsed, i) => ({ key: i, text: setValuesToDisplay(parsed, loadedUnit), parsed })))
+      } catch {
+        // seeding is best-effort — the static defaults remain
+      }
     })()
   }, [])
 

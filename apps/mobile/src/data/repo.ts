@@ -517,6 +517,246 @@ export async function logMeal(
   })
 }
 
+// ---------------------------------------------------------------------------
+// Optimistic scan log (Cal AI pattern #1) — the shutter writes the meal row
+// FIRST, as 'captured', and the orchestrator upgrades the SAME row in place:
+// queued/analyzing → complete (or failed, photo retained). The dayTotals
+// pendingCount reader and the timeline's pending copy already existed; this is
+// the writer they were waiting for. No new columns, no migration: the schema
+// default (analysis_status='captured') was designed for exactly this.
+// ---------------------------------------------------------------------------
+
+/**
+ * Insert the pending meal row at shutter time. Zero log_items: the timeline
+ * renders 'Analysis pending' for itemless meals and dayTotals counts the row
+ * as pending contributing zero kcal — the honest "logged but not yet known".
+ * Nothing here can fail the meal: no key, no network, no model. The
+ * food-mutation event makes the pending card appear on Home/Food in the SAME
+ * tap that dismissed the camera — the optimistic flow's visible half.
+ */
+export async function createPendingMeal(photoUri: string | null, now: number): Promise<number> {
+  const h = await db()
+  const sync = createSyncMetadata(now)
+  const mealId = await h.transaction(async (tx) => {
+    const meal = await tx.run(
+      `INSERT INTO meals (logged_at, local_date, meal_slot, photo_uri, portion_eaten_fraction,
+                          analysis_status, created_at, uuid, updated_at, revision, deleted_at, sync_state)
+       VALUES (?,?,?,?,1.0,'captured',?,?,?,?,?,?)`,
+      [now, localDate(now), slotFor(now), photoUri, now, sync.uuid, sync.updated_at, sync.revision, sync.deleted_at, sync.sync_state],
+    )
+    return Number(meal.lastInsertRowId)
+  })
+  emitFoodMutation({ kind: 'meal' })
+  return mealId
+}
+
+/**
+ * Advance a pending row's stored stage ('queued' = the model call is running,
+ * 'analyzing' = the deterministic pipeline is matching). The pending card's
+ * staged copy derives from THIS column — a stored field, never a timer — and
+ * each transition emits the food-mutation event that re-renders the card's
+ * copy (event-driven, no polling). Guarded to pending rows only, so a
+ * cancelled meal can never be revived.
+ */
+export async function markPendingMealStage(mealId: number, status: 'queued' | 'analyzing'): Promise<void> {
+  const h = await db()
+  const res = await h.run(
+    `UPDATE meals SET analysis_status = ?, updated_at = ?, revision = revision + 1, sync_state = 'local'
+     WHERE id = ? AND deleted_at IS NULL AND analysis_status IN ('captured','queued','analyzing')`,
+    [status, Date.now(), mealId],
+  )
+  if (res.changes > 0) emitFoodMutation({ kind: 'meal' })
+}
+
+/**
+ * Analysis failed. The row (and its photo) STAYS, marked 'failed' — the card
+ * renders "Couldn't analyse — tap to fix" with retry / log-manually / delete.
+ * 'failed' is deliberately outside dayTotals' pending set: a meal we could not
+ * analyse counts as neither eaten nor silently growing.
+ */
+export async function failPendingMeal(mealId: number): Promise<void> {
+  const h = await db()
+  await h.run(
+    `UPDATE meals SET analysis_status = 'failed', updated_at = ?, revision = revision + 1, sync_state = 'local'
+     WHERE id = ? AND deleted_at IS NULL AND analysis_status IN ('captured','queued','analyzing')`,
+    [Date.now(), mealId],
+  )
+  emitFoodMutation({ kind: 'meal' })
+}
+
+/**
+ * Re-arm a FAILED row for another analysis attempt (the card's Retry). Only a
+ * failed row may be re-queued — a completed meal never re-enters the pipeline
+ * through this door — and the caller re-fires startScan(uri, { mealId }) with
+ * the photo uri this row retained.
+ */
+export async function retryPendingMeal(mealId: number): Promise<string | null> {
+  const h = await db()
+  const row = await h.get<{ photo_uri: string | null }>(
+    `SELECT photo_uri FROM meals WHERE id = ? AND deleted_at IS NULL AND analysis_status = 'failed'`,
+    [mealId],
+  )
+  if (!row) return null
+  await h.run(
+    `UPDATE meals SET analysis_status = 'captured', updated_at = ?, revision = revision + 1, sync_state = 'local'
+     WHERE id = ?`,
+    [Date.now(), mealId],
+  )
+  emitFoodMutation({ kind: 'meal' })
+  return row.photo_uri
+}
+
+/**
+ * Upgrade a pending row to a complete meal IN PLACE — the same transaction
+ * shape logMeal uses (meal row + per-100 g item snapshots + cost ledger), but
+ * UPDATE-ing the row the shutter created instead of inserting a second one.
+ *
+ * The single recorded operation is an INSERT whose snapshot is the completed
+ * state, so undo removes the whole scan and redo restores it — the pending
+ * stage is never resurrected as a zombie row. If the user deleted the row
+ * while analysis ran ("Log manually instead"), this returns false and the
+ * result is dropped: a cancelled scan is never resurrected by a late answer.
+ */
+export async function completePendingMeal(
+  mealId: number,
+  result: import('@nutai/pipeline').ScanResult,
+  meta: {
+    provider: string
+    model: string
+    inputTokens: number
+    outputTokens: number
+    costUsd: number | null
+  } | null,
+  now: number,
+): Promise<boolean> {
+  const h = await db()
+  const date = localDate(now)
+  const honestyJson = serializeMealHonesty(result)
+
+  const completed = await h.transaction(async (tx) => {
+    const pending = await tx.get<Record<string, unknown>>(
+      `SELECT id FROM meals
+       WHERE id = ? AND deleted_at IS NULL AND analysis_status IN ('captured','queued','analyzing')`,
+      [mealId],
+    )
+    if (!pending) return false
+
+    // USER EDITS WIN (owner mandate): if items were somehow attached to the
+    // pending row while analysis was in flight (deep-linked meal-detail edit),
+    // the model's items must not clobber them — the meal still completes, but
+    // the user's rows stand and the model's are dropped.
+    const preexisting = await tx.get<{ c: number }>(
+      'SELECT COUNT(*) c FROM log_items WHERE meal_id = ? AND deleted_at IS NULL',
+      [mealId],
+    )
+    const keepUserItems = (preexisting?.c ?? 0) > 0
+    if (keepUserItems) console.warn(`[scan] meal ${mealId} gained user items while analysing — keeping them, dropping model items`)
+
+    await tx.run(
+      `UPDATE meals SET portion_eaten_fraction = ?, analysis_status = 'complete', engine_id = ?,
+                         prompt_version = ?, schema_version = ?, clamp_flags_json = ?, honesty_json = ?,
+                         updated_at = ?, revision = revision + 1, sync_state = 'local'
+       WHERE id = ?`,
+      [
+        result.meal.portionEatenFraction,
+        result.meal.engineId,
+        result.meal.promptVersion,
+        result.meal.schemaVersion,
+        JSON.stringify(result.clampFlags ?? []),
+        honestyJson,
+        now,
+        mealId,
+      ],
+    )
+
+    let sort = 0
+    for (const row of keepUserItems ? [] : result.meal.ingredients) {
+      const itemSync = createSyncMetadata(now)
+      const foodId = row.sourceFoodId == null ? null : Number(row.sourceFoodId)
+      const range =
+        row.portionRange && row.portionRange.minG <= row.portionRange.maxG ? row.portionRange : null
+      await tx.run(
+        `INSERT INTO log_items (meal_id, matched_food_id, matched_food_source, raw_model_label,
+                                display_name, grams, gram_pathway, portion_source,
+                                snap_energy_kcal, snap_protein_g, snap_fat_g, snap_carb_g,
+                                snap_fiber_g, snap_sugar_g, snap_sodium_mg,
+                                is_estimate, macros_user_edited, band_half_pct,
+                                assumptions_json, sort_order, logged_at, uuid,
+                                created_at, updated_at, revision, deleted_at, sync_state,
+                                visibility, qualitative_amount, portion_min_g, portion_max_g,
+                                preparation_json)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          mealId,
+          Number.isFinite(foodId as number) ? foodId : null,
+          row.origin === 'web_lookup' ? 'web' : row.sourceFoodId != null ? 'corpus' : 'estimate',
+          row.sourceUrl ?? null,
+          row.displayName,
+          row.grams,
+          row.gramPathway,
+          row.origin,
+          row.nutrientSnapshot.kcal,
+          row.nutrientSnapshot.protein_g,
+          row.nutrientSnapshot.fat_g,
+          row.nutrientSnapshot.carbs_g,
+          row.nutrientSnapshot.fiber_g ?? null,
+          row.nutrientSnapshot.sugar_g ?? null,
+          row.nutrientSnapshot.sodium_mg ?? null,
+          row.isEstimate ? 1 : 0,
+          row.macrosUserEdited ? 1 : 0,
+          row.bandHalfPct,
+          JSON.stringify(row.assumptions ?? []),
+          sort++,
+          now,
+          itemSync.uuid,
+          itemSync.created_at,
+          itemSync.updated_at,
+          itemSync.revision,
+          itemSync.deleted_at,
+          itemSync.sync_state,
+          row.visibility ?? null,
+          row.qualitativeAmount ?? null,
+          range ? range.minG : null,
+          range ? range.maxG : null,
+          row.preparation ? JSON.stringify(row.preparation) : null,
+        ],
+      )
+    }
+
+    if (meta) {
+      await tx.run(
+        `INSERT INTO scan_cost_ledger (meal_id, provider, model, input_tokens, output_tokens,
+                                       cost_usd, local_month, created_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        [mealId, meta.provider, meta.model, meta.inputTokens, meta.outputTokens, meta.costUsd ?? 0, date.slice(0, 7), now],
+      )
+    }
+
+    const mealRow = await tx.get<Record<string, unknown>>('SELECT * FROM meals WHERE id = ?', [mealId])
+    const itemRows = await tx.all<Record<string, unknown>>(
+      'SELECT * FROM log_items WHERE meal_id = ? ORDER BY id ASC',
+      [mealId],
+    )
+    const ledgerRows = await tx.all<Record<string, unknown>>(
+      'SELECT * FROM scan_cost_ledger WHERE meal_id = ? ORDER BY id ASC',
+      [mealId],
+    )
+
+    await recordOperation(tx, {
+      entityType: 'meals',
+      entityId: mealId,
+      opType: 'insert',
+      newJson: { meal: mealRow, items: itemRows, ledger: ledgerRows },
+      actor: 'user',
+      createdAt: now,
+    })
+    return true
+  })
+
+  if (completed) emitFoodMutation({ kind: 'meal' })
+  return completed
+}
+
 export async function deleteMeal(
   mealId: number,
   options?: {

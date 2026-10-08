@@ -251,11 +251,11 @@ test.describe('Wave 5C a11y-tree walk — what the tree actually exposes', () =>
     // The selected mode pill carries its pressed state (Badge maps
     // accessibilityState.selected → aria-pressed on web).
     await expect(page.getByRole('button', { name: 'Scan food', exact: true })).toHaveAttribute('aria-pressed', 'true')
-    // The Quick/Advanced review pair is a NAMED radiogroup with radio roles.
-    const group = page.getByRole('radiogroup', { name: 'Review mode' })
-    await expect(group).toBeVisible()
-    await expect(group.getByRole('radio', { name: 'Quick review' })).toBeVisible()
-    await expect(group.getByRole('radio', { name: 'Advanced review' })).toBeVisible()
+    // T-IMPL-A: the Quick/Advanced review pair is DELETED — no radiogroup may
+    // reappear (one scan path per capture type).
+    await expect(page.getByRole('radiogroup', { name: 'Review mode' })).toHaveCount(0)
+    await expect(page.getByRole('radio', { name: 'Quick review' })).toHaveCount(0)
+    await expect(page.getByRole('radio', { name: 'Advanced review' })).toHaveCount(0)
     // The shutter and the close affordance.
     await expect(page.getByRole('button', { name: 'Pick a food photo' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Close', exact: true })).toBeVisible()

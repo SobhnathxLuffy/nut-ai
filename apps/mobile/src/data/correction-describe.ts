@@ -33,3 +33,57 @@ export function describeCorrectionOperation(
 export function rowsNameOf(rows: IngredientRow[]): (id: string) => string {
   return (id: string) => rows.find((r) => r.id === id)?.displayName ?? 'that item'
 }
+
+// ---------------------------------------------------------------------------
+// Fuzzy name→row resolution (T-IMPL-A fix 8): the correction prompt asked the
+// model to echo exact timestamp ids; a mismatched id used to die as "no longer
+// in the list". Both correction paths now degrade to NAME matching over the
+// same context rows before reporting a skip.
+// ---------------------------------------------------------------------------
+
+interface NameBearingRow {
+  /** The row id the write layer understands (`m<meal>i<item>` or a draft row id). */
+  id: string
+  displayName: string
+}
+
+/** Lowercase + collapse whitespace + strip punctuation, so "Rice (white)" matches "rice white". */
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Resolve one correction operation's id-or-name to a row.
+ *
+ * Precedence: exact id → exact (normalized) name → the row whose name contains
+ * the query or vice versa (longest containing name wins — "rice" matches
+ * "brown rice" over "rice cakes" only when it is the only/longest hit) →
+ * word-overlap. Null = genuinely unresolvable; the caller reports a skip with
+ * the row's name, never a raw id.
+ */
+export function matchCorrectionRow<T extends NameBearingRow>(
+  idOrName: string,
+  rows: ReadonlyArray<T>,
+): T | null {
+  const query = normalizeName(idOrName)
+  if (!query) return null
+  const normalized = rows.map((r) => ({ row: r, name: normalizeName(r.displayName) }))
+  return (
+    normalized.find((r) => r.row.id === idOrName)?.row ??
+    normalized.find((r) => r.name === query)?.row ??
+    // Containment, longest name first so a specific name beats a generic one.
+    normalized
+      .filter((r) => r.name.includes(query) || query.includes(r.name))
+      .sort((a, b) => b.name.length - a.name.length)[0]?.row ??
+    // Word overlap: every word of the shorter side appears in the other.
+    normalized.find((r) => {
+      const words = query.split(' ').filter((w) => w.length > 2)
+      return words.length > 0 && words.every((w) => r.name.includes(w))
+    })?.row ??
+    null
+  )
+}

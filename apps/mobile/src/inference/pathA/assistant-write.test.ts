@@ -78,7 +78,7 @@ describe('assistant write tools', () => {
   it('conversation history is replayed to the provider with the context block.', async () => {
     const mockExecute = vi.fn(async (_system: string, user: string, history?: { role: string; content: string }[]) => {
       expect(history).toEqual([{ role: 'user', content: 'hi' }])
-      expect(user).toContain('[TODAY IN THE USER')
+      expect(user).toContain("[LOGGED IN THE USER'S APP")
       expect(user).toContain('[USER MESSAGE]')
       expect(user).toContain('what did I eat')
       return 'plain answer'

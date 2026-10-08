@@ -81,7 +81,7 @@ const ENTITY_COLUMNS: Readonly<Record<string, readonly string[]>> = {
   ...Object.fromEntries(Object.entries({
     exercises: ['name','tracking_type','aliases_json','primary_muscles_json','secondary_muscles_json','antagonist_muscles_json','equipment_json','notes','media_uri','is_custom','source'],
     equipment_inventory: ['name','kind','weight_kg','count'], routines: ['name','definition_json'], programs: ['name','definition_json'],
-    workouts: ['name','local_date','started_at','finished_at','status','notes','location','routine_id','rest_until'],
+    workouts: ['name','local_date','started_at','finished_at','status','notes','location','routine_id','rest_until','progression_note'],
     workout_exercises: ['workout_id','exercise_id','sort_order','superset_group_id','notes','tracking_type'],
     workout_sets: ['workout_exercise_id','sort_order','kind','load_kg','reps','duration_s','distance_m','assistance_kg','rir','rpe','tempo','planned_json','completed_at'],
     logging_shortcuts: ['meal_id','kind','name','snapshot_json'],

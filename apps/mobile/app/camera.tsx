@@ -6,13 +6,17 @@ import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../src/components/Icon'
 import { Badge } from '../src/components/Badge'
-import { startBarcodeScan, startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
-import { setPhase, setScanReviewMode, type ScanReviewMode } from '../src/scan/store'
-import { setting, putSetting } from '../src/data/repo'
+import { startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
+import { setPhase } from '../src/scan/store'
+import { createPendingMeal } from '../src/data/repo'
 // UI/UX report Table 9.2 (Wave 1c): "Scan captured → Light impact" — the
 // shutter metaphor; fires the moment the photo is secured. §8.4 (Wave 3) adds
-// the "Selection" pattern for the mode/review pills — value changes.
-import { lightImpact as hapticLightImpact, selectionAsync as hapticSelection } from '../src/utils/haptics'
+// the "Selection" pattern for the mode pills — value changes.
+import {
+  lightImpact as hapticLightImpact,
+  selectionAsync as hapticSelection,
+  success as hapticSuccess,
+} from '../src/utils/haptics'
 import { useMotionScale, useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, motion, radius, space, type } from '../src/theme/tokens'
 
@@ -25,31 +29,7 @@ const MODES: Array<{ id: CameraMode; label: string; icon: IconName }> = [
   { id: 'receipt', label: 'Receipt', icon: 'receipt' },
 ]
 
-const SCAN_MODE_SETTING = 'scan_review_mode'
 
-/**
- * Quick vs Advanced review preference. Quick shows a one-tap log for
- * high-confidence scans and falls back to full review automatically when
- * anything needs a check; Advanced always opens the full review. Persisted so
- * the choice survives app restarts.
- */
-function useScanReviewPref(): [ScanReviewMode, (m: ScanReviewMode) => void] {
-  const [pref, setPref] = useState<ScanReviewMode>('quick')
-  useEffect(() => {
-    let live = true
-    void setting(SCAN_MODE_SETTING).then((v) => {
-      if (live && (v === 'quick' || v === 'advanced')) setPref(v)
-    })
-    return () => {
-      live = false
-    }
-  }, [])
-  const update = (m: ScanReviewMode) => {
-    setPref(m)
-    void putSetting(SCAN_MODE_SETTING, m)
-  }
-  return [pref, update]
-}
 
 /**
  * UI/UX report §8.4 (Wave 3): the capture-guide arc.
@@ -121,65 +101,19 @@ function CaptureGuideArc({
 const ARC_SIZE = 104
 
 /**
- * UI/UX report §8.4 (Wave 3): the Quick/Advanced review pair joins the ONE
- * Badge as a segmented control — the audit's 32pt review pills die here, an
- * interactive Badge IS the 44pt target (Table 11.1) with PressableFX press
- * state layers, radio semantics inside the radiogroup, and the Table 9.2
- * selection haptic on every change.
- */
-function ReviewModeToggle({
-  value,
-  onChange,
-  onDark,
-}: {
-  value: ScanReviewMode
-  onChange: (m: ScanReviewMode) => void
-  /** Camera overlay sits on the dark viewfinder; web fallback uses theme colors. */
-  onDark: boolean
-}) {
-  const theme = useTheme()
-  return (
-    <View style={styles.reviewRow} accessibilityRole="radiogroup" accessibilityLabel="Review mode">
-      {(['quick', 'advanced'] as const).map((m) => {
-        const active = value === m
-        // Camera chrome stays theme-independent for live-feed contrast (the
-        // eslint camera exemption documents why); the web pair rides the
-        // theme's sunken/ink dialects untouched.
-        const fg = onDark ? (active ? '#000' : '#fff') : active ? theme.bg : theme.text
-        return (
-          <Badge
-            key={m}
-            role="radio"
-            accessibilityLabel={m === 'quick' ? 'Quick review' : 'Advanced review'}
-            selected={active}
-            onPress={() => {
-              onChange(m)
-              void hapticSelection()
-            }}
-            style={onDark ? { backgroundColor: active ? '#fff' : 'rgba(0,0,0,0.45)' } : undefined}
-          >
-            <Text style={[type.label, { color: fg }]}>{m === 'quick' ? 'Quick' : 'Advanced'}</Text>
-          </Badge>
-        )
-      })}
-    </View>
-  )
-}
-
-/**
  * Capture.
  *
- * SPEC-accuracy-engine.md §1.1 stages 0 and 1.
+ * SPEC-accuracy-engine.md §1.1 stages 0 and 1, rebuilt as the OPTIMISTIC flow
+ * (Cal AI pattern #1): a FOOD capture is a logged meal from the shutter tap.
+ * THE SHUTTER ALWAYS SUCCEEDS — the meal row (analysis_status='captured') is
+ * written by createPendingMeal before anything can fail, the modal dismisses
+ * straight back to the tabs, and the orchestrator upgrades the row in the
+ * background. The pending card on the Home/Food timeline is the scan's
+ * surface from then on; analysis is never a screen the user waits inside.
  *
- * THE SHUTTER ALWAYS SUCCEEDS. It writes a draft row before anything else can
- * fail — no key, no network, no model, no permission to analyze. A capture that
- * fails because the network is down loses the user's meal, and losing a meal is
- * unrecoverable in a way that a wrong number never is.
- *
- * Everything after the shutter — preprocessing, the model call, the pipeline —
- * lives in src/scan/orchestrator.ts and runs behind the result screen's
- * progress states. This screen's whole job is to hand off and get out of the
- * way fast.
+ * Barcode/label/receipt keep the /result hand-off: they answer as one result
+ * the user reads on the spot (a resolved product, a parsed label). No review
+ * mode exists anywhere — ONE scan path per capture type.
  */
 export default function Camera() {
   // P2-9: the web fallback previously exposed none of the capture modes and
@@ -193,7 +127,6 @@ export default function Camera() {
   const cameraRef = useRef<CameraView>(null)
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<CameraMode>('food')
-  const [reviewPref, setReviewPref] = useScanReviewPref()
   // P2-28: a takePictureAsync rejection (permission revoked mid-session, native
   // crash) used to be an unhandled rejection — the shutter just looked dead.
   // Surface it on the dark overlay so the user can retry with a diagnosis.
@@ -232,20 +165,28 @@ export default function Camera() {
     try {
       const shot = await cameraRef.current?.takePictureAsync({ quality: 1, skipProcessing: false })
       if (!shot?.uri) return
-      // Table 9.2: the capture landed — shutter haptic, then navigate.
+      // Table 9.2: the capture landed — shutter haptic.
       void hapticLightImpact()
 
-      // The draft exists from this moment. Everything after can fail safely.
-      setPhase({ kind: 'captured', photoUri: shot.uri })
-      setScanReviewMode(reviewPref)
+      if (mode === 'food') {
+        // OPTIMISTIC FOOD LOG: the meal row is written in THIS tap's breath —
+        // a local SQLite insert with no key, no network and no model in the
+        // way — then the analysis fires with that row's id and the camera
+        // dismisses. DB insert + dismiss land inside one tap; the pending
+        // card appears on the timeline through the food-mutation event.
+        const mealId = await createPendingMeal(shot.uri, Date.now())
+        void startScan(shot.uri, { mealId })
+        void hapticSuccess()
+        router.back()
+        return
+      }
 
-      // Navigate NOW. Preprocessing, the model call and the pipeline all run
-      // behind the result screen's progress states — the user never stares at
-      // a frozen viewfinder wondering whether the shutter worked.
+      // Barcode/label/receipt: the draft phase exists from this moment and
+      // everything after can fail safely behind the result screen.
+      setPhase({ kind: 'captured', photoUri: shot.uri })
       router.replace('/result')
       if (mode === 'label') void startLabelScan(shot.uri)
-      else if (mode === 'receipt') void startReceiptScan(shot.uri)
-      else void startScan(shot.uri)
+      else void startReceiptScan(shot.uri)
     } catch (err) {
       // P2-28: never a silent dead shutter.
       console.error('[camera] capture failed', err)
@@ -258,9 +199,11 @@ export default function Camera() {
   function onBarcode(data: string) {
     if (barcodeFired.current || !data) return
     barcodeFired.current = true
-    setScanReviewMode(reviewPref)
-    router.replace('/result')
-    void startBarcodeScan(data)
+    setPhase({ kind: 'captured', photoUri: null })
+    // QA3 route race: the digits travel WITH the route and result.tsx starts
+    // the lookup from its own params exactly once — a module-global hand-off
+    // between two screens cannot race the navigation anymore.
+    router.replace({ pathname: '/result', params: { autostart: 'barcode', data } } as never)
   }
 
   return (
@@ -274,7 +217,6 @@ export default function Camera() {
       />
 
       <View style={[styles.controls, { paddingBottom: Math.max(insets.bottom, space.xl) }]}>
-        <ReviewModeToggle value={reviewPref} onChange={setReviewPref} onDark />
         <View style={styles.modeRow}>
           {/* UI/UX report §8.4 (Wave 3): the four native mode pills join the ONE
               Badge — 44pt interactive target + PressableFX state layers + the
@@ -360,7 +302,6 @@ function WebCameraFallback() {
   const [gtin, setGtin] = useState('')
   const [busy, setBusy] = useState(false)
   const [gtinError, setGtinError] = useState('')
-  const [reviewPref, setReviewPref] = useScanReviewPref()
   const [pickError, setPickError] = useState<string | null>(null)
   // The circular shutter's label — the a11y name and the caption agree.
   const pickLabel =
@@ -378,12 +319,19 @@ function WebCameraFallback() {
       })
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri as string
+        if (mode === 'food') {
+          // Same optimistic contract as the native shutter: row first, then
+          // dismiss, analysis in the background.
+          const mealId = await createPendingMeal(uri, Date.now())
+          void startScan(uri, { mealId })
+          void hapticSuccess()
+          router.back()
+          return
+        }
         setPhase({ kind: 'captured', photoUri: uri })
-        setScanReviewMode(reviewPref)
         router.replace('/result')
         if (mode === 'label') void startLabelScan(uri)
-        else if (mode === 'receipt') void startReceiptScan(uri)
-        else void startScan(uri)
+        else void startReceiptScan(uri)
       }
     } catch (err) {
       // P2-28 web companion: a picker crash must not strand the button.
@@ -401,9 +349,9 @@ function WebCameraFallback() {
       return
     }
     setGtinError('')
-    setScanReviewMode(reviewPref)
-    router.replace('/result')
-    void startBarcodeScan(value)
+    setPhase({ kind: 'captured', photoUri: null })
+    // QA3 on web too: the GTIN rides the route; result starts the lookup.
+    router.replace({ pathname: '/result', params: { autostart: 'barcode', data: value } } as never)
   }
 
   return (
@@ -429,8 +377,6 @@ function WebCameraFallback() {
           />
         ))}
       </View>
-
-      <ReviewModeToggle value={reviewPref} onChange={setReviewPref} onDark={false} />
 
       {mode === 'barcode' ? (
         <View style={{ width: '100%', maxWidth: 420, gap: space.sm }}>
@@ -537,7 +483,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  reviewRow: { flexDirection: 'row', gap: space.xs, justifyContent: 'center' },
   hint: { color: 'rgba(255,255,255,0.85)', paddingVertical: space.lg },
   shutter: {
     width: 74,

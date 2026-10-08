@@ -1,4 +1,4 @@
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
@@ -12,7 +12,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { WebLookupResult, MacroTotals, IngredientRow, CorrectionIntent } from '@nutai/core-schema'
-import { CorrectionIntentZ } from '@nutai/core-schema'
 import { TIER_GLYPH, type Band } from '@nutai/confidence'
 import type { ScoredCandidate } from '@nutai/resolver'
 import { loadFood, resolveByText } from '@nutai/resolver'
@@ -24,12 +23,14 @@ import { Badge } from '../src/components/Badge'
 import { Sheet } from '../src/components/Sheet'
 import { Empty } from '../src/components/Empty'
 import { Skeleton, SkeletonLine, SkeletonRow } from '../src/components/Skeleton'
-import { customProviderBaseUrl, logMeal, putSetting, setting, db as openUserDb, undoLastOperation } from '../src/data/repo'
+import { customProviderBaseUrl, logMeal, putSetting, setting, db as openUserDb } from '../src/data/repo'
+import { showUndoableLoggedToast } from '../src/data/undo-toast'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { runCorrectionIntent } from '../src/inference/pathA/client'
-import { describeCorrectionOperation, rowsNameOf, type CorrectionOperation } from '../src/data/correction-describe'
-import { fixScan, lookupOther, retryScan } from '../src/scan/orchestrator'
+import { resolveQualitativeGrams } from '../src/data/log-corrections'
+import { describeCorrectionOperation, matchCorrectionRow, type CorrectionOperation } from '../src/data/correction-describe'
+import { fixScan, lookupOther, retryScan, startBarcodeScan } from '../src/scan/orchestrator'
 import { recentFoodsWithGrams, type RecentFoodWithGrams } from '../src/data/one-tap-log'
 import {
   CONFIDENCE_LEGEND_SETTING_KEY,
@@ -55,18 +56,15 @@ import {
   topUncertaintyFor,
 } from '../src/scan/review'
 import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
-import { isQuickEligible } from '../src/scan/quick-mode'
 import {
   addRow,
   answerQuestion,
   applyWebOption,
   editGrams,
   getPhase,
-  getScanReviewMode,
   removeRow,
   reset,
   useScan,
-  type ScanReviewMode,
   type WebLookupState,
 } from '../src/scan/store'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -175,13 +173,6 @@ function AnalyzingSkeletonRows({ stage }: { stage: 'preparing' | 'identifying' |
  * corrected" possible at all. THE REVIEW SCREEN IS THE FIX SCREEN. Every row is
  * editable in place, and every edit recomputes locally, instantly, for free.
  *
- * QUICK vs ADVANCED (review-mode batch): quick mode renders a compact one-tap
- * "Log it" card ONLY when isQuickEligible() says nothing in the result needs
- * attention — no highlighted questions, no AI-estimate rows, a tight meal band.
- * Anything that deserves a look drops the user into the full review below,
- * automatically. "Review ingredients" is always one tap away from the quick
- * card, and the confidence chip and its reasons are shown in both views.
- *
  * FIX RESULT now runs the AIP-004 correction parser first: the typed note is
  * parsed into structured operations against the current rows and shown as a
  * confirmation card. Updates and removes apply locally and instantly (the same
@@ -194,6 +185,17 @@ export default function Result() {
   const theme = useTheme()
   const insets = useSafeAreaInsets()
   const phase = useScan()
+  // QA3: a barcode capture hands its digits over the ROUTE, and this screen
+  // starts the lookup exactly once from its own params — the camera and the
+  // result no longer coordinate through a mutable module global across a
+  // navigation boundary.
+  const params = useLocalSearchParams<{ autostart?: string; data?: string }>()
+  const autostartedRef = useRef(false)
+  useEffect(() => {
+    if (params.autostart !== 'barcode' || !params.data || autostartedRef.current) return
+    autostartedRef.current = true
+    void startBarcodeScan(String(params.data))
+  }, [params.autostart, params.data])
   const [expandedBand, setExpandedBand] = useState(false)
   // Task 2-d: the per-ingredient range chips. The meal-level chip above keeps
   // its own `expandedBand`; each ROW tracks expansion independently here so a
@@ -223,9 +225,6 @@ export default function Result() {
   // A defaultValue input snapshots once — it went stale when applyWebOption
   // changed grams underneath, and clearing the field committed Number('') === 0 g.
   const [gramDrafts, setGramDrafts] = useState<Record<string, string>>({})
-  // null = honor the camera's persisted choice; a tap overrides for this scan.
-  const [viewOverride, setViewOverride] = useState<ScanReviewMode | null>(null)
-  const initialReviewMode = getScanReviewMode()
 
   /** P2-5: drop the draft so the display snaps back to the stored, validated grams. */
   const snapGramDraft = (rowId: string) => {
@@ -264,7 +263,7 @@ export default function Result() {
         style={{ backgroundColor: theme.bg }}
         contentContainerStyle={[styles.center, { paddingBottom: Math.max(insets.bottom, space.xl) }]}
       >
-        <Image source={{ uri: phase.photoUri }} style={styles.photo} />
+        {phase.photoUri ? <Image source={{ uri: phase.photoUri }} style={styles.photo} /> : null}
         <ActivityIndicator color={theme.textMuted} style={{ marginTop: space.xl }} />
         <Text style={[type.heading, { color: theme.text, marginTop: space.md }]}>{copy}</Text>
         <Text style={[type.caption, { color: theme.textMuted, marginTop: space.sm, textAlign: 'center' }]}>
@@ -347,8 +346,6 @@ export default function Result() {
   }
 
   const { result } = phase
-  const reviewMode = viewOverride ?? initialReviewMode
-  const quickEligible = isQuickEligible(result)
   const highlighted = result.questions.filter((q) => q.state === 'highlighted')
   const preAnswered = result.questions.filter((q) => q.state === 'pre_answered')
   // Task 2-d: scene-aware title + caption, uncertainty-honest hero, and the
@@ -394,25 +391,9 @@ export default function Result() {
         // Table 9.2: log meal → success haptic, alongside the flagship toast.
         void hapticSuccess()
         // UI/UX report §10.1 (Wave 1b): "meal logged with an Undo action" —
-        // THE flagship toast. The host is mounted at the app root, so it
-        // outlives dismissAll; undoLastOperation emits the food-mutation event,
-        // which refreshes the Home/Food timelines without any wiring here.
-        // 6s window: enough to reconsider without camping on screen.
-        showToast({
-          message: 'Meal logged.',
-          tone: 'success',
-          durationMs: 6000,
-          action: {
-            label: 'Undo',
-            onPress: () => {
-              void undoLastOperation().then((r) => {
-                if (!r.success) {
-                  showToast({ message: 'Could not undo — the log changed since this meal was added.', tone: 'error' })
-                }
-              })
-            },
-          },
-        })
+        // THE flagship toast, now the ONE shared helper (F10): same copy, same
+        // 6 s window, same "Could not undo —" honesty in every logging path.
+        showUndoableLoggedToast()
       } catch (caught) {
         const message = caught instanceof Error && caught.message ? caught.message : 'Could not log this meal. Your data is unchanged.'
         setLogError(message)
@@ -451,135 +432,6 @@ export default function Result() {
     </View>
   ) : null
 
-  if (reviewMode === 'quick' && quickEligible) {
-    return (
-      <View style={{ flex: 1, backgroundColor: theme.bg }}>
-        <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
-          {/* P2-14: an accidental scan gets an explicit way out — the analyzing
-              and failed states already have Close; the ready state did not. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Discard this scan"
-            onPress={() => { reset(); router.back() }}
-            hitSlop={space.md}
-            style={{ alignSelf: 'flex-end', minHeight: MIN_TAP_TARGET, justifyContent: 'center', paddingHorizontal: space.xs }}
-          >
-            <Text style={[type.body, { color: theme.textMuted }]}>Discard</Text>
-          </Pressable>
-          <Text style={[type.title, { color: theme.text }]}>
-            {mealTitle}
-          </Text>
-          {sceneCaption ? (
-            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-              {sceneCaption}
-            </Text>
-          ) : null}
-          {/* Task 3-c: what the model could and could not see — under the
-              title/caption block in BOTH views. */}
-          <HonestySummaryCard known={summaryLines.known} unknown={summaryLines.unknown} />
-          <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-            Quick result — every ingredient matched the database with high confidence, nothing needs a check.
-          </Text>
-          {phase.kind === 'ready' && phase.unresolvedItems?.length ? (
-            <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
-              {`${phase.unresolvedItems.length} receipt ${phase.unresolvedItems.length === 1 ? 'item' : 'items'} could not be matched, so ${phase.unresolvedItems.length === 1 ? 'it was' : 'they were'} not logged: ${phase.unresolvedItems.join(', ')}.`}
-            </Text>
-          ) : null}
-
-          <View style={{ marginTop: space.lg }}>
-            <Text style={[type.display, { color: theme.text, lineHeight: 68 }]}>{heroKcal}</Text>
-            <Text style={[type.caption, { color: theme.textMuted, marginTop: -space.xs }]}>kcal</Text>
-            {showLikelyRange ? (
-              // Task 2-d: a wide band may not claim a precise integer — the
-              // measured range travels with the ≈ anchor, in the same view.
-              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-                {likelyRangeLabel(result.totals.kcal, result.mealBand)}
-              </Text>
-            ) : null}
-            {/* Task 3-c: the model's own biggest calorie flag, then the
-                portion-context chip — both quick and advanced views. */}
-            {topUncertainty ? (
-              <Text style={[type.caption, { color: theme.textMuted, marginTop: space.xs }]}>
-                {topUncertainty}
-              </Text>
-            ) : null}
-            {portionNote ? (
-              <View accessibilityLabel={portionNote} style={[styles.portionChip, { backgroundColor: theme.uncertainBg }]}>
-                <Text style={[type.caption, { color: theme.uncertainText }]}>{portionNote}</Text>
-              </View>
-            ) : null}
-
-            {/* §8.4: the legend rides the FIRST appearance of a confidence
-                chip — one-time, dismissible, persisted. */}
-            <ConfidenceLegend />
-            <View style={{ marginTop: space.md }}>
-              <ConfidenceChip
-                value={result.totals.kcal}
-                band={result.mealBand}
-                expanded={expandedBand}
-                onPress={() => setExpandedBand((v) => !v)}
-              />
-              {expandedBand && <ConfidenceReasons band={result.mealBand} />}
-            </View>
-          </View>
-
-          <MacroStats totals={result.totals} />
-
-          {/* Task 3-c: the model's ONE high-impact question — high-value
-              enough for the quick view too (a quick-eligible scan can still
-              carry one). Informational only, never a second way to answer. */}
-          {modelQuestion && showModelQuestion ? (
-            <ModelQuestionCard question={modelQuestion.question} options={modelQuestion.options} />
-          ) : null}
-
-          {/* P2-9: a custom (reseller) model has no catalogue price — say so
-              instead of the ledger quietly reading as free. */}
-          {phase.meta && phase.meta.costUsd == null ? (
-            <Text style={[type.caption, { color: theme.textFaint, marginTop: space.md, textAlign: 'center' }]}>
-              Custom model — this scan's exact cost is unknown to the ledger.
-            </Text>
-          ) : null}
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setViewOverride('advanced')}
-            hitSlop={space.sm}
-            style={{ marginTop: space.xl, minHeight: MIN_TAP_TARGET, justifyContent: 'center' }}
-          >
-            <Text style={[type.body, { color: theme.uncertainText }]}>Review ingredients before logging</Text>
-          </Pressable>
-        </ScrollView>
-
-        <View style={[styles.actions, { paddingBottom: Math.max(insets.bottom, space.lg), backgroundColor: theme.bg, borderColor: theme.border }]}>
-          {logErrorEl}
-          <View style={{ flexDirection: 'row', gap: space.md }}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setViewOverride('advanced')}
-              style={[styles.secondary, { borderColor: theme.border }]}
-            >
-              <Text style={[type.bodyStrong, { color: theme.text }]}>Review</Text>
-            </Pressable>
-
-            {/* UI/UX report Table 12.2 (Wave 2): the flagship log CTA joins the
-                ONE Button at lg — press feedback, state layers and the icon
-                slot arrive with it; the 0.6 busy opacity becomes the §4.3
-                disabled layer. */}
-            <Button
-              label={logging ? 'Logging…' : 'Log it'}
-              icon="check"
-              size="lg"
-              selected
-              disabled={logging}
-              onPress={logNow}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </View>
-      </View>
-    )
-  }
-
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScrollView contentContainerStyle={{ padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: 120 }}>
@@ -603,14 +455,6 @@ export default function Result() {
         ) : null}
         {/* Task 3-c: known/unknown summary — under the title/caption block. */}
         <HonestySummaryCard known={summaryLines.known} unknown={summaryLines.unknown} />
-        {reviewMode === 'quick' && !quickEligible && (
-          <View style={[styles.quickNotice, { backgroundColor: theme.uncertainBg }]}>
-            <Text style={[type.caption, { color: theme.text, lineHeight: 19 }]}>
-              Some things here deserve a quick look — review before logging.
-            </Text>
-          </View>
-        )}
-
         {fixNotice ? (
           <Text style={[type.caption, { color: theme.textMuted, marginTop: space.md, lineHeight: 19 }]}>
             {fixNotice}
@@ -1034,9 +878,12 @@ export default function Result() {
 
   /**
    * AIP-004 fast path: parse the note into structured ops against the current
-   * rows. P2-3: on ANY parser failure the billed full re-analysis is offered
-   * as an EXPLICIT button — the old silent fallthrough fired a fully-billed
-   * vision scan the user never asked for.
+   * rows. The parser call itself streams through gateway connections and
+   * self-heals a degraded answer via repairCorrectionIntent (fix 7) — the
+   * 30s non-streaming trap and the first-{ to last-} slice are gone. P2-3:
+   * on ANY parser failure the billed full re-analysis is offered as an
+   * EXPLICIT button — the old silent fallthrough fired a fully-billed vision
+   * scan the user never asked for.
    */
   async function submitFix() {
     const note = fixText.trim()
@@ -1049,7 +896,7 @@ export default function Result() {
         const built = buildCorrectionPrompt(note, phase.result.meal.ingredients)
         const res = await runCorrectionIntent({ provider, model, systemPrompt: built.system, userPrompt: built.user, baseUrl: await customProviderBaseUrl() })
         if (res.ok) {
-          const intent = CorrectionIntentZ.parse(res.intent)
+          const intent = res.intent
           if (intent.operations.length === 0 && intent.clarification_needed) {
             setFixMessage(intent.clarification_needed)
             setFixBusy(false)
@@ -1063,8 +910,8 @@ export default function Result() {
             return
           }
         }
-        // P2-3: the parser failed, returned garbage, or answered empty. Keep
-        // the typed note and let the user CHOOSE the billed re-analysis.
+        // The parser failed, returned garbage, or answered empty. Keep the
+        // typed note and let the user CHOOSE the billed re-analysis.
         setFixMessage(
           res.ok
             ? 'The correction came back empty. You can re-analyze the photo instead — that re-runs the full scan and may cost more.'
@@ -1075,8 +922,6 @@ export default function Result() {
         setFixBusy(false)
         return
       } catch {
-        // CorrectionIntentZ.parse threw on a shape mismatch — same honest
-        // treatment: never a silent billed re-analysis.
         setFixMessage('The correction answer was not in a shape we could read. You can re-analyze the photo instead — that re-runs the full scan and may cost more.')
         setFixBusy(false)
         return
@@ -1092,35 +937,56 @@ export default function Result() {
     void fixScan(note)
   }
 
-  /** Apply the confirmed operations to the editable draft via the same primitives as hand-editing. */
+  /**
+   * Apply the confirmed operations to the editable draft via the same
+   * primitives as hand-editing. Fixes 8/9/12: each op resolves its row by ID
+   * or NAME (a mismatched id degrades to matching instead of dying), a
+   * qualitative size converts against the row's current grams, and the
+   * outcome is reported PER OP — applied and skipped, with reasons, never a
+   * silent half-applied batch.
+   */
   async function applyIntent() {
     if (phase.kind !== 'ready' || !pendingIntent || fixBusy) return
     setFixBusy(true)
     // P3-A4: rows are re-read from the live store per operation — a
     // remove_item earlier in the same batch must not leave the later ops
     // resolving grams against a stale pre-removal snapshot.
-    const findRow = (id: string) => {
+    const findRow = (idOrName: string) => {
       const current = getPhase()
-      return current.kind === 'ready'
-        ? current.result.meal.ingredients.find((r) => r.id === id)
-        : undefined
+      if (current.kind !== 'ready') return undefined
+      const rows = current.result.meal.ingredients
+      return rows.find((r) => r.id === idOrName) ?? matchCorrectionRow(idOrName, rows) ?? undefined
     }
+    const applied: string[] = []
     const skipped: string[] = []
     for (const op of pendingIntent.operations) {
       try {
         if (op.type === 'update_quantity') {
           const row = findRow(op.id)
           if (!row) {
-            skipped.push('One item to adjust is no longer in the list')
+            skipped.push(`“${op.id}” is not in the ingredient list`)
             continue
           }
           if (op.grams == null) {
-            skipped.push(`Enter the grams for “${row.displayName}” — “${op.qualitative_size ?? 'that amount'}” could not be converted here`)
+            const q = resolveQualitativeGrams(op.qualitative_size ?? '', row.grams)
+            if (!q.ok) {
+              skipped.push(`${row.displayName}: ${q.reason}`)
+              continue
+            }
+            editGrams(row.id, q.grams)
+            applied.push(`${row.displayName} → ${Math.round(q.grams)} g (${q.basis})`)
             continue
           }
           editGrams(row.id, op.grams)
+          applied.push(`${row.displayName} → ${Math.round(op.grams)} g`)
         } else if (op.type === 'remove_item') {
-          removeRow(op.id)
+          const row = findRow(op.id)
+          if (!row) {
+            skipped.push(`“${op.id}” is not in the ingredient list`)
+            continue
+          }
+          removeRow(row.id)
+          applied.push(`${row.displayName} removed`)
         } else if (op.type === 'add_item') {
           const sel = await resolveCorpusSelection(op.canonical_food_key || op.name, op.grams ?? undefined)
           if (!sel) {
@@ -1128,6 +994,7 @@ export default function Result() {
             continue
           }
           addRow(toIngredientRow(sel, op.name))
+          applied.push(`${op.name} added`)
         } else if (op.type === 'replace_item') {
           const row = findRow(op.id)
           const sel = await resolveCorpusSelection(op.canonical_food_key || op.name, row?.grams)
@@ -1137,6 +1004,7 @@ export default function Result() {
           }
           if (row) removeRow(row.id)
           addRow(toIngredientRow(sel, op.name))
+          applied.push(`${row ? row.displayName : 'the item'} → ${op.name}`)
         }
       } catch {
         skipped.push('One change could not be applied')
@@ -1147,8 +1015,15 @@ export default function Result() {
     setFixStage('input')
     setPendingIntent(null)
     setFixText('')
-    setFixMessage('')
-    if (skipped.length > 0) setFixNotice(skipped.join(' · '))
+    // Per-op result reporting: both halves, named. When everything applied
+    // the notice reads as the receipt; when something skipped, the reason is
+    // on the same surface — never aggregated into one easy-to-miss line.
+    const parts: string[] = []
+    if (applied.length > 0)
+      parts.push(`Applied ${applied.length} ${applied.length === 1 ? 'change' : 'changes'} — ${applied.join('; ')}.`)
+    if (skipped.length > 0)
+      parts.push(`Skipped ${skipped.length} — ${skipped.join('; ')}.`)
+    setFixNotice(parts.join(' '))
   }
 }
 
@@ -1168,15 +1043,20 @@ function domainOf(url: string): string {
  */
 function FixOperationRow({ op, rows }: { op: CorrectionOperation; rows: IngredientRow[] }) {
   const theme = useTheme()
+  // Fix 8: the op's id may be a NAME the model fell back to — resolve through
+  // the same fuzzy matcher the apply step uses so the confirm row always
+  // shows the real food, never a raw id.
+  const nameOf = (id: string) =>
+    rows.find((r) => r.id === id)?.displayName ?? matchCorrectionRow(id, rows)?.displayName ?? 'that item'
   const current =
     op.type === 'update_quantity' || op.type === 'replace_item'
-      ? rows.find((r) => r.id === op.id)
+      ? rows.find((r) => r.id === op.id) ?? matchCorrectionRow(op.id, rows) ?? undefined
       : undefined
   return (
     <View style={[styles.optionRow, { borderColor: theme.border, backgroundColor: theme.bgSunken }]}>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={[type.body, { color: theme.text }]}>
-          {describeCorrectionOperation(op, rowsNameOf(rows))}
+          {describeCorrectionOperation(op, nameOf)}
         </Text>
         {current ? (
           <Text style={[type.caption, { color: theme.textMuted }]}>
@@ -1828,11 +1708,6 @@ const styles = StyleSheet.create({
     marginTop: space.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
-    borderRadius: radius.md,
-  },
-  quickNotice: {
-    marginTop: space.md,
-    padding: space.md,
     borderRadius: radius.md,
   },
   // Task 3-c: the known/unknown summary card — neutral sunken surface, the

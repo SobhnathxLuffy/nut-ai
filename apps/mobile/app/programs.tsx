@@ -7,8 +7,11 @@ import {
   saveProgram,
   listRoutines,
   programDayStatus,
+  programWeekOf,
   cycleDayToWeekday,
   weekdayToCycleDay,
+  offsetLocalDate,
+  weekdayOfLocalDate,
   launchRoutine,
   type Program,
   type Routine,
@@ -253,6 +256,35 @@ export default function ProgramsScreen() {
             })
           )}
 
+          {/* T6 (program as plan): the schedule renders as real dates — the
+              user sees WHICH day each routine lands on before saving, never
+              just an abstract weekday matrix. */}
+          {(() => {
+            const previewStart = composeDate(dateParts)
+            if (!isValidLocalDate(previewStart) || schedule.length === 0) return null
+            const routineName = (id: number) => routines.find((r) => r.id === id)?.name ?? 'Routine'
+            const lines: string[] = []
+            for (let i = 0; i < 14; i++) {
+              const date = offsetLocalDate(previewStart, i)
+              const weekday = weekdayOfLocalDate(date)
+              const slot = schedule.find((s) => s.weekday === weekday)
+              const dayNumber = Number(date.slice(8, 10))
+              const month = date.slice(5, 7)
+              const label = i < 7 ? `Week 1 · ${FULL_DAYS[weekday]} ${dayNumber}.${month}` : `Week 2 · ${FULL_DAYS[weekday]} ${dayNumber}.${month}`
+              lines.push(`${label} — ${slot ? routineName(slot.routine_id) : 'rest'}`)
+            }
+            return (
+              <View style={{ gap: 4 }}>
+                <Label muted>First two weeks:</Label>
+                {lines.map((line) => (
+                  <Label key={line} muted>
+                    {line}
+                  </Label>
+                ))}
+              </View>
+            )
+          })()}
+
           <Row>
             <Button label={editId ? 'Save changes' : 'Save program'} selected disabled={!routines.length} onPress={() => void action.run(handleSave)} />
             <Button label="Cancel" onPress={resetForm} />
@@ -308,7 +340,11 @@ export default function ProgramsScreen() {
             <ItemRow
               icon="calendar"
               label={p.name}
-              value={`Starts ${plan.start_date} · ${plan.weeks} weeks · ${weekdays || 'no days assigned'}`}
+              value={
+                programWeekOf(plan, today) !== null
+                  ? `Week ${programWeekOf(plan, today)} of ${plan.weeks} · started ${plan.start_date} · ${weekdays || 'no days assigned'}`
+                  : `Starts ${plan.start_date} · ${plan.weeks} weeks · ${weekdays || 'no days assigned'}`
+              }
               onPress={() => handleEdit(p)}
               accessibilityLabel={`Edit program ${p.name}`}
             />

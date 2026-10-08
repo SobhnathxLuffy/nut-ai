@@ -62,7 +62,7 @@ describe('§7.1 item 2 + Ch. 8.3 — the shortcut strip is ONE-TAP LOGGING CARDS
 
   it('the tap fires the success haptic and the Meal-logged Undo toast', () => {
     expect(foodTab).toContain('hapticSuccess()')
-    expect(foodTab).toMatch(/message: 'Meal logged\.'/)
+    expect(foodTab).toMatch(/showUndoableLoggedToast\('Meal logged\.'\)/)
     expect(foodTab).toContain('undoLastOperation')
   })
 

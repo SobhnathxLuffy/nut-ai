@@ -44,7 +44,7 @@ export type WebLookupState =
 
 export type ScanPhase =
   | { kind: 'idle' }
-  | { kind: 'captured'; photoUri: string }
+  | { kind: 'captured'; photoUri: string | null }
   | {
       kind: 'analyzing'
       photoUri: string
@@ -415,24 +415,35 @@ export function reset(opts?: { retainPhoto?: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Review mode (quick vs advanced)
+// Completed-scan outcomes (optimistic log) — in-session only.
 // ---------------------------------------------------------------------------
 
-export type ScanReviewMode = 'quick' | 'advanced'
-
 /**
- * How the user wants to review scans, chosen on the camera screen and honored
- * by the result screen. Module-level like the phase itself: set once at
- * capture time, read once at result-mount time. The camera persists the
- * preference through settings; this carries the choice across the
- * navigate-to-result hand-off without threading a param through the router.
+ * What the optimistic flow keeps in memory for a meal it just wrote to the DB:
+ * the pipeline's highlighted questions (so the completed card can surface the
+ * ONE follow-up that matters, Cal AI pattern #2) and the grams each row landed
+ * at (the baseline the question multipliers rescale from — the same contract
+ * as scanGramsByRowId above). Deliberately session-scoped: the LOGGED meal is
+ * durable in the DB, and after a restart the card simply opens the editor like
+ * every other meal — no claim of question recovery is ever made.
  */
-let reviewMode: ScanReviewMode = 'quick'
-
-export function setScanReviewMode(mode: ScanReviewMode) {
-  reviewMode = mode
+export interface ScanOutcomeForMeal {
+  mealId: number
+  questions: import('@nutai/repair').SelectedQuestion[]
+  /** Item displayName → grams as the analysis landed them (the multiplier baseline). */
+  baselineGrams: Record<string, number>
 }
 
-export function getScanReviewMode(): ScanReviewMode {
-  return reviewMode
+const outcomesByMealId = new Map<number, ScanOutcomeForMeal>()
+
+export function setScanOutcome(outcome: ScanOutcomeForMeal): void {
+  outcomesByMealId.set(outcome.mealId, outcome)
+}
+
+export function getScanOutcome(mealId: number): ScanOutcomeForMeal | undefined {
+  return outcomesByMealId.get(mealId)
+}
+
+export function forgetScanOutcome(mealId: number): void {
+  outcomesByMealId.delete(mealId)
 }

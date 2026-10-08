@@ -24,9 +24,10 @@ import { normalizeGtin, resolveByBarcode } from '@nutai/resolver'
 import { openIfctDb, openNutritionDb } from '../db/expo-adapter'
 import { loadFoodDb } from '../db/portions'
 import { db, customProviderBaseUrl, setting } from '../data/repo'
+import { completePendingMeal, failPendingMeal, markPendingMealStage, retryPendingMeal } from '../data/repo'
 import { loadCredential, type StoredCredential } from '../inference/credentials'
-import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure } from '../inference/pathA/client'
-import { applyWebOption, beginScan, currentScanEpoch, getPhase, recordScanModelServerFailure, resetScanModelFailures, setPhase, setWebLookup } from './store'
+import { runLabelScan, runReceiptScan, runScanWithFallback, runWebLookup, type ScanFailure, type ScanFailureKind } from '../inference/pathA/client'
+import { applyWebOption, beginScan, currentScanEpoch, getPhase, recordScanModelServerFailure, resetScanModelFailures, setPhase, setScanOutcome, setWebLookup } from './store'
 import { deleteLocalFile } from './file-cleanup'
 import {
   barcodeFailurePhase,
@@ -161,11 +162,21 @@ async function tryStorageStep<T>(
   }
 }
 
-export async function startScan(photoUri: string): Promise<void> {
+/**
+ * The food-scan entry. `opts.mealId` turns this into the OPTIMISTIC flow: the
+ * shutter already inserted the meal row (analysis_status='captured') and this
+ * run upgrades THAT row in place — queued → analyzing → complete/failed —
+ * writing nothing to the shared phase store (food scans no longer route
+ * through the result screen, so a second shutter must never strand the first
+ * meal, and the store stays coherent for the barcode/label/receipt flows that
+ * still render there). Without mealId the legacy result-screen flow runs
+ * unchanged.
+ */
+export async function startScan(photoUri: string, opts: { mealId?: number } = {}): Promise<void> {
   // P2-7: this run's epoch. A back-out-and-rescan supersedes it; every phase
   // write below is checked against the store's active epoch first.
   const epoch = beginScan()
-  setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
+  if (opts.mealId == null) setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
 
   let base64: string
   try {
@@ -175,6 +186,10 @@ export async function startScan(photoUri: string): Promise<void> {
     // here is the exact mechanism that mislabeled the thali RangeError. The
     // raw error is ALWAYS logged, stale or not.
     console.error('[scan] preprocess failed', err)
+    if (opts.mealId != null) {
+      await failPendingMeal(opts.mealId).catch((e) => console.error('[scan] failed-mark failed', e))
+      return
+    }
     if (currentScanEpoch() !== epoch) return
     const failure = describePreprocessFailure(err)
     setPhase({ kind: 'failed', photoUri, message: failure.message, canRetry: failure.canRetry })
@@ -182,7 +197,21 @@ export async function startScan(photoUri: string): Promise<void> {
   }
 
   lastCapture = { photoUri, base64 }
-  await analyze(photoUri, base64, { epoch })
+  await analyze(photoUri, base64, { epoch, mealId: opts.mealId })
+}
+
+/**
+ * The failed scan card's Retry: re-arm the DB row (failed → captured) and
+ * re-run analysis on the SAME photo the row retained. Nothing is re-photographed
+ * and nothing is lost — the retry is the row's own second chance.
+ */
+export async function retryPendingScan(mealId: number): Promise<void> {
+  const photoUri = await retryPendingMeal(mealId).catch((err) => {
+    console.error('[scan] re-arming the failed meal failed', err)
+    return null
+  })
+  if (!photoUri) return
+  await startScan(photoUri, { mealId })
 }
 
 export async function retryScan(): Promise<void> {
@@ -202,6 +231,8 @@ interface AnalyzeOpts {
   keepFraction?: number
   /** P2-7: the epoch this analyze loop belongs to; checked before every write. */
   epoch?: number
+  /** Optimistic flow: the pending meal row this run upgrades in place. */
+  mealId?: number
 }
 
 async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {}): Promise<void> {
@@ -210,7 +241,28 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
   // used to escape the void-fired startScan as an unhandled rejection and
   // leave the result screen spinning on 'Preparing…' forever.
   const epoch = opts.epoch ?? beginScan()
-  const stale = () => epoch !== currentScanEpoch()
+  const mealId = opts.mealId ?? null
+  // The optimistic flow owns its DB row outright: its completion is a row
+  // UPDATE, not a phase write, so it must survive a second shutter beginning a
+  // new epoch. The stale guard stays exactly as P2-7 built it for the
+  // result-screen flows (barcode/label/receipt/fix/retry).
+  const stale = () => (mealId != null ? false : epoch !== currentScanEpoch())
+  // Every named failure exit routes through here: the optimistic flow marks
+  // the DB row failed (photo retained, card offers retry/edit/delete); the
+  // legacy flow lands the phase on the result screen.
+  const landFailure = (failure: {
+    message: string
+    canRetry: boolean
+    failureKind?: ScanFailureKind | 'no-key'
+    modelHint?: string
+  }) => {
+    if (mealId != null) {
+      void failPendingMeal(mealId).catch((err) => console.error('[scan] failed-mark failed', err))
+      return
+    }
+    if (stale()) return
+    setPhase({ kind: 'failed', photoUri, ...failure })
+  }
   try {
     const providerSetting = await setting('provider')
     if (stale()) return
@@ -221,9 +273,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     // (decisions.ts) with its own contract tests.
     const gate = gateScanProvider(providerSetting, credential)
     if (!gate.ok) {
-      setPhase({
-        kind: 'failed',
-        photoUri,
+      landFailure({
         message: gate.message,
         canRetry: gate.canRetry,
         failureKind: gate.failureKind,
@@ -232,6 +282,10 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
     const provider = gate.provider
     const scanCredential = gate.credential
+
+    // The stored stage is the pending card's progress copy — a persisted
+    // field, never a timer. 'queued' = the model call is running.
+    if (mealId != null) await markPendingMealStage(mealId, 'queued').catch(() => {})
 
     const model = (await setting('provider_model')) || cheapestModel(provider).id
     const baseUrl = await customProviderBaseUrl()
@@ -293,9 +347,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
 
     if (!outcome.ok) {
-      setPhase({
-        kind: 'failed',
-        photoUri,
+      landFailure({
         message: outcome.error.message,
         canRetry: outcome.error.retryable,
         failureKind: outcome.error.kind,
@@ -311,6 +363,9 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     resetScanModelFailures(model)
 
     setPhase({ kind: 'analyzing', photoUri, stage: 'matching' })
+    // 'analyzing' = the deterministic pipeline is matching and the macros are
+    // being computed — the last wait stage before real items land.
+    if (mealId != null) await markPendingMealStage(mealId, 'analyzing').catch(() => {})
 
     // P2-2: storage open and pipeline run are DIFFERENT failure classes and
     // used to share one catch — a corrupt or not-yet-open SQLite database was
@@ -329,10 +384,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
       dbs = { nutritionDb, ifctDb, userDb, foodDb }
     } catch (err) {
       console.error('scan storage open failed', err)
-      if (stale()) return
-      setPhase({
-        kind: 'failed',
-        photoUri,
+      landFailure({
         message:
           'The nutrition database could not be opened. Check free storage or restart the app, then try again — your photo is saved.',
         canRetry: false,
@@ -373,18 +425,14 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
         const reason =
           pipelineError instanceof Error ? pipelineError.message : String(pipelineError)
         console.warn('[scan] pipeline could not use the model answer', pipelineError, outcome.value.raw)
-        setPhase({
-          kind: 'failed',
-          photoUri,
+        landFailure({
           message: `The model's answer could not be used (${reason.trim().slice(0, 120) || 'unexpected shape'}). Retrying may help.`,
           canRetry: true,
           failureKind: 'schema-violation',
         })
         return
       }
-      setPhase({
-        kind: 'failed',
-        photoUri,
+      landFailure({
         message: 'The model answered in a shape we could not use. This one is on us — try once more.',
         canRetry: true,
         failureKind: 'schema-violation',
@@ -393,9 +441,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
 
     if (!result.isFood) {
-      setPhase({
-        kind: 'failed',
-        photoUri,
+      landFailure({
         message: result.refusalReason || 'That photo does not look like food.',
         canRetry: false,
       })
@@ -409,6 +455,53 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
 
     if (stale()) return
+
+    // OPTIMISTIC COMPLETION: the pending row becomes a real logged meal in
+    // place — items, per-100 g snapshots, honesty snapshot and cost ledger,
+    // one transaction, one operation record (undo removes the whole scan).
+    // The highlighted questions ride the in-session outcome map so the card
+    // can surface the ONE follow-up that matters (Cal AI pattern #2).
+    if (mealId != null) {
+      const scanMeta = {
+        provider,
+        model,
+        inputTokens: outcome.value.inputTokens,
+        outputTokens: outcome.value.outputTokens,
+        costUsd: outcome.value.costUsd,
+      }
+      const completed = await completePendingMeal(mealId, result, scanMeta, Date.now()).catch(
+        (err) => {
+          console.error('[scan] completing the pending meal failed', err)
+          return false
+        },
+      )
+      if (completed) {
+        setScanOutcome({
+          mealId,
+          questions: result.questions.filter((q) => q.state === 'highlighted'),
+          baselineGrams: Object.fromEntries(
+            result.meal.ingredients.map((r) => [r.displayName, r.grams]),
+          ),
+        })
+        // The haptic rides a dynamic import on purpose: a static one would
+        // pull expo-haptics → react-native into every bare-Node test that
+        // imports this module (Rollup cannot parse RN's Flow index.js).
+        void (async () => {
+          try {
+            const { success } = await import('../utils/haptics')
+            void success()
+          } catch {
+            // haptics are optional polish — never a scan outcome
+          }
+        })()
+      } else {
+        // The row was cancelled or already upgraded meanwhile — the guarded
+        // UPDATE found nothing to change, so nothing gets resurrected.
+        await failPendingMeal(mealId).catch(() => {})
+      }
+      return
+    }
+
     setPhase({
       kind: 'ready',
       photoUri,
@@ -431,10 +524,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     void refineMisses(result, outcome.value.raw, provider, model, scanCredential, epoch)
   } catch (err) {
     console.error('scan analyze failed', err)
-    if (stale()) return
-    setPhase({
-      kind: 'failed',
-      photoUri,
+    landFailure({
       message: 'Something went wrong inside the app while preparing this scan. This one is on us — try again.',
       canRetry: false,
       failureKind: 'internal-error',

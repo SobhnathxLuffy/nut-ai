@@ -435,6 +435,6 @@ describe('Wave 4b source inspection — the scaling props actually landed', () =
     const heroSites = read('app/result.tsx').match(
       /\[type\.display, \{ color: theme\.text, lineHeight: 68 \}\]/g,
     )
-    expect(heroSites, 'result.tsx hero-kcal display spreads without headroom').toHaveLength(2)
+    expect(heroSites, 'result.tsx hero-kcal display spreads without headroom').toHaveLength(1)
   })
 })

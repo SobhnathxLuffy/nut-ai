@@ -60,6 +60,7 @@ export const TUTORIAL_CARDS: readonly TutorialCard[] = [
     points: [
       '"Start empty workout" opens a session you fill in as you go.',
       '"Create routine" saves a reusable workout template, and "Programs & schedule" places a routine on each weekday across weeks.',
+      'You never have to learn gym jargon here — effort asks "Easy / Could do 2 more / Barely finished", and every technical term explains itself on tap.',
       'Your journal keeps every set — history and progress stay on this device.',
     ],
   },

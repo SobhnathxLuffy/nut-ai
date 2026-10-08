@@ -22,14 +22,14 @@ describe('friendlySetValueError (P1-5)', () => {
   })
 
   it('names out-of-range fields with their bound', () => {
-    expect(friendlySetValueError(zodError({ rpe: 11 }))).toBe('RPE must be 10 or less')
-    expect(friendlySetValueError(zodError({ rir: -1 }))).toBe('RIR must be at least 0')
+    expect(friendlySetValueError(zodError({ rpe: 11 }))).toBe('RPE (how hard it felt, out of 10) must be 10 or less')
+    expect(friendlySetValueError(zodError({ rir: -1 }))).toBe('RIR (reps you had left in the tank) must be at least 0')
   })
 
   it('maps several issues at once without JSON', () => {
     const message = friendlySetValueError(zodError({ reps: 1.5, rpe: 99 }))
     expect(message).toContain('Reps must be a whole number')
-    expect(message).toContain('RPE must be 10 or less')
+    expect(message).toContain('RPE (how hard it felt, out of 10) must be 10 or less')
     expect(message).not.toContain('[{')
   })
 

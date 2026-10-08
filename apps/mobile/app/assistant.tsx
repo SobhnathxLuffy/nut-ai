@@ -32,8 +32,10 @@ import { MIN_TAP_TARGET, elevationStyle, radius, space, stateLayerFor, type } fr
 import { router, useFocusEffect } from 'expo-router'
 import { encodeFoodReview } from '../src/data/food-review'
 import { localDate } from '../src/data/date-utils'
+import { dateOffset } from '../src/data/shortcuts'
+import { mealsForDay } from '../src/data/repo'
 import { customProviderBaseUrl, db as openUserDb, setting, putSetting } from '../src/data/repo'
-import { loadCorrectionRows, applyLoggedMealCorrections, type LoggedCorrectionWrite } from '../src/data/log-corrections'
+import { loadCorrectionRows, applyLoggedMealCorrections, resolveQualitativeGrams, resolveAddTargetMeal, type LoggedCorrectionWrite, type CorrectionRowRef } from '../src/data/log-corrections'
 import { expandProposalIngredients } from '../src/data/proposal-ingredients'
 import { describeActiveModel, composeModelLine } from '../src/inference/active-model'
 import { cheapestModel, type ProviderId } from '@nutai/prompt'
@@ -44,6 +46,13 @@ import { openIfctDb, openNutritionDb } from '../src/db/expo-adapter'
 import { resolveSelection } from '../src/data/food-search-select'
 import type { ManualFoodSelection } from '../src/data/manual-food'
 import { STREAM_STALL_TIMEOUT_MS } from '@nutai/prompt'
+
+/** F4 fix 8: normalization for the fuzzy name→row fallback — case, punctuation
+ *  and spacing drift between the model's echo and the logged name must not
+ *  break the match. */
+function normalizeName(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
 
 const HISTORY_SETTING = 'assistant_history'
 const HISTORY_MAX_TURNS = 40
@@ -450,6 +459,20 @@ export default function AssistantScreen() {
       if (res.toolCard?.tool_name?.startsWith('propose_') || res.toolCard?.tool_name === 'correct_logged_meal') {
         setProposalStatus(prev => ({ ...prev, [aiMsgId]: 'PROPOSED' }))
       }
+      if (res.toolCard?.tool_name === 'correct_logged_meal') {
+        // The card needs display names to be verifiable BEFORE confirming —
+        // fetch the same multi-day rows the apply step will resolve against.
+        void (async () => {
+          try {
+            const handle = await openUserDb()
+            const rows = await loadCorrectionRows(handle, correctionDates(Date.now()))
+            const names = Object.fromEntries(rows.map((r) => [r.key, r.displayName]))
+            setCorrectionMeta(prev => ({ ...prev, [aiMsgId]: { names, ...(prev[aiMsgId]?.result ? { result: prev[aiMsgId].result } : {}) } }))
+          } catch {
+            // names degrade to raw ids; the confirm flow re-resolves anyway
+          }
+        })()
+      }
       const finalText = res.text ?? ''
       setMessages(prev =>
         prev.map(m =>
@@ -468,10 +491,26 @@ export default function AssistantScreen() {
       // Persist the exchange as plain text turns; tool-card-only replies leave
       // no turn (normalizeHistory merges whatever comes next). Reasoning is
       // display-only and never replayed to the provider.
+      // F4 fix 5: a card-only reply used to vanish from persisted history —
+      // leaving the chat orphaned a proposal with no trace. A bracketed summary
+      // line rides along (text replies keep it too), so the replayed history
+      // always shows that a proposal happened.
+      const cardSummary = !res.toolCard
+        ? null
+        : res.toolCard.tool_name === 'correct_logged_meal'
+          ? '[proposed a correction to your log]'
+          : res.toolCard.tool_name === 'propose_meal'
+            ? `[proposed a meal: ${res.toolCard.data?.name ?? 'unnamed'}]`
+            : res.toolCard.tool_name === 'propose_workout_routine'
+              ? `[proposed a routine: ${res.toolCard.data?.name ?? 'unnamed'}]`
+              : `[used tool: ${res.toolCard.tool_name}]`
+      const replayText = cardSummary
+        ? `${finalText.trim()}${finalText.trim() ? '\n' : ''}${cardSummary}`.trim()
+        : finalText.trim()
       persistHistory([
         ...historyRef.current,
         { role: 'user', content: text },
-        ...(finalText.trim() ? [{ role: 'assistant' as const, content: finalText.trim() }] : []),
+        ...(replayText ? [{ role: 'assistant' as const, content: replayText }] : []),
       ])
     } catch (e: any) {
       // P3-A2: the streaming placeholder added for this turn must not survive
@@ -538,58 +577,148 @@ export default function AssistantScreen() {
     try {
       const intent: CorrectionIntent = { operations: data?.operations ?? [], clarification_needed: data?.clarification_needed ?? null }
       const now = Date.now()
+      const dates = correctionDates(now)
       const handle = await openUserDb()
-      const rows = await loadCorrectionRows(handle, localDate(now))
+      // Same window the context block shipped to the model — yesterday's keys
+      // resolve here exactly as the model saw them (F4 fix 1, apply side).
+      const rows = await loadCorrectionRows(handle, dates)
       const byKey = new Map(rows.map((r) => [r.key, r]))
-      const latestMealId = rows.length > 0 ? rows[rows.length - 1].mealId : null
       const writes: LoggedCorrectionWrite[] = []
+      const applied: string[] = []
+      const skipped: string[] = []
       const unknown: string[] = []
 
       if (intent.operations.length === 0) {
         throw new Error(data?.clarification_needed || 'Nothing to apply.')
       }
 
+      // F4 fix 8: a stale or hallucinated id no longer kills the operation —
+      // the echoed NAME (or an id that IS a name, per the prompt contract)
+      // falls back to a normalized substring match over the same rows.
+      const resolveKey = (id: string, nameCandidate: string | null): CorrectionRowRef | null => {
+        const direct = byKey.get(id)
+        if (direct) return direct
+        for (const candidate of [nameCandidate, id]) {
+          const needle = normalizeName(candidate)
+          if (!needle) continue
+          const hit =
+            rows.find((r) => normalizeName(r.displayName) === needle) ??
+            rows.find((r) => normalizeName(r.displayName).includes(needle) || needle.includes(normalizeName(r.displayName)))
+          if (hit) return hit
+        }
+        return null
+      }
+
+      const todayMeals = await mealsForDay(localDate(now))
+
       for (const op of intent.operations) {
         if (op.type === 'remove_item') {
-          if (byKey.has(op.id)) writes.push({ kind: 'remove', key: op.id })
-          else unknown.push(op.id)
-        } else if (op.type === 'update_quantity') {
-          if (op.grams == null) {
+          const ref = resolveKey(op.id, op.id)
+          if (ref) {
+            writes.push({ kind: 'remove', key: ref.key })
+            applied.push(`Removed ${ref.displayName}`)
+          } else {
             unknown.push(op.id)
-            continue
+            skipped.push(`Couldn't find "${op.id}" in your recent log`)
           }
-          if (byKey.has(op.id)) writes.push({ kind: 'update', key: op.id, grams: op.grams })
-          else unknown.push(op.id)
-        } else if (op.type === 'add_item') {
-          if (latestMealId == null) throw new Error('Nothing is logged today — use “I had …” to log it instead.')
-          const sel = await resolveCorrectionFood(op.canonical_food_key || op.name, op.grams ?? undefined)
-          if (!sel) throw new Error(`Could not find nutrition for "${op.name}".`)
-          writes.push({ kind: 'add', mealId: latestMealId, selection: sel })
-        } else if (op.type === 'replace_item') {
-          const ref = byKey.get(op.id)
+        } else if (op.type === 'update_quantity') {
+          const ref = resolveKey(op.id, op.id)
           if (!ref) {
             unknown.push(op.id)
+            skipped.push(`Couldn't find "${op.id}" in your recent log`)
+            continue
+          }
+          let grams = op.grams
+          let basis = ''
+          // F4 fix 4: qualitative sizes finally apply — relative words scale
+          // the row's current grams, counted units use small vessel priors,
+          // and anything unresolvable is REPORTED as skipped, never silent.
+          if (grams == null && op.qualitative_size) {
+            const q = resolveQualitativeGrams(op.qualitative_size, ref.grams)
+            if (q.ok) {
+              grams = q.grams
+              basis = ` (${q.basis})`
+            } else {
+              skipped.push(`${ref.displayName}: ${q.reason}`)
+              continue
+            }
+          }
+          if (grams == null) {
+            skipped.push(`${ref.displayName}: no amount was given`)
+            continue
+          }
+          writes.push({ kind: 'update', key: ref.key, grams })
+          applied.push(`Set ${ref.displayName} to ${Math.round(grams)} g${basis}`)
+        } else if (op.type === 'add_item') {
+          // F6: the target meal comes from meal words in the request ("add a
+          // coffee" lands in breakfast), else the clock's slot, else the
+          // latest meal — never blindly the last meal of the day.
+          const target = resolveAddTargetMeal(
+            `${op.name} ${op.qualitative_size ?? ''}`,
+            now,
+            todayMeals.map((m) => ({ id: m.id, slot: m.slot, loggedAt: m.loggedAt })),
+          )
+          if (!target) throw new Error('Nothing is logged today — use “I had …” to log it instead.')
+          const sel = await resolveCorrectionFood(op.canonical_food_key || op.name, op.grams ?? undefined)
+          if (!sel) {
+            skipped.push(`Could not find nutrition for "${op.name}"`)
+            continue
+          }
+          writes.push({ kind: 'add', mealId: target.id, selection: sel })
+          applied.push(`Added ${sel.displayName} to ${target.slot ?? 'your latest meal'}`)
+        } else if (op.type === 'replace_item') {
+          const ref = resolveKey(op.id, op.name)
+          if (!ref) {
+            unknown.push(op.id)
+            skipped.push(`Couldn't find "${op.name || op.id}" in your recent log`)
             continue
           }
           const sel = await resolveCorrectionFood(op.canonical_food_key || op.name, ref.grams)
-          if (!sel) throw new Error(`Could not find nutrition for "${op.name}".`)
-          writes.push({ kind: 'remove', key: op.id })
+          if (!sel) {
+            skipped.push(`Could not find nutrition for "${op.name}"`)
+            continue
+          }
+          writes.push({ kind: 'remove', key: ref.key })
           writes.push({ kind: 'add', mealId: ref.mealId, selection: sel })
+          applied.push(`Replaced ${ref.displayName} with ${sel.displayName}`)
         }
       }
 
       if (writes.length === 0) {
-        throw new Error('None of those changes match today\'s log — try naming the food exactly as it appears in your log.')
+        throw new Error(skipped[0] || 'None of those changes match your recent log — try naming the food as it appears in your log.')
       }
 
-      const applied = await applyLoggedMealCorrections(handle, writes, now)
-      if (applied.appliedMeals.length === 0) throw new Error('The correction could not be applied.')
+      const result = await applyLoggedMealCorrections(handle, writes, now, dates)
+      if (result.appliedMeals.length === 0) throw new Error('The correction could not be applied.')
+      // F4 fix 3: per-op results surface on the card — partial application is
+      // reported, not silently swallowed behind a green "Applied" badge.
+      const resultSkipped = [
+        ...skipped,
+        ...result.unknownKeys.map((k) => `Couldn't find "${correctionMeta[msgId]?.names[k] ?? k}" in your recent log`),
+        ...result.skipped,
+      ]
+      setCorrectionMeta(prev => ({
+        ...prev,
+        [msgId]: { names: prev[msgId]?.names ?? {}, result: { applied, skipped: resultSkipped } },
+      }))
       setProposalStatus(prev => ({ ...prev, [msgId]: 'SAVED' }))
     } catch (e: any) {
       console.error('correction apply failed', e)
       setProposalStatus(prev => ({ ...prev, [msgId]: 'FAILED' }))
     }
   }
+
+  /**
+   * F4 fixes 3-4: the correction card resolves the model's ids (or fallback
+   * NAMES) to display names, and after the user confirms it reports per-op
+   * results — "Applied …" and "Skipped … (reason)" — instead of a bare
+   * "Applied" badge that hid every partial failure.
+   */
+  const correctionDates = (now: number): string[] => [localDate(now), dateOffset(localDate(now), -1)]
+
+  const [correctionMeta, setCorrectionMeta] = useState<
+    Record<string, { names: Record<string, string>; result?: { applied: string[]; skipped: string[] } }>
+  >({})
 
   const toggleReasoning = (id: string) =>
     setOpenReasoning(prev => {
@@ -749,6 +878,7 @@ export default function AssistantScreen() {
               <CorrectionProposalCard
                 data={m.toolCard.data}
                 status={proposalStatus[m.id]}
+                meta={correctionMeta[m.id]}
                 onConfirm={() => handleCorrectionConfirm(m.id, m.toolCard.data)}
                 onCancel={() => setProposalStatus(prev => ({ ...prev, [m.id]: 'CANCELLED' }))}
               />
@@ -837,11 +967,13 @@ export default function AssistantScreen() {
 function CorrectionProposalCard({
   data,
   status,
+  meta,
   onConfirm,
   onCancel,
 }: {
   data: any
   status?: 'PROPOSED' | 'PENDING' | 'SAVED' | 'FAILED' | 'CANCELLED'
+  meta?: { names: Record<string, string>; result?: { applied: string[]; skipped: string[] } }
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -849,18 +981,31 @@ function CorrectionProposalCard({
   const operations: CorrectionIntent['operations'] = data?.operations ?? []
   const clarification: string | null = typeof data?.clarification_needed === 'string' ? data.clarification_needed : null
 
-  // Names come from today's log at render time is not possible here (async);
-  // the id is compact ("m12i3") but the operation text carries the food name
-  // for add/replace, and update/remove lines name the item via the id map the
-  // assistant context gave the model — good enough to recognize, and the
-  // result is visible on the timeline the moment it applies.
-  const nameOf = (id: string) => id
+  // F4 fix 4: the confirmation card resolves every id to a display name (the
+  // assistant preloaded the same multi-day rows the apply step uses), so the
+  // user verifies real foods before confirming — never "m12i3".
+  const nameOf = (id: string) => meta?.names?.[id] ?? id
 
   if (status === 'SAVED') {
+    const result = meta?.result
     return (
       <View style={[s.card, { borderColor: t.border }]}>
         <ProposalStatusBadge status={status} savedLabel="Applied" />
         <Text style={[type.body, { color: t.text, marginTop: space.xs }]}>Applied to your log. You can undo it from the Home timeline.</Text>
+        {result && result.applied.length > 0 && (
+          <View style={{ marginTop: space.xs, gap: 2 }}>
+            {result.applied.map((line, i) => (
+              <Text key={`a${i}`} style={[type.caption, { color: t.text }]}>✓ {line}</Text>
+            ))}
+          </View>
+        )}
+        {result && result.skipped.length > 0 && (
+          <View style={{ marginTop: space.xs, gap: 2 }}>
+            {result.skipped.map((line, i) => (
+              <Text key={`s${i}`} style={[type.caption, { color: t.textMuted }]}>Skipped — {line}</Text>
+            ))}
+          </View>
+        )}
       </View>
     )
   }
@@ -898,7 +1043,7 @@ function CorrectionProposalCard({
   return (
     <View style={[s.card, { borderColor: t.border }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <Text style={[type.bodyStrong, { color: t.text, flex: 1 }]}>Correct today&apos;s log</Text>
+        <Text style={[type.bodyStrong, { color: t.text, flex: 1 }]}>Correct your log</Text>
         <ProposalStatusBadge status={status} />
       </View>
       <View style={{ marginTop: space.sm, gap: space.xs }}>

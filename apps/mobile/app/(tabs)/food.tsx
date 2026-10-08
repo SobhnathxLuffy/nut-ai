@@ -11,6 +11,7 @@ import { showToast } from '../../src/components/toast-store'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, radius, space, type } from '../../src/theme/tokens'
 import { db, localDate, undoLastOperation } from '../../src/data/repo'
+import { showUndoableLoggedToast } from '../../src/data/undo-toast'
 import { subscribeFoodMutations } from '../../src/data/food-mutations'
 import { listShortcuts, removeShortcut, copyYesterday, type Shortcut } from '../../src/data/shortcuts'
 import {
@@ -94,21 +95,7 @@ export default function Food() {
         // §10.1 (Wave 1b): every logging path confirms with the same Undo
         // toast; undoLastOperation emits the food-mutation event that
         // refreshes Home's timeline and this strip.
-        showToast({
-          message: 'Meal logged.',
-          tone: 'success',
-          durationMs: 6000,
-          action: {
-            label: 'Undo',
-            onPress: () => {
-              void undoLastOperation().then((r) => {
-                if (!r.success) {
-                  showToast({ message: 'Could not undo — the log changed since this meal was added.', tone: 'error' })
-                }
-              })
-            },
-          },
-        })
+        showUndoableLoggedToast('Meal logged.')
         await refresh()
       } catch (e) {
         showToast({ message: e instanceof Error ? e.message : 'Could not log this meal', tone: 'error' })

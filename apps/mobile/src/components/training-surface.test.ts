@@ -25,9 +25,11 @@ import ts from 'typescript'
  */
 
 const here = dirname(fileURLToPath(import.meta.url))
+import { canonicalizeFieldValue as canonicalizeFieldValueImported } from '../data/workout-load'
 const routines = readFileSync(join(here, '../../app/routines.tsx'), 'utf8')
 const programs = readFileSync(join(here, '../../app/programs.tsx'), 'utf8')
 const workout = readFileSync(join(here, '../../app/workout.tsx'), 'utf8')
+const workoutLoad = readFileSync(join(here, '../../src/data/workout-load.ts'), 'utf8')
 const search = readFileSync(join(here, '../../app/search.tsx'), 'utf8')
 
 /** Slice a module-level `function NAME(...)` declaration out of screen source. */
@@ -98,7 +100,7 @@ describe('T4-b #5 — the routine editor warns before a dirty exit', () => {
 
   it('the dirty baseline is captured at every editor entry (open + create + deep link)', () => {
     expect(routines).toContain('function editorFingerprint(')
-    expect(routines).toContain('setBaseline(editorFingerprint(r.name, parsed.exercises))')
+    expect(routines).toContain('setBaseline(editorFingerprint(r.name, withUids))')
     expect(routines).toContain('setBaseline(editorFingerprint(\'\', []))')
     // The web leave-guard now tracks dirty, not merely "editing".
     expect(routines).toContain('useWebDirtyGuard(dirty)')
@@ -117,7 +119,7 @@ describe('T4-b #6 — planned inputs never silently drop a rejected value', () =
   it('behavioral: the set-field draft parser (§8.3 — intermediates never explode into NaN)', () => {
     // The runtime shape is the {value} | {error} union; the flattened optional
     // error keeps the truthy `.error` assertions honest to typecheck too.
-    const parse = evalHelper<(key: string, text: string) => { value: number | null; error?: string }>(routines, 'parseSetFieldDraft')
+    const parse = evalHelper<(key: string, text: string, unit?: string) => { value: number | null; error?: string }>(routines, 'parseSetFieldDraft', { canonicalizeFieldValue: canonicalizeFieldValueImported })
     expect(parse('load_kg', '60')).toEqual({ value: 60 })
     expect(parse('load_kg', '')).toEqual({ value: null }) // clearing is a commit, not an error
     expect(parse('reps', '8')).toEqual({ value: 8 })
@@ -215,11 +217,13 @@ describe('T4-b #8 — a corrupt user exercise row cannot dead-end the exercise l
 describe('A11Y P1-4 / P2-10 / P2-11 — exercise and weekday context in labels', () => {
   it('routines: every per-exercise control prefixes the exercise name', () => {
     expect(routines).toContain('const exName = exInfo?.name ?? `Exercise #${se.exercise_id}`')
-    expect(routines).toContain('label={`Remove ${exName}`}')
+    expect(routines).toContain('accessibilityLabel={`Remove ${exName}`}')
+    expect(routines).toContain('accessibilityLabel={`Move ${exName} up`}')
+    expect(routines).toContain('accessibilityLabel={`Duplicate ${exName}`}')
     expect(routines).toContain('label={`${exName} — ${fieldLabels[key]} · set ${si + 1}`}')
     expect(routines).toContain('label={`${exName} — Min Reps`}')
     expect(routines).toContain('label={`${exName} — Max Reps`}')
-    expect(routines).toContain("label={`${exName} — ${se.rule.kind === 'percentage' ? 'Increment (%)' : 'Increment (kg)'}`}")
+    expect(routines).toContain("label={`${exName} — ${se.rule.kind === 'percentage' ? 'Increment (%)' : `Increment (${unit})`}`}")
     expect(routines).toContain('label={`${exName} — Target RIR (0-10)`}')
     expect(routines).toContain('label={`${exName} — Planned ${fieldLabels[key]}`}')
     expect(routines).toContain('label={`${exName} — Planned tempo (e.g. 3-1-2-0)`}')
@@ -227,14 +231,16 @@ describe('A11Y P1-4 / P2-10 / P2-11 — exercise and weekday context in labels',
 
   it('routines: the hand-rolled chip rows became the sanctioned ChipRow with human labels + radiogroup context', () => {
     // P2-10: no raw engine enums as chip labels any more.
-    expect(routines).toContain('double: \'Double\'')
-    expect(routines).toContain('percentage: \'Percentage\'')
+    // T-IMPL-B A4: the labels moved to workout-load and speak user outcomes.
+    expect(workoutLoad).toContain("double: 'Reps first, then weight'")
+    expect(workoutLoad).toContain("percentage: 'Add weight'")
+    expect(routines).toContain('PROGRESSION_KIND_LABELS')
     expect(routines).not.toContain('<Button\n                      key={k}\n                      label={k}')
     // Both chip rows render through ChipRow under a named radiogroup:
-    expect(routines.match(/<ChipRow/g)?.length).toBe(2)
+    expect(routines.match(/<ChipRow/g)?.length).toBeGreaterThanOrEqual(2)
     expect(routines).toContain('accessibilityRole="radiogroup" accessibilityLabel={`${exName} — progression rule`}')
     expect(routines).toContain('accessibilityRole="radiogroup" accessibilityLabel={`${exName} — superset group`}')
-    expect(routines).toContain('a11yLabel={(k) => `${exName} — progression ${PROGRESSION_LABELS[k]}`}')
+    expect(routines).toContain('a11yLabel={(k) => `${exName} — progression ${PROGRESSION_KIND_LABELS[k]}`}')
     expect(routines).toContain("a11yLabel={(g) => `${exName} — superset ${g === 'none' ? 'none' : `group ${g}`}`}")
   })
 

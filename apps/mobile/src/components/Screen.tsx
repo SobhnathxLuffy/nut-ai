@@ -258,6 +258,7 @@ export function Button({
   icon,
   size = 'md',
   style,
+  accessibilityLabel: a11yLabel,
 }: {
   label: string
   onPress: () => void
@@ -269,6 +270,9 @@ export function Button({
   size?: ButtonSize
   /** Layout overrides (margin/flex) — merged after the primitive's style. */
   style?: StyleProp<ViewStyle>
+  /** Screen-reader override (A11Y P1-4): compact visible labels stay short
+   *  while the announced name carries the context (e.g. the exercise name). */
+  accessibilityLabel?: string
 }) {
   const t = useTheme()
   const isLg = size === 'lg'
@@ -276,7 +280,7 @@ export function Button({
   return (
     <PressableFX
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={a11yLabel ?? label}
       accessibilityState={{ disabled, selected }}
       disabled={disabled}
       onPress={onPress}

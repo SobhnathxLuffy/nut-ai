@@ -1,14 +1,18 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
-import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import { SetKind, SetValues, TRACKING_FIELDS } from '@nutai/core-schema'
+import { Alert, Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { RoutineInput, SetKind, SetValues, TRACKING_FIELDS, type ProgressionRule } from '@nutai/core-schema'
 import {
   calculatePlates,
+  detectSessionPRs,
   discardWorkout,
   editWorkoutExercise,
   finishWorkout,
   groupExercises,
+  insertWarmupRamp,
   listEquipment,
+  listRoutines,
+  nextProgression,
   performanceHistory,
   removeSet,
   reopenWorkout,
@@ -38,7 +42,16 @@ import {
   restClockLabel,
   shortFieldLabel,
 } from '../src/data/set-table'
-import { canonicalizeFieldValue, describeSet, getFieldLabels, setValuesToDisplay } from '../src/data/workout-load'
+import {
+  EFFORT_PICKS,
+  JARGON_HINTS,
+  SET_KIND_LABELS,
+  canonicalizeFieldValue,
+  describeSet,
+  formatLoadForDisplay,
+  getFieldLabels,
+  setValuesToDisplay,
+} from '../src/data/workout-load'
 import { friendlySetValueError } from '../src/data/workout-errors'
 import { showToast } from '../src/components/toast-store'
 import { syncRestNotification } from '../src/notifications/scheduler'
@@ -46,7 +59,7 @@ import { useTheme } from '../src/theme/ThemeProvider'
 import { MIN_TAP_TARGET, elevationStyle, radius, space, stateLayerFor, type } from '../src/theme/tokens'
 // UI/UX report Table 9.2 (Wave 1c): "Complete a set → Light impact" — fast,
 // physical, repeatable; a full workout finish is the success moment instead.
-import { lightImpact as hapticLightImpact } from '../src/utils/haptics'
+import { lightImpact as hapticLightImpact, warning as hapticWarning } from '../src/utils/haptics'
 import { confirmDialog } from '../src/ui/alert-web'
 
 /**
@@ -61,6 +74,14 @@ import { confirmDialog } from '../src/ui/alert-web'
  * down, pulses at zero, and skips on tap. Supersets render as linked
  * color-coded groups using ONE tinted token (stateLayerFor selected), not
  * ad-hoc alphas.
+ *
+ * T-IMPL-B (progression transparency): the launcher's "This week" suggestion
+ * (workouts.progression_note) renders as a dismissible banner — the prefill
+ * already happened, the banner explains WHY and offers Accept/Edit. Finishing
+ * a workout detects e1RM PRs (detectSessionPRs) into the completion summary,
+ * a finished exercise shows its computed next-time prescription, and a
+ * routine-authored per-exercise rest (RoutineInput.rest_seconds) drives the
+ * rest chip when present.
  *
  * DATA FLOW IS UNCHANGED: same workout_sets writes through saveSet /
  * removeSet / editWorkoutExercise / updateWorkout, same undo (operations
@@ -102,6 +123,14 @@ export default function WorkoutScreen() {
   // Per-exercise, per-set-slot previous values from performanceHistory —
   // the "previous" column of the set table (Ch. 8.5).
   const [previous, setPrevious] = useState<Map<number, Map<number, SetValues>>>(new Map())
+  // T-IMPL-B A3/I: the routine's plan, parsed ONCE per load into state (the
+  // PERF mandate forbids JSON.parse in render loops). Maps exercise_id → its
+  // progression rule + authored per-exercise rest. Null for empty workouts.
+  const [routinePlan, setRoutinePlan] = useState<Map<number, { rule: ProgressionRule; rest_seconds: number | null }> | null>(null)
+  // T-IMPL-B A3: the launcher's "This week" banner — dismissed per workout.
+  const [suggestionDismissedFor, setSuggestionDismissedFor] = useState<number | null>(null)
+  // T-IMPL-B F4: session PRs, detected once at the finish moment.
+  const [prs, setPrs] = useState<Array<{ name: string; e1rm_kg: number }>>([])
   // Context-menu + inline-tools state (the collapsed twelve actions).
   // `menuFor`/`plateFor` RETAIN the last payload after close so the sheets
   // can play their exit animation before unmounting content.
@@ -125,6 +154,24 @@ export default function WorkoutScreen() {
     const parsed = Number(nextRestPref)
     setRestPref(Number.isFinite(parsed) ? Math.min(600, Math.max(15, Math.round(parsed))) : 90)
     setPrevious(previousBySetSlot(perf))
+    // The routine plan (rules + per-exercise rest) rides ONE guarded parse per
+    // load — a corrupt definition simply means no plan, never a broken screen.
+    const rid = nextDetail.workout.routine_id
+    if (rid == null) {
+      setRoutinePlan(null)
+      return
+    }
+    const row = await h.get<{ definition_json: string }>('SELECT definition_json FROM routines WHERE id = ?', [rid])
+    if (!row) {
+      setRoutinePlan(null)
+      return
+    }
+    try {
+      const parsedPlan = RoutineInput.parse(JSON.parse(row.definition_json))
+      setRoutinePlan(new Map(parsedPlan.exercises.map((e) => [e.exercise_id, { rule: e.rule, rest_seconds: e.rest_seconds ?? null }])))
+    } catch {
+      setRoutinePlan(null)
+    }
   }, [id])
   const action = useAction(refresh)
 
@@ -172,7 +219,14 @@ export default function WorkoutScreen() {
   const resting = w.rest_until != null
 
   const skipRest = () => run(async () => { await updateWorkout(await db(), w.id, { rest_until: null }); void syncRestNotification(null, w.id) })
-  const startRest = () => run(async () => { const until = Date.now() + restPref * 1000; await updateWorkout(await db(), w.id, { rest_until: until }); void syncRestNotification(until, w.id) })
+  // T-IMPL-B (rest polish): a routine-authored per-exercise rest wins over the
+  // global preference — the menu rest and the auto-rest per set both read it.
+  const restFor = (exerciseId: number): number => {
+    const authored = routinePlan?.get(exerciseId)?.rest_seconds
+    if (authored != null && authored > 0) return Math.min(600, Math.max(15, authored))
+    return restPref
+  }
+  const startRest = (seconds: number = restPref) => run(async () => { const until = Date.now() + seconds * 1000; await updateWorkout(await db(), w.id, { rest_until: until }); void syncRestNotification(until, w.id) })
 
   // ------------------------------------------------------------------
   // The collapsed twelve secondary actions (Ch. 8.5). Every handler is the
@@ -284,11 +338,26 @@ export default function WorkoutScreen() {
           icon: 'pencil',
           onPress: () => setNotesFor(notesFor === e.id ? null : e.id),
         },
+        // T-IMPL-B (warm-up ramp): 40%×5 · 70%×3 · 90%×1 of the first working
+        // load, inserted as warmup-kind rows — analytics and PRs already
+        // exclude warmups (packages/analytics isWorkingSet).
+        ...(trackingFields.includes('load_kg')
+          ? [
+              {
+                key: 'warmup-ramp',
+                label: 'Add warm-up ramp',
+                icon: 'flame' as const,
+                hint: '40%×5 · 70%×3 · 90%×1 of your first working load',
+                disabled: e.sets.some((s) => s.kind === 'warmup'),
+                onPress: () => run(async () => { await insertWarmupRamp(await db(), e.id) }),
+              },
+            ]
+          : []),
         {
           key: 'rest',
-          label: resting ? 'Skip rest' : `Rest ${restPref}s`,
+          label: resting ? 'Skip rest' : `Rest ${restFor(e.exercise_id)}s`,
           icon: 'clock',
-          onPress: resting ? skipRest : startRest,
+          onPress: resting ? skipRest : () => startRest(restFor(e.exercise_id)),
         },
         {
           key: 'rest-minus',
@@ -328,17 +397,60 @@ export default function WorkoutScreen() {
           icon: 'bookmark',
           hint: 'From this workout’s completed sets',
           onPress: () => run(async () => {
-            await saveRoutine(await db(), {
+            // T-IMPL-B G: the minted routine now carries the DEFAULT
+            // progression ("Reps first, then weight") instead of the dead
+            // 'manual' kind, and a name collision offers Overwrite vs Create
+            // new instead of silently accumulating duplicates.
+            const input = {
               name: `${w.name} routine`,
               exercises: exercises
-                .filter(ex => ex.sets.some(s => s.completed_at))
-                .map(ex => ({
+                .filter((ex) => ex.sets.some((s) => s.completed_at))
+                .map((ex) => ({
                   exercise_id: ex.exercise_id,
                   group: ex.superset_group_id,
-                  sets: ex.sets.filter(s => s.completed_at).map(s => SetValues.parse(s)),
-                  rule: { kind: 'manual' },
+                  sets: ex.sets.filter((s) => s.completed_at).map((s) => SetValues.parse(s)),
+                  rule: { kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12, target_rir: 2 },
                 })),
-            })
+            }
+            if (!input.exercises.length) throw new Error('Complete at least one set to save a routine')
+            const h = await db()
+            const existing = (await listRoutines(h)).find((r) => r.name === input.name)
+            if (!existing) {
+              await saveRoutine(h, input)
+            } else {
+              await new Promise<void>((resolve) => {
+                Alert.alert(
+                  'Routine name in use',
+                  `“${input.name}” already exists. Overwrite it with this workout's exercises and sets, or create a new routine?`,
+                  [
+                    { text: 'Cancel', style: 'cancel', onPress: () => resolve() },
+                    {
+                      text: 'Overwrite',
+                      onPress: () => {
+                        resolve()
+                        void action.run(async () => {
+                          const dbh = await db()
+                          await saveRoutine(dbh, input, existing.id)
+                          showToast({ message: `Routine “${existing.name}” updated.`, tone: 'success' })
+                        })
+                      },
+                    },
+                    {
+                      text: 'Create new',
+                      onPress: () => {
+                        resolve()
+                        void action.run(async () => {
+                          const dbh = await db()
+                          await saveRoutine(dbh, input)
+                          showToast({ message: 'Routine saved.', tone: 'success' })
+                        })
+                      },
+                    },
+                  ],
+                )
+              })
+              return
+            }
             // UI/UX report §10.1 (Wave 1b): a successful save confirms itself
             // with a toast that offers the next action — not a dialog.
             showToast({
@@ -372,6 +484,24 @@ export default function WorkoutScreen() {
         </Label>
         {action.feedback}
 
+        {/* T-IMPL-B A3 — the visible progression suggestion (headline fix).
+            The launcher already prefilled today's targets; the banner adds
+            the WHY ("Squat: 22.5 kg — you hit 12 reps on all sets last time")
+            and the choice: Accept keeps the prefill, Edit closes the banner
+            and every field stays editable as normal. */}
+        {active && w.progression_note && suggestionDismissedFor !== w.id && (
+          <View style={[styles.suggestionCard, { backgroundColor: t.affirmTint, borderColor: t.affirm }]}>
+            <Text style={[type.bodyStrong, { color: t.text }]}>This week</Text>
+            {w.progression_note.split('\n').filter(Boolean).map((line, i) => (
+              <Text key={i} style={[type.caption, { color: t.textMuted, lineHeight: 19 }]}>{line}</Text>
+            ))}
+            <Row>
+              <Button label="Accept" selected onPress={() => setSuggestionDismissedFor(w.id)} />
+              <Button label="Edit" onPress={() => setSuggestionDismissedFor(w.id)} />
+            </Row>
+          </View>
+        )}
+
         {active && (
           <Row>
             <Button label="Add exercise" onPress={() => router.push({ pathname: '/search', params: { scope: 'exercise', workoutId: w.id } } as never)} />
@@ -383,8 +513,8 @@ export default function WorkoutScreen() {
         {active && (
           <Label muted>
             {advanced
-              ? 'Advanced set fields on: RIR · RPE · tempo · set types (warmup, drop, failure…).'
-              : 'Advanced set fields add RIR · RPE · tempo · set types per set.'}
+              ? 'Advanced set fields on: RIR (reps left in the tank) · RPE (how hard it felt) · tempo · set types.'
+              : 'Advanced set fields add RIR · RPE · tempo · set types per set — each one explains itself where it appears.'}
           </Label>
         )}
 
@@ -401,7 +531,8 @@ export default function WorkoutScreen() {
               advanced={advanced}
               refresh={refresh}
               unit={unit}
-              restSeconds={restPref}
+              restSeconds={restFor(block.exercise.exercise_id)}
+              rule={routinePlan?.get(block.exercise.exercise_id)?.rule ?? null}
               previousSlots={previous.get(block.exercise.exercise_id) ?? null}
               selected={group.includes(block.exercise.id)}
               circuitLabel={null}
@@ -420,7 +551,8 @@ export default function WorkoutScreen() {
                   advanced={advanced}
                   refresh={refresh}
                   unit={unit}
-                  restSeconds={restPref}
+                  restSeconds={restFor(e.exercise_id)}
+                  rule={routinePlan?.get(e.exercise_id)?.rule ?? null}
                   previousSlots={previous.get(e.exercise_id) ?? null}
                   selected={group.includes(e.id)}
                   circuitLabel={circuitMemberLabel(block.letter, memberIndex)}
@@ -456,7 +588,18 @@ export default function WorkoutScreen() {
 
         {active ? (
           <>
-            <Button label="Finish workout" selected disabled={action.busy} onPress={() => run(async () => { await finishWorkout(await db(), w.id); void syncRestNotification(null, w.id) })} />
+            <Button
+              label="Finish workout"
+              selected
+              disabled={action.busy}
+              onPress={() => run(async () => {
+                await finishWorkout(await db(), w.id)
+                void syncRestNotification(null, w.id)
+                // T-IMPL-B F4: one query at the finish moment — a better e1RM
+                // than EVERY previous completed session wins the banner below.
+                setPrs(await detectSessionPRs(await db(), w.id))
+              })}
+            />
             <Button
               label="Discard workout"
               onPress={() => confirmDialog({
@@ -469,7 +612,19 @@ export default function WorkoutScreen() {
             />
           </>
         ) : (
-          <Button label="Reopen workout to edit" onPress={() => run(async () => reopenWorkout(await db(), w.id))} />
+          <>
+            {/* T-IMPL-B F4: the completion summary's PR banner — the same
+                Epley window the Progress charts use, so the two can never
+                disagree. Detected at the finish tap; stored sessions reopen
+                without re-celebrating. */}
+            {prs.map((pr) => (
+              <View key={pr.name} style={[styles.suggestionCard, { backgroundColor: t.affirmTint, borderColor: t.affirm }]}>
+                <Text style={[type.bodyStrong, { color: t.text }]}>New PR — {pr.name} {formatLoadForDisplay(pr.e1rm_kg, unit)} {unit}</Text>
+                <Text style={[type.caption, { color: t.textMuted }]}>Best estimated 1RM across every completed session.</Text>
+              </View>
+            ))}
+            <Button label="Reopen workout to edit" onPress={() => run(async () => reopenWorkout(await db(), w.id))} />
+          </>
         )}
       </Screen>
 
@@ -506,6 +661,7 @@ function ExerciseCard({
   refresh,
   unit,
   restSeconds,
+  rule,
   previousSlots,
   selected,
   circuitLabel,
@@ -519,6 +675,8 @@ function ExerciseCard({
   refresh: () => Promise<void>
   unit: WeightUnit
   restSeconds: number
+  /** The routine's progression rule for this exercise (null in empty workouts). */
+  rule: ProgressionRule | null
   previousSlots: Map<number, SetValues> | null
   selected: boolean
   circuitLabel: string | null
@@ -533,6 +691,21 @@ function ExerciseCard({
   // Auto-advance: the card owns one ref per set row's first input so a
   // completed check can focus the next open row (Hevy's fast repeat).
   const firstInputRefs = useRef<Array<SetInputRef | null>>([])
+  // T-IMPL-B A3: once the exercise is done, show the engine's next-time
+  // prescription as a one-line note (computed from the LAST completed set —
+  // the same engine the launcher used to prefill). Cheap, memoized per set.
+  const nextTimeNote = useMemo(() => {
+    if (!rule || !active) return null
+    const done = [...e.sets].reverse().find((s) => s.completed_at)
+    if (!done) return null
+    try {
+      const res = nextProgression({ previous: SetValues.parse(done), rule, tracking_type: e.tracking_type })
+      const description = describeSet(res.values, unit)
+      return description ? `Next time: ${description} — ${res.explanation}` : null
+    } catch {
+      return null
+    }
+  }, [rule, active, e.sets, e.tracking_type, unit])
 
   const onSetChecked = (index: number) => {
     const focus = nextFocusIndex(e.sets, index)
@@ -602,6 +775,9 @@ function ExerciseCard({
             <Icon name="plus" size={18} color={t.textMuted} />
             <Text style={[type.label, { color: t.textMuted }]}>Add set</Text>
           </PressableFX>
+          {nextTimeNote ? (
+            <Text style={[type.caption, { color: t.affirm }]}>{nextTimeNote}</Text>
+          ) : null}
         </View>
       )}
 
@@ -611,7 +787,7 @@ function ExerciseCard({
           <View key={s.id} style={styles.summaryRow}>
             <Text style={[type.monoData, { color: t.textFaint, width: SET_NUMBER_WIDTH }]}>{s.sort_order + 1}</Text>
             <Text style={[type.body, { color: t.textMuted, flex: 1, textDecorationLine: s.completed_at ? 'line-through' : 'none' }]}>
-              {s.kind !== 'normal' ? `${s.kind} · ` : ''}{describeSet(s, unit) || 'no values'}{s.completed_at ? '' : ' · not completed'}
+              {s.kind !== 'normal' ? `${SET_KIND_LABELS[s.kind as SetKind] ?? s.kind} · ` : ''}{describeSet(s, unit) || 'no values'}{s.completed_at ? '' : ' · not completed'}
             </Text>
             {s.completed_at ? <Icon name="check" size={16} color={t.affirm} /> : null}
           </View>
@@ -759,26 +935,60 @@ function SetRow({
       {saving && <Text style={[type.caption, { color: t.textFaint }]}>Saving…</Text>}
       {!!error && <Label>{error}</Label>}
 
+      {/* T-IMPL-B E1 — the plain-language effort picker: three answers in
+          ordinary words, mapped onto the internal RPE/RIR the progression
+          engine reads (the rir rule's input path). The advanced toggle above
+          still exposes the numeric fields for those who want them. */}
+      {!advanced && s.kind !== 'warmup' && s.kind !== 'cooldown' && (
+        <View>
+          <Text style={[type.caption, { color: t.textFaint }]}>How hard was that?</Text>
+          <Row>
+            {EFFORT_PICKS.map((pick) => {
+              const selected = draft.current.rpe === pick.rpe
+              return (
+                <Button
+                  key={pick.key}
+                  label={pick.label}
+                  selected={selected}
+                  disabled={saving}
+                  onPress={() => {
+                    const next: SetValues = { ...draft.current, rpe: pick.rpe, rir: pick.rir }
+                    draft.current = next
+                    setValues((v) => ({ ...v, rpe: String(pick.rpe), rir: String(pick.rir) }))
+                    persist(next, completed)
+                  }}
+                />
+              )
+            })}
+          </Row>
+        </View>
+      )}
+
       {/* Advanced extras (same capability as the old editor, compacted under
-          the row): set kind + RIR/RPE/tempo. */}
+          the row): set kind + RIR/RPE/tempo — every label now speaks English
+          and carries its one-line explainer (T-IMPL-B E2). */}
       {advanced && (
         <>
           <Row>
             {SetKind.options.map(k => (
               <Button
                 key={k}
-                label={k}
+                label={SET_KIND_LABELS[k]}
                 selected={kind === k}
                 disabled={saving}
                 onPress={() => { setKind(k); persist(draft.current, completed, k) }}
               />
             ))}
           </Row>
+          {kind === 'amrap' && (
+            <Text style={[type.caption, { color: t.textFaint }]}>{JARGON_HINTS.amrap}</Text>
+          )}
           <Row>
             {advancedFields.map(key => (
               <View key={key} style={{ minWidth: 105, flex: 1 }}>
                 <Field
                   label={`${labels[key]} set ${s.sort_order + 1}`}
+                  hint={JARGON_HINTS[key]}
                   keyboardType={key === 'tempo' ? 'default' : 'decimal-pad'}
                   value={values[key] ?? ''}
                   onChangeText={text => {
@@ -817,6 +1027,14 @@ function RestChip({
   const reduced = useReducedMotion()
   const pulse = useRef(new Animated.Value(1)).current
   const atZero = resting && rest <= 0
+  // T-IMPL-B (rest polish): one haptic at the moment the timer lands on zero —
+  // the countdown is visible, so the buzz fires ONCE on the transition, not
+  // per second while the chip pulses.
+  const wasAtZero = useRef(false)
+  useEffect(() => {
+    if (atZero && !wasAtZero.current) void hapticWarning()
+    wasAtZero.current = atZero
+  }, [atZero])
 
   useEffect(() => {
     if (!atZero || reduced) {
@@ -1077,6 +1295,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  suggestionCard: {
+    padding: space.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    gap: space.sm,
   },
   plateResult: { padding: space.md, borderRadius: radius.md, gap: 4 },
 })

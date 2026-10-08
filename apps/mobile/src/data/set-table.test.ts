@@ -245,7 +245,9 @@ describe('workout.tsx source invariants (Ch. 8.5 contract)', () => {
       'await editWorkoutExercise(await db(), e.id, { deleted_at: Date.now() })',
       'await editWorkoutExercise(await db(), e.id, { superset_group_id: null })',
       'await groupExercises(await db(), w.id, group)',
-      'await saveRoutine(await db(), {',
+      'await saveRoutine(h, input)',
+      // T-IMPL-B G: a same-name collision offers Overwrite (update in place).
+      "'Overwrite'",
       'finishWorkout(await db(), w.id)',
       'await discardWorkout(await db(), w.id)',
       'reopenWorkout(await db(), w.id)',

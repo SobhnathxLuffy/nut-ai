@@ -15,6 +15,7 @@ import {
 } from '@nutai/indian-dishes'
 import { roundGrams } from '@nutai/recipe-engine'
 import { ifctCorpusInfo, nutritionCorpusInfo, openIfctDb, openNutritionDb, resetCorpusPromises } from '../src/db/expo-adapter'
+import { subscribeFoodMutations } from '../src/data/food-mutations'
 import { db as openUserDb } from '../src/data/repo'
 import { resolveSelection } from '../src/data/food-search-select'
 import { type ManualFoodSelection } from '../src/data/manual-food'
@@ -95,6 +96,19 @@ export default function FoodSearch() {
     dishes: number
     dishKb: { dishes: number; fullyMapped: number | null; yieldVerified: number | null } | null
   } | null>(null)
+  // QA2: the results list outlived the save — back-navigation into a mounted
+  // search let the same food be logged twice before the undo toast expired.
+  // Any 'meal' mutation (a save from food-review, assistant, anywhere) drops
+  // the mounted search state so a second tap cannot double-log.
+  useEffect(() => subscribeFoodMutations((m) => {
+    if (m.kind !== 'meal') return
+    setQuery('')
+    setResults([])
+    setOutcome('')
+    setCompositeMeal(null)
+    setCompositeSuggestion(null)
+    setShowDecompose(false)
+  }), [])
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ScoredCandidate[]>([])
   const [outcome, setOutcome] = useState<string>('')

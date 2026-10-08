@@ -79,9 +79,11 @@ describe('Field — error + hint slots + web focus ring (Table 5.1)', () => {
 })
 
 describe('the migrated pill CTAs (Table 12.2 census)', () => {
-  it('result.tsx: both Log-it CTAs are Button size="lg" with the check glyph', () => {
+  it('result.tsx: the Log-it CTA (barcode/label/receipt paths) is Button size="lg" with the check glyph', () => {
+    // T-IMPL-A: the photo path logs optimistically at the shutter and never
+    // reaches /result, so the second (quick-view) Log-it CTA is gone by design.
     const result = read('../../app/result.tsx')
-    expect(result.match(/<Button\s+label=\{logging \? 'Logging…' : 'Log it'\}/g)?.length).toBe(2)
+    expect(result.match(/<Button\s+label=\{logging \? 'Logging…' : 'Log it'\}/g)?.length).toBe(1)
     expect(result).toMatch(/icon="check"\s+size="lg"/)
   })
 
@@ -111,7 +113,7 @@ describe('app-wide press feedback reaches the highest-traffic rows (Table 9.1)',
   it('DayTimeline meal rows render through PressableFX', () => {
     const timeline = read('./DayTimeline.tsx')
     expect(timeline).toContain("import { PressableFX } from './PressableFX'")
-    expect(timeline).toMatch(/<PressableFX onPress=\{onPress\} accessibilityRole="button">/)
+    expect(timeline).toMatch(/<PressableFX onPress=\{onPress\} onLongPress=\{onLongPress\} accessibilityRole="button">/)
   })
 
   it('food-search result rows keep their testID while gaining the press feedback', () => {

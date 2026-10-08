@@ -12,6 +12,7 @@ import {
   removeLoggedItem,
   updateLoggedMeal,
   type LoggedMealDetail,
+  type LoggedMealItem,
 } from '../src/data/logged-meals'
 import { loggedRowBandFor, visibilityLabelFor } from '../src/data/meal-honesty'
 import { useTheme } from '../src/theme/ThemeProvider'
@@ -43,6 +44,15 @@ interface EditableItem {
   fiberPer100g: number | null
   sugarPer100g: number | null
   sodiumPer100Mg: number | null
+  // F3 macro overrides (T-IMPL-A): the per-100 g fields the user can hand-
+  // correct. The text is the DRAFT; the *Per100g fields above stay the loaded
+  // baseline so save() can tell an actual override from a no-op round trip.
+  // A per-100 g basis is THE label basis — it is also literally the snap_*
+  // column, so totals, previews and later gram edits all rescale from it.
+  kcalText: string
+  proteinText: string
+  carbText: string
+  fatText: string
   /** Task 5-5: persisted scan honesty, rendered under the row summary. */
   visibility?: string | null
   bandHalfPct?: number | null
@@ -89,6 +99,13 @@ export default function MealDetail() {
         fiberPer100g: item.fiberPer100g ?? null,
         sugarPer100g: item.sugarPer100g ?? null,
         sodiumPer100Mg: item.sodiumPer100Mg ?? null,
+        // F3: the draft macro fields prefill with the row's stored per-100 g
+        // values (empty = the log never reported it — the field shows the
+        // honest missing-data state, never a fake 0).
+        kcalText: item.kcalPer100g != null ? String(item.kcalPer100g) : '',
+        proteinText: item.proteinPer100g != null ? String(item.proteinPer100g) : '',
+        carbText: item.carbPer100g != null ? String(item.carbPer100g) : '',
+        fatText: item.fatPer100g != null ? String(item.fatPer100g) : '',
         visibility: item.visibility ?? null,
         bandHalfPct: item.bandHalfPct ?? null,
       })),
@@ -120,7 +137,7 @@ export default function MealDetail() {
     }
   }, [mealId, applyLoggedMeal])
 
-  const changeItem = (index: number, key: 'name' | 'gramsText', value: string) => {
+  const changeItem = (index: number, key: 'name' | 'gramsText' | 'kcalText' | 'proteinText' | 'carbText' | 'fatText', value: string) => {
     setMeal((current) =>
       current
         ? {
@@ -151,6 +168,16 @@ export default function MealDetail() {
         setError(`Enter a valid gram weight greater than zero for "${item.name.trim() || 'food'}"`)
         return
       }
+      // F3: a non-empty macro field must be a real, non-negative per-100 g
+      // value. "" stays honest (the log never reported it); garbage blocks.
+      for (const t of [item.kcalText, item.proteinText, item.carbText, item.fatText]) {
+        const v = Number(t.trim())
+        if (t.trim() !== '' && (!Number.isFinite(v) || v < 0)) {
+          isSavingRef.current = false
+          setError(`Macro values must be zero or more for "${item.name.trim() || 'food'}"`)
+          return
+        }
+      }
     }
 
     setBusy(true)
@@ -160,12 +187,29 @@ export default function MealDetail() {
         id: meal.id,
         date: meal.date,
         slot: meal.slot,
-        items: meal.items.map((item) => ({
-          id: item.id,
-          name: item.name.trim(),
-          grams: Number(item.gramsText),
-          kcalPer100g: item.kcalPer100g,
-        })),
+        items: meal.items.map((item) => {
+          // F3: only the macro fields the user actually CHANGED travel as
+          // overrides (baseline → text round trip must not mark rows user-
+          // edited when nothing was touched). Empty text = keep what the log
+          // reported; the per-100 g override IS the snap_* basis, so every
+          // total, preview and later gram edit rescales from it end-to-end.
+          const overrides: NonNullable<LoggedMealItem['overrides']> = {}
+          const kcal = parseMacroOverride(item.kcalText)
+          if (kcal !== null && kcal !== item.kcalPer100g) overrides.kcal = kcal
+          const protein = parseMacroOverride(item.proteinText)
+          if (protein !== null && protein !== item.proteinPer100g) overrides.protein = protein
+          const carbs = parseMacroOverride(item.carbText)
+          if (carbs !== null && carbs !== item.carbPer100g) overrides.carbs = carbs
+          const fat = parseMacroOverride(item.fatText)
+          if (fat !== null && fat !== item.fatPer100g) overrides.fat = fat
+          return {
+            id: item.id,
+            name: item.name.trim(),
+            grams: Number(item.gramsText),
+            kcalPer100g: item.kcalPer100g,
+            ...(Object.keys(overrides).length > 0 ? { overrides } : {}),
+          }
+        }),
       }
       const uuid = await updateLoggedMeal(await db(), detail, Date.now())
       setUndoUuid(uuid)
@@ -238,11 +282,11 @@ export default function MealDetail() {
   // discloses how many items the total excludes (missing snapshot or grams
   // mid-edit), so a partial total is never presented as the whole meal.
   const totalsGrams = meal.items.map((item) => ({ item, grams: validGramsOf(item.gramsText) }))
-  const kcalParts = totalsGrams.map(({ item, grams }) => macroAtGrams(item.kcalPer100g, grams))
+  const kcalParts = totalsGrams.map(({ item, grams }) => macroAtGrams(effPer100(item.kcalText, item.kcalPer100g), grams))
   const totalKcal = sumPresent(kcalParts)
-  const totalProtein = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.proteinPer100g, grams)))
-  const totalCarb = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.carbPer100g, grams)))
-  const totalFat = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.fatPer100g, grams)))
+  const totalProtein = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(effPer100(item.proteinText, item.proteinPer100g), grams)))
+  const totalCarb = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(effPer100(item.carbText, item.carbPer100g), grams)))
+  const totalFat = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(effPer100(item.fatText, item.fatPer100g), grams)))
   const totalFiber = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.fiberPer100g, grams)))
   const totalSugar = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.sugarPer100g, grams)))
   const totalSodium = sumPresent(totalsGrams.map(({ item, grams }) => macroAtGrams(item.sodiumPer100Mg, grams)))
@@ -305,25 +349,28 @@ export default function MealDetail() {
         {meal.items.map((item, index) => {
           const parsedGrams = parseFloat(item.gramsText)
           const validGrams = Number.isFinite(parsedGrams) && parsedGrams > 0 ? parsedGrams : null
+          // The preview and the band read the DRAFT per-100 g values, so a
+          // hand-corrected macro recomputes the row live (F3 end-to-end).
+          const kcalEff = effPer100(item.kcalText, item.kcalPer100g)
           const preview =
-            item.kcalPer100g === null
+            kcalEff === null
               ? 'Calories not reported'
               : validGrams !== null
-              ? `${Math.round((item.kcalPer100g * validGrams) / 100)} kcal`
+              ? `${Math.round((kcalEff * validGrams) / 100)} kcal`
               : '— kcal'
           const editing = editingItemId === item.id
           const visibilityCaption = visibilityLabelFor(item.visibility)
           // The band range is around the SAME row preview kcal — snap × grams / 100 —
           // so the badge and the preview never disagree about which number is banded.
           const rowKcal =
-            item.kcalPer100g !== null && validGrams !== null ? (item.kcalPer100g * validGrams) / 100 : null
+            kcalEff !== null && validGrams !== null ? (kcalEff * validGrams) / 100 : null
           const rowBand = rowKcal !== null ? loggedRowBandFor(item.bandHalfPct, rowKcal) : null
           // Task 11-b: the row's macros at its CURRENT grams — snap per-100g ×
           // grams / 100 — so editing grams rescales the preview live (the snaps
           // themselves are per-100g and are never rewritten on save).
-          const proteinNow = macroAtGrams(item.proteinPer100g, validGrams)
-          const carbNow = macroAtGrams(item.carbPer100g, validGrams)
-          const fatNow = macroAtGrams(item.fatPer100g, validGrams)
+          const proteinNow = macroAtGrams(effPer100(item.proteinText, item.proteinPer100g), validGrams)
+          const carbNow = macroAtGrams(effPer100(item.carbText, item.carbPer100g), validGrams)
+          const fatNow = macroAtGrams(effPer100(item.fatText, item.fatPer100g), validGrams)
           const fiberNow = macroAtGrams(item.fiberPer100g, validGrams)
           const sugarNow = macroAtGrams(item.sugarPer100g, validGrams)
           const sodiumNow = macroAtGrams(item.sodiumPer100Mg, validGrams)
@@ -426,6 +473,20 @@ export default function MealDetail() {
                     onValueChange={(value) => changeItem(index, 'gramsText', value)}
                     numeric
                   />
+                  {/* F3: hand-corrected macros — per-100 g, THE label basis and
+                      literally the snap_* column, so every total and preview
+                      rescales live. Empty = the log never reported it (never a
+                      fake 0); a filled value overrides the AI's number. */}
+                  <View style={styles.macroGrid}>
+                    <View style={styles.macroRow}>
+                      <Field label="kcal / 100 g" value={item.kcalText} onValueChange={(value) => changeItem(index, 'kcalText', value)} numeric />
+                      <Field label="Protein / 100 g" value={item.proteinText} onValueChange={(value) => changeItem(index, 'proteinText', value)} numeric />
+                    </View>
+                    <View style={styles.macroRow}>
+                      <Field label="Carbs / 100 g" value={item.carbText} onValueChange={(value) => changeItem(index, 'carbText', value)} numeric />
+                      <Field label="Fat / 100 g" value={item.fatText} onValueChange={(value) => changeItem(index, 'fatText', value)} numeric />
+                    </View>
+                  </View>
                   <Text style={[type.caption, { color: theme.textMuted }]}>Use “Save changes” to persist edits, or the ⋯ menu for quick actions.</Text>
                 </View>
               ) : null}
@@ -491,6 +552,12 @@ export default function MealDetail() {
                       fiberPer100g: item.fiberPer100g ?? null,
                       sugarPer100g: item.sugarPer100g ?? null,
                       sodiumPer100Mg: item.sodiumPer100Mg ?? null,
+                      // F3: the undo path prefills the override drafts from the
+                      // restored row, same as the initial load does.
+                      kcalText: item.kcalPer100g != null ? String(item.kcalPer100g) : '',
+                      proteinText: item.proteinPer100g != null ? String(item.proteinPer100g) : '',
+                      carbText: item.carbPer100g != null ? String(item.carbPer100g) : '',
+                      fatText: item.fatPer100g != null ? String(item.fatPer100g) : '',
                       // Task 5-5: the undo path keeps the persisted honesty on
                       // screen — applyLoggedMeal's mapping, verbatim.
                       visibility: item.visibility ?? null,
@@ -585,6 +652,22 @@ function validGramsOf(gramsText: string): number | null {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null
 }
 
+/** F3: the value a macro field effectively shows — the user's draft override when
+ *  it parses, otherwise the loaded per-100 g baseline. ONE definition so the
+ *  totals, the row preview and the spoken summary can never disagree. */
+function effPer100(text: string, baseline: number | null): number | null {
+  return parseMacroOverride(text) ?? baseline
+}
+
+/** F3: a per-100 g override draft → number, or null when the field is empty or
+ *  not a usable number (save validation blocks garbage; this only renders). */
+function parseMacroOverride(text: string): number | null {
+  const trimmed = text.trim()
+  if (trimmed === '') return null
+  const value = Number(trimmed)
+  return Number.isFinite(value) && value >= 0 ? value : null
+}
+
 /** A snapshot macro at `grams`, or null when the row reported nothing (or grams are mid-edit). */
 function macroAtGrams(per100g: number | null, grams: number | null): number | null {
   if (per100g === null || grams === null) return null
@@ -614,6 +697,9 @@ function oneDecimal(value: number): number {
 
 const styles = StyleSheet.create({
   primaryBtn: { minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  // F3: the per-100 g macro override grid — two rows of two compact fields.
+  macroGrid: { gap: 8, marginTop: 4 },
+  macroRow: { flexDirection: 'row', gap: 8 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   slot: {

@@ -7,6 +7,8 @@ import { Badge } from '../../src/components/Badge'
 import { BarChart, LineChart } from '../../src/components/Charts'
 import { analyticsStartDate, loadReport } from '../../src/data/analytics'
 import { localDate, db } from '../../src/data/repo'
+import { listPrograms, programWeekAdherence, programWeekOf, trainingStreak } from '@nutai/training'
+import { ProgramInput, type ProgramInput as ProgramPlan } from '@nutai/core-schema'
 import { readWeightUnit } from '../../src/data/weight-units'
 import { useTheme } from '../../src/theme/ThemeProvider'
 import { Skeleton, SkeletonCard } from '../../src/components/Skeleton'
@@ -168,9 +170,56 @@ function Strength({ report, unit }: { report: PeriodReport; unit: WeightUnit }) 
   </>
 }
 
+/** T12 (progress interlock): the active program's current week, planned vs
+ *  done sessions this week, and the simple week streak — the Progress tab
+ *  finally answers "am I keeping up with my plan?", not just aggregates. */
+function ProgramAdherence() {
+  const [row, setRow] = useState<{ name: string; week: number | null; weeks: number; scheduled: number; done: number; streak: number } | null>(null)
+  useFocusEffect(useCallback(() => {
+    void (async () => {
+      try {
+        const h = await db()
+        const today = localDate(Date.now())
+        const streak = await trainingStreak(h, today)
+        const programs = await listPrograms(h)
+        const plans = programs
+          .map((p: { id: number; name: string; definition_json: string }) => {
+            try { return { name: p.name, plan: ProgramInput.parse(JSON.parse(p.definition_json)) as ProgramPlan } } catch { return null }
+          })
+          .filter((x): x is { name: string; plan: ProgramPlan } => x !== null)
+        const active = plans.find(({ plan }) => programWeekOf(plan, today) !== null)
+        if (!active) {
+          setRow({ name: '', week: null, weeks: 0, scheduled: 0, done: 0, streak })
+          return
+        }
+        const adh = await programWeekAdherence(h, active.plan, today)
+        setRow({ name: active.name, week: adh.week, weeks: active.plan.weeks, scheduled: adh.scheduledDates.length, done: adh.completedDates.length, streak })
+      } catch {
+        // adherence is a read-only surface — a data problem never blocks the tab
+      }
+    })()
+  }, []))
+  if (!row) return null
+  return (
+    <Card title="Plan adherence">
+      {row.week !== null ? (
+        <>
+          <DataRow label="This week" value={row.name ? `Week ${row.week} of ${row.weeks}` : '—'} />
+          <DataRow label="Sessions planned vs done" value={row.scheduled === 0 ? 'no sessions scheduled' : `${row.done} of ${row.scheduled}`} />
+        </>
+      ) : (
+        <Muted>No active program — create one from Programs &amp; schedule to track adherence here.</Muted>
+      )}
+      <DataRow label="Training streak" value={row.streak === 1 ? '1 week' : `${row.streak} weeks`} />
+      <Muted>A week counts when at least one session is completed in it. Swapped routines still count.</Muted>
+    </Card>
+  )
+}
+
 function Training({ report, metricCardWidth }: { report: PeriodReport; metricCardWidth: number }) {
   const theme = useTheme(); const muscles = Object.entries(report.training.muscle_group_sets).sort((a, b) => b[1] - a[1])
   return <>
+    <ProgramAdherence />
     <View style={styles.metricGrid}>
       <MetricCard width={metricCardWidth} label="Sessions" value={String(report.training.session_count)} detail={`${report.training.sessions_per_week.toFixed(1)} / week`} />
       <MetricCard width={metricCardWidth} label="Working sets" value={String(report.training.working_sets)} detail={`${report.training.working_sets_per_week.toFixed(1)} / week`} />

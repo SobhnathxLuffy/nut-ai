@@ -3,6 +3,7 @@ import { z } from 'zod'
 export const TrackingType = z.enum(['weight_reps', 'bodyweight_reps', 'distance_time', 'time', 'reps', 'weight_time', 'distance', 'assisted'])
 export type TrackingType = z.infer<typeof TrackingType>
 export const SetKind = z.enum(['normal', 'warmup', 'drop', 'failure', 'amrap', 'myo', 'cluster', 'cooldown'])
+export type SetKind = z.infer<typeof SetKind>
 export const ExerciseInput = z.object({
   name: z.string().trim().min(1).max(120), tracking_type: TrackingType,
   aliases: z.array(z.string().trim().min(1).max(100)).max(30).default([]),
@@ -49,6 +50,12 @@ export const RoutineInput = z.object({
   name: z.string().trim().min(1).max(120),
   exercises: z.array(z.object({ exercise_id: z.number().int().positive(), group: z.string().nullable().default(null),
     sets: z.array(SetValues).min(1).max(100), rule: ProgressionRule,
+    // T-IMPL-B: optional per-exercise rest default in seconds (0-600). The
+    // live session starts THIS duration after the exercise's sets complete;
+    // absent/null keeps the global preference. Additive and optional, so
+    // pre-existing routine JSON parses unchanged and older writers of the
+    // RoutineInput type keep compiling.
+    rest_seconds: z.number().int().min(0).max(600).nullable().optional(),
   })).min(1).max(100),
 })
 export type RoutineInput = z.infer<typeof RoutineInput>

@@ -19,9 +19,11 @@ const FIELD_LABELS: Record<string, string> = {
   duration_s: 'Duration',
   distance_m: 'Distance',
   assistance_kg: 'Assistance',
-  rir: 'RIR',
-  rpe: 'RPE',
-  tempo: 'Tempo',
+  // T-IMPL-B E3: the jargon labels carry their plain-language tail so even the
+  // error text teaches — "RIR (reps you had left in the tank) must be 10 or less".
+  rir: 'RIR (reps you had left in the tank)',
+  rpe: 'RPE (how hard it felt, out of 10)',
+  tempo: 'Tempo (down–pause–up–pause seconds)',
 }
 
 interface IssueLike {

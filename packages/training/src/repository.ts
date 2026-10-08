@@ -4,7 +4,7 @@ import { EXERCISE_LIBRARY } from './library.js'
 import { nextProgression, type Performance } from './progression.js'
 
 export interface Exercise extends ExerciseInput { id:number; uuid:string; is_custom:number; source:string }
-export interface Workout { id:number; uuid:string; name:string; local_date:string; started_at:number; finished_at:number|null; status:'active'|'completed'|'discarded'; notes:string; location:string; routine_id:number|null; rest_until:number|null }
+export interface Workout { id:number; uuid:string; name:string; local_date:string; started_at:number; finished_at:number|null; status:'active'|'completed'|'discarded'; notes:string; location:string; routine_id:number|null; rest_until:number|null; progression_note:string|null }
 export interface WorkoutExercise { id:number; exercise_id:number; workout_id:number; name:string; tracking_type:TrackingType; sort_order:number; superset_group_id:string|null; notes:string; sets:WorkoutSet[]; previous:WorkoutSet|null }
 export interface WorkoutSet extends SetValues { id:number; workout_exercise_id:number; sort_order:number; kind:string; planned_json:string|null; completed_at:number|null }
 export interface Equipment extends EquipmentInput {id:number}
@@ -155,19 +155,45 @@ export async function createExercise(db:DbAdapter,input:unknown,now=Date.now()):
   const e=ExerciseInput.parse(input)
   return mutate(db,now,(tx,c)=>writeRow(tx,'exercises',{...exerciseRow(e),is_custom:1,source:'user'},now,c))
 }
-export async function addExerciseToRoutine(db:DbAdapter,routineId:number,exerciseId:number,now=Date.now()):Promise<void> {
-  const ex=await getExercise(db,exerciseId)
-  if(!ex) throw new Error('Exercise not found')
-  const defaultSet: SetValues = {
-    load_kg: ex.tracking_type === 'weight_reps' ? 20 : null,
-    reps: ['weight_reps', 'bodyweight_reps', 'reps', 'assisted'].includes(ex.tracking_type) ? 10 : null,
-    duration_s: ['distance_time', 'time', 'weight_time'].includes(ex.tracking_type) ? 60 : null,
-    distance_m: ['distance_time', 'distance'].includes(ex.tracking_type) ? 1000 : null,
-    assistance_kg: ex.tracking_type === 'assisted' ? 20 : null,
+/** The type-based planned-set fallback — the ONE place the 20 kg × 10-style
+ * table lives (T-IMPL-B B2: the routines editor, the repository and the
+ * log-exercise configure screen all share it; no third copy may appear). */
+export function typeDefaultSets(trackingType:TrackingType):SetValues[] {
+  const base: SetValues = {
+    load_kg: trackingType === 'weight_reps' ? 20 : null,
+    reps: ['weight_reps', 'bodyweight_reps', 'reps', 'assisted'].includes(trackingType) ? 10 : null,
+    duration_s: ['distance_time', 'time', 'weight_time'].includes(trackingType) ? 60 : null,
+    distance_m: ['distance_time', 'distance'].includes(trackingType) ? 1000 : null,
+    assistance_kg: trackingType === 'assisted' ? 20 : null,
     rir: null,
     rpe: null,
     tempo: null,
   }
+  return [base, { ...base }, { ...base }]
+}
+
+/** History-aware planned-set defaults (T-IMPL-B B2): seed a new routine block
+ * (or the log-exercise configure card) from the user's LAST completed session
+ * of the exercise — what they actually did, not a hard-coded default. History
+ * is performanceHistory() order (finished_at ASC), so the last rows are the
+ * newest session; its sets arrive in sort order. Falls back to
+ * typeDefaultSets when the exercise has never been logged. */
+export function defaultSetsFor(exercise:{ id:number; tracking_type:TrackingType },history:readonly (Performance & { sort_order?: number })[]):SetValues[] {
+  const rows=history.filter(h=>h.exercise_id===exercise.id)
+  const lastWorkoutId=rows.at(-1)?.workout_id
+  if(lastWorkoutId!==undefined){
+    const lastSets=rows.filter(h=>h.workout_id===lastWorkoutId)
+      .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0))
+      .slice(0,100)
+      .map(h=>({ load_kg:h.load_kg,reps:h.reps,duration_s:h.duration_s,distance_m:h.distance_m,assistance_kg:h.assistance_kg,rir:h.rir,rpe:h.rpe,tempo:h.tempo }))
+    if(lastSets.length) return lastSets
+  }
+  return typeDefaultSets(exercise.tracking_type)
+}
+
+export async function addExerciseToRoutine(db:DbAdapter,routineId:number,exerciseId:number,now=Date.now()):Promise<void> {
+  const ex=await getExercise(db,exerciseId)
+  if(!ex) throw new Error('Exercise not found')
   const defaultRule: ProgressionRule = {
     kind: 'double',
     increment: 2.5,
@@ -179,11 +205,13 @@ export async function addExerciseToRoutine(db:DbAdapter,routineId:number,exercis
     const row=await tx.get<Routine>('SELECT * FROM routines WHERE id=? AND deleted_at IS NULL',[routineId])
     if(!row) throw new Error('Routine not found')
     const routine=RoutineInput.parse(JSON.parse(row.definition_json))
+    const history=await performanceHistory(tx)
     routine.exercises.push({
       exercise_id: exerciseId,
       group: null,
-      sets: [defaultSet, { ...defaultSet }, { ...defaultSet }],
+      sets: defaultSetsFor(ex,history),
       rule: defaultRule,
+      rest_seconds: null,
     })
     RoutineInput.parse(routine)
     await writeRow(tx,'routines',{definition_json:JSON.stringify(routine)},now,c,routineId)
@@ -195,11 +223,11 @@ export const activeWorkout=(db:DbAdapter):Promise<Workout|null>=>db.get("SELECT 
 // action. 120 completed workouts is far beyond what a journal tab should
 // render at once; the list is windowed in the screen as well.
 export const workoutHistory=(db:DbAdapter):Promise<Workout[]>=>db.all("SELECT * FROM workouts WHERE status='completed' AND deleted_at IS NULL ORDER BY started_at DESC,id DESC LIMIT 120")
-export async function startWorkout(db:DbAdapter, date:string, name='Quick workout', now=Date.now()):Promise<number> {
+export async function startWorkout(db:DbAdapter, date:string, name='Empty workout', now=Date.now()):Promise<number> {
   validateLocalDate(date)
   return mutate(db,now,async(tx,c)=>{
     const active=await activeWorkout(tx); if(active)return active.id
-    return writeRow(tx,'workouts',{name:name.trim()||'Quick workout',local_date:date,started_at:now,status:'active'},now,c)
+    return writeRow(tx,'workouts',{name:name.trim()||'Empty workout',local_date:date,started_at:now,status:'active'},now,c)
   })
 }
 async function requireActive(tx:DbAdapter,id:number):Promise<void> {
@@ -278,6 +306,29 @@ export const listEquipment=(db:DbAdapter):Promise<Equipment[]>=>db.all('SELECT *
 export async function saveEquipment(db:DbAdapter,input:unknown,id?:number,now=Date.now()):Promise<number> {
   const value=EquipmentInput.parse(input);return mutate(db,now,(tx,c)=>writeRow(tx,'equipment_inventory',value,now,c,id))
 }
+/** Routine delete (T-IMPL-B D): soft-deletes the routine AND strips it from
+ * every live program's schedule in the same transaction — the delete dialog
+ * promises "removed from programs that schedule it", and a stripped reference
+ * can no longer throw 'Routine not found' at launch. A program left with NO
+ * scheduled routine is deleted too: an empty schedule is not a program
+ * (ProgramInput requires at least one day), so keeping it would render the
+ * corrupt-row card. Rides mutate() like every training write, so the whole
+ * cascade is one undoable operation. */
+export async function deleteRoutine(db:DbAdapter,id:number,now=Date.now()):Promise<void> {
+  await mutate(db,now,async(tx,c)=>{
+    if(!await tx.get('SELECT id FROM routines WHERE id=? AND deleted_at IS NULL',[id])) throw new Error('Routine not found')
+    await writeRow(tx,'routines',{deleted_at:now},now,c,id)
+    const programs=await tx.all<Row>('SELECT * FROM programs WHERE deleted_at IS NULL')
+    for(const row of programs){
+      let plan:ProgramInput
+      try{ plan=ProgramInput.parse(JSON.parse(String(row['definition_json']))) }catch{ continue }
+      if(!plan.schedule.some(s=>s.routine_id===id)) continue
+      const remaining=plan.schedule.filter(s=>s.routine_id!==id)
+      if(remaining.length===0) await writeRow(tx,'programs',{deleted_at:now},now,c,Number(row['id']))
+      else { plan.schedule=remaining; await writeRow(tx,'programs',{definition_json:JSON.stringify(plan)},now,c,Number(row['id'])) }
+    }
+  })
+}
 export const listRoutines=(db:DbAdapter):Promise<Routine[]>=>db.all('SELECT * FROM routines WHERE deleted_at IS NULL ORDER BY name')
 export const listPrograms=(db:DbAdapter):Promise<Program[]>=>db.all('SELECT * FROM programs WHERE deleted_at IS NULL ORDER BY name')
 export async function saveRoutine(db:DbAdapter,input:unknown,id?:number,now=Date.now()):Promise<number> {
@@ -339,6 +390,66 @@ export function programDayStatus(program:ProgramInput,date:string):ProgramDaySta
   const id=scheduledRoutine(program,date)
   return id===null?{ kind:'rest'}:{ kind:'scheduled',routineId:id }
 }
+/** Local-calendar date offset built from date parts — the same guard as
+ * weekdayOfLocalDate (never `new Date(bareString)`). */
+export function offsetLocalDate(date:string,days:number):string {
+  validateLocalDate(date)
+  const [y,m,d]=date.split('-').map(Number)
+  const next=new Date(y!,m!-1,d!+days)
+  return `${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}-${String(next.getDate()).padStart(2,'0')}`
+}
+
+/** "Week N of M" (T-IMPL-B F2): 1-based block week containing `date`, from the
+ * SAME day math as scheduledRoutine (days from start ÷ 7). Null before the
+ * start date and after the block runs out — callers show "starts in N days" /
+ * "finished" there. */
+export function programWeekOf(program:ProgramInput,date:string):number|null {
+  validateLocalDate(date);validateLocalDate(program.start_date)
+  const days=Math.floor((Date.parse(date)-Date.parse(program.start_date))/86400000)
+  if(days<0||days>=program.weeks*7)return null
+  return Math.floor(days/7)+1
+}
+
+export interface ProgramWeekAdherence { week:number|null; scheduledDates:string[]; completedDates:string[] }
+/** Planned-vs-done for the block's CURRENT week (T-IMPL-B F3): the scheduled
+ * session dates this week (any routine) and which of them already have a
+ * completed workout. A completed workout on a scheduled date counts as done
+ * even if the user swapped the routine — the honest, kind definition. */
+export async function programWeekAdherence(db:DbAdapter,program:ProgramInput,date:string):Promise<ProgramWeekAdherence> {
+  const week=programWeekOf(program,date)
+  const scheduledDates:string[]=[]
+  if(week!==null){
+    for(let i=0;i<7;i++){
+      const d=offsetLocalDate(program.start_date,(week-1)*7+i)
+      if(scheduledRoutine(program,d)!==null) scheduledDates.push(d)
+    }
+  }
+  const completedDates:string[]=[]
+  for(const d of scheduledDates){
+    const row=await db.get<{ id:number }>("SELECT id FROM workouts WHERE status='completed' AND deleted_at IS NULL AND local_date=? LIMIT 1",[d])
+    if(row) completedDates.push(d)
+  }
+  return { week,scheduledDates,completedDates }
+}
+
+/** One training streak, kept simple and labeled (T-IMPL-B F3): consecutive
+ * MONDAY-ALIGNED calendar weeks with at least one completed session, counting
+ * the current week only once it already has one. */
+export function computeTrainingStreak(dates:readonly string[],today:string):number {
+  validateLocalDate(today)
+  const weekIndex=(iso:string)=>{ const dayNumber=Math.floor(Date.parse(`${iso}T12:00:00Z`)/86400000); return Math.floor((dayNumber+3)/7) }
+  const weeks=new Set(dates.map(weekIndex))
+  const current=weekIndex(today)
+  if(!weeks.has(current)) return 0
+  let streak=0
+  for(let w=current;weeks.has(w);w--) streak++
+  return streak
+}
+export async function trainingStreak(db:DbAdapter,today:string):Promise<number> {
+  const rows=await db.all<{ local_date:string }>("SELECT DISTINCT local_date FROM workouts WHERE status='completed' AND deleted_at IS NULL")
+  return computeTrainingStreak(rows.map(r=>r.local_date),today)
+}
+
 export async function launchRoutine(db:DbAdapter,id:number,date:string,now=Date.now()):Promise<number> {
   validateLocalDate(date)
   return mutate(db,now,async(tx,c)=>{
@@ -347,22 +458,97 @@ export async function launchRoutine(db:DbAdapter,id:number,date:string,now=Date.
     const routine=RoutineInput.parse(JSON.parse(row.definition_json))
     const workout=await writeRow(tx,'workouts',{name:row.name,local_date:date,started_at:now,routine_id:id},now,c)
     const equipment=await listEquipment(tx)
+    const notes:string[]=[]
     for(const planned of routine.exercises){
       const e=await addExerciseTx(tx,c,workout,planned.exercise_id,now,planned.group)
-      const history=await tx.all<WorkoutSet>(`SELECT s.* FROM workout_sets s JOIN workout_exercises e ON e.id=s.workout_exercise_id JOIN workouts w ON w.id=e.workout_id WHERE e.exercise_id=? AND w.routine_id=? AND w.status='completed' AND w.deleted_at IS NULL AND e.deleted_at IS NULL AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL ORDER BY w.finished_at DESC,s.sort_order`,[planned.exercise_id,id])
-      const ex=await tx.get<{equipment_json:string;tracking_type:TrackingType}>('SELECT equipment_json,tracking_type FROM exercises WHERE id=?',[planned.exercise_id])
+      // T-IMPL-B A2: history spans ALL completed workouts (any routine), so
+      // sessions logged outside this routine — e.g. live "empty workout"
+      // sessions — still drive progression. Ordering keeps the newest session
+      // first; the per-slot find() therefore reads the last time the user did
+      // this exercise, wherever it was logged.
+      const history=await tx.all<WorkoutSet>(`SELECT s.* FROM workout_sets s JOIN workout_exercises e ON e.id=s.workout_exercise_id JOIN workouts w ON w.id=e.workout_id WHERE e.exercise_id=? AND w.status='completed' AND w.deleted_at IS NULL AND e.deleted_at IS NULL AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL ORDER BY w.finished_at DESC,s.sort_order`,[planned.exercise_id])
+      const ex=await tx.get<{name:string;equipment_json:string;tracking_type:TrackingType}>('SELECT name,equipment_json,tracking_type FROM exercises WHERE id=?',[planned.exercise_id])
       const requirements=JSON.parse(ex!.equipment_json) as string[]
       const bar=equipment.find(p=>requirements.includes(p.kind)&&['barbell','dumbbell','ez_bar','trap_bar'].includes(p.kind))
+      // T-IMPL-B H: planned_json keeps the ROUTINE's plan (what the user
+      // authored); the progressed values live on the row itself, and the WHY
+      // rides the workout's progression_note (A3) instead of mutating the plan.
+      let noteForExercise: string | null = null
+      let ceilingProgression: { values: SetValues } | null = null
       for(const [order,target] of planned.sets.entries()){
         const previous=history.find(h=>h.sort_order===order)
-        const values=previous?nextProgression({previous:SetValues.parse(previous),rule:planned.rule,...(bar?{inventory:{bar,plates:equipment.filter(p=>p.kind==='plate'),handles:bar.kind==='dumbbell'?2:1}}:{})}).values:target
+        const progression=previous?nextProgression({previous:SetValues.parse(previous),rule:planned.rule,tracking_type:ex!.tracking_type,...(bar?{inventory:{bar,plates:equipment.filter(p=>p.kind==='plate'),handles:bar.kind==='dumbbell'?2:1}}:{})}):null
+        const values=progression?progression.values:target
         validateSet(ex!.tracking_type,values,true)
-        await writeRow(tx,'workout_sets',{...values,workout_exercise_id:e,sort_order:order,planned_json:JSON.stringify(values)},now,c)
+        await writeRow(tx,'workout_sets',{...values,workout_exercise_id:e,sort_order:order,planned_json:JSON.stringify(target)},now,c)
+        if(progression&&noteForExercise===null) noteForExercise=progression.explanation
+        // A1's "+1 set": the rep ladder topped out on this slot. Flag consumed
+        // from the LAST slot only, so the extra set is granted once per
+        // exercise per launch, never once per slot.
+        if(progression?.addSet&&order===planned.sets.length-1) ceilingProgression=progression
       }
+      if(ceilingProgression){
+        const order=planned.sets.length
+        // The appended set has no authored plan slot — its prescription IS the
+        // plan for this session (the ladder-restart values), so planned_json
+        // mirrors what the user should do, and the note says why.
+        await writeRow(tx,'workout_sets',{...ceilingProgression.values,workout_exercise_id:e,sort_order:order,kind:'normal',completed_at:null,planned_json:JSON.stringify(ceilingProgression.values)},now,c)
+        notes.push(`${ex!.name}: one more set added — you hit the rep ceiling last time.`)
+      }
+      if(noteForExercise!==null) notes.push(`${ex!.name}: ${noteForExercise}`)
     }
+    // A3: the visible suggestion. Joined one line per progressing exercise;
+    // the workout screen renders it as the "This week" banner and workout
+    // detail keeps it for the record.
+    if(notes.length) await writeRow(tx,'workouts',{progression_note:notes.join('\n')},now,c,workout)
     return workout
+  })
+}
+/** Warm-up ramp (report 9.2 #12, T-IMPL-B I): inserts 40%×5, 70%×3, 90%×1 of
+ * the first load-bearing set's load as warmup-kind rows JUST BEFORE it. Every
+ * later set row shifts by three sort orders inside the same transaction, so
+ * the ramp renders in place and the working sets keep their order. Warmups are
+ * already excluded from analytics (packages/analytics isWorkingSet) and PRs
+ * (deriveRecords). */
+export async function insertWarmupRamp(db:DbAdapter,workoutExerciseId:number,now=Date.now()):Promise<void> {
+  await mutate(db,now,async(tx,c)=>{
+    const exercise=await tx.get<WorkoutExercise>('SELECT * FROM workout_exercises WHERE id=? AND deleted_at IS NULL',[workoutExerciseId]);if(!exercise)throw new Error('Exercise not found');await requireActive(tx,exercise.workout_id)
+    const sets=await tx.all<WorkoutSet>('SELECT * FROM workout_sets WHERE workout_exercise_id=? AND deleted_at IS NULL ORDER BY sort_order,id',[workoutExerciseId])
+    if(sets.some(s=>s.kind==='warmup'))throw new Error('This exercise already has a warm-up ramp')
+    const firstWorking=sets.find(s=>s.load_kg!==null)
+    if(!firstWorking?.load_kg)throw new Error('Add a load to the first working set first')
+    for(const s of [...sets].reverse())await writeRow(tx,'workout_sets',{sort_order:s.sort_order+3},now,c,s.id)
+    const ramp:[number,number][]=[[0.4,5],[0.7,3],[0.9,1]]
+    let order=firstWorking.sort_order
+    for(const [pct,reps] of ramp){
+      await writeRow(tx,'workout_sets',{load_kg:Math.round(firstWorking.load_kg*pct*100)/100,reps,duration_s:null,distance_m:null,assistance_kg:null,rir:null,rpe:null,tempo:null,workout_exercise_id:workoutExerciseId,sort_order:order++,kind:'warmup',completed_at:null,planned_json:null},now,c)
+    }
   })
 }
 export async function performanceHistory(db:DbAdapter):Promise<Performance[]> {
   return db.all(`SELECT s.*,e.exercise_id,e.tracking_type,e.workout_id,w.finished_at AS at,w.local_date FROM workout_sets s JOIN workout_exercises e ON e.id=s.workout_exercise_id JOIN workouts w ON w.id=e.workout_id WHERE w.status='completed' AND w.deleted_at IS NULL AND e.deleted_at IS NULL AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL ORDER BY w.finished_at,s.id`)
+}
+
+/** Session PR detection (T-IMPL-B F4): for each load-bearing exercise in this
+ * workout, the best Epley estimated 1RM across its completed WORKING sets
+ * (weight_reps, 1–12 reps — the SAME window deriveRecords uses, so the
+ * finish-summary banner and the Progress charts can never disagree), compared
+ * against every previous completed session. No previous session counts as a
+ * PR — a first performance is a record. */
+export async function detectSessionPRs(db:DbAdapter,workoutId:number):Promise<Array<{name:string;e1rm_kg:number}>> {
+  const rows=await db.all<{exercise_id:number;name:string;load_kg:number;reps:number}>(`SELECT e.exercise_id,x.name,s.load_kg,s.reps FROM workout_sets s JOIN workout_exercises e ON e.id=s.workout_exercise_id JOIN exercises x ON x.id=e.exercise_id WHERE e.workout_id=? AND e.deleted_at IS NULL AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL AND s.kind NOT IN ('warmup','cooldown') AND e.tracking_type='weight_reps' AND s.load_kg IS NOT NULL AND s.reps IS NOT NULL AND s.reps>0 AND s.reps<=12`,[workoutId])
+  const best=new Map<number,{name:string;e1rm:number}>()
+  for(const r of rows){
+    const value=r.reps===1?r.load_kg:r.load_kg*(1+r.reps/30)
+    const current=best.get(r.exercise_id)
+    if(!current||value>current.e1rm) best.set(r.exercise_id,{name:r.name,e1rm:value})
+  }
+  const prs:Array<{name:string;e1rm_kg:number}>=[]
+  for(const [exerciseId,session] of best){
+    // 30.0 on purpose: SQLite divides integers integrally (8/30 = 0), which
+    // would silently shrink every multi-rep e1RM and mint false PRs.
+    const previous=await db.get<{v:number|null}>(`SELECT MAX(CASE WHEN s.reps=1 THEN s.load_kg ELSE s.load_kg*(1.0+s.reps/30.0) END) v FROM workout_sets s JOIN workout_exercises e ON e.id=s.workout_exercise_id JOIN workouts w ON w.id=e.workout_id WHERE e.exercise_id=? AND w.id!=? AND w.status='completed' AND w.deleted_at IS NULL AND e.deleted_at IS NULL AND s.deleted_at IS NULL AND s.completed_at IS NOT NULL AND s.kind NOT IN ('warmup','cooldown') AND e.tracking_type='weight_reps' AND s.reps>0 AND s.reps<=12`,[exerciseId,workoutId])
+    if(previous?.v==null||session.e1rm>previous.v) prs.push({name:session.name,e1rm_kg:Math.round(session.e1rm*100)/100})
+  }
+  return prs.sort((a,b)=>a.name.localeCompare(b.name))
 }

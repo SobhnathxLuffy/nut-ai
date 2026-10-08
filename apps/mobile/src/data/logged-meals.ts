@@ -22,6 +22,21 @@ export interface LoggedMealItem {
   visibility?: string | null
   /** Task 5-5: the row's persisted band half-width (fraction). Optional — manual/legacy rows carry NULL (no claim). */
   bandHalfPct?: number | null
+  /**
+   * F3 macro overrides (T-IMPL-A): the user's hand-corrected per-100 g values
+   * for kcal/protein/carbs/fat. Per-100 g is the minimal correct representation
+   * — it IS the snap_* computational basis, so every total, preview and gram
+   * rescale in the app flows through the override with zero new arithmetic.
+   * Only fields present are written; `macros_user_edited` is set for the row
+   * so honesty surfaces can tell the number is no longer purely the AI's.
+   * Values are finite ≥ 0 (validated by updateLoggedMeal).
+   */
+  overrides?: {
+    kcal?: number
+    protein?: number
+    carbs?: number
+    fat?: number
+  }
 }
 export interface LoggedMealDetail {
   id: number
@@ -72,13 +87,37 @@ export async function getLoggedMeal(db: DbAdapter, mealId: number): Promise<Logg
 export async function updateLoggedMeal(db: DbAdapter, detail: LoggedMealDetail, now: number): Promise<string> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(detail.date)) throw new Error('Choose a valid date')
   if (detail.items.some(item=>!item.name.trim() || !Number.isFinite(item.grams) || item.grams <= 0)) throw new Error('Each food needs a name and grams greater than zero')
+  for (const item of detail.items) {
+    const o = item.overrides
+    if (o && Object.values(o).some((v) => v != null && (!Number.isFinite(v) || v! < 0)))
+      throw new Error('Macro overrides must be zero or more')
+  }
   const operation = await db.transaction(async tx=>{
     const previous = await aggregate(tx,detail.id)
     await tx.run("UPDATE meals SET local_date=?, meal_slot=?, updated_at=?, revision=revision+1, sync_state='local' WHERE id=?",[detail.date,detail.slot,now,detail.id])
     // Task 11-b: grams edits deliberately touch ONLY display_name/grams. The
     // snap_* columns are PER-100G snapshots, so every displayed macro (snap ×
     // grams / 100) rescales itself from the new grams — no rewrite, no drift.
-    for(const item of detail.items) await tx.run("UPDATE log_items SET display_name=?, grams=?, updated_at=?, revision=revision+1, sync_state='local' WHERE id=? AND meal_id=?",[item.name.trim(),item.grams,now,item.id,detail.id])
+    for(const item of detail.items) {
+      await tx.run("UPDATE log_items SET display_name=?, grams=?, updated_at=?, revision=revision+1, sync_state='local' WHERE id=? AND meal_id=?",[item.name.trim(),item.grams,now,item.id,detail.id])
+      // F3: hand-corrected macros write the per-100 g override columns. The
+      // override IS the snapshot basis (not a side-channel), so totals,
+      // previews, day analytics and later gram edits all read one number.
+      const o = item.overrides
+      if (o) {
+        await tx.run(
+          `UPDATE log_items SET
+             snap_energy_kcal = COALESCE(?, snap_energy_kcal),
+             snap_protein_g   = COALESCE(?, snap_protein_g),
+             snap_carb_g      = COALESCE(?, snap_carb_g),
+             snap_fat_g       = COALESCE(?, snap_fat_g),
+             macros_user_edited = 1,
+             updated_at = ?, revision = revision + 1, sync_state = 'local'
+           WHERE id = ? AND meal_id = ?`,
+          [o.kcal ?? null, o.protein ?? null, o.carbs ?? null, o.fat ?? null, now, item.id, detail.id],
+        )
+      }
+    }
     const next=await aggregate(tx,detail.id)
     return recordOperation(tx,{entityType:'meals',entityId:detail.id,opType:'update',prevJson:previous,newJson:next,actor:'user',createdAt:now})
   })

@@ -243,12 +243,13 @@ test.describe('130% font-scale emulation (Wave 5C, design-system §7 #2)', () =>
     await expect(page.getByRole('heading', { name: 'Scan food' })).toBeVisible({ timeout: 15_000 })
     await rescale()
 
-    // The web capture surface: the four mode pills + the review radios.
+    // The web capture surface: the four mode pills (the review-mode toggle is
+    // gone — T-IMPL-A deleted Quick/Advanced; one scan path per type).
     for (const mode of ['Scan food', 'Barcode', 'Label', 'Receipt']) {
       await expect(page.getByRole('button', { name: mode, exact: true })).toBeVisible()
     }
-    await expect(page.getByRole('radio', { name: 'Quick review' })).toBeVisible()
-    await expect(page.getByRole('radio', { name: 'Advanced review' })).toBeVisible()
+    await expect(page.getByRole('radio', { name: 'Quick review' })).toHaveCount(0)
+    await expect(page.getByRole('radio', { name: 'Advanced review' })).toHaveCount(0)
 
     // The injection re-applied after navigation: the camera heading (the
     // 20px heading token) now computes at its scaled 26px — proving

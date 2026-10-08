@@ -12,6 +12,9 @@ import { Button, Card, Field, Label, Row, useAction } from './Screen'
 import { PressableFX } from './PressableFX'
 import { DayStatusControl } from './DayStatusControl'
 import { SkeletonLine, SkeletonRow } from './Skeleton'
+import { ScanCardList } from './ScanCards'
+import { scansForDay, type ScanCard } from '../data/pending-scans'
+import { showUndoableLoggedToast } from '../data/undo-toast'
 import { showToast } from './toast-store'
 import { confirmDialog } from '../ui/alert-web'
 import { space } from '../theme/tokens'
@@ -37,6 +40,7 @@ export function DayTimeline({
   const [totals, setTotals] = useState<DayTotals | null>(null)
   const [goal, setGoal] = useState<CurrentGoal | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [scanCards, setScanCards] = useState<ScanCard[]>([])
   const [history, setHistory] = useState<OperationRecord[]>([])
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg')
   const [mealUndoUuid, setMealUndoUuid] = useState<string | null>(getLastDeletedMealUndoUuid())
@@ -46,13 +50,14 @@ export function DayTimeline({
 
   const refresh = useCallback(async () => {
     const h = await db()
-    const [e, s, t, g, o, unit] = await Promise.all([
+    const [e, s, t, g, o, unit, scan] = await Promise.all([
       timeline(h, date),
       getDayStatus(h, date),
       dayTotals(date),
       currentGoal(),
       listOperations(h, { entityType: 'day_status', entityId: Number(date.replaceAll('-', '')), limit: 4 }),
       readWeightUnit(h),
+      scansForDay(h, date),
     ])
     const [undoOp, redoOp] = await Promise.all([
       h.get<{ op_type: string; entity_type: string }>('SELECT op_type, entity_type FROM operations WHERE undone_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1'),
@@ -67,6 +72,7 @@ export function DayTimeline({
     setMealUndoUuid(getLastDeletedMealUndoUuid())
     setUndoTarget(undoOp ?? null)
     setRedoTarget(redoOp ?? null)
+    setScanCards(scan)
     setLoaded(true)
   }, [date])
 
@@ -77,6 +83,10 @@ export function DayTimeline({
   useEffect(() => subscribeFoodMutations(() => { void refresh() }), [refresh])
   const perform = (fn: () => Promise<unknown>) => { void action.run(fn) }
   const repeat = (id: number) => perform(async () => { const h = await db(); await repeatSnapshots(h, [await mealSnapshot(h, id)], date) })
+  // Scan-born meals are expressed ONLY by the ScanCard above — the generic
+  // event row would render the same meal a second time.
+  const notScanEvent = (e: TimelineEvent): boolean =>
+    !(e.type === 'meal' && scanCards.some((c) => c.mealId === e.entity_id))
 
   return <>
     {!hideDateControls && (
@@ -158,8 +168,12 @@ export function DayTimeline({
         <SkeletonRow lines={2} />
       </View>
     )}
-    {loaded&&events.length===0&&<Card><Label>No entries for this day yet.</Label><Label muted>Use the logging actions above whenever you’re ready.</Label></Card>}
-    {events.map(e=><Card key={e.id}><PressableMeal enabled={e.type==='meal'} onPress={()=>router.push({pathname:'/meal-detail',params:{id:e.entity_id}} as never)}><Label>{new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · {e.label}</Label><Label muted>{e.type === 'weight' && e.weight_kg != null ? formatWeightKg(e.weight_kg, weightUnit) : e.detail}</Label></PressableMeal>
+    {/* Scan-born meals (optimistic photo logs) render as their own cards —
+        pending/failed/complete states the generic event row cannot express —
+        and are removed from the plain event list so nothing renders twice. */}
+    {scanCards.length>0&&<ScanCardList cards={scanCards}/>}
+    {loaded&&events.filter(notScanEvent).length===0&&scanCards.length===0&&<Card><Label>No entries for this day yet.</Label><Label muted>Use the logging actions above whenever you’re ready.</Label></Card>}
+    {events.filter(notScanEvent).map(e=><Card key={e.id}><PressableMeal enabled={e.type==='meal'} onPress={()=>router.push({pathname:'/meal-detail',params:{id:e.entity_id}} as never)} onLongPress={e.type==='meal'?()=>{perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid);showUndoableLoggedToast('Meal deleted.')})}:undefined}><Label>{new Date(e.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · {e.label}</Label><Label muted>{e.type === 'weight' && e.weight_kg != null ? formatWeightKg(e.weight_kg, weightUnit) : e.detail}</Label></PressableMeal>
       {e.type==='meal'&&<Row><Button label="Repeat meal" disabled={action.busy} onPress={()=>repeat(e.entity_id)}/><Button label="Favorite" onPress={()=>perform(async()=>saveShortcut(await db(),e.entity_id,'favorite',e.detail))}/><Button label="Delete meal" onPress={()=>confirmDialog({title:'Delete this meal?',message:'You can restore it with Undo.',confirmLabel:'Delete',destructive:true,onConfirm:()=>perform(async()=>{const op=await deleteMeal(e.entity_id);const uuid=op?.uuid??null;setLastDeletedMealUndoUuid(uuid);setMealUndoUuid(uuid)})})}/></Row>}
       {(e.type==='workout'||e.type==='pr')&&<Button label="Open workout" onPress={()=>router.push({pathname:'/workout',params:{id:e.entity_id}} as never)}/>}</Card>)}
   </>
@@ -168,9 +182,9 @@ export function DayTimeline({
 // UI/UX report Table 9.1 (Wave 2): the timeline's meal rows — the app's
 // highest-traffic list — ride PressableFX, so every tap confirms with the
 // 0.97 scale + 6% ink state layer instead of a silent Pressable.
-function PressableMeal({enabled,onPress,children}:{enabled:boolean;onPress:()=>void;children:React.ReactNode}) {
+function PressableMeal({enabled,onPress,onLongPress,children}:{enabled:boolean;onPress:()=>void;onLongPress?:()=>void;children:React.ReactNode}) {
   if (!enabled) return <>{children}</>
-  return <PressableFX onPress={onPress} accessibilityRole="button">{children}</PressableFX>
+  return <PressableFX onPress={onPress} onLongPress={onLongPress} accessibilityRole="button">{children}</PressableFX>
 }
 
 const OPERATION_VERBS: Record<string, string> = { insert: 'add', update: 'edit', delete: 'delete' }

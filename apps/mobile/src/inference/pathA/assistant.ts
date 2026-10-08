@@ -10,6 +10,10 @@ import type { ChatTurn } from './client'
 // A lightweight chat execution loop
 export type AssistantReply = { text?: string; toolCard?: AssistantToolCall & { data: any } }
 
+/** Tools whose card is user-confirmed before anything writes — safe to run
+ *  even when the model wrapped them in prose (F4 fix 2). */
+const ACTION_TOOL_NAMES: ReadonlySet<string> = new Set(['correct_logged_meal', 'propose_meal', 'propose_workout_routine'])
+
 /**
  * The prompt half of one chat turn: system prompt + today-context + user text.
  * Split out of runAssistantChat so the UI can drive its own STREAMING call and
@@ -45,14 +49,21 @@ export async function parseAssistantReply(responseText: string): Promise<Assista
         // dropped (console.debug, never a silent divergence) — the tool only
         // runs when the reply IS the tool call, bare or fenced.
         const prose = proseOutsideToolJson(responseText, jsonStr)
-        if (prose) {
+        // F4 fix 2: ACTION tools (confirmation-gated by AIP-004, so executing
+        // them can never silently mutate anything) must never be dropped
+        // because the model added words — "Done — removed the rice!" with no
+        // card was the exact false-confirmation failure. Read-only summary
+        // tools keep the text-wins misroute guard (the Task-3 case: a
+        // knowledge question that arrives with a spurious totals call).
+        if (prose && !ACTION_TOOL_NAMES.has(parsed.data.tool_name)) {
           console.debug(
-            `[assistant] reply carried text AND a tool call — rendering the text, discarding tool "${parsed.data.tool_name}"`,
+            `[assistant] reply carried text AND a read-only tool call — rendering the text, discarding tool "${parsed.data.tool_name}"`,
           )
           return { text: prose }
         }
         const data = await executeToolLocally(parsed.data)
-        return { toolCard: { ...parsed.data, data } }
+        const card: AssistantReply = { toolCard: { ...parsed.data, data } }
+        return prose ? { ...card, text: prose } : card
       }
     }
   } catch (e) {
@@ -82,6 +93,12 @@ export function proseOutsideToolJson(reply: string, jsonStr: string): string {
  * caller swaps in a quiet "preparing" state for the latter.
  */
 export function stripStreamingToolJson(raw: string): { text: string; toolJson: boolean } {
+  // F4 fix: the guard only recognized compact {"tool_name" — pretty-printed
+  // tool JSON ("tool_name": <space>) poured into the bubble mid-stream.
+  const spaced = /\{\s*"tool_name"\s*:/.exec(raw)
+  if (spaced && spaced.index !== undefined) {
+    return { text: raw.slice(0, spaced.index).replace(/\s+$/, ''), toolJson: true }
+  }
   const idx = raw.indexOf('{"tool_name"')
   if (idx !== -1) {
     return { text: raw.slice(0, idx).replace(/\s+$/, ''), toolJson: true }
@@ -112,10 +129,29 @@ export async function runAssistantChat(
 }
 
 function extractJson(text: string): string | null {
+  // F4 fix: a string-aware depth scan returns the FIRST balanced object, so
+  // trailing prose after the JSON or a second JSON block can no longer break
+  // the naive first-{-to-last-} span (the model that answers
+  // 'Done! {"tool_name":…} …' then trails off produced unparseable slices).
   const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start !== -1 && end !== -1 && end >= start) {
-    return text.slice(start, end + 1)
+  if (start === -1) return null
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let i = start; i < text.length; i++) {
+    const ch = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') depth++
+    else if (ch === '}') {
+      depth--
+      if (depth === 0) return text.slice(start, i + 1)
+    }
   }
   return null
 }
@@ -227,46 +263,55 @@ async function safe<T>(fn: () => T | Promise<T> | undefined): Promise<T | null> 
  */
 export async function buildTodayContext(now: number = Date.now()): Promise<string> {
   try {
-    const date = localDate(now)
-    const [totals, goal, meals, status] = await Promise.all([
-      safe(() => dayTotals(date)),
-      safe(() => currentGoal()),
-      safe(() => mealsForDay(date)),
-      safe(() => getDayStatus(date)),
-    ])
+    const today = localDate(now)
+    // F4 fix 1: yesterday joins the window — "fix yesterday's breakfast" was
+    // structurally impossible when the context shipped only today's rows.
+    // The apply step reads the SAME window (correctionDates), so keys resolve.
+    const yesterday = dateOffset(today, -1)
+    const goal = await safe(() => currentGoal())
 
     const lines: string[] = []
-    lines.push(`[TODAY IN THE USER'S APP — ${date}]`)
-    if (status?.completion === 'fasting') {
-      lines.push('Day status: fasting.')
-    } else if (totals && totals.mealCount > 0) {
-      lines.push(
-        `Logged so far: ${totals.mealCount} meal(s), ${Math.round(totals.kcal)} kcal, ` +
-        `protein ${Math.round(totals.protein_g)} g, carbs ${Math.round(totals.carbs_g)} g, fat ${Math.round(totals.fat_g)} g.`
-      )
-      const logged = (meals ?? []).filter((m) => m.items.length > 0)
-      if (logged.length > 0) {
+    lines.push(`[LOGGED IN THE USER'S APP — TODAY ${today} AND YESTERDAY ${yesterday}]`)
+    for (const [label, date] of [['today', today], ['yesterday', yesterday]] as const) {
+      const [totals, meals, status] = await Promise.all([
+        safe(() => dayTotals(date)),
+        safe(() => mealsForDay(date)),
+        safe(() => getDayStatus(date)),
+      ])
+      lines.push(`--- ${label.toUpperCase()} (${date}) ---`)
+      if (status?.completion === 'fasting') {
+        lines.push('Day status: fasting.')
+        continue
+      }
+      if (totals && totals.mealCount > 0) {
         lines.push(
-          'Logged items (use these EXACT ids with the correct_logged_meal tool if the user asks to change them):'
+          `Logged: ${totals.mealCount} meal(s), ${Math.round(totals.kcal)} kcal, ` +
+          `protein ${Math.round(totals.protein_g)} g, carbs ${Math.round(totals.carbs_g)} g, fat ${Math.round(totals.fat_g)} g.`
         )
-        for (const meal of logged) {
-          for (const item of meal.items) {
-            lines.push(
-              `- [ID m${meal.id}i${item.id}] ${item.displayName}, ${Math.round(item.grams)} g, ~${item.energyKcal} kcal (${meal.slot ?? 'meal'})`
-            )
+        const logged = (meals ?? []).filter((m) => m.items.length > 0)
+        if (logged.length > 0) {
+          lines.push(
+            'Logged items (use these EXACT ids with the correct_logged_meal tool when the user asks to change them):'
+          )
+          for (const meal of logged) {
+            for (const item of meal.items) {
+              lines.push(
+                `- [ID m${meal.id}i${item.id}] (${label}, ${meal.slot ?? 'meal'}) ${item.displayName}, ${Math.round(item.grams)} g, ~${item.energyKcal} kcal`
+              )
+            }
           }
         }
+      } else {
+        lines.push(`Nothing logged ${label}.`)
       }
-    } else {
-      lines.push('Nothing logged yet today.')
     }
     if (goal) {
       lines.push(
-        `Daily targets: ${Math.round(goal.targetKcal)} kcal, protein ${Math.round(goal.protein_g)} g, ` +
+        `Daily targets (today): ${Math.round(goal.targetKcal)} kcal, protein ${Math.round(goal.protein_g)} g, ` +
         `carbs ${Math.round(goal.carbs_g)} g, fat ${Math.round(goal.fat_g)} g.`
       )
     }
-    lines.push('[END TODAY CONTEXT]')
+    lines.push('[END LOG CONTEXT]')
     return lines.join('\n')
   } catch {
     return ''

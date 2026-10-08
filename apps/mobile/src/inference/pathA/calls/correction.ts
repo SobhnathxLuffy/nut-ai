@@ -5,7 +5,8 @@ import { withBaseUrl } from '../../base-url'
 import { classify, classifyTransportError, SCHEMA_MALFORMED_JSON, serializeBody } from '../wire/errors'
 import { extractJsonObject } from '../wire/json'
 import { correctionRequestFor } from '../transports'
-import { CORRECTION_TIMEOUT_MS } from '@nutai/prompt'
+import { CORRECTION_TIMEOUT_MS, GATEWAY_SCAN_TIMEOUT_MS } from '@nutai/prompt'
+import { foldSseToEnvelope } from './scan'
 
 /**
  * The Fix-Result correction call (QA Wave 4 god-file split).
@@ -13,6 +14,8 @@ import { CORRECTION_TIMEOUT_MS } from '@nutai/prompt'
  * GATEWAY ROUTING: a custom base URL speaks the OpenAI-compatible dialect for
  * EVERY provider (same rule as the scan path) — request built and response
  * parsed with the openai transport. Native dialects only on official endpoints.
+ * Gateway calls STREAM (stream:true + SSE fold, 180 s ceiling) so the ~30 s
+ * non-streaming gateway wall cannot kill the Fix-Result parser (F5).
  */
 
 export async function runCorrectionIntent(
@@ -21,9 +24,14 @@ export async function runCorrectionIntent(
 ): Promise<{ ok: true; intent: CorrectionIntent } | { ok: false; error: { kind: any; message: string; retryable: boolean; httpStatus?: number } }> {
   // P2-3: this call used to have no timeout and no abort — a hung gateway
   // froze the Fix-Result flow forever while the caller awaited it.
-  const timeoutMs = req.timeoutMs ?? CORRECTION_TIMEOUT_MS
+  // F5 fix: on a GATEWAY the call streams with the raised 180 s ceiling — the
+  // same gateway cuts non-streaming completions at ~30 s (the scan path
+  // documents the wall), so "describe an edit" timed out far more often than
+  // scan ever did. Official endpoints keep the non-streaming 30 s contract.
+  const viaGateway = Boolean(req.baseUrl)
+  const timeoutMs = req.timeoutMs ?? (viaGateway ? GATEWAY_SCAN_TIMEOUT_MS : CORRECTION_TIMEOUT_MS)
   // The wire dialect follows the base URL, not the provider label.
-  const dialect: ProviderId = req.baseUrl ? 'openai' : req.provider
+  const dialect: ProviderId = viaGateway ? 'openai' : req.provider
   try {
     const credObj = await loadCredential(req.provider)
     if (!credObj || !credObj.value) {
@@ -42,6 +50,12 @@ export async function runCorrectionIntent(
     const url = withBaseUrl(built.url, req.baseUrl)
     const headers = built.headers
 
+    // F5: the stream flag rides the body for gateway calls only, exactly as
+    // the scan path does — buffered SSE reads as one text and folds back into
+    // the chat-completions envelope below.
+    if (viaGateway && built.body && typeof built.body === 'object') {
+      ;(built.body as Record<string, unknown>)['stream'] = true
+    }
     const serialized = serializeBody(built.body)
     if (!serialized.ok) return { ok: false, error: serialized.error }
 
@@ -68,11 +82,19 @@ export async function runCorrectionIntent(
     const text = await res.text()
     if (!res.ok) return { ok: false, error: classify(res.status, text, { secret: credObj.value, model: req.model }) }
 
+    // F5: GATEWAY SSE FOLD — a stream:true answer arrives as Server-Sent
+    // Events; fold it into the envelope every parser below already reads.
+    // Non-SSE bodies (gateway ignored stream:true) fall through untouched.
+    const folded = viaGateway ? foldSseToEnvelope(text) : null
     let json: Record<string, any>
-    try {
-      json = JSON.parse(text) as Record<string, any>
-    } catch {
-      return { ok: false, error: SCHEMA_MALFORMED_JSON }
+    if (folded) {
+      json = folded.envelope as Record<string, any>
+    } else {
+      try {
+        json = JSON.parse(text) as Record<string, any>
+      } catch {
+        return { ok: false, error: SCHEMA_MALFORMED_JSON }
+      }
     }
 
     let rawResult = ''

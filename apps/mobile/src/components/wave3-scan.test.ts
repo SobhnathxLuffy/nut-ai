@@ -84,12 +84,15 @@ describe('§8.4 — the skeleton list BUILDS with the real pipeline stage, never
 // Camera screen — 44pt pills on the Badge primitive + the capture-guide arc
 // ---------------------------------------------------------------------------
 
-describe('§8.4 item 1 — mode pills + review toggle ride the ONE Badge (44pt targets)', () => {
-  it('the review toggle is a Badge radiogroup pair (radio role, selection haptic)', () => {
-    expect(camera).toContain("from '../src/components/Badge'")
-    expect(camera).toMatch(/<Badge[\s\S]*?role="radio"[\s\S]*?accessibilityLabel=\{m === 'quick' \? 'Quick review' : 'Advanced review'\}/)
-    // Table 9.2 "Selection": value changes fire the selection haptic.
-    expect(camera).toMatch(/onChange\(m\)\s*\n\s*void hapticSelection\(\)/)
+describe('§8.4 item 1 — mode pills ride the ONE Badge (44pt targets); review mode is GONE', () => {
+  // T-IMPL-A (Cal AI overhaul): the Quick/Advanced review toggle is deleted —
+  // ONE scan path per capture type. The toggle's absence is now the lock: the
+  // camera source may not reference a review mode anywhere again.
+  it('no review mode exists on the camera screen', () => {
+    expect(camera).not.toContain('ReviewModeToggle')
+    expect(camera).not.toContain('reviewRow')
+    expect(camera).not.toContain('scan_review_mode')
+    expect(camera).not.toContain("role=\"radio\"")
   })
 
   it('the native mode pills ride the Badge with camera-chrome children — no private pill style remains', () => {
@@ -154,7 +157,7 @@ describe('§8.4 item 3 — skeleton-during-analyze; the model caption leaves the
 
 describe('§8.4 item 4 — the confidence legend on first chip appearance', () => {
   it('the legend renders above the meal chip in BOTH views and dismisses through settings', () => {
-    expect(result.match(/<ConfidenceLegend \/>/g)?.length).toBe(2) // quick + advanced
+    expect(result.match(/<ConfidenceLegend \/>/g)?.length).toBe(1) // one editor view — the quick/advanced split is gone (T-IMPL-A)
     expect(result).toContain('function ConfidenceLegend()')
     expect(result).toContain('shouldShowConfidenceLegend(v)')
     expect(result).toContain('putSetting(CONFIDENCE_LEGEND_SETTING_KEY')
@@ -181,7 +184,7 @@ describe('§8.4 item 6 — Fix collapses into ONE bottom sheet with note + befor
   it('the note field and the parsed before/after rows live in the SAME surface', () => {
     expect(result).toMatch(/placeholder="Describe what needs to be fixed"/)
     expect(result).toContain('function FixOperationRow')
-    expect(result).toContain('describeCorrectionOperation(op, rowsNameOf(rows))')
+    expect(result).toContain('describeCorrectionOperation(op, nameOf)')
     // The "before" half: update/swap ops show what the row is NOW.
     expect(result).toContain('Now: {formatInt(current.grams)} g')
     // P2-3 survives the collapse: the billed re-analysis stays an explicit button.

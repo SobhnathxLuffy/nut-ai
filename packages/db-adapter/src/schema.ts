@@ -389,7 +389,7 @@ CREATE TABLE IF NOT EXISTS accuracy_baselines (
 `
 
 /** Current user-schema version. Bump with every migration added below. */
-export const USER_SCHEMA_VERSION = 13
+export const USER_SCHEMA_VERSION = 14
 
 export interface Migration {
   up?: (db: DbAdapter, now: number) => Promise<void>
@@ -802,6 +802,20 @@ ALTER TABLE logging_shortcuts_v13 RENAME TO logging_shortcuts;
 CREATE UNIQUE INDEX shortcut_unique ON logging_shortcuts(meal_id,kind) WHERE deleted_at IS NULL;
 `
 
+
+/**
+ * v14 — progression transparency note on the workout row (T-IMPL-B).
+ *
+ * launchRoutine now keeps the routine's plan in workout_sets.planned_json and
+ * stores the computed "this week" progression explanation (the WHY behind the
+ * prefilled values, human-readable) in ONE nullable column on the workout.
+ * Nullable and additive: pre-v14 workouts and empty-workout sessions carry
+ * NULL, and readers render nothing rather than inventing a suggestion.
+ */
+export const USER_SCHEMA_V14_SQL = `
+ALTER TABLE workouts ADD COLUMN progression_note TEXT;
+`
+
 export const MIGRATIONS: readonly Migration[] = [
   { version: 1, sql: USER_SCHEMA },
   { version: 2, sql: USER_SCHEMA_V2_SQL, up: backfillV2 },
@@ -816,6 +830,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { version: 11, sql: USER_SCHEMA_V11_SQL },
   { version: 12, sql: USER_SCHEMA_V12_SQL },
   { version: 13, sql: USER_SCHEMA_V13_SQL },
+  { version: 14, sql: USER_SCHEMA_V14_SQL },
 ]
 
 export const DISH_KB_SCHEMA = `

@@ -192,4 +192,132 @@ describe('TRN-004: PR engine and progression', () => {
     expect(res.values.reps).toBe(11)
     expect(res.explanation).toContain('cannot be assembled from your inventory')
   })
+
+  // T-IMPL-B A1: multi-axis progression — every tracking type moves, not just
+  // loaded lifts. These locks are the engine half of the "only weight
+  // incrementation exists" complaint.
+  describe('multi-axis progression (T-IMPL-B A1)', () => {
+    const base = { duration_s: null, distance_m: null, assistance_kg: null, rir: null, rpe: null, tempo: null }
+
+    it('climbs the rep ladder for bodyweight_reps (+1 rep per session) with a visible reason', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 8 },
+        rule: ProgressionRule.parse({ kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12 }),
+        tracking_type: 'bodyweight_reps',
+      })
+      expect(res.values.load_kg).toBeNull()
+      expect(res.values.reps).toBe(9)
+      expect(res.explanation.toLowerCase()).toContain('rep')
+    })
+
+    it('every load-oriented rule kind degrades to the rep ladder when there is no load — "Reps first" works standalone', () => {
+      for (const kind of ['double', 'fixed', 'percentage', 'rir'] as const) {
+        const res = nextProgression({
+          previous: { ...base, load_kg: null, reps: 10, rir: 3 },
+          rule: ProgressionRule.parse({ kind, increment: 2.5, min_reps: 8, max_reps: 12, target_rir: 2 }),
+          tracking_type: 'bodyweight_reps',
+        })
+        expect(res.values.reps, `kind ${kind} still adds a rep without load`).toBe(11)
+        expect(res.values.load_kg).toBeNull()
+      }
+    })
+
+    it('holds a bodyweight lift at target RIR when the rir rule asks for more left in the tank', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 10, rir: 0 },
+        rule: ProgressionRule.parse({ kind: 'rir', increment: 2.5, min_reps: 8, max_reps: 12, target_rir: 2 }),
+        tracking_type: 'bodyweight_reps',
+      })
+      expect(res.values.reps).toBe(10)
+      expect(res.explanation).toContain('tank')
+    })
+
+    it('at max_reps it restarts the ladder at min_reps and raises the addSet flag (A1 "+1 set")', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 12 },
+        rule: ProgressionRule.parse({ kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12 }),
+        tracking_type: 'reps',
+      })
+      expect(res.values.reps).toBe(8)
+      expect(res.addSet).toBe(true)
+      expect(res.explanation).toContain('one more set')
+    })
+
+    it('below the ceiling the addSet flag stays false', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 10 },
+        rule: ProgressionRule.parse({ kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12 }),
+        tracking_type: 'bodyweight_reps',
+      })
+      expect(res.values.reps).toBe(11)
+      expect(res.addSet).toBe(false)
+    })
+
+    it('steps duration by about 5% for time work', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: null, duration_s: 60 },
+        rule: ProgressionRule.parse({ kind: 'fixed', increment: 2.5 }),
+        tracking_type: 'time',
+      })
+      expect(res.values.duration_s).toBe(63)
+      expect(res.explanation).toContain('5%')
+    })
+
+    it('steps duration and distance together for distance_time work', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: null, duration_s: 1800, distance_m: 5000 },
+        rule: ProgressionRule.parse({ kind: 'percentage', increment: 5 }),
+        tracking_type: 'distance_time',
+      })
+      expect(res.values.duration_s).toBe(1890)
+      expect(res.values.distance_m).toBe(5250)
+    })
+
+    it('keeps tiny durations moving with the minimum +1 step', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: null, duration_s: 5 },
+        rule: ProgressionRule.parse({ kind: 'fixed', increment: 2.5 }),
+        tracking_type: 'time',
+      })
+      expect(res.values.duration_s).toBe(6)
+    })
+
+    it('reduces assistance by the increment step for assisted work (the lift gets harder)', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 8, assistance_kg: 30 },
+        rule: ProgressionRule.parse({ kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12 }),
+        tracking_type: 'assisted',
+      })
+      expect(res.values.assistance_kg).toBe(27.5)
+      expect(res.values.reps).toBe(8)
+      expect(res.explanation).toContain('assistance')
+    })
+
+    it('never drives assistance negative', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 8, assistance_kg: 1 },
+        rule: ProgressionRule.parse({ kind: 'fixed', increment: 2.5 }),
+        tracking_type: 'assisted',
+      })
+      expect(res.values.assistance_kg).toBe(0)
+    })
+
+    it('infers the axis from the previous values when no tracking type is passed (old callers)', () => {
+      const res = nextProgression({
+        previous: { ...base, load_kg: null, reps: 9 },
+        rule: ProgressionRule.parse({ kind: 'double', increment: 2.5, min_reps: 8, max_reps: 12 }),
+      })
+      expect(res.values.reps).toBe(10)
+    })
+
+    it('manual still never moves anything', () => {
+      const previous = { ...base, load_kg: null, reps: 9, duration_s: 60 }
+      const res = nextProgression({
+        previous,
+        rule: ProgressionRule.parse({ kind: 'manual', increment: 2.5 }),
+        tracking_type: 'bodyweight_reps',
+      })
+      expect(res.values).toEqual(previous)
+    })
+  })
 })

@@ -71,7 +71,7 @@ describe('schema v13 favorites-only shortcuts', () => {
     await seedShortcut(db, 5, 7, 'usual', 'Deleted usual', { deleted: true })
 
     const result = await migrate(db, NOW + 1)
-    expect(result.applied).toEqual([13])
+    expect(result.applied).toEqual([13, 14])
     expect(await currentVersion(db)).toBe(USER_SCHEMA_VERSION)
 
     const rows = await db.all<{
@@ -98,7 +98,7 @@ describe('schema v13 favorites-only shortcuts', () => {
     const db = openMemoryDb()
     const result = await migrate(db, NOW)
     expect(result.to).toBe(USER_SCHEMA_VERSION)
-    expect(result.applied.at(-1)).toBe(13)
+    expect(result.applied.at(-1)).toBe(14)
 
     await db.run(
       `INSERT INTO logging_shortcuts (uuid, created_at, meal_id, kind, name, snapshot_json)
@@ -121,17 +121,17 @@ describe('schema v13 favorites-only shortcuts', () => {
     ).rejects.toThrow()
   })
 
-  it('keeps the chain forward-only: v1 immutable, v13 last, no downgrade path', () => {
+  it('keeps the chain forward-only: v1 immutable, v14 last, no downgrade path', () => {
     expect(MIGRATIONS[0]?.version).toBe(1)
-    expect(MIGRATIONS.at(-1)?.version).toBe(13)
+    expect(MIGRATIONS.at(-1)?.version).toBe(14)
     expect(MIGRATIONS.some((m) => 'down' in m)).toBe(false)
   })
 
-  it('cannot downgrade a v13 database by asking for an older target', async () => {
+  it('cannot downgrade a v14 database by asking for an older target', async () => {
     const db = openMemoryDb()
     await migrate(db, NOW)
     const result = await migrate(db, NOW + 1, 12)
     expect(result.applied).toEqual([])
-    expect(await currentVersion(db)).toBe(13)
+    expect(await currentVersion(db)).toBe(14)
   })
 })
