@@ -266,7 +266,6 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     failureKind?: ScanFailureKind | 'no-key'
     modelHint?: string
   }) => {
-    console.error('[scan-debug] landFailure', failure.failureKind, failure.message?.slice(0, 90))
     if (mealId != null) {
       void failPendingMeal(mealId).catch((err) => console.error('[scan] failed-mark failed', err))
       return
@@ -358,7 +357,6 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
 
     if (!outcome.ok) {
-      console.error('[scan-debug] outcome failed', outcome.error.kind, outcome.error.message)
       landFailure({
         message: outcome.error.message,
         canRetry: outcome.error.retryable,

@@ -336,7 +336,6 @@ function WebCameraFallback() {
           // dismiss, analysis in the background — with the pixels in hand so
           // the analysis cannot outlive its input.
           const mealId = await createPendingMeal(uri, Date.now())
-          console.log('[camera-debug] base64 length:', base64 ? base64.length : 'NONE', 'uri:', uri.slice(0, 30))
           void startScan(uri, { mealId, preparedBase64: base64 })
           void hapticSuccess()
           router.back()
