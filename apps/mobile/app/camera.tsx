@@ -6,7 +6,7 @@ import Svg, { Circle as SvgCircle } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Icon, type IconName } from '../src/components/Icon'
 import { Badge } from '../src/components/Badge'
-import { startLabelScan, startReceiptScan, startScan } from '../src/scan/orchestrator'
+import { startLabelScan, startReceiptScan, startScan, preprocess } from '../src/scan/orchestrator'
 import { setPhase } from '../src/scan/store'
 import { createPendingMeal } from '../src/data/repo'
 // UI/UX report Table 9.2 (Wave 1c): "Scan captured → Light impact" — the
@@ -174,8 +174,16 @@ export default function Camera() {
         // way — then the analysis fires with that row's id and the camera
         // dismisses. DB insert + dismiss land inside one tap; the pending
         // card appears on the timeline through the food-mutation event.
+        // Preprocess HERE, while the picker's blob: URI is still alive — it
+        // dies with this screen, and a dead blob can never be analysed.
         const mealId = await createPendingMeal(shot.uri, Date.now())
-        void startScan(shot.uri, { mealId })
+        let prepared: string | undefined
+        try {
+          prepared = await preprocess(shot.uri)
+        } catch (err) {
+          console.error('[camera] optimistic preprocess failed', err)
+        }
+        void startScan(shot.uri, { mealId, preparedBase64: prepared })
         void hapticSuccess()
         router.back()
         return
@@ -315,15 +323,21 @@ function WebCameraFallback() {
       const ImagePicker = require('expo-image-picker')
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        base64: false,
+        // Web: the picked file's blob: URL dies with this screen, so the
+        // optimistic food path needs the PIXELS, not a reference to them —
+        // base64 travels with the asset and the scan cannot outlive its input.
+        base64: true,
       })
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri as string
+        const base64 = (result.assets[0].base64 as string | undefined) ?? undefined
         if (mode === 'food') {
           // Same optimistic contract as the native shutter: row first, then
-          // dismiss, analysis in the background.
+          // dismiss, analysis in the background — with the pixels in hand so
+          // the analysis cannot outlive its input.
           const mealId = await createPendingMeal(uri, Date.now())
-          void startScan(uri, { mealId })
+          console.log('[camera-debug] base64 length:', base64 ? base64.length : 'NONE', 'uri:', uri.slice(0, 30))
+          void startScan(uri, { mealId, preparedBase64: base64 })
           void hapticSuccess()
           router.back()
           return

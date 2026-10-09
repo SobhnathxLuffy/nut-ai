@@ -172,11 +172,21 @@ async function tryStorageStep<T>(
  * still render there). Without mealId the legacy result-screen flow runs
  * unchanged.
  */
-export async function startScan(photoUri: string, opts: { mealId?: number } = {}): Promise<void> {
+export async function startScan(photoUri: string, opts: { mealId?: number; preparedBase64?: string } = {}): Promise<void> {
   // P2-7: this run's epoch. A back-out-and-rescan supersedes it; every phase
   // write below is checked against the store's active epoch first.
   const epoch = beginScan()
   if (opts.mealId == null) setPhase({ kind: 'analyzing', photoUri, stage: 'preparing' })
+
+  // The camera may hand us an ALREADY-preprocessed payload: the optimistic
+  // flow preprocesses while the picker's blob: URI is still alive (it dies
+  // with the camera screen), then dismisses. Re-preprocessing a dead blob
+  // would hang or fail the whole scan.
+  if (opts.preparedBase64) {
+    lastCapture = { photoUri, base64: opts.preparedBase64 }
+    await analyze(photoUri, opts.preparedBase64, { epoch, mealId: opts.mealId })
+    return
+  }
 
   let base64: string
   try {
@@ -256,6 +266,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     failureKind?: ScanFailureKind | 'no-key'
     modelHint?: string
   }) => {
+    console.error('[scan-debug] landFailure', failure.failureKind, failure.message?.slice(0, 90))
     if (mealId != null) {
       void failPendingMeal(mealId).catch((err) => console.error('[scan] failed-mark failed', err))
       return
@@ -347,6 +358,7 @@ async function analyze(photoUri: string, base64: string, opts: AnalyzeOpts = {})
     }
 
     if (!outcome.ok) {
+      console.error('[scan-debug] outcome failed', outcome.error.kind, outcome.error.message)
       landFailure({
         message: outcome.error.message,
         canRetry: outcome.error.retryable,
