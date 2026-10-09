@@ -1,6 +1,6 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BackHandler, View } from 'react-native'
+import { BackHandler, ScrollView, View, useWindowDimensions } from 'react-native'
 import { RoutineInput, TRACKING_FIELDS, type ProgressionRule, type SetValues, type RoutineInput as RoutineInputType } from '@nutai/core-schema'
 import {
   listRoutines,
@@ -175,6 +175,9 @@ function displaySetField(key: SetFieldKey, value: number | null, unit: WeightUni
 
 export default function RoutinesScreen() {
   const params = useLocalSearchParams<{ id?: string; addExerciseId?: string }>()
+  // v0.5.0 picker audit RC1: the viewport height bounds the picker sheet's
+  // scroll body (the ScrollView inside the picker Sheet below).
+  const viewport = useWindowDimensions()
   const [routines, setRoutines] = useState<Routine[]>([])
   const [routineCounts, setRoutineCounts] = useState<Record<number, number>>({})
   const [exercises, setExercises] = useState<Exercise[]>([])
@@ -741,13 +744,16 @@ export default function RoutinesScreen() {
     () => pickerRecents.map((id) => exercises.find((e) => e.id === id)).filter((e): e is Exercise => !!e).slice(0, 8),
     [pickerRecents, exercises],
   )
+  // v0.5.0 picker audit RC2: no .slice(0, 30) cap — the catalog is 225
+  // entries (EXERCISE_LIBRARY via listExercises, ORDER BY name) and the cap
+  // silently hid every row past the 30th. The sheet body scrolls (below), so
+  // the full list renders fine inline.
   const pickerResults = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase()
     return exercises
       .filter((e) => (pickerMuscle ? e.primary_muscles.includes(pickerMuscle) : true))
       .filter((e) => (pickerEquipment ? e.equipment.includes(pickerEquipment) : true))
       .filter((e) => (q ? e.name.toLowerCase().includes(q) || e.aliases.some((a) => a.toLowerCase().includes(q)) : true))
-      .slice(0, 30)
   }, [exercises, pickerQuery, pickerMuscle, pickerEquipment])
 
   return (
@@ -900,22 +906,42 @@ export default function RoutinesScreen() {
         title="Add exercises"
         accessibleTitle="Add exercises to the routine"
       >
-        {!pickerQuery && recentsExercises.length > 0 && (
-          <>
-            <Label muted>Recent</Label>
-            <View accessibilityRole="radiogroup" accessibilityLabel="Recently performed exercises">
-              <ChipRow
-                items={recentsExercises}
-                keyOf={(e) => String(e.id)}
-                label={(e) => e.name}
-                a11yLabel={(e) => `Add recent exercise ${e.name}`}
-                isActive={() => false}
-                onPress={(e) => void handleAddExercise(e.id)}
-              />
-            </View>
-          </>
-        )}
-        <Field label="Search exercises or aliases" value={pickerQuery} onChangeText={setPickerQuery} autoCorrect={false} />
+        {/* v0.5.0 picker audit RC1: the sheet body is a height-bounded
+            ScrollView. The children used to stack ~2.3k px raw inside the
+            bottom-anchored Sheet (no ScrollView, no maxHeight), so on a
+            ~700-800px viewport the title, Recent rail, the search field and
+            both chip rows laid out above y=0 — invisible and unreachable
+            (the Sheet's PanResponder only dismisses or springs back). The
+            bound is a pixel value from useWindowDimensions, NOT a '80%'
+            style: the sheet surface's height is content-sized, and a
+            percentage resolves against an indefinite parent height as none
+            (CSS spec; Yoga same) — it would silently not bound anything.
+            Search is the FIRST child so it sits at the sheet's visible top
+            even while filtered rows run long; the search Field above the
+            Recent rail is the audited 3-line reorder. A ScrollView child
+            wins vertical drags over the Sheet's dismiss PanResponder, so
+            swipe-down-to-dismiss works from the grab handle/title/backdrop
+            (audit-accepted); Done/backdrop/tap-outside still close. */}
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          style={{ maxHeight: Math.round(viewport.height * 0.8) }}
+        >
+          <Field label="Search exercises or aliases" value={pickerQuery} onChangeText={setPickerQuery} autoCorrect={false} />
+          {!pickerQuery && recentsExercises.length > 0 && (
+            <>
+              <Label muted>Recent</Label>
+              <View accessibilityRole="radiogroup" accessibilityLabel="Recently performed exercises">
+                <ChipRow
+                  items={recentsExercises}
+                  keyOf={(e) => String(e.id)}
+                  label={(e) => e.name}
+                  a11yLabel={(e) => `Add recent exercise ${e.name}`}
+                  isActive={() => false}
+                  onPress={(e) => void handleAddExercise(e.id)}
+                />
+              </View>
+            </>
+          )}
         {muscleOptions.length > 0 && (
           <>
             <Label muted>Muscle</Label>
@@ -964,6 +990,7 @@ export default function RoutinesScreen() {
         })}
         {!pickerResults.length && <Label muted>No matching exercise. Adjust the filters, or create a custom one from the Train tab's Exercise library.</Label>}
         <Button label="Done" selected onPress={() => setPickerOpen(false)} />
+        </ScrollView>
       </Sheet>
     </View>
   )

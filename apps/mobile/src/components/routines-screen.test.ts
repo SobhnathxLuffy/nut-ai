@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
+import { EXERCISE_LIBRARY } from '@nutai/training'
 
 /**
  * Task 2-c regression locks for /routines (the "Create Routine" / "New
@@ -265,5 +266,66 @@ describe('Task 12-b M2 — the picker handoff merges into an EDIT in progress', 
     const again = merge([rowA, rowB], 2, addRowB)
     expect(again).toHaveLength(2)
     expect(again).toEqual([rowA, rowB])
+  })
+})
+describe('v0.5.0 UX-fix wave (T2-a) — the in-editor exercise picker sheet is reachable', () => {
+  // The picker audit (T1-a) root-caused the owner complaint "only a SMALL
+  // number of exercises visible, SEARCH BAR cannot be seen":
+  //   RC1  the sheet stacked ~2.3k px of raw children inside the bottom-anchored
+  //        Sheet (no ScrollView, no maxHeight), so the title, Recent rail, the
+  //        search field and both chip rows laid out ABOVE y=0 on a ~700-800px
+  //        viewport — invisible and unreachable; the Sheet's PanResponder only
+  //        dismisses or springs back (it never pans content).
+  //   RC2  pickerResults hard-capped at .slice(0, 30) of the 225-entry catalog
+  //        (EXERCISE_LIBRARY via listExercises, ORDER BY name) — the tail W-Z.
+  // The RN screen cannot mount in this plain-node environment (the constraint
+  // this file's header documents), so these locks are source sweeps plus the
+  // catalog invariant the fix depends on.
+  const sheetStart = source.indexOf('<Sheet\n        open={pickerOpen}')
+  const sheet = source.slice(sheetStart, source.indexOf('</Sheet>', sheetStart))
+
+  it('RC1: the sheet body scrolls inside a height-bounded ScrollView', () => {
+    expect(sheet).toContain('<ScrollView')
+    // Chips/rows must stay tappable while the search field holds focus (§8.3).
+    expect(sheet).toContain('keyboardShouldPersistTaps="handled"')
+    // A percentage maxHeight would resolve against the sheet surface's
+    // content-sized (indefinite) height as none (CSS spec; Yoga same) — the
+    // bound must be a real pixel value derived from the viewport.
+    expect(sheet).toMatch(/maxHeight:\s*Math\.round\(\w+\.height \* 0\.8\)/)
+    // ...and the viewport hook feeding that bound is wired into the screen.
+    expect(source).toContain('useWindowDimensions()')
+  })
+
+  it('RC1: the search field is the FIRST picker child, above the Recent rail', () => {
+    // Pinned at the sheet's visible top: the sheet is bottom-anchored, so the
+    // first child is the one that survives the keyboard and long lists.
+    const field = sheet.indexOf('Search exercises or aliases')
+    const recents = sheet.indexOf('Recently performed exercises')
+    expect(field).toBeGreaterThan(-1)
+    expect(recents).toBeGreaterThan(-1)
+    expect(field).toBeLessThan(recents)
+  })
+
+  it('RC2: pickerResults is uncapped — the whole catalog stays reachable', () => {
+    const memo = source.slice(
+      source.indexOf('const pickerResults = useMemo'),
+      source.indexOf('}, [exercises, pickerQuery, pickerMuscle, pickerEquipment])'),
+    )
+    expect(memo).not.toContain('.slice(')
+    // The cap only mattered because the catalog dwarfs it — 225 entries
+    // (seed-invariants pins listExercises == EXERCISE_LIBRARY.length; if the
+    // library shrinks below this floor, revisit whether the picker needs a
+    // virtualized list again).
+    expect(EXERCISE_LIBRARY.length).toBeGreaterThanOrEqual(200)
+  })
+
+  it('the ScrollView closes around every picker child (Done included)', () => {
+    // `sheet` was sliced to end BEFORE </Sheet>, so a closing tag inside the
+    // slice is by construction inside the sheet; the pair order pins that
+    // every picker child (search, chips, rows, the Done button) is wrapped.
+    expect(sheet).toContain('<ScrollView')
+    expect(sheet).toContain('</ScrollView>')
+    expect(sheet.indexOf('<ScrollView')).toBeLessThan(sheet.indexOf('Search exercises or aliases'))
+    expect(sheet.indexOf('<Button label="Done"')).toBeLessThan(sheet.indexOf('</ScrollView>'))
   })
 })

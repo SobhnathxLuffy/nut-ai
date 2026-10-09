@@ -260,7 +260,7 @@ export default function MealDetail() {
     if (notFound && !error) {
       // P3-U1: an honest dead end with a way out, not an eternal spinner.
       return (
-        <View style={{ flex: 1, backgroundColor: theme.bg, padding: space.lg, paddingTop: insets.top + space.lg, gap: space.md }}>
+        <View style={{ flex: 1, backgroundColor: theme.bg, padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: Math.max(insets.bottom, space.lg), gap: space.md }}>
           <Text style={[type.title, { color: theme.text }]}>Meal not found</Text>
           <Text style={[type.body, { color: theme.textMuted }]}>
             This meal may have been deleted or the link is out of date.
@@ -272,7 +272,7 @@ export default function MealDetail() {
       )
     }
     return (
-      <View style={{ flex: 1, backgroundColor: theme.bg, padding: space.lg, paddingTop: insets.top + space.lg }}>
+      <View style={{ flex: 1, backgroundColor: theme.bg, padding: space.lg, paddingTop: insets.top + space.lg, paddingBottom: Math.max(insets.bottom, space.lg) }}>
         <Text style={[type.body, { color: error ? theme.safety : theme.textMuted }]}>{error ?? 'Loading meal…'}</Text>
       </View>
     )
@@ -301,15 +301,27 @@ export default function MealDetail() {
 
   return (
     // §8.3 (the keyboard must not hide required controls): 'padding' tracks the
-    // keyboard on iOS; RN's padding mode does not resize on Android, where
-    // 'height' is the mode that does — same component, per-OS behavior.
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    // keyboard on iOS. Android: v0.5.0 UX-fix wave (meal-detail audit RC1) —
+    // 'height' carries the RN non-restore class (react-native#28195): after
+    // the keyboard closed the container stayed shrunken and the dead space
+    // the owner reported persisted. No KAV adjustment runs on Android; the
+    // screen leans on windowSoftInputMode=adjustResize. CAVEAT (device QA
+    // follow-up): sibling form modals (custom-food, dish-composer, recipes,
+    // assistant) pin 'height' on Android because edge-to-edge (Expo SDK 53+)
+    // reportedly breaks that resize — if device QA shows Save/Delete under
+    // the keyboard, restore 'height' here (1-line revert) and re-triage RC1.
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{
           padding: space.lg,
           paddingTop: insets.top + space.lg,
-          paddingBottom: insets.bottom + 80,
+          // v0.5.0 meal-detail audit RC2: the modal host already insets the
+          // bottom chrome; the old insets.bottom + 80 double-counted it and
+          // left ~100px of dead space under a short meal. Math.max is the
+          // app-wide dock pattern (Sheet.tsx, camera, edit-goals): real safe
+          // area OR the lg floor, never both summed.
+          paddingBottom: Math.max(insets.bottom, space.lg),
           gap: space.md,
         }}
       >
