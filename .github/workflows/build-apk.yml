@@ -70,6 +70,16 @@ jobs:
         working-directory: apps/mobile
         run: npx expo prebuild --platform android --clean --no-install
 
+      - name: Raise Gradle heap
+        working-directory: apps/mobile/android
+        run: |
+          # v0.4.0 packaging diagnosis: :app:packageRelease died of
+          # OutOfMemoryError with the template 2 GiB heap — the dex/asset
+          # packaging step needs more headroom on the CI runner than the
+          # prebuild template grants. 4 GiB heap + 1 GiB metaspace.
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8/' gradle.properties
+          grep gradle.jvmargs gradle.properties
+
       - name: Gradle assembleRelease
         working-directory: apps/mobile/android
         run: |
