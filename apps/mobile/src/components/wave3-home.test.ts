@@ -122,9 +122,24 @@ describe('§8.2 item 5 — the 56-day strip keeps 44pt rows, gains today-pulse a
   })
 
   it('the strip stays 56 Monday-first days from dayStripOffsets, 40pt circles in 44pt+ rows', () => {
-    expect(home).toContain('dayStripOffsets(now)')
+    expect(home).toContain('dayStripOffsets(anchor)')
     expect(home).toMatch(/width: 40, height: 40/)
     expect(derivations).toMatch(/\{ length: 56 \}/)
+  })
+
+  it('midnight-crossing fix: ONE shared day anchor feeds chips, data reads and day-detail alike', () => {
+    // The anchor is state, re-derived ONLY via the pure day-change helper…
+    expect(home).toContain('const [anchorMs, setAnchorMs] = useState(() => Date.now())')
+    expect(home).toContain('nextDayAnchor(prev, Date.now())')
+    // …refreshed on both re-entry paths (focus AND app resume).
+    expect(home).toContain("AppState.addEventListener('change'")
+    expect(home).toContain('if (state === \'active\') setAnchorMs')
+    // …and `selected` derives from the anchor, never a second fresh clock.
+    expect(home).toContain('anchorMs + offset * 86_400_000')
+    expect(home).not.toContain('Date.now() + offset * 86_400_000')
+    // The strip receives the shared anchor instead of freezing its own.
+    expect(home).toContain('<DayStrip anchorMs={anchorMs}')
+    expect(home).not.toContain('useMemo(() => new Date(), [])')
   })
 })
 

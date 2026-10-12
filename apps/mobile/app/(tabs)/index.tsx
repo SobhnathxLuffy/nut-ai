@@ -2,6 +2,7 @@ import { router, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
+  AppState,
   Platform,
   Pressable,
   RefreshControl,
@@ -24,6 +25,7 @@ import {
   adaptiveTargetView,
   dayStripFlags,
   dayStripOffsets,
+  nextDayAnchor,
   slotGuide,
 } from '../../src/data/home-instrument'
 import {
@@ -97,6 +99,13 @@ export default function Home() {
   const [adaptive, setAdaptive] = useState<AdaptiveOutcome | null>(null)
   const [offset, setOffset] = useState(0)
   const [streak, setStreak] = useState(0)
+  /**
+   * The ONE day anchor the whole screen reads from (midnight-crossing fix).
+   * The strip's chips, the selected-day data reads and the day-detail push
+   * all derive from this single value, refreshed only when the local calendar
+   * day actually changes (focus / app resume) — see nextDayAnchor.
+   */
+  const [anchorMs, setAnchorMs] = useState(() => Date.now())
   /** kcal logged per meal slot for the selected day (slotKcalForDay). */
   const [slotKcal, setSlotKcal] = useState<Record<string, number> | null>(null)
   // UI/UX report §8.2 / Table 9.1 (Wave 1c): pull-to-refresh re-runs the same
@@ -112,7 +121,19 @@ export default function Home() {
   const [contentH, setContentH] = useState(0)
   const detailH = useRef(new Animated.Value(0)).current
 
-  const selected = useMemo(() => Date.now() + offset * 86_400_000, [offset])
+  const selected = useMemo(() => anchorMs + offset * 86_400_000, [anchorMs, offset])
+
+  // Re-anchor on app resume: an Android process kept in recents overnight
+  // never blurs the screen, so focus alone would never roll the strip past
+  // the opened-on day. The pure helper bails (same object identity) when the
+  // local day has not changed, so this listener is free on every ordinary
+  // foreground event.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setAnchorMs((prev) => nextDayAnchor(prev, Date.now()))
+    })
+    return () => sub.remove()
+  }, [])
 
   const loadData = useCallback(async () => {
     // The adaptive loop runs BEFORE reading the goal, so a target it just
@@ -144,6 +165,12 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       setFocusTick((tick) => tick + 1)
+      // Midnight-crossing fix: arriving on Home is the moment the strip may
+      // roll to the new day. When the anchor actually moves, `selected`
+      // moves with it, `loadData` re-derives, and the focus effect below
+      // re-runs on the fresh day — Oct 11's log can never again render
+      // under the Oct 10 chip.
+      setAnchorMs((prev) => nextDayAnchor(prev, Date.now()))
       let alive = true
       void (async () => {
         if (!alive) return
@@ -327,7 +354,7 @@ export default function Home() {
           </View>
         </View>
 
-        <DayStrip selected={offset} onSelect={setOffset} />
+        <DayStrip anchorMs={anchorMs} selected={offset} onSelect={setOffset} />
 
         <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
           <View style={[styles.heroCard, { backgroundColor: theme.bgElevated, borderColor: theme.border }]}>
@@ -418,7 +445,7 @@ export default function Home() {
       </View>
 
       {/* Day strip */}
-      <DayStrip selected={offset} onSelect={setOffset} />
+      <DayStrip anchorMs={anchorMs} selected={offset} onSelect={setOffset} />
 
       {/* Calories + macros — single view, no fake carousel */}
       <View style={{ paddingHorizontal: space.lg, marginTop: space.md }}>
@@ -615,7 +642,7 @@ function PullIndicator({
   )
 }
 
-function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: number) => void }) {
+function DayStrip({ anchorMs, selected, onSelect }: { anchorMs: number; selected: number; onSelect: (o: number) => void }) {
   const theme = useTheme()
   const motionScale = useMotionScale()
   // Android release QA 2026-10: day columns used `flex: 1` (basis 0) AND a
@@ -625,11 +652,13 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
   // computed width (~7 visible days) with no flex competition.
   const { width: windowWidth } = useWindowDimensions()
   const dayWidth = dayColumnWidthFor(windowWidth)
-  // The strip is anchored to the moment Home mounted — it must not re-derive
-  // its weeks mid-session and slide the calendar under the user's finger.
-  const now = useMemo(() => new Date(), [])
+  // The strip rides Home's ONE shared day anchor (see nextDayAnchor): it is
+  // re-derived only when the local calendar day actually changes — on focus
+  // or app resume — so it can still never slide mid-gesture, but it can no
+  // longer go stale past midnight and freeze the app on yesterday.
+  const anchor = useMemo(() => new Date(anchorMs), [anchorMs])
   // Monday-first 56-day window, from the pure derivation (pinned by tests).
-  const days = useMemo(() => dayStripOffsets(now), [now])
+  const days = useMemo(() => dayStripOffsets(anchor), [anchor])
   const scrollViewRef = useRef<ScrollView>(null)
 
   // §8.2 today-pulse: the live "you are here" marker — a small dot under
@@ -651,6 +680,14 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
     return () => loop.stop()
   }, [motionScale, pulse])
 
+  // Midnight-crossing: when the anchor rolls to the new day the window's
+  // Monday-first shape shifts, but the 56 columns keep their exact width —
+  // content size never changes, so onContentSizeChange alone would leave the
+  // scroll parked on the old end. Re-land on today whenever the anchor moves.
+  useEffect(() => {
+    scrollViewRef.current?.scrollToEnd({ animated: false })
+  }, [anchor])
+
   return (
     <ScrollView
       ref={scrollViewRef}
@@ -661,7 +698,7 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
       contentContainerStyle={{ paddingHorizontal: space.lg, gap: space.xs }}
     >
       {days.map((off) => {
-        const d = new Date(now.getTime() + off * 86_400_000)
+        const d = new Date(anchor.getTime() + off * 86_400_000)
         const flags = dayStripFlags(off)
         const isSel = off === selected
         return (
@@ -670,13 +707,13 @@ function DayStrip({ selected, onSelect }: { selected: number; onSelect: (o: numb
             disabled={flags.future}
             // O4 (day-detail): a strip press still selects the day here AND
             // opens the dedicated day-detail view for that date — the exact
-            // date the chip shows (strip-anchored `now`, same arithmetic).
+            // date the chip shows (shared anchor, same arithmetic).
             // Selection mechanics below are untouched.
             onPress={() => {
               onSelect(off)
               router.push({
                 pathname: '/day-detail',
-                params: { date: localDate(now.getTime() + off * 86_400_000) },
+                params: { date: localDate(anchor.getTime() + off * 86_400_000) },
               } as never)
             }}
             accessibilityRole="button"
@@ -739,11 +776,8 @@ function countStreak(dates: string[]): number {
   return n
 }
 
-/** Local date ISO string from a unix timestamp. */
-function isoLocal(ms: number): string {
-  const d = new Date(ms)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
+/** Local date ISO string from a unix timestamp — the shared date-utils helper. */
+const isoLocal = localDate
 
 /**
  * §8.2: one macro = one compact stat row — inline mini-ring in the macro's

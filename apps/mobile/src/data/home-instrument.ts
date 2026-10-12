@@ -199,6 +199,31 @@ export function dayStripOffsets(now: Date): number[] {
   return Array.from({ length: 56 }, (_, i) => i - dow - 49)
 }
 
+/**
+ * The ONE day anchor Home runs on (midnight-crossing fix, 2026-10-12).
+ *
+ * Home used to run two independent clocks: the DayStrip froze `new Date()`
+ * at mount (so the strip never rolled past the day the app was opened on),
+ * while the selected-day read re-derived `Date.now()` on every offset change
+ * (so chips and data disagreed after midnight — an Oct 11 log appeared under
+ * the Oct 10 chip). Both now hang off a single anchor that re-derives ONLY
+ * when the local calendar day has actually changed (focus / app resume), so
+ * the strip can never slide mid-gesture — it updates exactly when the user
+ * comes back to the screen on a new day.
+ *
+ * Pure and testable: same local day → keep the previous anchor (no
+ * re-render); day changed → the fresh timestamp wins.
+ */
+export function nextDayAnchor(prevMs: number, nowMs: number): number {
+  const prev = new Date(prevMs)
+  const now = new Date(nowMs)
+  const sameDay =
+    prev.getFullYear() === now.getFullYear() &&
+    prev.getMonth() === now.getMonth() &&
+    prev.getDate() === now.getDate()
+  return sameDay ? prevMs : nowMs
+}
+
 // ---------------------------------------------------------------------------
 // Check-in evidence parsing
 // ---------------------------------------------------------------------------

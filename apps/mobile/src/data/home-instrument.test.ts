@@ -7,6 +7,7 @@ import {
   adaptiveTargetView,
   dayStripFlags,
   dayStripOffsets,
+  nextDayAnchor,
   parseCheckinAcceptedAt,
   shortDate,
   slotGuide,
@@ -202,6 +203,37 @@ describe('dayStripOffsets — the 56-day window', () => {
     const days = dayStripOffsets(new Date('2026-08-23T10:00:00')) // a Sunday
     expect(days[days.length - 1]).toBe(0)
     expect(days.every((o) => o <= 0)).toBe(true)
+  })
+})
+
+describe('nextDayAnchor — the ONE day anchor Home runs on (midnight-crossing fix)', () => {
+  it('keeps the previous anchor while the local day is unchanged', () => {
+    const morning = new Date('2026-10-12T09:30:00').getTime()
+    const evening = new Date('2026-10-12T23:10:00').getTime()
+    expect(nextDayAnchor(morning, evening)).toBe(morning)
+  })
+
+  it('rolls to the fresh timestamp when the local calendar day changes', () => {
+    const beforeMidnight = new Date('2026-10-11T23:59:00').getTime()
+    const afterMidnight = new Date('2026-10-12T00:01:00').getTime()
+    expect(nextDayAnchor(beforeMidnight, afterMidnight)).toBe(afterMidnight)
+  })
+
+  it('rolls on a month and year boundary too', () => {
+    const oct31 = new Date('2026-10-31T12:00:00').getTime()
+    const nov1 = new Date('2026-11-01T00:00:01').getTime()
+    expect(nextDayAnchor(oct31, nov1)).toBe(nov1)
+    const dec31 = new Date('2026-12-31T23:59:59').getTime()
+    const jan1 = new Date('2027-01-01T00:00:00').getTime()
+    expect(nextDayAnchor(dec31, jan1)).toBe(jan1)
+  })
+
+  it('is a pure function — either keeps prevMs verbatim or returns nowMs verbatim', () => {
+    const a = new Date('2026-10-12T08:00:00').getTime()
+    const b = new Date('2026-10-12T20:00:00').getTime()
+    const c = new Date('2026-10-13T08:00:00').getTime()
+    expect(nextDayAnchor(a, b)).toBe(a)
+    expect(nextDayAnchor(a, c)).toBe(c)
   })
 })
 
