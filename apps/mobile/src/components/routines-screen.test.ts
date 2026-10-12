@@ -319,13 +319,19 @@ describe('v0.5.0 UX-fix wave (T2-a) — the in-editor exercise picker sheet is r
     expect(EXERCISE_LIBRARY.length).toBeGreaterThanOrEqual(200)
   })
 
-  it('the ScrollView closes around every picker child (Done included)', () => {
+  it('the ScrollView closes before the footer Done (RC4: Done is a fixed footer, not buried after 225 rows)', () => {
     // `sheet` was sliced to end BEFORE </Sheet>, so a closing tag inside the
     // slice is by construction inside the sheet; the pair order pins that
-    // every picker child (search, chips, rows, the Done button) is wrapped.
+    // every picker child (search, chips, rows) is wrapped by the ScrollView
+    // while the Done button lives OUTSIDE it — one tap away at the sheet's
+    // fixed footer instead of ~14k px deep behind the catalog.
     expect(sheet).toContain('<ScrollView')
     expect(sheet).toContain('</ScrollView>')
     expect(sheet.indexOf('<ScrollView')).toBeLessThan(sheet.indexOf('Search exercises or aliases'))
-    expect(sheet.indexOf('<Button label="Done"')).toBeLessThan(sheet.indexOf('</ScrollView>'))
+    expect(sheet.indexOf('</ScrollView>')).toBeLessThan(sheet.indexOf('<Button label="Done"'))
+  })
+
+  it('RC3: the scroll body keeps its own vertical rhythm (parent gap cannot reach through a ScrollView)', () => {
+    expect(sheet).toContain('contentContainerStyle={{ gap: space.sm, paddingBottom: space.md }}')
   })
 })

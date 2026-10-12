@@ -925,6 +925,12 @@ export default function RoutinesScreen() {
         <ScrollView
           keyboardShouldPersistTaps="handled"
           style={{ maxHeight: Math.round(viewport.height * 0.8) }}
+          // v0.5.0 picker audit RC3: the height-bounded ScrollView silently
+          // dropped the Sheet's `gap: 8` — a ScrollView clips its parent's
+          // flex gap, so the search field, chips and rows rendered
+          // edge-to-edge. The container style restores the rhythm; the
+          // bottom pad keeps the last row clear of the footer Done.
+          contentContainerStyle={{ gap: space.sm, paddingBottom: space.md }}
         >
           <Field label="Search exercises or aliases" value={pickerQuery} onChangeText={setPickerQuery} autoCorrect={false} />
           {!pickerQuery && recentsExercises.length > 0 && (
@@ -989,8 +995,13 @@ export default function RoutinesScreen() {
           )
         })}
         {!pickerResults.length && <Label muted>No matching exercise. Adjust the filters, or create a custom one from the Train tab's Exercise library.</Label>}
-        <Button label="Done" selected onPress={() => setPickerOpen(false)} />
         </ScrollView>
+        {/* v0.5.0 picker audit RC4: Done moves OUT of the scroll body — it
+            used to sit after ~225 rows (~14k px deep), unreachable without
+            scrolling the whole catalog. A fixed footer under the bounded
+            ScrollView keeps it one tap away always; the Sheet's own gap
+            spaces it off the list. */}
+        <Button label="Done" selected onPress={() => setPickerOpen(false)} />
       </Sheet>
     </View>
   )
