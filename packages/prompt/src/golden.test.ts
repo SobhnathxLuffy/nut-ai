@@ -48,7 +48,7 @@ describe('golden: system prompt', () => {
     // fat semantics (intrinsic vs added cooking fat), visible-vs-inferred, and
     // the always-emitted honesty blocks (portion_context, qualitative_amount,
     // preparation, major_uncertainties, highest_impact_question, summary).
-    expect(PROMPT_VERSION).toBe('food-scan-v1.3.0')
+    expect(PROMPT_VERSION).toBe('food-scan-v1.3.1')
   })
 
   it('SYSTEM_PROMPT bytes are pinned (update the golden deliberately)', () => {
@@ -148,7 +148,11 @@ describe('golden: gemini scan request', () => {
  * reason in the commit message. Copy the digest from the failing assertion
  * message ("Received" line) into SYSTEM_PROMPT_GOLDEN_SHA256.
  */
-const SYSTEM_PROMPT_GOLDEN_SHA256 = '4acedf9197903e85a3b614951b797a95026ac3035731c605ee702e54e000e69f'
+// 2026-10-12 (v1.3.1, gateway small-model evals): beverage_category joined the
+// null-allowed list — the wire sanitizer strips its null branch, so rule-following
+// small models followed the "never null" rule into empty strings and failed the
+// whole payload on non-beverage items.
+const SYSTEM_PROMPT_GOLDEN_SHA256 = '11df2e80e7d1ad2b923fbb230a35b4e3e14ffa4adf7511e7b6e3ac32a5c00838'
 
 // P3-D3: computed from the current ASSISTANT_SYSTEM_PROMPT. Update in the
 // same commit as an intentional prompt edit and say why in the message.

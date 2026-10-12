@@ -100,8 +100,44 @@ export function normalizeQualitativeSize(v: unknown): string | undefined {
 /** Enum members first: a bare number is a count in a size context. */
 function repairQualitativeSize(v: unknown): unknown {
   if (typeof v === 'string' && /^(small|medium|large|count:\d+(\.\d+)?)$/.test(v.trim())) return v.trim()
-  const repaired = normalizeQualitativeSize(v)
-  return repaired ?? v
+  // A bare NUMBER is a count in context ("how many": 2) — the string normalizer
+  // only reads strings, so numbers take the same path by conversion.
+  const repaired = normalizeQualitativeSize(typeof v === 'number' && Number.isFinite(v) ? String(v) : v)
+  // The least-false deterministic landing spot — the same default the string
+  // normalizer itself bottoms out at. A non-string shape (object/array/bool)
+  // must not fail the whole payload when 'medium' is an honest, editable value.
+  return repaired ?? 'medium'
+}
+
+/**
+ * model_gram_range is OPTIONAL and nullable — "no range" is a legal, honest
+ * answer (the estimate field carries the number the ladder consumes; the
+ * range is the honesty AROUND it). Live evals on aicredits.in (gemini-2.5-
+ * flash-lite, gemma-3-12b) caught the drift shapes: the gateway contract
+ * tells rule-following small models to "use 0 when unknown", which lands as
+ * {min_g: 0, max_g: 0} and fails the positive-bounds check; others emit the
+ * range as a STRING ("150-200") or null out one bound. Any range that is not
+ * a coherent positive min<=max pair drops to ABSENT — an incoherent band must
+ * never ship, and absence never blocks an otherwise-valid scan.
+ */
+function repairGramRange(v: unknown): unknown {
+  if (v == null) return v
+  if (typeof v === 'string') {
+    // "150-200" / "150–200 g" → a real range when both sides parse positive.
+    const m = v.match(/(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)/)
+    if (m) {
+      const min = Number(m[1])
+      const max = Number(m[2])
+      if (min > 0 && max >= min) return { min_g: min, max_g: max }
+    }
+    return undefined
+  }
+  if (!isObj(v)) return undefined
+  const min = toNumber(v['min_g'])
+  const max = toNumber(v['max_g'])
+  if (min === undefined || max === undefined) return undefined
+  if (min <= 0 || max <= 0 || min > max) return undefined
+  return { min_g: min, max_g: max }
 }
 
 function repairConfidence(v: unknown): unknown {
@@ -112,7 +148,20 @@ function repairConfidence(v: unknown): unknown {
 function repairStringArray(v: unknown, cap?: number): unknown {
   // A non-array is deep garbage; [] is the honest neutral — no claims made.
   if (!Array.isArray(v)) return []
-  const strings = v.filter((x): x is string => typeof x === 'string')
+  // Object-shaped entries ({text: '...'}, {assumption: '...'}) arrive from
+  // small models that read the schema's array-of-strings as "array of
+  // assumption objects" (live eval, gemma-3-12b on an 11-item thali). A
+  // single string-valued key carries the SAME claim — take it verbatim.
+  const strings = v.flatMap((x) => {
+    if (typeof x === 'string') return [x]
+    if (isObj(x)) {
+      const single = Object.values(x).find((val) => typeof val === 'string' && val.trim().length > 0)
+      if (single !== undefined && Object.values(x).every((val) => typeof val === 'string' || val == null)) {
+        return [single as string]
+      }
+    }
+    return []
+  })
   return cap === undefined ? strings : strings.slice(0, cap)
 }
 
@@ -159,8 +208,12 @@ function repairContainer(v: unknown): unknown {
   if (typeof v['type'] !== 'string' || !/^(cereal_bowl|soup_plate|mug|drinking_glass|wine_glass|pint_glass|takeout_container|other)$/.test(v['type'])) {
     return null
   }
-  const fill = toNumber(v['fill_fraction'])
-  if (fill === undefined || fill < 0 || fill > 1) return null
+  let fill = toNumber(v['fill_fraction'])
+  if (fill === undefined || fill < 0) return null
+  // A 0–100 percent reading of the same claim ("50" = half full) rescales
+  // deterministically; anything above 1 but at most 100 is unambiguous.
+  if (fill > 1 && fill <= 100) fill = fill / 100
+  if (fill > 1) return null
   return { type: v['type'], fill_fraction: fill }
 }
 
@@ -228,6 +281,7 @@ function repairItem(v: unknown): unknown {
       if (n !== undefined) out['model_gram_estimate'] = n
     }
   }
+  if ('model_gram_range' in out) out['model_gram_range'] = repairGramRange(out['model_gram_range'])
   // The one uncertainty enum has no null; 'none' is its own neutral member and
   // the least-false landing spot for an invented value.
   if (typeof out['uncertainty_reason'] === 'string' && !/^(oil_or_fat_not_visually_determinable|sauce_type_ambiguous|milk_type_ambiguous|meat_fat_percent_ambiguous|cooked_vs_raw_ambiguous|container_size_no_reference|serving_count_ambiguous|portion_depth_not_visible|identity_ambiguous|partially_occluded|abv_unknown|shake_recipe_unknown|none)$/.test(out['uncertainty_reason'])) {

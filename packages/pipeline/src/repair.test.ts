@@ -214,3 +214,59 @@ describe('payloadValidationIssues (diagnostics)', () => {
     expect(issues.some((i) => i.startsWith('meal_overall'))).toBe(true)
   })
 })
+
+describe('model_gram_range repair (live gateway evals, 2026-10-12)', () => {
+  it('drops the zeroed range the gateway contract taught small models to emit', () => {
+    const raw = payload({ items: [item({ model_gram_range: { min_g: 0, max_g: 0 } })] })
+    expectValid(repairVisionPayload(raw))
+    const repaired = validateWithRepair(raw)!
+    expect(repaired.items[0]!.model_gram_range).toBeUndefined()
+  })
+
+  it('drops non-positive and half-null ranges to absent, never ships an incoherent band', () => {
+    // Inverted (min > max) ranges are schema-VALID (GramRangeZ has no refine)
+    // and are guarded downstream — runPipeline nulls a crossing range instead
+    // of surfacing it (index.ts portionRange). The INVALID shapes drop here.
+    for (const bad of [{ min_g: -5, max_g: 100 }, { min_g: 0, max_g: 100 }, { min_g: null, max_g: 100 }]) {
+      const raw = payload({ items: [item({ model_gram_range: bad })] })
+      const repaired = validateWithRepair(raw)!
+      expect(repaired.items[0]!.model_gram_range).toBeUndefined()
+    }
+    // An inverted range passes validation untouched — the pipeline's own
+    // portionRange guard is the net for that shape.
+    const inverted = payload({ items: [item({ model_gram_range: { min_g: 200, max_g: 100 } })] })
+    expect(validateWithRepair(inverted)).not.toBeNull()
+  })
+
+  it('reads a string range ("150-200") into a real one', () => {
+    const raw = payload({ items: [item({ model_gram_range: '150-200' })] })
+    const repaired = validateWithRepair(raw)!
+    expect(repaired.items[0]!.model_gram_range).toEqual({ min_g: 150, max_g: 200 })
+  })
+
+  it('keeps a legal range byte-identical', () => {
+    const raw = payload({ items: [item({ model_gram_range: { min_g: 120, max_g: 180 } })] })
+    const repaired = validateWithRepair(raw)!
+    expect(repaired.items[0]!.model_gram_range).toEqual({ min_g: 120, max_g: 180 })
+  })
+
+  it('null stays null', () => {
+    const raw = payload({ items: [item({ model_gram_range: null })] })
+    const repaired = validateWithRepair(raw)!
+    expect(repaired.items[0]!.model_gram_range).toBeNull()
+  })
+})
+
+describe('qualitative_size non-string drift (live gateway evals, 2026-10-12)', () => {
+  it('a bare NUMBER lands on count:N instead of failing the payload', () => {
+    const raw = payload({ items: [item({ qualitative_size: 2 })] })
+    const repaired = validateWithRepair(raw)!
+    expect(repaired.items[0]!.qualitative_size).toBe('count:2')
+  })
+
+  it('a non-string non-number shape (object) lands on medium — an honest, editable value', () => {
+    const raw = payload({ items: [item({ qualitative_size: { size: 'large' } })] })
+    const repaired = validateWithRepair(raw)!
+    expect(repaired.items[0]!.qualitative_size).toBe('medium')
+  })
+})

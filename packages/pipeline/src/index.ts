@@ -44,7 +44,7 @@ import {
   type RowPreparation,
 } from './scan-contract.js'
 
-export { payloadValidationIssues } from './repair.js'
+export { payloadValidationIssues, repairVisionPayload } from './repair.js'
 export type {
   HighImpactQuestion,
   PortionContext,

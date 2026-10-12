@@ -59,7 +59,7 @@
  *   major_uncertainties, highest_impact_question and summary.
  */
 
-export const PROMPT_VERSION = 'food-scan-v1.3.0'
+export const PROMPT_VERSION = 'food-scan-v1.3.1'
 
 export const SYSTEM_PROMPT = `You are a food-photo nutrition analyst inside a calorie-tracking app whose single
 most important product promise is honesty about uncertainty. You are given one or
@@ -566,7 +566,8 @@ commentary before or after, no explanation outside the schema's own fields. Emit
 fields, every time, for every scan — including refusals. Where a value is unknown,
 use the honest empty: empty string, empty array, the "unknown" enum sentinel, or a
 null ONLY where the schema explicitly allows one (model_gram_estimate,
-model_gram_range, highest_impact_question). Uncertainty is expressed through the
+model_gram_range, highest_impact_question, and beverage_category for an item that is
+not a beverage — never the empty string there). Uncertainty is expressed through the
 confidence fields, qualitative_amount, preparation, stated_assumptions,
 clarifying_questions, major_uncertainties, portion_context, \`visibility\` and
 \`model_gram_range\` — never by omitting a field and never by writing a range into
