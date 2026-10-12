@@ -17,8 +17,8 @@ function cardText(card: (typeof TUTORIAL_CARDS)[number]): string {
 const ALL_TEXT = TUTORIAL_CARDS.map(cardText).join('\n')
 
 describe('coverage — one card per concept area', () => {
-  it('ships exactly the five required areas, in teaching order', () => {
-    expect(TUTORIAL_CARDS.map((c) => c.id)).toEqual(['home', 'food', 'training', 'ai', 'offline'])
+  it('ships exactly the six required areas, in teaching order', () => {
+    expect(TUTORIAL_CARDS.map((c) => c.id)).toEqual(['home', 'food', 'training', 'workout', 'ai', 'offline'])
   })
 
   it('every card is complete: icon, title, body and at least two points', () => {
@@ -51,6 +51,15 @@ describe('source-lock — the cards name the REAL features the user will find', 
     ['quick session', /Start empty workout/],
     ['reusable templates', /Create routine/],
     ['programs', /Programs & schedule/],
+    // Workout mode (the live session)
+    ['set table', /sets as a table/],
+    ['rest timer', /rest timer/i],
+    ['set kinds', /warmup, drop, failure, AMRAP/],
+    ['superset grouping', /supersets/],
+    ['mid-session library', /Add exercise/],
+    ['cardio wizard', /Log exercise/],
+    ['progression banner', /This week/],
+    ['template round trip', /Save as routine/],
     // AI
     ['assistant entry', /AI Assistant/],
     ['division of labor', /deterministic/],
@@ -68,6 +77,19 @@ describe('source-lock — the cards name the REAL features the user will find', 
   it('the training card keeps the journal promise the Train tab itself makes', () => {
     const training = TUTORIAL_CARDS.find((c) => c.id === 'training')!
     expect(cardText(training)).toMatch(/journal|history|every set/i)
+  })
+
+  it('the workout card names the labels the live session actually renders', () => {
+    // The five feature names below are the exact strings workout.tsx and the
+    // FAB menu render — drift in either breaks this lock (same contract as
+    // the other source-locked feature names above).
+    const workout = TUTORIAL_CARDS.find((c) => c.id === 'workout')!
+    const text = cardText(workout)
+    expect(text).toMatch(/rest timer/i)
+    expect(text).toMatch(/Save as routine/)
+    expect(text).toMatch(/Add exercise/)
+    expect(text).toMatch(/Log exercise/)
+    expect(text).toMatch(/This week/)
   })
 })
 

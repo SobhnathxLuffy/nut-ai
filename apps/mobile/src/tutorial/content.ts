@@ -19,7 +19,7 @@ import type { IconName } from '../components/Icon'
  */
 
 export interface TutorialCard {
-  id: 'home' | 'food' | 'training' | 'ai' | 'offline'
+  id: 'home' | 'food' | 'training' | 'workout' | 'ai' | 'offline'
   icon: IconName
   title: string
   body: string
@@ -62,6 +62,20 @@ export const TUTORIAL_CARDS: readonly TutorialCard[] = [
       '"Create routine" saves a reusable workout template, and "Programs & schedule" places a routine on each weekday across weeks.',
       'You never have to learn gym jargon here — effort asks "Easy / Could do 2 more / Barely finished", and every technical term explains itself on tap.',
       'Your journal keeps every set — history and progress stay on this device.',
+    ],
+  },
+  {
+    id: 'workout',
+    icon: 'run',
+    title: 'Workout mode: the session runs itself',
+    body:
+      'Once a workout is live, everything is one screen: each exercise shows its sets as a table you fill in and check off as you go.',
+    points: [
+      'The rest timer starts itself when you check a set — the chip counts down and pings you; skip or re-run it anytime.',
+      'Every set has a kind: warmup, drop, failure, AMRAP and more — set from the row\'s menu, each labelled in plain words.',
+      'Pair exercises as supersets (groups A, B, C), insert a warmup ramp, and "Add exercise" mid-session from the library — cardio too, via "Log exercise".',
+      'A "This week" banner pre-fills your next session from your progression rule — Accept it, or Edit and do your own thing.',
+      'Finish and the summary names new PRs, then "Save as routine" turns the session into a template for next time.',
     ],
   },
   {
