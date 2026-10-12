@@ -18,6 +18,7 @@ export default function Train(){const [active,setActive]=useState<Workout|null>(
    <Button selected label={active?`Resume ${active.name}`:'Start empty workout'} onPress={()=>{void action.run(async()=>open(active?.id??await startWorkout(await db(),localDate(Date.now()))))}}/>
    {!active&&<Label muted>Add exercises as you go — nothing planned ahead.</Label>}
    <Row><Button label="Exercise library" onPress={()=>router.push('/search?scope=exercise' as never)}/><Button label="Equipment & plates" onPress={()=>router.push('/equipment' as never)}/><Button label="Create routine" onPress={()=>router.push('/routines' as never)}/></Row>
+   <Button label="Import routines & programs (JSON)" onPress={()=>router.push('/import-training' as never)}/>
    <Label>Routines</Label>{!routines.length&&<Label muted>Create a reusable workout or save one from your history.</Label>}{routines.map(r=><Card key={r.id}><Label>{r.name}</Label><Row><Button label="Start routine" disabled={!!active} onPress={()=>{void action.run(async()=>open(await launchRoutine(await db(),r.id,localDate(Date.now()))))}}/><Button label="Edit routine" onPress={()=>router.push({pathname:'/routines',params:{id:r.id}} as never)}/></Row></Card>)}
    {/* Task 2-c (program IA): the prerequisite is stated at the entry point,
        not buried on the Programs screen. */}

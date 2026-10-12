@@ -127,6 +127,16 @@ export default function DataSettings() {
         Your API key never travels in a backup — re-enter that once after restoring on a new phone.
       </Text>
 
+      {/* Bulk JSON import for routines & programs — ADDS to the log, never
+          replaces it (the backup import above is the replace-all path). */}
+      <Text style={[type.label, { color: theme.textMuted, marginTop: space.md }]}>Training plans</Text>
+      <ItemRow
+        icon="dumbbell"
+        label="Import routines & programs"
+        value="Add many at once from one JSON file — example included"
+        onPress={() => router.push('/import-training' as never)}
+      />
+
       <Text style={[type.label, { color: theme.textMuted, marginTop: space.md }]}>Start over</Text>
       <ItemRow
         icon="close"
