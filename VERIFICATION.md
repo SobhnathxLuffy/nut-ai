@@ -6,7 +6,7 @@ Reproduce with `npm run check`.
 | Gate | Command | Result |
 |---|---|---|
 | ESLint | `npm run lint` | **clean**, 0 errors, 0 warnings |
-| Unit + property + integration tests | `npx vitest run` | **1,915 passed**, 161 files (v0.3.0 owner-QA gate run, 2026-10-06) |
+| Unit + property + integration tests | `npx vitest run` | **2,003 passed**, 165 files (v0.5.0 gate run, 2026-10-12; 2 file-level environment failures in the sandbox: expo-sqlite ESM packaging in node_modules, pre-existing and unrelated to source) |
 | Typecheck — packages | `tsc -p tsconfig.json` | clean, strict |
 | Typecheck — app | `tsc --noEmit` in `apps/mobile` | clean, strict |
 | Node-purity gate | `node scripts/check-node-purity.mjs` | **19/19 packages** React-Native-free |

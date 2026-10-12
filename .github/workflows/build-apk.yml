@@ -145,46 +145,44 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: "Nut AI ${{ github.ref_name }} — Android APK"
           prerelease: ${{ env.IS_PRERELEASE }}
-          # Per-release changelog: the body below is the v0.2.0 release notes
-          # (drafted in docs/release-notes-draft-v0.2.0.md §2). Version strings
-          # are derived — do not hardcode them back.
+          # Per-release changelog: the body below is the v0.5.0 release notes
+          # (docs/release-notes-v0.5.0.md). Version strings are derived — do
+          # not hardcode them back.
           body: |
-            > Tag: `${{ github.ref_name }}` · versionCode ${{ env.VERSION_CODE }} · upgrade-installs over apk-v0.2.0
+            > Tag: `${{ github.ref_name }}` · versionCode ${{ env.VERSION_CODE }} · upgrade-installs over apk-v0.4.0
 
             ## Nut AI v${{ env.VERSION }} — Android APK
 
             ### Your reported issues, fixed
 
-            **1. Favorites only — "usual" and "saved" removed everywhere**
-            - The three save options (Favorite / Save usual meal / Save meal) are now just **Favorite**.
-            - The Food tab strip shows Recent / Frequent / Favorites only; the Saved Foods entry is gone.
-            - Old backups still restore losslessly — legacy usual/saved shortcuts come back as favorites.
+            **1. The dates never switched to the new day (the big one)**
+            - Home's day strip froze on the day the app was opened: keep the app in recents overnight and the new day never arrived — no chip to log "today".
+            - The chips and the data read two different clocks, so an Oct 11 log rendered under the Oct 10 chip while tapping the Oct 11 chip showed the correct day-detail. Chips, home data and day-detail now run on ONE shared day anchor that rolls on focus and on app resume.
 
-            **2. Logged meals finally show what you logged**
-            - Tap any logged meal: you now see its calories AND protein/carbs/fat per item, plus honest meal totals.
-            - Saved favorite meals are searchable in food search alongside IFCT, USDA, recipes, and dishes.
+            **2. Routines → Add exercises: the search bar was unreachable**
+            - The picker sheet stacked ~2.3k px above the screen edge: only the alphabet-tail of 30 exercises visible, search field invisible. Now: height-bounded scrollable body, search pinned at the top, the FULL 225-exercise catalog reachable, spacing restored, Done as a fixed footer.
 
-            **3. Barcode database — 116 packaged products added offline**
-            - India-first: Amul, Britannia, Maggi/Nestlé, Haldiram's, Parle, MDH, Tata, Dabur, Patanjali, Aachi and more — plus international staples (Coca-Cola, Pepsi, Lay's, Oreo, Nutella, Kellogg's…).
-            - Scans resolve offline in airplane mode. Values are curated-representative from public labels.
+            **3. Light mode**
+            - Profile → Units & health → **Appearance**: **Match system / Light / Dark** — instant whole-app re-theme, remembered on the device. Default stays "Match system".
 
-            **4. AI logs multi-food requests separately**
-            - "Log 3 parathas and 400g curd" no longer collapses into one blob: the review screen shows ONE row per food with its own editable grams and live macros.
-            - The assistant stops asking extra questions — it proposes immediately; you adjust weights before saving.
+            **4. Meal detail: the black dead space**
+            - After the keyboard closed, the meal editor stayed shrunken (Android KeyboardAvoidingView bug) leaving large dead areas. The container no longer shrinks on Android and the double-counted bottom inset is gone — the meal renders edge-to-edge.
 
-            **5. Two touch-blocking bugs fixed**
-            - Indian-foods composer: "Log household variant" and the portion controls are reachable above the gesture bar again.
-            - AI assistant chat: the input and latest messages no longer hide behind the keyboard on Android.
+            **5. AI scan quality on small models (aicredits.in and any gateway)**
+            - The gateway output contract and the validator contradicted each other ("use 0 when unknown" vs a schema rejecting 0) — rule-following small models failed wholesale. Fixed on both ends: per-kind unknown-value contract, prompt v1.3.1 (beverage_category null for non-drinks), and a wider repair layer (zeroed/string gram ranges, numeric sizes, object-shaped assumptions, percent fills). Measured on aicredits.in: gemini-2.5-flash-lite 1/3 → 3/3 valid scans.
 
-            **6. QA-sweep fixes**
-            - "Undo workout action" no longer deletes food logs (workout-scoped undo/redo).
-            - Editing a routine no longer loses your sets when returning from the exercise picker.
-            - No more "NaN kcal" while typing grams in the review screen; zero-ingredient AI proposals fail honestly; check-in pregnancy/lactation switch is operable; corrupt program rows are visible.
+            ### New
+
+            **6. Bulk JSON import for routines & programs**
+            - Train tab → "Import routines & programs (JSON)" (also Profile → Your data): one file, any number of routines and programs. Exercises resolve by NAME, sets validated by the engine, weekday schedules ("Mon") converted against the start date, transactional + individually undoable, per-item problems listed. Loadable example in the screen; field reference in docs/training-import-format.md.
+
+            **7. Workout-mode tutorial**
+            - A sixth tutorial card teaches the live workout session by its real labels: set table, self-starting rest timer, set kinds (warmup/drop/failure/AMRAP), supersets A/B/C, "This week" progression banner, PRs and "Save as routine". Replay from Profile → "Replay the tutorial".
 
             ### Install on your phone
             1. Download `nut-ai-v${{ env.VERSION }}.apk` below.
-            2. If v0.1.1 or v0.2.0 is installed, install straight over it (versionCode ${{ env.VERSION_CODE }} upgrades cleanly; your data migrates automatically).
-            3. Fresh install: open the APK and allow "install unknown apps" for your browser if asked.
+            2. If v0.4.0 or earlier is installed, install straight over it (versionCode ${{ env.VERSION_CODE }} upgrades cleanly; your data migrates automatically).
+            3. Fresh install: allow "install unknown apps" for your browser if asked.
 
             ### Verify the download (optional)
             ```
@@ -192,8 +190,8 @@ jobs:
             ```
 
             ### Honest verification status
-            - Automated gates at this tag: 1,925 unit tests / 162 files, 46/46 web e2e journeys, typecheck, lint, node-purity, contrast — all green (see VERIFICATION.md).
-            - On-device rows (TalkBack, widgets on a real launcher, notification delivery, camera scan hits, keyboard feel) remain NOT TESTED in CI — no Android environment is available in the build sandbox; the two touch-blocking UI fixes are source-locked and web-e2e-verified but not device-photographed.
+            - Automated gates at this tag: 2,003 unit tests passing, 45/45 web e2e journeys (1 documented skip), lint, strict typecheck, node-purity 26/26, contrast 104/104 (light 52 + dark 52), data/IFCT/indian-dishes golden audits — all green.
+            - Live-model scan evals ran against the real aicredits.in gateway (harness: eval/run-model.mjs). On-device rows (TalkBack, widgets on a real launcher, camera feel) remain NOT TESTED in CI — no Android environment in the build sandbox.
 
           files: |
             out/nut-ai-v${{ env.VERSION }}.apk
