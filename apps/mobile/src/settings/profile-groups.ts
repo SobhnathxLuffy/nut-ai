@@ -72,6 +72,15 @@ export const PROFILE_GROUPS: readonly ProfileGroupDef[] = [
         label: 'Notifications',
         route: '/notification-settings',
       },
+      {
+        // The in-app appearance override (light-mode request, 2026-10-12):
+        // system / light / dark, sub-page per the grouped-list architecture.
+        // Same app-preferences family as notifications and haptics.
+        key: 'appearance',
+        icon: 'sun',
+        label: 'Appearance',
+        route: '/settings-appearance',
+      },
     ],
   },
   {

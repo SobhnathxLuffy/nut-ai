@@ -47,3 +47,34 @@ describe('DayTimeline web-alert shim is gone for good (P2-16)', () => {
     expect(source).not.toContain('Alert.alert(')
   })
 })
+
+describe('appearance preference (light-mode request, 2026-10-12)', () => {
+  const here = dirname(fileURLToPath(import.meta.url))
+  const read = (...parts: string[]) => readFileSync(join(here, ...parts), 'utf8')
+
+  const provider = read('ThemeProvider.tsx')
+  const preference = read('preference.ts')
+  const appearance = read('..', '..', 'app', 'settings-appearance.tsx')
+  const profileGroups = read('..', 'settings', 'profile-groups.ts')
+
+  it('ThemeProvider resolves through the preference, with system following the OS', () => {
+    expect(provider).toContain('resolveColorScheme(preference, osScheme)')
+    expect(provider).toContain('useThemePreference')
+    expect(provider).toContain('readThemePreference()')
+  })
+
+  it('the preference module fails open to system and owns exactly ONE kv key', () => {
+    expect(preference).toContain("THEME_PREFERENCE_KEY = 'theme.preference.v1'")
+    expect(preference).toContain("return raw === 'light' || raw === 'dark' ? raw : 'system'")
+  })
+
+  it('the appearance sub-page offers the three options and writes through the context setter', () => {
+    expect(appearance).toContain("['system', 'light', 'dark']")
+    expect(appearance).toContain('setPreference(option)')
+    expect(appearance).toContain('accessibilityRole="radio"')
+  })
+
+  it('the Profile grouped list routes the appearance sub-page', () => {
+    expect(profileGroups).toContain("route: '/settings-appearance'")
+  })
+})
