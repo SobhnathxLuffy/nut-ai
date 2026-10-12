@@ -32,7 +32,16 @@ jobs:
         run: npm ci
 
       - name: Build nutrition corpus
-        run: npm run build:tools-pkgs && npm run data:build
+        run: |
+          # fdc.nal.usda.gov intermittently refuses datacenter IPs (observed
+          # 2026-10-12). Content-derived corpus fallback from the released
+          # asset — see build-apk.yml for the full note.
+          if ! (npm run build:tools-pkgs && npm run data:build); then
+            echo "Live corpus build failed — falling back to the released corpus asset"
+            curl -fL --retry 3 "https://github.com/SobhnathxLuffy/nut-ai/releases/download/nutrition-corpus/nutrition.db.zip" -o /tmp/nutrition.db.zip
+            unzip -o /tmp/nutrition.db.zip -d apps/mobile/assets/
+            ls -la apps/mobile/assets/nutrition.db
+          fi
 
       - name: Typecheck
         run: npm run typecheck
@@ -65,7 +74,16 @@ jobs:
       # export at all (APK-readiness QA 2026-10; also regenerates
       # corpus-revision.ts deterministically so the freshness gate matches).
       - name: Build nutrition corpus
-        run: npm run build:tools-pkgs && npm run data:build
+        run: |
+          # fdc.nal.usda.gov intermittently refuses datacenter IPs (observed
+          # 2026-10-12). Content-derived corpus fallback from the released
+          # asset — see build-apk.yml for the full note.
+          if ! (npm run build:tools-pkgs && npm run data:build); then
+            echo "Live corpus build failed — falling back to the released corpus asset"
+            curl -fL --retry 3 "https://github.com/SobhnathxLuffy/nut-ai/releases/download/nutrition-corpus/nutrition.db.zip" -o /tmp/nutrition.db.zip
+            unzip -o /tmp/nutrition.db.zip -d apps/mobile/assets/
+            ls -la apps/mobile/assets/nutrition.db
+          fi
 
       - name: Build web bundle
         working-directory: apps/mobile

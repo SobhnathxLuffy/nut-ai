@@ -64,7 +64,18 @@ jobs:
 
       - name: Build nutrition.db corpus
         working-directory: tools/indian-dishes
-        run: node build-sqlite.mjs
+        run: |
+          # fdc.nal.usda.gov intermittently refuses datacenter IPs (observed
+          # 2026-10-12 on both CI runs). The corpus is content-derived — a
+          # prebuilt copy with the REQUIRED_CORPUS_REVISION the tree pins is
+          # published as the nutrition-corpus release asset and used as the
+          # fallback when the live fetch fails.
+          if ! node build-sqlite.mjs; then
+            echo "Live corpus build failed — falling back to the released corpus asset"
+            curl -fL --retry 3 "https://github.com/SobhnathxLuffy/nut-ai/releases/download/nutrition-corpus/nutrition.db.zip" -o /tmp/nutrition.db.zip
+            unzip -o /tmp/nutrition.db.zip -d ../../apps/mobile/assets/
+            ls -la ../../apps/mobile/assets/nutrition.db
+          fi
 
       - name: Expo prebuild (android)
         working-directory: apps/mobile
